@@ -5,6 +5,29 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-11 · Möten: rubriken i kalendern är "Clicknet - <bolaget>: Möte" (på `main`, ingen migration)
+
+**Varför.** Beställaren: "Rubriken ska inte vara så. Det ska vara Clicknet - (Bolagetsnamn, kundens): Möte". Mötet
+hette "SEO-möte: <bolaget>", och kunden såg samma rubrik i sin inbjudan, eftersom inbjudan (`calendar_event_ics`,
+`lk_ics_ko`) byggs ur kalenderhändelsen.
+
+**Ändringen.** `motenforma.ts`: `moteRubrik(namn)` ger "Clicknet - <namn>: Möte", och `arEgenRubrik(titel, namn)`
+känner igen både den och den gamla "SEO-möte: <namn>". `/nav2/moten`: Boka (`skapaMote` och `bokaAtKollega`) tar
+rubriken ur `moteRubrik`; Ändra byter bolagets namn i rubriken när den är Mötens egen, ny eller gammal, och lämnar en
+rubrik som skrivits om i Kalendern orörd. Utkastet (rad ändrad direkt i mains `utkast.html`): Teams-länkens ämne
+(`moTeamsNytt`) är samma rubrik. Nyhet `moten-rubrik` i `poster.ts`.
+
+**Prov.** `tests/moten.mjs`: fyra nya kontroller (rubriken, den nya och den gamla räknas som egen, en handskriven
+eller ett annat bolags gör det inte), hela filen grön. De ändrade raderna i `route.ts` typprovade för sig med tsc (`--strict`).
+Ej klickat inloggat.
+
+**Kvar.** Redan bokade möten heter fortfarande "SEO-möte: …". De kommande döps om bara på beställarens ja: en ändrad
+rubrik sparas genom `lk_spara_mote`, som skickar kunden en uppdaterad inbjudan. Resten av samma beställning
+(bekräftelse och statistik per bokare, uppföljning som bokar ett riktigt möte, Kalenderns tidsval i bokningen, eget
+utseende för kundmöten i Kalendern, bokare med på mötet) är i brainstorming; se NASTA_SESSION.
+
+---
+
 ## 2026-11-11 · Ordersökningen söker på allt: org.nr, telefon, fakturanummer och Inkios nummer (på `main`, ingen migration)
 
 **Varför.** Beställaren: "i order ska jag kunna söka upp ordrar på orgnummer, telefonnummer eller fakturanummer. tex i

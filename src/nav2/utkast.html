@@ -36880,7 +36880,7 @@ function moUtcIso(tid){
   return new Date(2 * g - Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute)).toISOString().replace('.000', '');
 }
 function moTeamsNytt(D){
-  const q = new URLSearchParams({subject:`SEO-möte: ${String(D.f.namn || '').trim() || 'kund'}`});
+  const q = new URLSearchParams({subject:`Clicknet - ${String(D.f.namn || '').trim() || 'kund'}: Möte`});
   if (D.tid){ q.set('startTime', moUtcIso(D.tid)); q.set('endTime', moUtcIso(moLokalPlus(D.tid, D.k && D.k.mote && D.typ !== 'boka' ? D.k.mote.langd : MOLANGD))); }
   return 'https://teams.microsoft.com/l/meeting/new?' + q.toString();
 }

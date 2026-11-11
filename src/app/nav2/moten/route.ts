@@ -46,6 +46,8 @@ import {
   uppslagsVarning,
   videoNamn,
   utfallIndata,
+  arEgenRubrik,
+  moteRubrik,
   type Aktor,
   type UtfallIn,
   type Uppslag,
@@ -73,7 +75,7 @@ export const dynamic = "force-dynamic";
  * anropet. `mote_uppslag` (0262) körs däremot med den inloggades egen token,
  * eftersom funktionen läser `current_employee_id()`.
  *
- * MÖTET I KALENDERN: hållaren är organisatör (rubriken "SEO-möte: <bolag>", 30
+ * MÖTET I KALENDERN: hållaren är organisatör (rubriken "Clicknet - <bolag>: Möte", 30
  * minuter, plats Telefon). Bokar man åt sig själv går det genom `skapaMote`; bokar
  * man åt en kollega läggs mötet som kollegan själv med `lk_skapa_mote` (se
  * `bokaAtKollega`), eftersom Kalenderns ombudsregel annars nekar. Hållaren måste
@@ -543,7 +545,7 @@ export async function POST(request: Request) {
     // `lk_skapa_mote`, 0069) med service role. Bokaren står kvar i `mote.bokat_av`, notisen `mote-bokat`
     // går till hållaren (steg 9), och `hallsAv` är redan prövad som en aktiv säljare, så ingen annans
     // kalender kan fyllas med möten.
-    const rubrik = `SEO-möte: ${v.namn}`;
+    const rubrik = moteRubrik(v.namn);
     const m: { fel?: string; eventId?: string } =
       v.hallsAv === mig
         ? await skapaMote({ organisator: v.hallsAv, rubrik, dag: v.dag, start: minuterAv(v.start), minuter: v.langd, deltagare: [v.hallsAv, ...v.med], plats: v.plats, agenda: v.mal })
@@ -964,7 +966,7 @@ export async function POST(request: Request) {
    *  5. Loggen, och en notis till hållaren när någon annan ändrat hens möte (kalendern säger inget till
    *     arrangören om ändringar arrangören själv står som aktör för).
    *
-   * Rubriken följer bolagets namn bara när den är Mötens egen ("SEO-möte: <namn>"), och agendan följer målet
+   * Rubriken följer bolagets namn bara när den är Mötens egen (`arEgenRubrik`), och agendan följer målet
    * bara när den är målet: det som ändrats i Kalendern för hand skrivs inte över.
    */
   async function andra(): Promise<Response> {
@@ -1039,8 +1041,8 @@ export async function POST(request: Request) {
     const platsNu = v.plats ? v.plats.plats : platsFore;
     const lankNu = v.plats ? v.plats.lank : lankFore;
     const platsAndras = platsNu !== platsFore || (lankNu ?? "") !== (lankFore ?? "");
-    const egenRubrik = `SEO-möte: ${bo.namn}`;
-    const titel = kal && bolagLapp.namn && kal.title === egenRubrik ? `SEO-möte: ${bolagLapp.namn}` : kal?.title ?? egenRubrik;
+    const egenRubrik = moteRubrik(bo.namn);
+    const titel = kal && bolagLapp.namn && arEgenRubrik(kal.title, bo.namn) ? moteRubrik(bolagLapp.namn) : kal?.title ?? egenRubrik;
     const agenda = kal && "mal" in moteLapp && (kal.agenda_md ?? "") === (m.mal ?? "") ? String(moteLapp.mal ?? "") : kal?.agenda_md ?? "";
     const kalAndras = !!kal && (!!nyTid || platsAndras || titel !== kal.title || agenda !== (kal.agenda_md ?? "") || medIn.length > 0 || medUt.length > 0);
     const gastAndras = gastIn.length > 0 || gastUt.length > 0;

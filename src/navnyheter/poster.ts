@@ -14,6 +14,17 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten-rubrik",
+    rubrik: "Mötet heter Clicknet - bolaget: Möte",
+    ingress: "Ett möte du bokar i Möten heter nu till exempel \"Clicknet - Bygg & Plåt AB: Möte\" i kalendern och i kundens inbjudan.",
+    text: `Förut hette mötet "SEO-möte: Bygg & Plåt AB". Nu står Clicknet först, så att kunden
+ser vem mötet är med direkt i sin kalender. Byter du bolagets namn under **Ändra** följer
+rubriken med. Har du skrivit en egen rubrik i Kalendern rör Nav den inte.`,
+    datum: "2026-11-11",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "ordersok-pa-allt",
     rubrik: "Sök order på org.nr, telefon och fakturanummer",
     ingress: "Sökfältet i Order hittar nu en order på nästan allt: org.nr, telefonnummer, mejl, adress, fakturanummer och Inkios nummer.",

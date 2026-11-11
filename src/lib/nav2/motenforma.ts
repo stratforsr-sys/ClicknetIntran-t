@@ -42,6 +42,15 @@ export const MOTE_PLATS = "Telefon";
 export const MAX_KOLLEGOR = 10;
 export const MAX_GASTER = 10;
 
+/**
+ * Rubriken på mötet i kalendern, och därmed i kundens inbjudan: "Clicknet - <bolaget>: Möte" (beställaren
+ * 2026-11-11). Före dess hette den "SEO-möte: <bolaget>". Båda räknas som Mötens egen rubrik, så att Ändra
+ * byter bolagets namn i den; en rubrik som skrivits om i Kalendern för hand lämnas orörd.
+ */
+export const moteRubrik = (namn: string): string => `Clicknet - ${namn}: Möte`;
+export const arEgenRubrik = (titel: string | null | undefined, namn: string): boolean =>
+  titel === moteRubrik(namn) || titel === `SEO-möte: ${namn}`;
+
 /* ------------------------------------------------------------------------ */
 /* Platsen (2026-11-03): som i Outlook, över telefon, i Teams eller på en plats */
 /* ------------------------------------------------------------------------ */

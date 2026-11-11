@@ -479,5 +479,13 @@ rubrik("2026-11-03: Ändra mötet (andraIndata)");
 }
 }
 
+rubrik("2026-11-11: Rubriken i kalendern (moteRubrik, arEgenRubrik)");
+{
+  ok("Clicknet - <bolaget>: Möte", M.moteRubrik("Bygg & Plåt AB") === "Clicknet - Bygg & Plåt AB: Möte");
+  ok("den nya rubriken är Mötens egen", M.arEgenRubrik("Clicknet - Bygg & Plåt AB: Möte", "Bygg & Plåt AB"));
+  ok("den gamla \"SEO-möte: <bolaget>\" räknas också som Mötens egen", M.arEgenRubrik("SEO-möte: Bygg & Plåt AB", "Bygg & Plåt AB"));
+  ok("en rubrik skriven för hand, eller med ett annat bolag, är inte Mötens", !M.arEgenRubrik("Genomgång med Anna", "Bygg & Plåt AB") && !M.arEgenRubrik("Clicknet - Annat AB: Möte", "Bygg & Plåt AB") && !M.arEgenRubrik(null, "Bygg & Plåt AB"));
+}
+
 console.log(fel ? `\n\x1b[31m${fel} fel\x1b[0m` : "\n\x1b[32mAlla ✓\x1b[0m");
 process.exit(fel ? 1 : 0);
