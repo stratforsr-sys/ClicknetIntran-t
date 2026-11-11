@@ -13,8 +13,8 @@
  *   avtal, Inkio-order och ärenden.
  * - **webbläsaren:** sökningens rena del i utkastet (blocket `ordersok`) plockas
  *   ur src/nav2/utkast.html och körs: siffror i alla format, flera ord, var
- *   träffen sitter, och K27: ett org.nr som är ett personnummer hittas bara på
- *   hela numret, och ett nummer hamnar aldrig i en länk.
+ *   träffen sitter, org.nr på en del av numret (även en enskild firmas), och
+ *   K27: ett nummer hamnar aldrig i en länk.
  *
  *   node --experimental-strip-types tests/nav2-ordersok.mjs
  */
@@ -89,7 +89,7 @@ const OPAKET = { 1: { l: "Optimerad Kampanjsida", pris: 1495 } };
 const K = new Function(
   "oQnorm",
   "OPAKET",
-  `${html.slice(a0, b0)}; return { oSiffror, oPersonnr, oSokKanslig, oSokTermer, oSokTraff, oSokSpannText };`,
+  `${html.slice(a0, b0)}; return { oSiffror, oSokKanslig, oSokTermer, oSokTraff, oSokSpannText };`,
 )(oQnorm, OPAKET);
 
 const ab = {
@@ -115,12 +115,6 @@ ok("+46 (0)70 blir 0", K.oSiffror("+46 (0)70-123 45 67") === "0701234567", K.oSi
 ok("46 utan plus, elva siffror, blir 0", K.oSiffror("46701234567") === "0701234567");
 ok("org.nr utan streck", K.oSiffror("559512-3456") === "5595123456");
 
-rubrik("Personnummer (K27)");
-ok("en enskild firma", K.oPersonnr("850101-1234") === true);
-ok("med sekel", K.oPersonnr("19850101-1234") === true);
-ok("ett aktiebolag", K.oPersonnr("559512-3456") === false);
-ok("tomt", K.oPersonnr("") === false);
-
 rubrik("Telefon");
 for (const q of ["0701234567", "070-123 45 67", "070 123 45 67", "+46701234567", "+46 70 123 45 67", "1234567"]) ok(`"${q}" hittar telefonen`, traff(ab, q, "tel"));
 ok("lagrat med +46 hittas med 07…", traff(ef, "0709876543", "tel"));
@@ -129,7 +123,10 @@ ok("två siffror räcker inte för telefonen", !traff(ab, "45", "tel"));
 rubrik("Org.nr");
 for (const q of ["559512-3456", "5595123456", "165595123456", "559512"]) ok(`"${q}" hittar aktiebolagets org.nr`, traff(ab, q, "org"));
 for (const q of ["850101-1234", "8501011234", "19850101-1234", "198501011234"]) ok(`hela numret "${q}" hittar den enskilda firman`, traff(ef, q, "org"));
-for (const q of ["850101", "8501011", "0101-1234", "1234", "85010112"]) ok(`en del av personnumret, "${q}", hittar ingenting`, !traff(ef, q, "org"));
+for (const q of ["850101", "8501011", "0101-1234", "1234", "85010112"]) ok(`en del av den enskilda firmans org.nr, "${q}", hittar den`, traff(ef, q, "org"));
+ok("två siffror räcker inte för ett org.nr", !traff(ab, "55", "org") && !traff(ef, "85", "org"));
+const tp = (sok(ef, "0101-1234") || []).find((h) => h.nyckel === "org");
+ok("delen markeras i den enskilda firmans org.nr", !!tp && tp.varde.slice(tp.spann[0], tp.spann[1]) === "0101-1234", JSON.stringify(tp));
 
 rubrik("Inkios nummer");
 ok("fakturanumret", traffE(ab, "1158", "Faktura"));
@@ -194,6 +191,8 @@ ok("ndOrdLank lägger aldrig ett nummer i adressen", /oSokKanslig\(S\.ordQ\)/.te
 ok("ndOrdStart ger ordern kundens nummer", /nummer:/.test(kropp("ndOrdStart")));
 ok("spärren mot org.nr är borta", !html.includes("Organisationsnummer går inte att söka på"));
 ok("oOrgLik finns inte kvar", !/oOrgLik/.test(html));
+ok("ingen särregel för personnummer i sökningen", !/oPersonnr|'personnr'/.test(html));
+ok("tomläget säger inte att hela numret krävs", !/hittas bara på hela numret/.test(kropp("o7SokTom")));
 ok("sökfältet säger vad det söker i", /placeholder="Sök bolag, org\.nr, telefon, fakturanummer/.test(html));
 
 rubrik("Servern skickar numren");

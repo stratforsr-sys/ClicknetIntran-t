@@ -12,8 +12,9 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 Sökfältet i Order hittar en order på org.nr, telefon (hur det än är skrivet), mejl, adress, anteckningen och skälen,
 och på kundens nummer i Inkio: fakturor, avtal, Inkio-order och ärenden. Numren läses ur bevakningens kopia
 (`crm_handelse`) i `byggOrder`, och `src/lib/nav2/ordersok.ts` formar dem. En träff som inte syns på raden står under
-bolaget ("Faktura 1158 · 7 463 kr · förfaller 19 dec · skickad"). K27: en enskild firmas org.nr hittas bara på hela
-numret, och sex siffror eller fler läggs aldrig i en länk (D-OS1). Prov: `tests/nav2-ordersok.mjs`. Kvar:
+bolaget ("Faktura 1158 · 7 463 kr · förfaller 19 dec · skickad"). Ett org.nr hittas på hela numret eller en del, en
+enskild firmas likadant som ett aktiebolags (beställaren samma dag), och sex siffror eller fler läggs aldrig i en
+länk (D-OS1). Prov: `tests/nav2-ordersok.mjs`. Kvar:
 beställarens prov i previewen, sedan merge till `main`. Detaljerna i ARBETSLOGG.
 
 ---

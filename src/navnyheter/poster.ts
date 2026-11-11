@@ -23,8 +23,8 @@ fakturanummer från Inkio. Inkios avtals-, order- och ärendenummer fungerar ock
 skriva flera ord på en gång, till exempel bolagets namn och ett fakturanummer.
 
 Hittas ordern på något som inte syns i listan står träffen under bolagets namn, till exempel
-**Faktura 1158 · 7 463 kr · förfaller 19 dec**. En enskild firmas org.nr är ett personnummer,
-så det hittas bara när hela numret står i sökfältet.`,
+**Faktura 1158 · 7 463 kr · förfaller 19 dec**. Ett org.nr hittas på hela numret eller en del
+av det, både för aktiebolag och enskilda firmor.`,
     datum: "2026-11-11",
     roller: [],
     href: "/order",

@@ -642,7 +642,7 @@ Planeringsvyn står kvar oförändrad under `/kalender?vy=planera`.
 
 ---
 
-## D-OS1 · Ordersökningen söker på allt, och K27 gäller hela numret
+## D-OS1 · Ordersökningen söker på allt, även en del av en enskild firmas org.nr
 
 **2026-11-11**, ingen migration. Beställaren: "i order ska jag kunna söka upp
 ordrar på orgnummer, telefonnummer eller fakturanummer … Gör sökningen ordentligt
@@ -654,14 +654,16 @@ anteckningen och skälen) och i kundens nummer i Inkio: fakturor, avtal,
 Inkio-order och ärenden. Det ersätter ordervyns beslut från september
 (ARBETSLOGG, "`?kund=` bär ett ORDER-ID") att sökfältet bara söker på bolagsnamn.
 
-**K27 står kvar, med en annan dörr.** Skälet då var att en träff på tio siffror
-låter någon fiska fram en enskild firmas personnummer ur listan, och att frågan
-hamnade i adressen. Nu gäller:
+**K27 i sökningen.** Skälet till den gamla spärren var att en träff på en del av
+numret låter någon fiska fram en enskild firmas personnummer ur listan, och att
+frågan hamnade i adressen. Grenens första version släppte därför en enskild firmas
+org.nr bara på hela numret. Samma dag bestämde beställaren annorlunda: "För en
+enskild firma sätt på så att man också kan söka på bara en del av orgnummret
+precis som aktiebolaget." Nu gäller:
 
-- **Ett org.nr som är ett personnummer hittas bara på hela numret** (10 eller 12
-  siffror). En del av numret ger ingen träff, så ingen kan gissa sig fram siffra
-  för siffra. Ett bolags org.nr (månadens första siffra 2 eller högre) hittas också
-  på en del av numret.
+- **Alla org.nr hittas på hela numret eller en del** (minst tre siffror), en
+  enskild firmas likadant som ett aktiebolags. Personen ser bara de order RLS
+  redan har gett hen, och där står org.nr ändå i ordern.
 - **Sökningen körs i webbläsaren**, över de order RLS redan har gett personen.
   Frågan lämnar aldrig sidan och loggas inte.
 - **Sex siffror eller fler läggs aldrig i en länk eller en adress** (Kopiera länk,

@@ -30,8 +30,10 @@ till kunden, så ett fakturanummer hittar kundens alla order (tre order delar ku
 faktura 1158 hittar #8.
 
 **K27.** En enskild firmas org.nr är ett personnummer, och skälet till spärren var att en träff på en del av numret låter
-någon fiska fram det siffra för siffra, och att frågan hamnade i adressen. Nu hittas ett sådant org.nr (månadens första
-siffra 0 eller 1) bara på hela numret, med eller utan sekel; ett bolags org.nr hittas också på en del. Sökningen körs i
+någon fiska fram det siffra för siffra, och att frågan hamnade i adressen. Grenens första version (`87eb379`) släppte
+därför en enskild firmas org.nr bara på hela numret. Efter previewen bestämde beställaren samma dag: "För en enskild
+firma sätt på så att man också kan söka på bara en del av orgnummret precis som aktiebolaget." Nu hittas alla org.nr på
+hela numret eller en del (minst tre siffror), och särregeln (`oPersonnr`, sorten `personnr`) är borta. Sökningen körs i
 webbläsaren över de order RLS redan gett personen och loggas inte. Sex siffror eller fler läggs aldrig i Kopiera länk
 eller `ndOrdLank`, och kvittot säger det. Beslutet står i DECISIONS.md som D-OS1.
 
@@ -39,12 +41,12 @@ eller `ndOrdLank`, och kvittot säger det. Beslutet står i DECISIONS.md som D-O
 står under bolaget, i tabellen och i telefonens kort: "Faktura 1158 · 7 463 kr · förfaller 19 dec · skickad", "Telefon
 070-123 45 67", eller ett utdrag runt träffen i en lång anteckning. Den bästa träffen per ord visas, högst två, och
 markeringen blinkar till en gång när träffen dyker upp (inte vid minskad rörelse). Synliga ord markeras som förut,
-nu alla ord. Utan träff säger listan vad sökningen letar i, och på sex till elva siffror att ett personnummer hittas
-bara på hela numret. Utkastets anteckning 245 är omskriven.
+nu alla ord. Utan träff säger listan vad sökningen letar i. Utkastets anteckning 245 är omskriven.
 
 **Prov.** `tests/nav2-ordersok.mjs` (i `npm test`, 89 kontroller): `formaNummer`, och sökningens rena del som plockas
 ur utkastet mellan `/* ordersok: start` och `/* ordersok: slut */`. Patchen av utkastet är skriven som ett idempotent
-skript (`~/nav2-utkast/delar/ordersok/patch_utkast.py`, och `patch_server.py` för `order.ts`). Typkontroll med repots
+skript (`~/nav2-utkast/delar/ordersok/patch_utkast.py`, `patch_utkast2.py` för den enskilda firman och `patch_server.py`
+för `order.ts`). Typkontroll med repots
 låsta versioner av Supabase, Next och TypeScript: samma fem fel som main (moduler som saknas lokalt), inga nya. I
 headless Chrome mot utkastets exempeldata som Admin: telefon med och utan +46, helt och delvis org.nr, anteckning, två
 ord, makuleringens skäl, ordernummer, ingen träff och en del av ett personnummer, i 1440 och 390 bredd, inga skriptfel.
