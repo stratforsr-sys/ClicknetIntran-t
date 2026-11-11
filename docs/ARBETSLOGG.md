@@ -5,6 +5,30 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-12 · Möten: inställningarna, byggsteg 2 av 4 (på `main`, ingen migration)
+
+**Varför.** Nav säljs, så allt som skiljer ett företag från ett annat ska vara en inställning, och inställningarna
+byggs före provisionen (steg 3) så att inget möte låses med 0 kr innan beloppen är satta.
+
+**Besluten.** En tolkare per nyckel i `motesflode.ts` (`TOLKA`), som både läsningen och sparandet går igenom: det som
+går att spara går alltid att läsa. Kolumnnamnen prövas strängare när de sparas (en okänd kolumn nekas) och läggs
+ovanpå de sparade, så att ett namn i taget går att ändra. `moten.galler-fran` går inte att ändra. Admin-nivån
+(`nivaFor`) ser och ändrar rutan, men det som rör pengar bara de som också ser all provision (som
+`commission_entry`); en teamledare ändrar alltså dagarna men inte beloppen. Rubrikens prefix flyttades ur koden till
+`moten.rubrik-prefix`; Clicknets värde sattes med engångs-SQL utanför migrationerna, så att en ny installation får
+"<bolaget>: Möte". `arEgenRubrik` känner igen rubriken med vilket prefix som helst, så att ett bytt prefix inte gör
+gamla möten till "egna rubriker". Händelsen heter `mote.settings_changed` (modulprefixet `mote` finns redan).
+
+**Steg 1-rättelsen samma natt.** Bygget av `a79513c` föll på ett typfel i `moten.ts` (en reservläsning med `let`
+och ett annat `select` gav en annan svarstyp); produktionen körde vidare på förra versionen. `85377ce` tog bort
+reservläsningen (0287 är körd). Lokalt syns inte felet: den delade `node_modules` saknar `@supabase/supabase-js`,
+så tsc ger 14 000 fel både före och efter. Tavlans nya läsningar provades mot produktionens REST efter rättelsen.
+
+**Provat.** `tests/motesflode.mjs` (provaInstallning: varje nyckel, gränserna, okänd nyckel, gäller-från),
+`tests/moten.mjs` (rubriken med och utan prefix, vem som får ändra vad), roboten
+(`pipeline-prov.mjs --inst` och `--utan-pengar`: varje fält sparar sitt värde, en tom fråga sparas inte, utan aktiva
+frågor ett belopp, Escape stänger, tavlan visar de nya dagarna, låsta belopp utan provisionsroll).
+
 ## 2026-11-11 · Möten: pipelinen, byggsteg 1 av 4 (på `main`, 0287 KÖRD)
 
 **Varför.** Beställaren 2026-11-11: bokaren ska bekräfta mötet ett inställbart antal dagar före, ett möte man inte

@@ -7,7 +7,7 @@
  */
 import {
   INST_FORVAL, PIPE_KOLUMNER, lasInstallningar, lokalDag, bekraftelseFonster, pipelineKolumn,
-  bradska, niva, fordela, taptSkal, manadFor, kortFas, ursprungligBokare, sorteraFas,
+  bradska, niva, fordela, taptSkal, manadFor, kortFas, ursprungligBokare, sorteraFas, provaInstallning, INST_NYCKLAR,
 } from "../src/lib/nav2/motesflode.ts";
 
 let fel = 0;
@@ -57,6 +57,30 @@ lika("prefix gäller", lasInstallningar([{ key: "moten.rubrik-prefix", value: "C
 lika("felaktig påminnelsetid ger förvalet", lasInstallningar([{ key: "moten.utfall-paminnelse", value: "25:00" }]).utfallPaminnelse, "18:00");
 lika("mottagare gäller", lasInstallningar([{ key: "moten.mottagare", value: ["a", "b"] }]).mottagare, ["a", "b"]);
 lika("okänd nyckel välter inget", lasInstallningar([{ key: "moten.okand", value: 1 }, { key: "annat", value: null }]), INST_FORVAL);
+
+console.log("Att spara en inställning (provaInstallning)");
+{
+  const fel = (n, v) => { const r = provaInstallning(n, v); return r.ok ? null : r.fel; };
+  ok("30 dagar nekas med en mening", /0 till 14/.test(fel("moten.bekrafta-dagar", 30) ?? ""));
+  ok("okänd nyckel nekas", !!fel("moten.okand", 1));
+  ok("gäller från går inte att ändra", !!fel("moten.galler-fran", "2026-01-01T00:00:00Z"));
+  lika("3 dagar går", provaInstallning("moten.bekrafta-dagar", 3), { ok: true, varde: 3 });
+  lika("beloppen avrundas till ören", provaInstallning("moten.provision", { kvalificerat: 600.005, hallet: 300 }), { ok: true, varde: { kvalificerat: 600.01, hallet: 300 } });
+  ok("negativt belopp nekas", !!fel("moten.provision", { kvalificerat: -1, hallet: 300 }));
+  ok("ett kolumnnamn för långt nekas", !!fel("moten.kolumnnamn", { bokat: "x".repeat(25) }));
+  ok("en okänd kolumn nekas", !!fel("moten.kolumnnamn", { klar: "Klar" }));
+  lika("kolumnnamn trimmas", provaInstallning("moten.kolumnnamn", { hos_saljaren: " Väntar på rapport " }), { ok: true, varde: { hos_saljaren: "Väntar på rapport" } });
+  ok("sex frågor nekas", !!fel("moten.fragor", Array.from({ length: 6 }, (_, i) => ({ id: "f" + i, text: "F", aktiv: true }))));
+  ok("två frågor med samma id nekas", !!fel("moten.fragor", [{ id: "a", text: "A", aktiv: true }, { id: "a", text: "B", aktiv: true }]));
+  ok("okänd tidszon nekas", !!fel("moten.tidszon", "Mars/Olympus"));
+  lika("en riktig tidszon går", provaInstallning("moten.tidszon", "Europe/Oslo"), { ok: true, varde: "Europe/Oslo" });
+  ok("25:00 nekas", !!fel("moten.utfall-paminnelse", "25:00"));
+  ok("halva nekas", !!fel("moten.ombokning-provision", "halva"));
+  lika("tomt prefix går", provaInstallning("moten.rubrik-prefix", "  "), { ok: true, varde: "" });
+  ok("41 tecken prefix nekas", !!fel("moten.rubrik-prefix", "x".repeat(41)));
+  ok("mottagare som inte är text nekas", !!fel("moten.mottagare", [1, 2]));
+  ok("varje nyckel matchar nav_setting-mönstret", Object.values(INST_NYCKLAR).every((k) => /^[a-z0-9.-]{1,60}$/.test(k)));
+}
 
 console.log("Lokal dag och fönster");
 lika("lokal dag efter midnatt", lokalDag("2026-11-15T23:15:00Z", tz), "2026-11-16");

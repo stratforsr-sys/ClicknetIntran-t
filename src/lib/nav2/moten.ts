@@ -5,7 +5,7 @@ import { fullName, hasRole, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { dagarBakat, svenskTidpunkt, svenskVeckodag, svensktDatum } from "@/lib/klocka";
 import { lokal } from "./leads";
-import { arHallare, KOLUMNER, MOTE_PLATS, platsTyp, type Kolumn, type Platstyp } from "./motenforma";
+import { arHallare, farAndraInstallning, farSeInstallningar, KOLUMNER, MOTE_PLATS, platsTyp, type Kolumn, type Platstyp } from "./motenforma";
 import {
   bekraftelseFonster, bradska, fordela, kortFas, lasInstallningar, manadFor, PIPE_KOLUMNER, sorteraFas, ursprungligBokare,
   type MotenInst, type PipeKolumn,
@@ -113,7 +113,9 @@ export type NdMoten = {
   kort: NdMoteKort[];
   avgjorda: NdAvgjort[];
   /** Det som går att ställa in per företag och som tavlan behöver. */
-  inst: Pick<MotenInst, "bekraftaDagar" | "kolumnnamn" | "fragor">;
+  inst: Pick<MotenInst, "bekraftaDagar" | "kolumnnamn" | "fragor" | "rubrikPrefix">;
+  /** Inställningsrutan: hela inställningen för Admin och Superadmin, null för alla andra. `farPengar`: får ändra beloppen och vilka som får mötesprovision. */
+  installningar: (MotenInst & { farPengar: boolean }) | null;
   /** Betraktarens egen andel per kolumn, i kronor. Null för den som inte får mötesprovision. */
   provisionPaSpel: Record<PipeKolumn, number> | null;
   vecka: { affar: number; nej: number; kedjor: { kedja: string; namn: string; avslut: "affar" | "nej"; nar: string }[] };
@@ -199,11 +201,12 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
   const chef = hasRole(user, ...CHEFSROLLER);
   const instTom = lasInstallningar([]);
   const tom: NdMoten = {
-    kort: [], avgjorda: [], inst: { bekraftaDagar: instTom.bekraftaDagar, kolumnnamn: instTom.kolumnnamn, fragor: instTom.fragor },
-    provisionPaSpel: null, vecka: { affar: 0, nej: 0, kedjor: [] }, saljare: [], kollegor: [], chef,
+    kort: [], avgjorda: [], inst: { bekraftaDagar: instTom.bekraftaDagar, kolumnnamn: instTom.kolumnnamn, fragor: instTom.fragor, rubrikPrefix: instTom.rubrikPrefix },
+    installningar: null, provisionPaSpel: null, vecka: { affar: 0, nej: 0, kedjor: [] }, saljare: [], kollegor: [], chef,
   };
   if (!user.employee) return tom;
   const jag = user.employee.id;
+  const aktor = { id: jag, roller: user.roles as string[] };
   const nu = new Date();
   const { fran, till } = veckansGranser(nu);
   // Månadens avgjorda: hämta ett något bredare fönster och välj ut månaden i installationens tidszon nedan.
@@ -458,7 +461,8 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
   return {
     kort,
     avgjorda,
-    inst: { bekraftaDagar: inst.bekraftaDagar, kolumnnamn: inst.kolumnnamn, fragor: inst.fragor },
+    inst: { bekraftaDagar: inst.bekraftaDagar, kolumnnamn: inst.kolumnnamn, fragor: inst.fragor, rubrikPrefix: inst.rubrikPrefix },
+    installningar: farSeInstallningar(aktor) ? { ...inst, farPengar: farAndraInstallning(aktor, "moten.provision") } : null,
     provisionPaSpel,
     vecka,
     saljare,

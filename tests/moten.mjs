@@ -481,10 +481,21 @@ rubrik("2026-11-03: Ändra mötet (andraIndata)");
 
 rubrik("2026-11-11: Rubriken i kalendern (moteRubrik, arEgenRubrik)");
 {
-  ok("Clicknet - <bolaget>: Möte", M.moteRubrik("Bygg & Plåt AB") === "Clicknet - Bygg & Plåt AB: Möte");
+  // 0287: prefixet är en inställning (moten.rubrik-prefix), inte kod. Utan prefix heter mötet "<bolaget>: Möte".
+  ok("med prefix: <prefix> - <bolaget>: Möte", M.moteRubrik("Bygg & Plåt AB", "Clicknet") === "Clicknet - Bygg & Plåt AB: Möte");
+  ok("utan prefix: <bolaget>: Möte", M.moteRubrik("Bygg & Plåt AB", "") === "Bygg & Plåt AB: Möte" && M.moteRubrik("Bolag AB") === "Bolag AB: Möte");
   ok("den nya rubriken är Mötens egen", M.arEgenRubrik("Clicknet - Bygg & Plåt AB: Möte", "Bygg & Plåt AB"));
+  ok("rubriken utan prefix och med ett annat prefix är också Mötens", M.arEgenRubrik("Bygg & Plåt AB: Möte", "Bygg & Plåt AB") && M.arEgenRubrik("Acme - Bygg & Plåt AB: Möte", "Bygg & Plåt AB"));
   ok("den gamla \"SEO-möte: <bolaget>\" räknas också som Mötens egen", M.arEgenRubrik("SEO-möte: Bygg & Plåt AB", "Bygg & Plåt AB"));
   ok("en rubrik skriven för hand, eller med ett annat bolag, är inte Mötens", !M.arEgenRubrik("Genomgång med Anna", "Bygg & Plåt AB") && !M.arEgenRubrik("Clicknet - Annat AB: Möte", "Bygg & Plåt AB") && !M.arEgenRubrik(null, "Bygg & Plåt AB"));
+}
+
+rubrik("0287: vem ändrar Mötens inställningar (farAndraInstallning)");
+{
+  const u = (...roller) => ({ id: "x", roller });
+  ok("en säljare ändrar ingenting", !M.farAndraInstallning(u("salesperson"), "moten.bekrafta-dagar") && !M.farSeInstallningar(u("salesperson")));
+  ok("en teamledare (Admin) ändrar dagarna men inte beloppen", M.farAndraInstallning(u("team_lead"), "moten.bekrafta-dagar") && !M.farAndraInstallning(u("team_lead"), "moten.provision"));
+  ok("ekonomi, säljchef, VD och admin ändrar beloppen", ["finance", "sales_manager", "ceo", "admin"].every((r) => M.farAndraInstallning(u(r), "moten.provision") && M.farAndraInstallning(u(r), "moten.mottagare") && M.farAndraInstallning(u(r), "moten.ombokning-provision")));
 }
 
 console.log(fel ? `\n\x1b[31m${fel} fel\x1b[0m` : "\n\x1b[32mAlla ✓\x1b[0m");

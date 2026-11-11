@@ -47,12 +47,14 @@ import {
   videoNamn,
   utfallIndata,
   arEgenRubrik,
+  farAndraInstallning,
   moteRubrik,
   type Aktor,
   type UtfallIn,
   type Uppslag,
 } from "@/lib/nav2/motenforma";
 import { lokal } from "@/lib/nav2/leads";
+import { faltFor, lasInstallningar, provaInstallning, type MotenInst } from "@/lib/nav2/motesflode";
 import { medNyckel } from "@/lib/nav2/nyckel";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 
@@ -230,6 +232,12 @@ export async function POST(request: Request) {
     return ids.map((id) => n.get(id) || "en kollega");
   };
 
+  /** Installationens inställningar för Möten (nav_setting "moten.*", motesflode.ts). Ett fel ger förvalen. */
+  const lasInst = async (): Promise<MotenInst> => {
+    const { data } = await db.from("nav_setting").select("key, value").like("key", "moten.%").limit(100);
+    return lasInstallningar((data ?? []) as { key: string; value: unknown }[]);
+  };
+
   const harOppetMote = async (kedja: string): Promise<boolean> => {
     const { data } = await db.from("mote").select("id").eq("kedja_id", kedja).is("utfall", null).limit(1);
     return ((data ?? []) as unknown[]).length > 0;
@@ -314,6 +322,8 @@ export async function POST(request: Request) {
     case "paminn":
       return await medNyckel(request, mig, () => paminn());
 
+    case "installningar":
+      return installningar();
     case "forsok":
       return forsok();
     case "bekrafta":
@@ -551,7 +561,7 @@ export async function POST(request: Request) {
     // `lk_skapa_mote`, 0069) med service role. Bokaren står kvar i `mote.bokat_av`, notisen `mote-bokat`
     // går till hållaren och kollegorna på mötet (steg 9), och `hallsAv` är redan prövad som en aktiv
     // säljare, så ingen annans kalender kan fyllas med möten.
-    const rubrik = moteRubrik(v.namn);
+    const rubrik = moteRubrik(v.namn, (await lasInst()).rubrikPrefix);
     const m: { fel?: string; eventId?: string } =
       v.hallsAv === mig
         ? await skapaMote({ organisator: v.hallsAv, rubrik, dag: v.dag, start: minuterAv(v.start), minuter: v.langd, deltagare: [v.hallsAv, ...v.med], plats: v.plats, agenda: v.mal })
@@ -727,6 +737,32 @@ export async function POST(request: Request) {
     if (((data ?? []) as unknown[]).length === 0) return svar({ fel: "Mötet är redan bekräftat." }, 409);
     await skrivHandelse({ actorId: mig, action: "mote.confirmed", objectType: "mote", objectId: m.id, meta: { kedja: m.kedja_id } });
     return svar({ ok: "Mötet är bekräftat.", mote: m.id });
+  }
+
+  /**
+   * Mötens inställningar (0287): en nyckel i taget, prövad med samma tolkare som läsningen (motesflode.ts).
+   * Admin och Superadmin; det som rör pengar bara de som hanterar provision (`farAndraInstallning`).
+   * Kolumnnamnen kan skickas ett i taget och läggs ovanpå de sparade. Händelsen bär värdet före och efter.
+   */
+  async function installningar(): Promise<Response> {
+    const nyckel = String(b.nyckel ?? "");
+    if (!farAndraInstallning(aktorn, nyckel)) {
+      return svar({ fel: faltFor(nyckel) && farAndraInstallning(aktorn, "moten.tidszon") ? "Mötesprovisionen ändras av ekonomi, säljchefen eller VD." : "Bara admin ändrar Mötens inställningar." }, 403);
+    }
+    const p = provaInstallning(nyckel, b.varde);
+    if (!p.ok) return svar({ fel: p.fel }, 400);
+    let varde = p.varde;
+    if (nyckel === "moten.mottagare") {
+      const ids = varde as string[];
+      if (ids.some((id) => !UUID.test(id)) || (await aktiva(ids)).length !== ids.length) return svar({ fel: "Någon i listan finns inte eller har slutat." }, 400);
+    }
+    const { data: foreRad } = await db.from("nav_setting").select("value").eq("key", nyckel).maybeSingle();
+    const fore = (foreRad as { value: unknown } | null)?.value ?? null;
+    if (nyckel === "moten.kolumnnamn" && fore && typeof fore === "object" && !Array.isArray(fore)) varde = { ...(fore as Record<string, unknown>), ...(varde as Record<string, unknown>) };
+    const { error } = await db.from("nav_setting").upsert({ key: nyckel, value: varde, updated_by: mig, updated_at: new Date().toISOString() });
+    if (error) return svar({ fel: "Inställningen kunde inte sparas." }, 500);
+    await skrivHandelse({ actorId: mig, action: "mote.settings_changed", objectType: "nav_setting", objectId: nyckel, meta: { nyckel, fore, efter: varde } });
+    return svar({ ok: "Sparat.", nyckel, varde });
   }
 
   /**
@@ -1089,8 +1125,9 @@ export async function POST(request: Request) {
     const platsNu = v.plats ? v.plats.plats : platsFore;
     const lankNu = v.plats ? v.plats.lank : lankFore;
     const platsAndras = platsNu !== platsFore || (lankNu ?? "") !== (lankFore ?? "");
-    const egenRubrik = moteRubrik(bo.namn);
-    const titel = kal && bolagLapp.namn && arEgenRubrik(kal.title, bo.namn) ? moteRubrik(bolagLapp.namn) : kal?.title ?? egenRubrik;
+    const prefix = (await lasInst()).rubrikPrefix;
+    const egenRubrik = moteRubrik(bo.namn, prefix);
+    const titel = kal && bolagLapp.namn && arEgenRubrik(kal.title, bo.namn) ? moteRubrik(bolagLapp.namn, prefix) : kal?.title ?? egenRubrik;
     const agenda = kal && "mal" in moteLapp && (kal.agenda_md ?? "") === (m.mal ?? "") ? String(moteLapp.mal ?? "") : kal?.agenda_md ?? "";
     const kalAndras = !!kal && (!!nyTid || platsAndras || titel !== kal.title || agenda !== (kal.agenda_md ?? "") || medIn.length > 0 || medUt.length > 0);
     const gastAndras = gastIn.length > 0 || gastUt.length > 0;

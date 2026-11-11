@@ -17,6 +17,7 @@
 import { arArbetsdag, dagPlus } from "../saljtakt.ts";
 import { SKAL } from "./leadsforma.ts";
 import { normaliseraEpost, normaliseraTelefon } from "../leads.ts";
+import { nivaFor } from "./forma.ts";
 
 export const KOLUMNER = ["bokat", "bekraftat", "utfall_saknas", "folj_upp", "tyst"] as const;
 export type Kolumn = (typeof KOLUMNER)[number];
@@ -47,9 +48,14 @@ export const MAX_GASTER = 10;
  * 2026-11-11). Före dess hette den "SEO-möte: <bolaget>". Båda räknas som Mötens egen rubrik, så att Ändra
  * byter bolagets namn i den; en rubrik som skrivits om i Kalendern för hand lämnas orörd.
  */
-export const moteRubrik = (namn: string): string => `Clicknet - ${namn}: Möte`;
+/**
+ * Mötets rubrik i kalendern och i kundens inbjudan. Prefixet är installationens (`moten.rubrik-prefix`,
+ * motesflode.ts), aldrig kod: med prefix "<prefix> - <bolaget>: Möte", utan "<bolaget>: Möte".
+ */
+export const moteRubrik = (namn: string, prefix = ""): string => (prefix.trim() ? `${prefix.trim()} - ${namn}: Möte` : `${namn}: Möte`);
+/** Mötens egen rubrik, med vilket prefix som helst (prefixet kan ha bytts sedan mötet bokades), eller den gamla formen. */
 export const arEgenRubrik = (titel: string | null | undefined, namn: string): boolean =>
-  titel === moteRubrik(namn) || titel === `SEO-möte: ${namn}`;
+  !!titel && (titel === `${namn}: Möte` || titel.endsWith(` - ${namn}: Möte`) || titel === `SEO-möte: ${namn}`);
 
 /* ------------------------------------------------------------------------ */
 /* Platsen (2026-11-03): som i Outlook, över telefon, i Teams eller på en plats */
@@ -186,6 +192,16 @@ export const HALLARE_ROLLER = ["salesperson", "team_lead", "sales_manager", "ceo
 export const arHallare = (roller: readonly string[] | null | undefined): boolean => (roller ?? []).some((r) => (HALLARE_ROLLER as readonly string[]).includes(r));
 
 const harRoll = (u: Aktor, lista: readonly string[]): boolean => u.roller.some((r) => lista.includes(r));
+
+/**
+ * Mötens inställningar (0287): Admin och Superadmin ser och ändrar dem. Det som rör pengar (beloppen, vilka som får
+ * mötesprovision, ombokningsregeln) ändras bara av dem som hanterar provision (som `commission_entry`, 0031) och admin.
+ */
+export const PROVISIONS_ROLLER = ["finance", "ceo", "sales_manager", "admin"] as const;
+const PENGANYCKLAR = ["moten.provision", "moten.mottagare", "moten.ombokning-provision"];
+export const farSeInstallningar = (u: Aktor): boolean => nivaFor(u.roller) !== "salesperson";
+export const farAndraInstallning = (u: Aktor, nyckel: string): boolean =>
+  farSeInstallningar(u) && (!PENGANYCKLAR.includes(nyckel) || harRoll(u, PROVISIONS_ROLLER));
 
 /**
  * Med på mötet: den som bokade det, den som håller det och kollegorna. Beställaren 2026-11-04: alla tre gör samma saker
@@ -651,7 +667,7 @@ export const SQL_INGET_SVAR = `update public.mote_kedja
  * igenom resten (`uppslag`, `lediga`, och `samtal` från B4), som bara läser. En okänd handling är
  * ingen skrivning och får sitt vanliga 400.
  */
-export const SKRIVANDE_HANDLINGAR = ["boka", "paminn", "forsok", "bekrafta", "flytta", "avboka", "utfall", "kund", "nej", "inget_svar", "prova_igen", "radera", "andra"] as const;
+export const SKRIVANDE_HANDLINGAR = ["boka", "paminn", "forsok", "installningar", "bekrafta", "flytta", "avboka", "utfall", "kund", "nej", "inget_svar", "prova_igen", "radera", "andra"] as const;
 export const arSkrivning = (handling: string): boolean => (SKRIVANDE_HANDLINGAR as readonly string[]).includes(handling);
 
 /**

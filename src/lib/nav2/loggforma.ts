@@ -249,6 +249,7 @@ const RUBRIK: Record<string, string> = {
   "mote.confirmed": "Möte bekräftat",
   "mote.edited": "Möte ändrat",
   "mote.moved": "Möte flyttat",
+  "mote.settings_changed": "Mötens inställningar ändrade",
   "news.archived": "Nyhet arkiverad",
   "news.drafted": "Nyhet sparad som utkast",
   "news.published": "Nyhet publicerad",

@@ -14,6 +14,18 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten-installningar",
+    rubrik: "Ställ in Möten för ert företag",
+    ingress: "Under Inställningar i Möten väljer du hur många dagar före mötet det ska bekräftas, vilka frågor säljaren svarar på efteråt och vad kolumnerna heter.",
+    text: `Knappen **Inställningar** uppe till höger i **Möten** öppnar ett blad där varje ändring sparas
+direkt. Där står också mötesprovisionen: beloppen för kvalificerat och hållet möte, vilka som får den och vad
+som gäller när en annan bokare bokar om ett möte. Beloppen ändras av ekonomi, säljchefen eller VD.
+Rubrikens början i kalendern ("Clicknet - Bolaget AB: Möte") ställs in på samma ställe.`,
+    datum: "2026-11-12",
+    roller: ["sales_manager", "ceo", "finance", "admin", "team_lead"],
+    href: "/moten",
+  },
+  {
     slug: "moten-pipeline",
     rubrik: "Möten är en pipeline som flyttar sig själv",
     ingress: "Tavlan har fem kolumner: Bokat, Att bekräfta, Bekräftat, Hos säljaren och Avgjort. Ett möte flyttar sig självt när det är dags att ringa kunden och när mötet har hållits.",

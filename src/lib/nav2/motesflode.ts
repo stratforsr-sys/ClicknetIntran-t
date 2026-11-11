@@ -80,71 +80,94 @@ export function giltigTidszon(tz: unknown): tz is string {
 }
 
 /**
+ * En tolkare per inställning: ger värdet i sin rena form, eller undefined när
+ * det inte går att använda. Läsningen och sparandet (provaInstallning) går
+ * genom samma tolkare, så att det som går att spara alltid går att läsa.
+ */
+const giltigtBelopp = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x) && x >= 0 && x <= GRANSER.belopp;
+const giltigtNamn = (n: unknown): n is string => typeof n === "string" && !!n.trim() && n.trim().length <= GRANSER.kolumnnamn;
+
+const TOLKA: { [K in Exclude<keyof MotenInst, "kolumnnamn">]: (v: unknown) => MotenInst[K] | undefined } = {
+  bekraftaDagar: (v) => (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= GRANSER.dagarMax ? v : undefined),
+  fragor: (v) => {
+    if (!Array.isArray(v) || v.length > GRANSER.fragorMax) return undefined;
+    const id = new Set<string>();
+    const lista: Fraga[] = [];
+    for (const f of v) {
+      if (!arObjekt(f) || typeof f.id !== "string" || !/^[a-z0-9_-]{1,40}$/.test(f.id) || id.has(f.id)
+        || typeof f.text !== "string" || !f.text.trim() || f.text.trim().length > GRANSER.fragaText || typeof f.aktiv !== "boolean") return undefined;
+      id.add(f.id);
+      lista.push({ id: f.id, text: f.text.trim(), aktiv: f.aktiv });
+    }
+    return lista;
+  },
+  satser: (v) => (arObjekt(v) && giltigtBelopp(v.kvalificerat) && giltigtBelopp(v.hallet)
+    ? { kvalificerat: Math.round(v.kvalificerat * 100) / 100, hallet: Math.round(v.hallet * 100) / 100 }
+    : undefined),
+  mottagare: (v) => (Array.isArray(v) && v.length <= 1000 && v.every((m) => typeof m === "string" && m.length > 0 && m.length <= 64) ? [...new Set(v as string[])] : undefined),
+  ombokning: (v) => (v === "ny" || v === "dela" ? v : undefined),
+  tidszon: (v) => (giltigTidszon(v) ? v : undefined),
+  utfallPaminnelse: (v) => (typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : undefined),
+  rubrikPrefix: (v) => (typeof v === "string" && v.trim().length <= GRANSER.prefix ? v.trim() : undefined),
+  gallerFran: (v) => (typeof v === "string" && !Number.isNaN(Date.parse(v)) ? new Date(v).toISOString() : undefined),
+};
+
+/**
  * Varje nyckel prövas för sig: ett felaktigt värde ger förvalet för just den
- * nyckeln och välter aldrig Möten eller Provision.
+ * nyckeln och välter aldrig Möten eller Provision. Kolumnnamnen prövas namn för namn.
  */
 export function lasInstallningar(rader: { key: string; value: unknown }[]): MotenInst {
   const v = new Map(rader.map((r) => [r.key, r.value]));
   const ut: MotenInst = structuredClone(INST_FORVAL);
-  const N = INST_NYCKLAR;
-
-  const dagar = v.get(N.bekraftaDagar);
-  if (typeof dagar === "number" && Number.isInteger(dagar) && dagar >= 0 && dagar <= GRANSER.dagarMax) ut.bekraftaDagar = dagar;
-
-  const fragor = v.get(N.fragor);
-  if (Array.isArray(fragor) && fragor.length <= GRANSER.fragorMax) {
-    const id = new Set<string>();
-    const lista: Fraga[] = [];
-    let hel = true;
-    for (const f of fragor) {
-      if (!arObjekt(f) || typeof f.id !== "string" || !/^[a-z0-9_-]{1,40}$/.test(f.id) || id.has(f.id)
-        || typeof f.text !== "string" || !f.text.trim() || f.text.length > GRANSER.fragaText || typeof f.aktiv !== "boolean") {
-        hel = false;
-        break;
-      }
-      id.add(f.id);
-      lista.push({ id: f.id, text: f.text.trim(), aktiv: f.aktiv });
-    }
-    if (hel) ut.fragor = lista;
+  for (const falt of Object.keys(TOLKA) as (keyof typeof TOLKA)[]) {
+    if (!v.has(INST_NYCKLAR[falt])) continue;
+    const t = TOLKA[falt](v.get(INST_NYCKLAR[falt]));
+    if (t !== undefined) (ut as Record<string, unknown>)[falt] = t;
   }
-
-  const satser = v.get(N.satser);
-  if (arObjekt(satser)) {
-    const giltig = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x) && x >= 0 && x <= GRANSER.belopp;
-    if (giltig(satser.kvalificerat) && giltig(satser.hallet)) {
-      ut.satser = { kvalificerat: Math.round(satser.kvalificerat * 100) / 100, hallet: Math.round(satser.hallet * 100) / 100 };
-    }
-  }
-
-  const namn = v.get(N.kolumnnamn);
-  if (arObjekt(namn)) {
-    for (const k of PIPE_KOLUMNER) {
-      const n = namn[k];
-      if (typeof n === "string" && n.trim() && n.trim().length <= GRANSER.kolumnnamn) ut.kolumnnamn[k] = n.trim();
-    }
-  }
-
-  const mottagare = v.get(N.mottagare);
-  if (Array.isArray(mottagare) && mottagare.every((m) => typeof m === "string" && m.length > 0 && m.length <= 64)) {
-    ut.mottagare = [...new Set(mottagare as string[])];
-  }
-
-  const regel = v.get(N.ombokning);
-  if (regel === "ny" || regel === "dela") ut.ombokning = regel;
-
-  const tz = v.get(N.tidszon);
-  if (giltigTidszon(tz)) ut.tidszon = tz;
-
-  const tid = v.get(N.utfallPaminnelse);
-  if (typeof tid === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(tid)) ut.utfallPaminnelse = tid;
-
-  const prefix = v.get(N.rubrikPrefix);
-  if (typeof prefix === "string" && prefix.trim().length <= GRANSER.prefix) ut.rubrikPrefix = prefix.trim();
-
-  const fran = v.get(N.gallerFran);
-  if (typeof fran === "string" && !Number.isNaN(Date.parse(fran))) ut.gallerFran = new Date(fran).toISOString();
-
+  const namn = v.get(INST_NYCKLAR.kolumnnamn);
+  if (arObjekt(namn)) for (const k of PIPE_KOLUMNER) if (giltigtNamn(namn[k])) ut.kolumnnamn[k] = (namn[k] as string).trim();
   return ut;
+}
+
+const SPARFEL: Record<keyof MotenInst, string> = {
+  bekraftaDagar: "Antalet dagar ska vara ett heltal från 0 till 14.",
+  fragor: "Högst fem frågor, var och en med en text på högst 120 tecken.",
+  satser: "Beloppen ska vara mellan 0 och 100 000 kr.",
+  kolumnnamn: "Varje kolumnnamn ska ha mellan 1 och 24 tecken.",
+  mottagare: "Listan över vilka som får mötesprovision stämmer inte.",
+  ombokning: "Välj Den som bokade om eller Dela lika.",
+  tidszon: "Tidszonen finns inte.",
+  utfallPaminnelse: "Skriv tiden som TT:MM, till exempel 18:00.",
+  rubrikPrefix: "Prefixet får ha högst 40 tecken.",
+  gallerFran: "Den här inställningen går inte att ändra.",
+};
+
+/** Inställningen och fältet för en nav_setting-nyckel, eller null. */
+export function faltFor(nyckel: string): keyof MotenInst | null {
+  const f = (Object.keys(INST_NYCKLAR) as (keyof MotenInst)[]).find((k) => INST_NYCKLAR[k] === nyckel);
+  return f ?? null;
+}
+
+/**
+ * Prövar ett värde innan det sparas. Samma tolkare som läsningen; kolumnnamnen
+ * prövas strängare (en okänd kolumn eller ett ogiltigt namn nekas i stället för
+ * att falla tillbaka). `moten.galler-fran` går inte att ändra.
+ */
+export function provaInstallning(nyckel: string, varde: unknown): { ok: true; varde: unknown } | { ok: false; fel: string } {
+  const falt = faltFor(nyckel);
+  if (!falt) return { ok: false, fel: "Okänd inställning." };
+  if (falt === "gallerFran") return { ok: false, fel: SPARFEL.gallerFran };
+  if (falt === "kolumnnamn") {
+    if (!arObjekt(varde)) return { ok: false, fel: SPARFEL.kolumnnamn };
+    const ut: Partial<Record<PipeKolumn, string>> = {};
+    for (const [k, n] of Object.entries(varde)) {
+      if (!(PIPE_KOLUMNER as readonly string[]).includes(k) || !giltigtNamn(n)) return { ok: false, fel: SPARFEL.kolumnnamn };
+      ut[k as PipeKolumn] = n.trim();
+    }
+    return { ok: true, varde: ut };
+  }
+  const t = TOLKA[falt](varde);
+  return t === undefined ? { ok: false, fel: SPARFEL[falt] } : { ok: true, varde: t };
 }
 
 /** Kalenderdagen ("YYYY-MM-DD") för en tidpunkt i tidszonen. */
