@@ -27133,7 +27133,12 @@ laggTill = function(rad){
   // samma rad fyra gånger (2026-11-02). Säger Nav nej kommer det som inte sparades tillbaka, om fältet fortfarande är tomt.
   const falt = v => { S.quick = v; render(); setTimeout(() => document.getElementById(S.todoOpen ? 'qinTodo' : 'qinMain')?.focus(), 0); };
   falt('');
-  (async () => { for (let i = 0; i < delar.length; i++){ const s = await ndUpgPost('skapa', {rad:delar[i]}, {ladda:false, tyst:true}); if (!s.ok){ if (!S.quick) falt(delar.slice(i).join('; ')); ndSkrivFel(s, 'Uppgiften lades inte upp.'); if (i) ndOmlas('upg'); return; } } toast(delar.length > 1 ? `${delar.length} uppgifter upplagda.` : 'Uppgiften är upplagd.'); ndOmlas('upg'); })();
+  // En rad utan dag har ingen deadline och läggs inte i dag (beställaren 2026-11-11): den hamnar under Kommande, och
+  // kvittot säger det med Visa. En rad som försvinner ur listan den skrevs i ser osparad ut (2026-11-02, fyra gånger).
+  (async () => { const svar = []; for (let i = 0; i < delar.length; i++){ const s = await ndUpgPost('skapa', {rad:delar[i]}, {ladda:false, tyst:true}); if (!s.ok){ if (!S.quick) falt(delar.slice(i).join('; ')); ndSkrivFel(s, 'Uppgiften lades inte upp.'); if (i) ndOmlas('upg'); return; } svar.push(s); }
+    if (svar.every(s => s.dag === null && s.egen === true)) toastActs(delar.length > 1 ? `${delar.length} uppgifter upplagda utan deadline, under Kommande.` : 'Upplagd utan deadline, under Kommande.', [['Visa', () => { S.view = 'uppgifter'; S.tab = 'kommande'; S.todoOpen = false; render(); window.scrollTo(0, 0); }]]);
+    else toast(delar.length > 1 ? `${delar.length} uppgifter upplagda.` : 'Uppgiften är upplagd.');
+    ndOmlas('upg'); })();
 };
 
 document.addEventListener('click', e => {
@@ -35183,9 +35188,9 @@ function ndPalNyUppgift(){
   S.todoOpen = true; render(); setTimeout(() => document.getElementById('qinTodo')?.focus(), 50);
 }
 function ndPalLaggTill(text){
-  ndUpgPost('skapa', {titel:text, dag:kIdag()}, {ladda:false, tyst:true}).then(s => {
+  ndUpgPost('skapa', {titel:text}, {ladda:false, tyst:true}).then(s => {
     if (!s.ok){ ndSkrivFel(s, 'Uppgiften lades inte upp.'); return; }
-    toast('Lagd i Uppgifter, i dag.', () => { ndUpgPost('avbryt', {id:s.id, note:'Ångrad i paletten'}, {ladda:false, tyst:true}).then(a => { toast(a.ok ? 'Ångrat.' : a.fel || 'Det gick inte att ångra.'); ndOmlas('upg'); }); });
+    toast('Lagd i Uppgifter, utan deadline.', () => { ndUpgPost('avbryt', {id:s.id, note:'Ångrad i paletten'}, {ladda:false, tyst:true}).then(a => { toast(a.ok ? 'Ångrat.' : a.fel || 'Det gick inte att ångra.'); ndOmlas('upg'); }); });
     ndOmlas('upg');
   });
 }
@@ -35210,7 +35215,7 @@ drawPal = function(q){
     return {html:`${I(x.i)}<span>${esc(x.l)}</span>`, run:()=>{ closePal(); run(); }};
   });
   grp('Gå till', pages.slice(0, nq ? 12 : 6), ([l,i,h]) => ({html:`${I(i)}<span>${esc(l)}</span><span class="p">${h}</span>`, run:()=>{ closePal(); ndGa(h); }}));
-  if (nq.length >= 3 && nq !== '?' && !qs.length) grp('Lägg till', [q.trim()], x => ({html:`${I('plus')}<span>Ny uppgift: ”${esc(x)}”</span><span class="p">i dag</span>`, run:()=>{ closePal(); ndKopplad('uppgifter') ? ndPalLaggTill(x) : ndGa('/uppgifter'); }}));
+  if (nq.length >= 3 && nq !== '?' && !qs.length) grp('Lägg till', [q.trim()], x => ({html:`${I('plus')}<span>Ny uppgift: ”${esc(x)}”</span><span class="p">utan deadline</span>`, run:()=>{ closePal(); ndKopplad('uppgifter') ? ndPalLaggTill(x) : ndGa('/uppgifter'); }}));
   if (!palItems.length) html = `<div class="empty"><b>Inga träffar</b>Prova ett annat ord.</div>`;
   document.getElementById('palRes').innerHTML = html;
   document.querySelectorAll('#palRes .opt[data-pi]').forEach(o => o.addEventListener('mousemove', () => { palSel = +o.dataset.pi; hl(); }));

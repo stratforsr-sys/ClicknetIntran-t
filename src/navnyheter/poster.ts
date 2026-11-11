@@ -14,6 +14,18 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "uppgift-utan-deadline",
+    rubrik: "En uppgift utan deadline blir aldrig försenad",
+    ingress: "Skriver du en uppgift utan dag hamnar den under Kommande, inte i Att göra i dag, och den står aldrig som försenad.",
+    text: `Förut fick en uppgift utan dag dagens datum som deadline. Dagen efter stod den som
+försenad, fast ingen deadline någonsin satts. Nu får uppgiften en dag bara om du skriver en:
+"i morgon", "fredag", "3/12", eller ett klockslag som "14:00", som betyder i dag. Kvittot
+säger var uppgiften hamnade, och **Visa** tar dig dit.`,
+    datum: "2026-11-11",
+    roller: [],
+    href: "/uppgifter",
+  },
+  {
     slug: "saljtavlan-firar-igen",
     rubrik: "Säljtavlan firar varje ny order igen",
     ingress: "En godkänd order spelas nu upp på kontorets tv med namn, belopp och ljud, som den ska.",

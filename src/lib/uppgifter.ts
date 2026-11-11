@@ -519,7 +519,12 @@ const PRIORITETSORD: Record<string, Prioritet> = {
   "4": 4, "låg": 4, "lag": 4,
 };
 
-export function tolkaSnabbrad(rad: string, idag: string, utanDag?: string): Snabbrad {
+/** "14:00", "kl 14.30". Samma mönster avgör om raden fick en dag och vilken tid. */
+const KLOCKSLAG = /\s(?:kl\.?\s*)?([01]?\d|2[0-3])[:.]([0-5]\d)\b/u;
+/** "kl 14": timmen ensam, och bara med "kl" framför. */
+const KL_TIMME = /\skl\.?\s*([01]?\d|2[0-3])\b/iu;
+
+export function tolkaSnabbrad(rad: string, idag: string, klockslagetsDag?: string): Snabbrad {
   let text = ` ${rad} `;
 
   const ut: Snabbrad = {
@@ -664,26 +669,31 @@ export function tolkaSnabbrad(rad: string, idag: string, utanDag?: string): Snab
     });
   }
 
-  if (!ut.due_date && utanDag) {
+  if (!ut.due_date && klockslagetsDag) {
     /**
-     * Raden utan dag. Nav 2.0 skickar `utanDag` (i dag): raden skrivs i
-     * "Att göra i dag", och en uppgift som hamnar under Någon gång syns inte
-     * där (beställaren 2026-11-02 lade samma rad fyra gånger). "Någon gång"
-     * säger då uttryckligen att raden saknar dag. Gamla snabbraden skickar
-     * ingen, och där blir raden utan datum som förut.
+     * Raden utan dag i Nav 2.0. EN UPPGIFT UTAN DAG HAR INGEN DEADLINE: den
+     * hamnar under Kommande, aldrig i "Att göra i dag", och kan aldrig bli
+     * försenad (beställaren 2026-11-11). Mellan 2026-11-02 och 2026-11-11 lades
+     * raden i dag, och dagen efter stod en uppgift som aldrig haft någon
+     * deadline som försenad.
+     *
+     * Bara ett klockslag ger raden en dag: den som skriver "Möte 14:00" har
+     * skrivit en deadline, och den är i dag. "Någon gång" lämnar rubriken och
+     * ger ingen dag, inte heller med ett klockslag. Gamla snabbraden skickar
+     * ingen `klockslagetsDag`, och där står båda kvar i rubriken som förut.
      */
     let nagonGang = false;
     plocka(/\s(någon\s?gång|nagon\s?gang)\b/iu, () => {
       nagonGang = true;
       return true;
     });
-    if (!nagonGang) ut.due_date = utanDag;
+    if (!nagonGang && (KLOCKSLAG.test(text) || KL_TIMME.test(text))) ut.due_date = klockslagetsDag;
   }
 
   // --- Klockslag -----------------------------------------------------------
   // Sist, och bara om det finns ett datum: ett klockslag utan dag är ingen
   // tidpunkt, och databasen vägrar raden (`task_tid_kraver_datum` i 0054).
-  plocka(/\s(?:kl\.?\s*)?([01]?\d|2[0-3])[:.]([0-5]\d)\b/u, (m) => {
+  plocka(KLOCKSLAG, (m) => {
     if (!ut.due_date) return false;
     ut.due_time = `${m[1].padStart(2, "0")}:${m[2]}`;
     return true;
@@ -692,7 +702,7 @@ export function tolkaSnabbrad(rad: string, idag: string, utanDag?: string): Snab
   if (!ut.due_time) {
     // "kl 14" — timmen ensam, och bara med "kl" framför. Utan det ordet hade
     // "ring 20 bolag" blivit klockan 20.
-    plocka(/\skl\.?\s*([01]?\d|2[0-3])\b/iu, (m) => {
+    plocka(KL_TIMME, (m) => {
       if (!ut.due_date) return false;
       ut.due_time = `${m[1].padStart(2, "0")}:00`;
       return true;
