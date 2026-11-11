@@ -14828,8 +14828,6 @@ function oSiffror(s){
 }
 // Ett org.nr med tio siffror, utan sekel.
 const oTio = s => { const d = String(s || '').replace(/\D/g, ''); return d.length === 12 ? d.slice(2) : d; };
-// Sex siffror eller fler kan vara ett personnummer eller ett telefonnummer: sådant läggs aldrig i en länk eller en adress.
-const oSokKanslig = q => (String(q || '').match(/\d/g) || []).length >= 6;
 // Sökningens ord. Ett nummer skrivet med mellanslag ("070 123 45 67") är ett ord; annars delas texten vid mellanslagen.
 function oSokTermer(q){
   const s = String(q || '').trim(); if (!s) return [];
@@ -15263,7 +15261,7 @@ document.addEventListener('keydown', e => { if (S.view === 'order' && e.key === 
 FEAT.push(
   {n:243, t:'Order: hitta allt, se allt', s:'Order', ton:'signal', p:'Säljaren ser sina egna order och chefen alla, samma regel som RLS i repot. Sidan är en lista som går att söka, filtrera, sortera och gruppera, med orderkortet i en panel bredvid. N lägger en ny order, / söker, J och K flyttar mellan order, Enter öppnar och Esc stänger.', fore:'Lista med filterrad och kort', efter:'En tabell med allt, och kortet bredvid', insp:'Listor i Linear och Stripe: tät tabell, filter som chips, detaljen i en panel.'},
   {n:244, t:'Siffrorna överst är filter', s:'Order', ton:'signal', p:'Chefen ser Att godkänna (med ordervärdet), Stoppade, Godkänt i oktober och Löper ut snart. Säljaren ser sin provision i oktober, Väntar, Stoppade och Löper ut snart. Varje siffra är en knapp som filtrerar listan.', fore:'', efter:'', insp:''},
-  {n:245, t:'Sök och vyer', s:'Order', ton:'signal', p:'Ett sökfält för allt på ordern: bolag, kontaktperson, ort, säljare, ordernummer (#1482 eller 1482), org.nr, telefon (hur det än är skrivet), mejl, adress, paket, tjänster, anteckningar och Inkios nummer för fakturor, avtal, order och ärenden. Flera ord ska alla finnas. Träffen som inte syns på raden står under bolaget. Org.nr hittas på hela numret eller en del, även en enskild firmas, och ett nummer läggs aldrig i en länk (K27). Färdiga vyer bredvid, med antal: Alla, Att godkänna, Stoppade, Oktober och Löper ut snart. Egna vyer sparas och tas bort med ×.', fore:'Sök bara på bolagsnamn', efter:'Sök på allt, även fakturanummer, och vyer med ett klick', insp:''},
+  {n:245, t:'Sök och vyer', s:'Order', ton:'signal', p:'Ett sökfält för allt på ordern: bolag, kontaktperson, ort, säljare, ordernummer (#1482 eller 1482), org.nr, telefon (hur det än är skrivet), mejl, adress, paket, tjänster, anteckningar och Inkios nummer för fakturor, avtal, order och ärenden. Flera ord ska alla finnas. Träffen som inte syns på raden står under bolaget. Org.nr hittas på hela numret eller en del, även en enskild firmas, och sökningen följer med i Kopiera länk. Färdiga vyer bredvid, med antal: Alla, Att godkänna, Stoppade, Oktober och Löper ut snart. Egna vyer sparas och tas bort med ×.', fore:'Sök bara på bolagsnamn', efter:'Sök på allt, även fakturanummer, och vyer med ett klick', insp:''},
   {n:246, t:'Filter på allt som behövs', s:'Order', ton:'signal', p:'Status, säljare (för chefen, med sökfält), period, paket, bindningstid och Mer: tillägg, fri order, finans, utköp, med tjänster, säljsamtal saknas, avtal saknas, inte i Inkio, och löper ut inom 90 dagar. Varje val visar hur många order det ger, så att man aldrig väljer sig till en tom lista. Aktiva filter står som chips under raden och tas bort ett i taget eller alla på en gång. Visa grupperar per status, säljare, månad eller kund, och växlar mellan kompakt och bekväm täthet.', fore:'Säljare, tid och status', efter:'Allt, med antal på varje val', insp:'Facetterade filter med antal (Baymard, Eleken). Täthet efter användning (content density).'},
   {n:247, t:'Tabellen', s:'Order', ton:'signal', p:'Order och datum, kund med kontakt och ort, affären med märken (Tillägg, Fri, Finans, Utköp, tjänster), per månad, ordervärde, provision, säljare och status. Siffrorna står i tabulära siffror, så att de går att jämföra rakt nedåt. De tre kontrollerna till höger (säljsamtal, påskrivet avtal och Inkio) blir röda när något saknas. Stoppade order och avtal som snart löper ut syns direkt på raden. Klicka på en rubrik för att sortera. Chefen kan markera inskickade order och godkänna alla som är kompletta på en gång.', fore:'', efter:'', insp:''},
   {n:248, t:'Summan för det du ser', s:'Order', ton:'signal', p:'Under listan: antal order, ordervärde och provision för exakt det filtret, utan utkast och makulerade. Exportera ger samma urval som CSV-fil.', fore:'', efter:'', insp:''},
@@ -15887,7 +15885,7 @@ function o7Andrad(){
 }
 function o7Lank(){
   const f = S.ordF, p = [];
-  if (S.ordQ && !oSokKanslig(S.ordQ)) p.push('q=' + encodeURIComponent(S.ordQ));
+  if (S.ordQ) p.push('q=' + encodeURIComponent(S.ordQ));
   ['status', 'vem', 'paket', 'lop', 'flagg'].forEach(k => { if (f[k].length) p.push(k + '=' + f[k].map(encodeURIComponent).join(',')); });
   if (f.period !== 'alla') p.push('period=' + f.period);
   return 'https://nav.clicknet.se/order' + (p.length ? '?' + p.join('&') : '');
@@ -16078,7 +16076,7 @@ function o7Click(t, e){
   // Listan
   if (d.o7aterst !== undefined){ const v = OVYER().find(x => x.id === S.o7VyBas) || OVYER()[0]; S.ordVy = v.id; S.ordF = {...O7TOM(), ...JSON.parse(JSON.stringify(v.f))}; render(); return true; }
   if (d.o7uppd !== undefined){ const v = S.ordSparade.find(x => x.id === S.o7VyBas); if (v){ v.f = JSON.parse(JSON.stringify(S.ordF)); S.ordVy = v.id; try { localStorage.setItem('nav2-ordvyer', JSON.stringify(S.ordSparade)); } catch(_){} render(); toast(`Vyn ”${v.l}” är uppdaterad.`); } return true; }
-  if (d.o7lank !== undefined){ kopiera(o7Lank(), S.ordQ && oSokKanslig(S.ordQ) ? 'Länken är kopierad, utan sökningen: ett telefon- eller personnummer läggs aldrig i en länk.' : 'Länken är kopierad. Den öppnar listan med samma filter.'); return true; }
+  if (d.o7lank !== undefined){ kopiera(o7Lank(), 'Länken är kopierad. Den öppnar listan med samma filter och sökning.'); return true; }
   if (d.o7kol){ const k = d.o7kol; S.o7Dolda.has(k) ? S.o7Dolda.delete(k) : S.o7Dolda.add(k); try { localStorage.setItem('nav2-ordkol', JSON.stringify([...S.o7Dolda])); } catch(_){} render(); setTimeout(() => document.querySelector(`[data-o7kol="${k}"]`)?.focus(), 0); return true; }
   if (d.o7grupp !== undefined){ const g = d.o7grupp; S.o7Fallda.has(g) ? S.o7Fallda.delete(g) : S.o7Fallda.add(g); render(); return true; }
   if (d.o7allaval !== undefined){ const l = ordSortera(ordFiltrera(oMina())).filter(o => o.st === 'inskickad'), alla = l.every(o => S.ordVal.has(o.nr)); l.forEach(o => alla ? S.ordVal.delete(o.nr) : S.ordVal.add(o.nr)); render(); return true; }
@@ -28786,7 +28784,7 @@ function ndOrdLank(){
   if (f.status.length === 1 && st[f.status[0]]) p.push('status=' + st[f.status[0]]);
   if (f.vem.length === 1){ const s = ndO().saljare.find(x => x.namn === f.vem[0]); if (s) p.push('vem=' + s.id); }
   if (/^\d{4}-\d{2}$/.test(f.period)) p.push('tid=' + f.period + '-01');
-  if (S.ordQ && !oSokKanslig(S.ordQ)) p.push('sok=' + encodeURIComponent(S.ordQ));
+  if (S.ordQ) p.push('sok=' + encodeURIComponent(S.ordQ));
   return '/order' + (p.length ? '?' + p.join('&') : '');
 }
 

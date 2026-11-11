@@ -34,8 +34,10 @@ någon fiska fram det siffra för siffra, och att frågan hamnade i adressen. Gr
 därför en enskild firmas org.nr bara på hela numret. Efter previewen bestämde beställaren samma dag: "För en enskild
 firma sätt på så att man också kan söka på bara en del av orgnummret precis som aktiebolaget." Nu hittas alla org.nr på
 hela numret eller en del (minst tre siffror), och särregeln (`oPersonnr`, sorten `personnr`) är borta. Sökningen körs i
-webbläsaren över de order RLS redan gett personen och loggas inte. Sex siffror eller fler läggs aldrig i Kopiera länk
-eller `ndOrdLank`, och kvittot säger det. Beslutet står i DECISIONS.md som D-OS1.
+webbläsaren över de order RLS redan gett personen och loggas inte. Grenen lämnade sex siffror eller fler
+utanför Kopiera länk och `ndOrdLank`; beställaren svarade samma dag "Släpp den reglen för nu", så sökningen följer nu
+med i länken även när den är ett nummer (`oSokKanslig` och kvittots varning är borta, `patch_utkast3.py`). Länken
+skapas bara när någon trycker Kopiera länk. Beslutet står i DECISIONS.md som D-OS1.
 
 **Gränssnittet.** Sökfältet säger "Sök bolag, org.nr, telefon, fakturanummer…". En träff i något som inte syns på raden
 står under bolaget, i tabellen och i telefonens kort: "Faktura 1158 · 7 463 kr · förfaller 19 dec · skickad", "Telefon
@@ -52,7 +54,8 @@ headless Chrome mot utkastets exempeldata som Admin: telefon med och utan +46, h
 ord, makuleringens skäl, ordernummer, ingen träff och en del av ett personnummer, i 1440 och 390 bredd, inga skriptfel.
 Repots övriga prov: 83 gröna; de nio röda är databasprov som saknar `pg` eller nycklar i klonen, likadant på main.
 
-**Kvar.** Mergad till `main` 2026-11-11 på beställarens ja ("Kör och pusha ut allting"), som en commit ihop med grenens två steg;
+**Kvar.** Mergad till `main` 2026-11-11 på beställarens ja ("Kör och pusha ut allting"), som en commit ihop med grenens två steg.
+Länkregeln släpptes efteråt i en egen commit direkt på `main` ("fortsätt och sen comitta till main");
 ej provad i gränssnittet med riktiga data.
 
 ---

@@ -14,7 +14,7 @@
  * - **webbläsaren:** sökningens rena del i utkastet (blocket `ordersok`) plockas
  *   ur src/nav2/utkast.html och körs: siffror i alla format, flera ord, var
  *   träffen sitter, org.nr på en del av numret (även en enskild firmas), och
- *   K27: ett nummer hamnar aldrig i en länk.
+ *   sökningen följer med i länken, även ett nummer (beställaren 2026-11-11).
  *
  *   node --experimental-strip-types tests/nav2-ordersok.mjs
  */
@@ -89,7 +89,7 @@ const OPAKET = { 1: { l: "Optimerad Kampanjsida", pris: 1495 } };
 const K = new Function(
   "oQnorm",
   "OPAKET",
-  `${html.slice(a0, b0)}; return { oSiffror, oSokKanslig, oSokTermer, oSokTraff, oSokSpannText };`,
+  `${html.slice(a0, b0)}; return { oSiffror, oSokTermer, oSokTraff, oSokSpannText };`,
 )(oQnorm, OPAKET);
 
 const ab = {
@@ -171,11 +171,6 @@ ok("fakturans uppgifter följer med träffen", tf?.belopp === 7463 && tf?.status
 ok("två ord markeras båda", JSON.stringify(K.oSokSpannText("Hedboms Bygg AB", K.oSokTermer("bygg hedboms"))) === "[[0,7],[8,12]]", JSON.stringify(K.oSokSpannText("Hedboms Bygg AB", K.oSokTermer("bygg hedboms"))));
 ok("ett nummer markerar ingen text", K.oSokSpannText("Hedboms Bygg AB", K.oSokTermer("1158")).length === 0);
 
-rubrik("Länkar och adresser (K27)");
-ok("ett personnummer är känsligt", K.oSokKanslig("850101-1234"));
-ok("ett telefonnummer också", K.oSokKanslig("070 123 45 67"));
-ok("ett bolagsnamn är det inte", !K.oSokKanslig("Hedboms"));
-ok("ett fakturanummer är det inte", !K.oSokKanslig("1158"));
 
 // ---------------------------------------------------------------------------
 // Kopplingen: utkastet och servern använder delarna
@@ -186,8 +181,21 @@ const kropp = (namn) => {
   return i < 0 ? "" : html.slice(i, html.indexOf("\n}", i));
 };
 ok("ordFiltrera söker med oSokOrder", /oSokOrder\(o\)/.test(kropp("ordFiltrera")));
-ok("o7Lank lägger aldrig ett nummer i länken", /oSokKanslig\(S\.ordQ\)/.test(kropp("o7Lank")));
-ok("ndOrdLank lägger aldrig ett nummer i adressen", /oSokKanslig\(S\.ordQ\)/.test(kropp("ndOrdLank")));
+
+rubrik("Sökningen följer med i länken, även ett nummer");
+const lank = (namn, q) => {
+  const S = { ordQ: q, ordF: { status: [], vem: [], paket: [], lop: [], flagg: [], period: "alla" } };
+  try { return new Function("S", `${kropp(namn)}\n}; return ${namn}();`)(S); } catch (e) { return String(e); }
+};
+ok("Kopiera länk tar med ett personnummer", lank("o7Lank", "850101-1234").includes("q=850101-1234"), lank("o7Lank", "850101-1234"));
+ok("Kopiera länk tar med ett telefonnummer", lank("o7Lank", "070 123 45 67").includes("q=070%20123%2045%2067"));
+ok("Kopiera länk tar med ett bolagsnamn", lank("o7Lank", "Hedboms").includes("q=Hedboms"));
+ok("navets adress tar med ett org.nr", lank("ndOrdLank", "559512-3456").includes("sok=559512-3456"), lank("ndOrdLank", "559512-3456"));
+ok("utan sökning ingen q", !lank("o7Lank", "").includes("q="));
+ok("oSokKanslig finns inte kvar", !/oSokKanslig/.test(html));
+ok("kvittot och nyheten säger inte att ett nummer lämnas utanför", !/läggs aldrig i en länk/.test(html));
+
+rubrik("Utkastet använder blocket, forts.");
 ok("ndOrdStart ger ordern kundens nummer", /nummer:/.test(kropp("ndOrdStart")));
 ok("spärren mot org.nr är borta", !html.includes("Organisationsnummer går inte att söka på"));
 ok("oOrgLik finns inte kvar", !/oOrgLik/.test(html));

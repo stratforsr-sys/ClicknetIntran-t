@@ -24,7 +24,8 @@ skriva flera ord på en gång, till exempel bolagets namn och ett fakturanummer.
 
 Hittas ordern på något som inte syns i listan står träffen under bolagets namn, till exempel
 **Faktura 1158 · 7 463 kr · förfaller 19 dec**. Ett org.nr hittas på hela numret eller en del
-av det, både för aktiebolag och enskilda firmor.`,
+av det, både för aktiebolag och enskilda firmor. **Kopiera länk** tar med sökningen, så en
+kollega öppnar samma träffar.`,
     datum: "2026-11-11",
     roller: [],
     href: "/order",

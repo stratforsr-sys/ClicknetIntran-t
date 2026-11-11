@@ -666,8 +666,11 @@ precis som aktiebolaget." Nu gäller:
   redan har gett hen, och där står org.nr ändå i ordern.
 - **Sökningen körs i webbläsaren**, över de order RLS redan har gett personen.
   Frågan lämnar aldrig sidan och loggas inte.
-- **Sex siffror eller fler läggs aldrig i en länk eller en adress** (Kopiera länk,
-  `ndOrdLank`), eftersom de kan vara ett personnummer eller ett telefonnummer.
+- **Sökningen följer med i Kopiera länk** (`o7Lank` och `ndOrdLank`), även ett
+  nummer. Grenen lämnade sex siffror eller fler utanför länken,
+  eftersom de kan vara ett personnummer eller ett telefonnummer; beställaren
+  släppte den regeln samma dag: "Släpp den reglen för nu". Länken skapas bara när
+  någon trycker Kopiera länk, så sökningen hamnar aldrig i adressfältet av sig själv.
 
 **Inkios nummer läses ur bevakningens kopia** (`crm_handelse`, 0277), som tjänst
 och bara för organisationsnumren i urvalet. Posterna hör till kunden, så ett
