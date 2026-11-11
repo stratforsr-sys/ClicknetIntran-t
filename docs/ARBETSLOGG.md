@@ -5,6 +5,23 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-11 · Möten: kollegan som läggs in på mötet får notisen (på `main`, ingen migration)
+
+**Varför.** Efter passet 2026-11-04 (alla som är med ser mötet) frågade vi om kollegorna också ska få Mötens notis.
+Beställaren: "Bara om kollegan är inlagd i mötet att hen ska vara med i mötet". Förut gick `mote-bokat` bara till
+hållaren, och en kollega fick bara kalenderns inbjudan.
+
+**Ändringen.** `src/app/nav2/moten/route.ts`: i bokningen (steg 9) går `mote-bokat` med `notifieraFlera` till
+`v.med` utom bokaren och hållaren ("Albin bokade ett möte med dig", detalj "<bolaget> · <tid> · Mick håller i det"
+när bokaren inte håller mötet). I Ändra får de kollegor som just lagts in (`medIn`, utom den som ändrar) samma
+källa med rubriken "Albin lade till dig på ett möte", men bara när kalendern tagit emot ändringen (`sparat`):
+annars är kollegan inte med på mötet. Ingen ny notiskälla: `mote-bokat` finns redan i KALLOR, länkarna och
+utskicksetiketten. Den som tas bort ur mötet får som förut kalenderns besked och ingen Möten-notis.
+
+**Provat.** `tests/notislankar.mjs` och `tests/moten.mjs` gröna. tsc på rutten: samma 120 fel före och efter
+(saknade moduler), och ett inplanterat typfel i den nya notisen fångades. Ej provat i produktionen: det kräver ett
+riktigt bokat möte med en kollega.
+
 ## 2026-11-11 · Möten: rubriken i kalendern är "Clicknet - <bolaget>: Möte" (på `main`, ingen migration)
 
 **Varför.** Beställaren: "Rubriken ska inte vara så. Det ska vara Clicknet - (Bolagetsnamn, kundens): Möte". Mötet

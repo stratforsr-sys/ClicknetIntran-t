@@ -3,7 +3,7 @@ import { fullName, getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { svenskaMinuter, svensktDatum, svenskTidpunkt } from "@/lib/klocka";
 import { SAMTAL_MIN_SEK, samtalsfonster, samtalTillatet } from "@/lib/nav2/motesstatforma";
-import { notifiera } from "@/lib/notishandelse-server";
+import { notifiera, notifieraFlera } from "@/lib/notishandelse-server";
 import { skrivHandelse } from "@/lib/handelselogg-server";
 import { dagPlus } from "@/lib/saljtakt";
 import { lk } from "@/lib/leveranskalender-server";
@@ -543,8 +543,8 @@ export async function POST(request: Request) {
     // `lk_far_andra` släpper bara in den som är organisatör eller har ombud i hållarens kalender. Här
     // bokar en säljare åt en annan, så mötet läggs som hållaren själv (`p_aktor = p_organizer = hallsAv`,
     // `lk_skapa_mote`, 0069) med service role. Bokaren står kvar i `mote.bokat_av`, notisen `mote-bokat`
-    // går till hållaren (steg 9), och `hallsAv` är redan prövad som en aktiv säljare, så ingen annans
-    // kalender kan fyllas med möten.
+    // går till hållaren och kollegorna på mötet (steg 9), och `hallsAv` är redan prövad som en aktiv
+    // säljare, så ingen annans kalender kan fyllas med möten.
     const rubrik = moteRubrik(v.namn);
     const m: { fel?: string; eventId?: string } =
       v.hallsAv === mig
@@ -597,7 +597,21 @@ export async function POST(request: Request) {
       meta: { kedja, bolag, halls_av: v.hallsAv, art, bolag_skapat: skapadBolag, kedja_skapad: skapadKedja, mote_tid: motetid.toISOString(), med: v.med, gaster: v.gaster.length },
     });
 
-    // 9. Notis till den som ska hålla mötet, om någon annan bokade det.
+    // 9. Notis till den som ska hålla mötet, om någon annan bokade det, och till kollegorna som lagts in på
+    //    mötet (`v.med`). Bokaren och hållaren räknas inte som kollegor här: bokaren vet, hållaren har sin egen.
+    const kollegor = v.med.filter((x) => x !== mig && x !== v.hallsAv);
+    if (kollegor.length) {
+      const hallare = v.hallsAv !== mig ? (await fornamnFor([v.hallsAv]))[0] : "";
+      await notifieraFlera(kollegor, {
+        av: mig,
+        kalla: "mote-bokat",
+        typ: "kalender",
+        rubrik: `${forFor(fullName(user!.employee!))} bokade ett möte med dig`,
+        detalj: `${v.namn} · ${nar(motetid)}${hallare ? ` · ${hallare} håller i det` : ""}`,
+        href: `/moten/${moteId}`,
+        objekt: { typ: "mote", id: moteId },
+      });
+    }
     if (v.hallsAv !== mig) {
       await notifiera({
         till: v.hallsAv,
@@ -1135,8 +1149,21 @@ export async function POST(request: Request) {
       meta: { kedja: m.kedja_id, falt, ...(nyTid ? { fran: m.mote_tid, till: nyTid.toISOString() } : {}), med_in: medIn, med_ut: medUt, gaster_in: inOk.length, gaster_ut: utOk.length },
     });
 
-    // 5. Hållaren får veta när någon annan ändrat hens möte.
+    // 5. Hållaren får veta när någon annan ändrat hens möte, och en kollega som just lagts in på mötet får
+    //    samma notis som vid en bokning (bara om kalendern tog emot ändringen, annars är hen inte med).
     const namnNu = bolagLapp.namn ?? bo.namn;
+    const nyaKollegor = sparat ? medIn.filter((x) => x !== mig) : [];
+    if (nyaKollegor.length) {
+      await notifieraFlera(nyaKollegor, {
+        av: mig,
+        kalla: "mote-bokat",
+        typ: "kalender",
+        rubrik: `${forFor(fullName(user!.employee!))} lade till dig på ett möte`,
+        detalj: `${namnNu} · ${nar(nyTid ?? m.mote_tid)}${m.halls_av !== mig ? ` · ${(await fornamnFor([m.halls_av]))[0]} håller i det` : ""}`,
+        href: `/moten/${m.id}`,
+        objekt: { typ: "mote", id: m.id },
+      });
+    }
     if (m.halls_av !== mig) {
       const vad = [nyTid ? "ny tid" : "", platsAndras ? "ny plats" : "", medIn.length || medUt.length ? "kollegor" : "", gastAndras ? "gäster" : "", Object.keys(bolagLapp).length ? "kunduppgifter" : "", "mal" in moteLapp || "nulage" in moteLapp || "kalla" in moteLapp ? "inför mötet" : ""].filter(Boolean);
       await notifiera({

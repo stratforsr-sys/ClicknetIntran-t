@@ -588,7 +588,7 @@ export const NOTIS_KALLOR = [
   "lead-tilldelad",
   /** Nav 2.0 (0135): chefen påminner säljaren om leads som väntat på samtal. Händelse: den är menad att avbryta. */
   "lead-paminn",
-  /** Nav 2.0, Möten: någon annan bokade ett möte åt dig. Händelse: du ska veta det innan det är dags. */
+  /** Nav 2.0, Möten: någon annan bokade ett möte åt dig, eller lade in dig som kollega på ett möte (2026-11-11). Händelse: du ska veta det innan det är dags. */
   "mote-bokat",
   /** Nav 2.0, Möten (2026-11-03): någon annan ändrade ett möte du håller (tid, plats, vilka som är med). Samma skäl. */
   "mote-andrat",
