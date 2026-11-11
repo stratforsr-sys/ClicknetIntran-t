@@ -274,10 +274,8 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
   const flode = new Map<string, FlodeRad>();
   const moteIds = rader.map((r) => r.mote_id).filter((x): x is string => !!x);
   if (moteIds.length) {
-    // Bokningstiden, flyttiden och försöken (0287) står på mötesraden. Före 0287 räcker bokningstiden.
-    let evSvar = await supabaseAdmin().from("mote").select("id, event_id, kalla, bokat_nar, bekraftat_nar, flyttad_nar, forsok, senast_forsok").in("id", moteIds).limit(MAX_KORT);
-    if (saknas(evSvar.error)) evSvar = await supabaseAdmin().from("mote").select("id, event_id, kalla, bokat_nar, bekraftat_nar").in("id", moteIds).limit(MAX_KORT);
-    const ev = evSvar.data;
+    // Bokningstiden, bekräftelsen, flyttiden och försöken (0287) står på mötesraden.
+    const { data: ev } = await supabaseAdmin().from("mote").select("id, event_id, kalla, bokat_nar, bekraftat_nar, flyttad_nar, forsok, senast_forsok").in("id", moteIds).limit(MAX_KORT);
     for (const x of (ev ?? []) as unknown as FlodeRad[]) {
       flode.set(x.id, x);
       if (x.kalla) kallor.set(x.id, x.kalla);
