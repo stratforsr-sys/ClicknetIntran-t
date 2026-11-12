@@ -15,10 +15,9 @@
  */
 
 import { arArbetsdag, dagPlus } from "../saljtakt.ts";
-import { SKAL } from "./leadsforma.ts";
+import { MOTES_NEJ_SKAL, MOTES_NULAGE, niva, nivaSvar, type Fraga, type NivaSvar } from "./motesflode.ts";
 import { normaliseraEpost, normaliseraTelefon } from "../leads.ts";
 import { nivaFor } from "./forma.ts";
-import { niva, nivaSvar, type Fraga, type NivaSvar } from "./motesflode.ts";
 
 export const KOLUMNER = ["bokat", "bekraftat", "utfall_saknas", "folj_upp", "tyst"] as const;
 export type Kolumn = (typeof KOLUMNER)[number];
@@ -30,19 +29,61 @@ export const KOLUMN_NAMN: Record<Kolumn, string> = {
   tyst: "Tyst",
 };
 
-export const NULAGE = { ingen: "Ingen SEO", sjalv: "Gör själv", byra: "Har byrå" } as const;
+/** Nulägets val. Listan ligger på ett ställe, motesflode.ts (S1), och skickas därifrån till gränssnittet. */
+export const NULAGE = MOTES_NULAGE;
 
 /** Samma skäl som Leads (`lead_skal`), så att ett Nej betyder samma sak på båda ställena. */
-export const NEJ_SKAL = SKAL;
+export const NEJ_SKAL = MOTES_NEJ_SKAL;
 
 /** Fasta värden ur specen. */
 export const TYST_EFTER_INGET_SVAR = 3;
 export const TYST_EFTER_DAGAR = 21;
 export const MOTE_MINUTER = 30;
 export const MOTE_PLATS = "Telefon";
-/** Fler från Clicknet (kollegor i kalendern) och fler hos kunden (gäster med e-post), utöver hållaren och kontakten. */
+/** Fler från det egna företaget (kollegor i kalendern) och fler hos kunden (gäster med e-post), utöver hållaren och kontakten. */
 export const MAX_KOLLEGOR = 10;
 export const MAX_GASTER = 10;
+/** Veckans stängda (F3.1): skälet står bara på ett nej. Blanktecken kapas, och ett tomt skäl är inget skäl. */
+export function nejSkal(avslut: string, skal: string | null | undefined): string | null {
+  const s = (skal ?? "").trim();
+  return avslut === "nej" && s ? s : null;
+}
+/**
+ * Veckans stängda (F3.1): kedjans säljare är den som höll kedjans senaste hållna möte. Har inget möte hållits
+ * gäller hållaren på kedjans senaste möte med utfall. En kedja utan möte med utfall saknas i svaret.
+ */
+export function saljarePerKedja(moten: readonly { kedja_id: string; halls_av: string | null; mote_tid: string; utfall: string | null }[]): Map<string, string> {
+  const bast = new Map<string, { id: string; tid: string; hallet: boolean }>();
+  for (const m of moten) {
+    if (!m.halls_av || !m.utfall) continue;
+    const hallet = m.utfall === "hallet", f = bast.get(m.kedja_id);
+    if (!f || (hallet && !f.hallet) || (hallet === f.hallet && m.mote_tid > f.tid)) bast.set(m.kedja_id, { id: m.halls_av, tid: m.mote_tid, hallet });
+  }
+  return new Map([...bast].map(([k, v]) => [k, v.id]));
+}
+/** Avgjort (F18.1): månadens möten och de som väntar på bedömning oavsett månad. Ett möte står en gång, månadens rad gäller. */
+export function slaIhopAvgjorda<T extends { id: string }>(manadens: readonly T[], vantande: readonly T[]): T[] {
+  const sedda = new Set(manadens.map((m) => m.id));
+  const ut = [...manadens];
+  for (const v of vantande) if (!sedda.has(v.id)) { sedda.add(v.id); ut.push(v); }
+  return ut;
+}
+/** Avgjorts ordning (F18.1): det som väntar på bedömning överst, sedan senaste mötet först. `tid` är lokal "YYYY-MM-DD HH:MM". */
+export const sorteraAvgjorda = (a: { vantarBedomning: boolean; tid: string }, b: { vantarBedomning: boolean; tid: string }): number =>
+  Number(b.vantarBedomning) - Number(a.vantarBedomning) || b.tid.localeCompare(a.tid);
+/** Tavlans tak (F5.3). REST-vägen ger aldrig fler rader än taket, så ett fullt svar betyder att kort kan saknas. */
+export const arKapad = (antal: number, tak: number): boolean => tak > 0 && antal >= tak;
+/**
+ * En id-lista i skivor (G3). Id:na i en `.in()` står i adressen, och en för lång adress ger inget svar alls:
+ * läsningarna tar därför högst `storlek` id åt gången. Ordningen behålls, en tom lista ger inga skivor.
+ */
+export const IN_SKIVA = 100;
+export function skivor<T>(lista: readonly T[], storlek: number = IN_SKIVA): T[][] {
+  const n = Math.max(1, Math.floor(storlek));
+  const ut: T[][] = [];
+  for (let i = 0; i < lista.length; i += n) ut.push(lista.slice(i, i + n));
+  return ut;
+}
 
 /**
  * Rubriken på mötet i kalendern, och därmed i kundens inbjudan: "Clicknet - <bolaget>: Möte" (beställaren
@@ -524,6 +565,13 @@ function dagOchStart(dag: unknown, start: unknown): Resultat<{ dag: string; star
 }
 
 const nej = (fel: string): { ok: false; fel: string } => ({ ok: false, fel });
+/** Mötets längd i minuter ur ett anrop (boka och lediga, G12): tomt ger förvalet, annars ett heltal 15–480. */
+export function langdIndata(v: unknown): Resultat<number> {
+  if (tom(v)) return { ok: true, varden: MOTE_MINUTER };
+  const n = typeof v === "number" ? v : typeof v === "string" && /^\d+$/.test(v.trim()) ? Number(v) : NaN;
+  if (!Number.isInteger(n) || n < 15 || n > 480) return nej("Mötets längd stämmer inte.");
+  return { ok: true, varden: n };
+}
 
 export type BokaVarden = {
   namn: string;
@@ -596,12 +644,9 @@ export function bokaIndata(body: unknown): Resultat<BokaVarden> {
   const tidpunkt = dagOchStart(b.dag, b.start);
   if (!tidpunkt.ok) return tidpunkt;
 
-  let langd: number = MOTE_MINUTER;
-  if (!tom(b.langd)) {
-    const n = typeof b.langd === "number" ? b.langd : typeof b.langd === "string" && /^\d+$/.test(b.langd.trim()) ? Number(b.langd) : NaN;
-    if (!Number.isInteger(n) || n < 15 || n > 480) return nej("Mötets längd stämmer inte.");
-    langd = n;
-  }
+  const l = langdIndata(b.langd);
+  if (!l.ok) return l;
+  const langd = l.varden;
 
   let nulage: BokaVarden["nulage"] = null;
   if (!tom(b.nulage)) {
@@ -715,7 +760,7 @@ export const SQL_INGET_SVAR = `update public.mote_kedja
  * igenom resten (`uppslag`, `lediga`, och `samtal` från B4), som bara läser. En okänd handling är
  * ingen skrivning och får sitt vanliga 400.
  */
-export const SKRIVANDE_HANDLINGAR = ["boka", "paminn", "forsok", "installningar", "bekrafta", "flytta", "avboka", "utfall", "bedom", "ifragasatt", "ratta_utfall", "ifragasatt_beslut", "kund", "nej", "inget_svar", "prova_igen", "radera", "andra"] as const;
+export const SKRIVANDE_HANDLINGAR = ["boka", "paminn", "forsok", "installningar", "bekrafta", "flytta", "avboka", "utfall", "bedom", "ifragasatt", "ratta_utfall", "ifragasatt_beslut", "kund", "nej", "inget_svar", "prova_igen", "radera", "andra", "angra", "uppfoljning_andra"] as const;
 export const arSkrivning = (handling: string): boolean => (SKRIVANDE_HANDLINGAR as readonly string[]).includes(handling);
 
 /**
@@ -739,6 +784,24 @@ export const SQL_FLYTTA_MOTE = `update public.mote
 export function moteIndata(body: unknown): Resultat<{ mote: string }> {
   const b = (body ?? {}) as Record<string, unknown>;
   return ID(b.mote) ? { ok: true, varden: { mote: b.mote } } : nej("Mötet stämmer inte.");
+}
+
+/**
+ * Ångra en envägsknapp (Bekräfta eller Fick inte tag). `nar` är tiden servern svarade med när handlingen
+ * sparades: den pekar ut just den sparningen. `fore` är `senast_forsok` som det stod före försöket, så att
+ * det kan läggas tillbaka (bara för försöket; annars null).
+ */
+export type AngraVarden = { mote: string; vad: "bekrafta" | "forsok"; nar: string; fore: string | null };
+export function angraIndata(body: unknown): Resultat<AngraVarden> {
+  const b = (body ?? {}) as Record<string, unknown>;
+  if (!ID(b.mote)) return nej("Mötet stämmer inte.");
+  if (b.vad !== "bekrafta" && b.vad !== "forsok") return nej("Det går inte att ångra.");
+  const tid = (v: unknown): v is string =>
+    typeof v === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}(:?\d{2})?)$/.test(v) && Number.isFinite(Date.parse(v));
+  if (!tid(b.nar)) return nej("Det går inte att ångra längre. Ladda om tavlan.");
+  const fore = b.vad === "forsok" && b.fore !== undefined && b.fore !== null ? b.fore : null;
+  if (fore !== null && !tid(fore)) return nej("Det går inte att ångra längre. Ladda om tavlan.");
+  return { ok: true, varden: { mote: b.mote, vad: b.vad, nar: b.nar, fore } };
 }
 
 export function flyttaIndata(body: unknown): Resultat<{ mote: string; dag: string; start: string }> {
@@ -937,6 +1000,25 @@ export function kedjaFore(body: unknown): Resultat<{ kedja: string; fore: string
   if (!ID(b.kedja)) return nej("Kedjan stämmer inte.");
   const f = foreVarde(b.fore);
   return f.ok ? { ok: true, varden: { kedja: b.kedja, fore: f.varden } } : f;
+}
+
+/**
+ * Ändra uppföljningen: dagen kunden ska ringas och raden som står på kortet. Dagen är i dag eller senare. En dag som
+ * redan passerat får stå kvar om den inte ändras (då är det bara raden som rättas). Lappen rör bara dagen och raden:
+ * räknaren för inget svar står kvar.
+ */
+export function uppfoljningAndring(
+  body: unknown,
+  nu: { idag: string; datum: string | null },
+): Resultat<{ kedja: string; fore: string | null; lapp: { uppfoljning_datum: string; uppfoljning_text: string | null } }> {
+  const r = kedjaFore(body);
+  if (!r.ok) return r;
+  const b = (body ?? {}) as Record<string, unknown>;
+  if (!arDatum(b.datum)) return nej("Välj en dag för uppföljningen.");
+  if (b.datum < nu.idag && b.datum !== nu.datum) return nej("Välj i dag eller en senare dag.");
+  const t = text(b.text);
+  if ((t?.length ?? 0) > 1000) return nej("Texten är för lång.");
+  return { ok: true, varden: { ...r.varden, lapp: { uppfoljning_datum: b.datum, uppfoljning_text: t } } };
 }
 
 /* ------------------------------------------------------------------------ */

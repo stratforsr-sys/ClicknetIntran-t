@@ -5,10 +5,10 @@ import { fullName, hasRole, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { dagarBakat, svenskTidpunkt, svenskVeckodag, svensktDatum } from "@/lib/klocka";
 import { lokal } from "./leads";
-import { arHallare, farAndraInstallning, farRattaUtfall, farSeInstallningar, KOLUMNER, MOTE_PLATS, platsTyp, type Kolumn, type Platstyp } from "./motenforma";
+import { arHallare, arKapad, nejSkal, saljarePerKedja, skivor, slaIhopAvgjorda, sorteraAvgjorda, farAndraInstallning, farRattaUtfall, farSeInstallningar, KOLUMNER, MOTE_PLATS, platsTyp, type Kolumn, type Platstyp } from "./motenforma";
 import {
-  bekraftelseFonster, bradska, fordela, kortFas, lasInstallningar, manadFor, PIPE_KOLUMNER, sorteraFas, ursprungligBokare,
-  type MotenInst, type PipeKolumn,
+  bekraftelseFonster, bradska, fordela, kortFas, lasInstallningar, manadFor, motesVal, PIPE_KOLUMNER, sorteraFas, sparadeSvar, ursprungligBokare,
+  type MotenInst, type MotesVal, type PipeKolumn,
 } from "./motesflode";
 
 /**
@@ -87,7 +87,7 @@ export type NdMoteKort = {
   historik: { id: string; tid: string; text: string }[];
 };
 
-/** Ett möte som fått utfall i innevarande månad (Avgjort på tavlan). */
+/** Ett möte som fått utfall i innevarande månad, eller ett äldre som fortfarande väntar på bedömning (Avgjort på tavlan). */
 export type NdAvgjort = {
   mote: string;
   kedja: string;
@@ -107,6 +107,10 @@ export type NdAvgjort = {
   /** Betraktarens låsta mötesprovision för mötet, null utan rad. */
   belopp: number | null;
   skal: string | null;
+  /** Mötet ledde till en affär: utfallet rättas inte från tavlan (F8.1). Saknas när den egna läsningen inte gjordes eller inte gick. */
+  affar?: boolean;
+  /** Ett senare möte är ombokat från det här: det rättas inte till Hållet. Saknas som `affar`. */
+  ombokat?: boolean;
 };
 
 /** Ett ifrågasatt möte som väntar på en admin (Ändra svaren eller Låt stå), i inställningsrutan. */
@@ -121,22 +125,35 @@ export type NdIfragasatt = {
   niva: "kvalificerat" | "hallet" | null;
   /** När nivån ifrågasattes, svensk lokal "YYYY-MM-DD HH:MM". */
   ifragasattNar: string;
+  /** Svaren som gav nivån (F18.2), för bladet Ändra svaren. Null när de inte finns eller inte gick att läsa. */
+  svar?: { id: string; ja: boolean }[] | null;
 };
 
 export type NdMoten = {
   kort: NdMoteKort[];
   avgjorda: NdAvgjort[];
   /** Det som går att ställa in per företag och som tavlan behöver. */
-  inst: Pick<MotenInst, "bekraftaDagar" | "kolumnnamn" | "fragor" | "rubrikPrefix">;
+  inst: Pick<MotenInst, "bekraftaDagar" | "kolumnnamn" | "fragor" | "rubrikPrefix"> & {
+    /** Bladens val (S1–S3): nuläge, nej-skäl och källförslag, från ett ställe i motesflode.ts. */
+    val: MotesVal;
+  };
   /** Inställningsrutan: hela inställningen för Admin och Superadmin, null för alla andra. `farPengar`: får ändra beloppen och vilka som får mötesprovision. */
   installningar: (MotenInst & { farPengar: boolean; ifragasatta: NdIfragasatt[] }) | null;
   /** Betraktarens egen andel per kolumn, i kronor. Null för den som inte får mötesprovision. */
   provisionPaSpel: Record<PipeKolumn, number> | null;
-  vecka: { affar: number; nej: number; kedjor: { kedja: string; namn: string; avslut: "affar" | "nej"; nar: string }[] };
+  /**
+   * `skal`: skälet på ett nej, null annars eller när det inte gick att läsa. `saljare`: den som höll kedjans senaste
+   * hållna möte, tom utan ett sådant. `order`: affärens order (sales_order.id), null utan order eller när den inte gick att läsa.
+   */
+  vecka: { affar: number; nej: number; kedjor: { kedja: string; namn: string; avslut: "affar" | "nej"; nar: string; skal: string | null; saljare: string; order: string | null }[] };
   saljare: { id: string; namn: string }[];
   /** Alla som inte har slutat, att lägga till som kollegor i ett möte. */
   kollegor: { id: string; namn: string }[];
   chef: boolean;
+  /** Taket nåddes (F5.3): tavlan visar de första korten i tidsordning och säger att fler kan finnas. Saknas annars. */
+  kapad?: true;
+  /** Läsningen av korten gick inte (B16). Tavlan är då oläst, inte tom, och säger det. Saknas när läsningen gick. */
+  fel?: true;
 };
 
 const CHEFSROLLER = ["team_lead", "sales_manager", "ceo", "admin"] as const;
@@ -144,8 +161,8 @@ const CHEFSROLLER = ["team_lead", "sales_manager", "ceo", "admin"] as const;
 /** Tavlan visar öppna kedjor. REST-vägen kapar tyst vid 1000 rader, så taket sätts uttryckligen. */
 const MAX_KORT = 1000;
 const MAX_MOTEN = 5000;
-
-const saknas = (e: { message?: string } | null | undefined) => !!e && /does not exist|schema cache|could not find/i.test(e.message ?? "");
+/** Möten som väntar på bedömning oavsett månad (F18.1): de senaste, så att en gammal hög inte växer utan gräns. */
+const MAX_VANTANDE = 200;
 
 const MANADER = ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
 const UTFALL: Record<string, string> = { hallet: "Hållet", uteblev: "Uteblev", avbokat: "Avbokat" };
@@ -211,11 +228,25 @@ export function veckansGranser(nu: Date): { fran: string; till: string } {
   return { fran: svenskTidpunkt(mandag, "00:00").toISOString(), till: svenskTidpunkt(nastaMandag, "00:00").toISOString() };
 }
 
+/**
+ * En `.in()`-läsning i skivor om högst 100 id (G3), en skiva i taget. `null` = någon skiva gick inte att läsa:
+ * den som anropar avgör om det är ett läsfel eller något som får saknas.
+ */
+async function lasISkivor<T>(ids: string[], las: (skiva: string[]) => PromiseLike<{ data: unknown; error: unknown }>): Promise<T[] | null> {
+  const ut: T[] = [];
+  for (const skiva of skivor(ids)) {
+    const { data, error } = await las(skiva);
+    if (error) return null;
+    ut.push(...((data ?? []) as T[]));
+  }
+  return ut;
+}
+
 export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Promise<NdMoten> {
   const chef = hasRole(user, ...CHEFSROLLER);
   const instTom = lasInstallningar([]);
   const tom: NdMoten = {
-    kort: [], avgjorda: [], inst: { bekraftaDagar: instTom.bekraftaDagar, kolumnnamn: instTom.kolumnnamn, fragor: instTom.fragor, rubrikPrefix: instTom.rubrikPrefix },
+    kort: [], avgjorda: [], inst: { bekraftaDagar: instTom.bekraftaDagar, kolumnnamn: instTom.kolumnnamn, fragor: instTom.fragor, rubrikPrefix: instTom.rubrikPrefix, val: motesVal() },
     installningar: null, provisionPaSpel: null, vecka: { affar: 0, nej: 0, kedjor: [] }, saljare: [], kollegor: [], chef,
   };
   if (!user.employee) return tom;
@@ -227,8 +258,10 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
   const manadFran = new Date(Date.UTC(nu.getUTCFullYear(), nu.getUTCMonth() - 1, 25)).toISOString();
   const manadTill = new Date(Date.UTC(nu.getUTCFullYear(), nu.getUTCMonth() + 1, 2)).toISOString();
 
-  const [kortSvar, veckaSvar, personSvar, instSvar, avgjortSvar] = await Promise.all([
-    supabase.from("mote_kort").select("*").limit(MAX_KORT),
+  const [kortSorterat, veckaSvar, personSvar, instSvar, avgjortSvar] = await Promise.all([
+    // Sorterat före taket (F5.3): uppföljningskorten utan möte först, sedan mötena i tidsordning. Når taket kapas
+    // då mötena längst fram i tiden, inte ett godtyckligt urval. `mote_tid` står i vyn (0261).
+    supabase.from("mote_kort").select("*").order("mote_tid", { ascending: true, nullsFirst: true }).limit(MAX_KORT),
     supabase.from("mote_kedja_utfall").select("kedja_id, bolag_id, avslut, avslut_nar").in("avslut", ["affar", "nej"]).gte("avslut_nar", fran).lt("avslut_nar", till).limit(MAX_KORT),
     supabaseAdmin().from("employee").select("id, first_name, last_name, employee_role!employee_role_employee_id_fkey(role)").neq("status", "offboarded").limit(500),
     supabaseAdmin().from("nav_setting").select("key, value").like("key", "moten.%").limit(100),
@@ -240,7 +273,10 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
       .lt("mote_tid", manadTill)
       .limit(MAX_MOTEN),
   ]);
-  if (saknas(kortSvar.error)) return tom;
+  // Går inte den sorterade läsningen läses korten som förut, osorterat: sorteringen får inte ta tavlan med sig.
+  const kortSvar = kortSorterat.error ? await supabase.from("mote_kort").select("*").limit(MAX_KORT) : kortSorterat;
+  // Ett fel är inte ett tomt konto (B16): utan korten säger tavlan att mötena inte gick att hämta.
+  if (kortSvar.error) return { ...tom, fel: true };
   const inst = lasInstallningar((instSvar.data ?? []) as { key: string; value: unknown }[]);
   const tz = inst.tidszon;
   const manad = manadFor(nu.toISOString(), tz);
@@ -258,7 +294,23 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
   // Den som bokat eller håller ett möte kan ha slutat: hämta de namn som saknas.
   const saknade = new Set<string>();
   // Månadens avgjorda möten (RLS: samma krets som tavlan). Före 0287 saknas `niva`; då är listan tom.
-  const avgjortRader = ((avgjortSvar.error ? [] : avgjortSvar.data ?? []) as unknown as AvgjortRad[]).filter((m) => manadFor(m.mote_tid, tz) === manad);
+  const manadensRader = ((avgjortSvar.error ? [] : avgjortSvar.data ?? []) as unknown as AvgjortRad[]).filter((m) => manadFor(m.mote_tid, tz) === manad);
+  // Möten som väntar på bedömning står kvar över månadsskiftet (F18.1): hållna, utan nivå, sedan `moten.galler-fran`,
+  // utan månadsgräns. En egen fråga som får misslyckas; då står månadens möten som förut.
+  let vantandeRader: AvgjortRad[] = [];
+  const gallerMs = inst.gallerFran ? Date.parse(inst.gallerFran) : NaN;
+  if (Number.isFinite(gallerMs)) {
+    const { data, error } = await supabase
+      .from("mote")
+      .select("id, kedja_id, mote_tid, utfall, niva, bokat_av, halls_av, bekraftat_nar")
+      .eq("utfall", "hallet")
+      .is("niva", null)
+      .gte("mote_tid", new Date(gallerMs).toISOString())
+      .order("mote_tid", { ascending: false })
+      .limit(MAX_VANTANDE);
+    if (!error) vantandeRader = (data ?? []) as unknown as AvgjortRad[];
+  }
+  const avgjortRader = slaIhopAvgjorda(manadensRader, vantandeRader);
   for (const r of rader) for (const id of [r.halls_av, r.bokat_av]) if (id && !namn.has(id)) saknade.add(id);
   for (const m of avgjortRader) for (const id of [m.halls_av, m.bokat_av]) if (id && !namn.has(id)) saknade.add(id);
   if (saknade.size) {
@@ -397,14 +449,31 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
   const avgjorda: NdAvgjort[] = [];
   if (avgjortRader.length) {
     const kedjeIds = [...new Set(avgjortRader.map((m) => m.kedja_id))];
-    const [{ data: kd }, { data: pv }] = await Promise.all([
-      supabase.from("mote_kedja").select("id, bolag_id, deltagare").in("id", kedjeIds).limit(MAX_KORT),
-      supabase.from("mote_provision").select("mote_id, belopp, skal").eq("employee_id", jag).in("mote_id", avgjortRader.map((m) => m.id)).limit(MAX_MOTEN),
+    const moteIds = avgjortRader.map((m) => m.id);
+    // Id-listorna läses i skivor (G3). Går bolagsnamnen eller beloppen inte att läsa är det ett läsfel, som när
+    // korten inte går att läsa: Avgjort får aldrig visa 0 kr för att frågan inte gick.
+    const [kd, pv] = await Promise.all([
+      lasISkivor<{ id: string; bolag_id: string; deltagare: string[] | null }>(kedjeIds, (ids) => supabase.from("mote_kedja").select("id, bolag_id, deltagare").in("id", ids).limit(MAX_KORT)),
+      lasISkivor<{ mote_id: string; belopp: number | string; skal: string | null }>(moteIds, (ids) => supabase.from("mote_provision").select("mote_id, belopp, skal").eq("employee_id", jag).in("mote_id", ids).limit(MAX_MOTEN)),
     ]);
-    const kedjor = new Map(((kd ?? []) as { id: string; bolag_id: string; deltagare: string[] | null }[]).map((k) => [k.id, k]));
-    const { data: bd } = await supabase.from("mote_bolag").select("id, namn").in("id", [...new Set([...kedjor.values()].map((k) => k.bolag_id))]).limit(MAX_KORT);
-    const bolagNamnA = new Map(((bd ?? []) as { id: string; namn: string }[]).map((b) => [b.id, b.namn]));
-    const prov = new Map(((pv ?? []) as { mote_id: string; belopp: number | string; skal: string | null }[]).map((p) => [p.mote_id, p]));
+    if (!kd || !pv) return { ...tom, fel: true };
+    const kedjor = new Map(kd.map((k) => [k.id, k]));
+    const bd = await lasISkivor<{ id: string; namn: string }>([...new Set(kd.map((k) => k.bolag_id))], (ids) => supabase.from("mote_bolag").select("id, namn").in("id", ids).limit(MAX_KORT));
+    if (!bd) return { ...tom, fel: true };
+    const bolagNamnA = new Map(bd.map((b) => [b.id, b.namn]));
+    const prov = new Map(pv.map((p) => [p.mote_id, p]));
+    // Rätta utfall (F8.1): det servern inte tar (affär, ombokat) läses i två egna frågor som får misslyckas. Då saknas
+    // bara fälten, knappen visas och servern säger nej. Bara för den som kan rätta (chef).
+    let affarer: Set<string> | null = null;
+    let ombokade: Set<string> | null = null;
+    if (chef) {
+      const [res, omb] = await Promise.all([
+        lasISkivor<{ id: string; resultat: string | null }>(moteIds, (ids) => supabase.from("mote").select("id, resultat").in("id", ids).limit(MAX_MOTEN)),
+        lasISkivor<{ foregaende_id: string | null }>(moteIds, (ids) => supabase.from("mote").select("foregaende_id").in("foregaende_id", ids).limit(MAX_MOTEN)),
+      ]);
+      if (res) affarer = new Set(res.filter((r) => r.resultat === "affar").map((r) => r.id));
+      if (omb) ombokade = new Set(omb.map((r) => r.foregaende_id).filter((x): x is string => !!x));
+    }
     for (const m of avgjortRader) {
       const k = kedjor.get(m.kedja_id);
       const p = prov.get(m.id);
@@ -424,9 +493,11 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
         deltagare: k?.deltagare ?? [m.bokat_av, m.halls_av],
         belopp: p ? Number(p.belopp) : null,
         skal: p?.skal ?? null,
+        ...(affarer ? { affar: affarer.has(m.id) } : {}),
+        ...(ombokade ? { ombokat: ombokade.has(m.id) } : {}),
       });
     }
-    avgjorda.sort((a, b) => b.tid.localeCompare(a.tid));
+    avgjorda.sort(sorteraAvgjorda);
   }
 
   // Ifrågasatta möten utan beslut: bara för den som får avgöra dem (säljchef, VD, admin). Läses med service role,
@@ -444,6 +515,16 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
       const moteIds = [...new Set(irader.map((r) => r.mote_id))];
       const { data: md } = await supabaseAdmin().from("mote").select("id, kedja_id, mote_tid, niva").in("id", moteIds).limit(200);
       const mrader = (md ?? []) as unknown as { id: string; kedja_id: string; mote_tid: string; niva: string | null }[];
+      // De gamla svaren (F18.2): `niva_svar` (0287) läses i en egen fråga som får misslyckas. Då öppnas Ändra svaren
+      // utan ifyllda svar, som förut, och listan över ifrågasatta står kvar.
+      const gamlaSvar = new Map<string, { id: string; ja: boolean }[]>();
+      const { data: sd, error: sfel } = await supabaseAdmin().from("mote").select("id, niva_svar").in("id", moteIds).limit(200);
+      if (!sfel) {
+        for (const r of (sd ?? []) as unknown as { id: string; niva_svar: unknown }[]) {
+          const sv = sparadeSvar(r.niva_svar);
+          if (sv) gamlaSvar.set(r.id, sv);
+        }
+      }
       const ikedjor = [...new Set(mrader.map((m) => m.kedja_id))];
       const { data: ik } = ikedjor.length ? await supabaseAdmin().from("mote_kedja").select("id, bolag_id").in("id", ikedjor).limit(200) : { data: [] };
       const ikMap = new Map(((ik ?? []) as unknown as { id: string; bolag_id: string }[]).map((k) => [k.id, k.bolag_id]));
@@ -467,6 +548,7 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
           bokare: personer.join(" och "),
           niva: m.niva === "kvalificerat" || m.niva === "hallet" ? m.niva : null,
           ifragasattNar: lokal(tidigast),
+          svar: gamlaSvar.get(m.id) ?? null,
         });
       }
       ifragasatta.sort((a, b) => a.ifragasattNar.localeCompare(b.ifragasattNar));
@@ -495,7 +577,9 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
         if (andel) paSpel[k.fas] += andel.belopp;
       }
     }
-    paSpel.avgjort = avgjorda.reduce((s, a) => s + (a.belopp ?? 0), 0);
+    // Bara månadens möten: ett äldre möte som väntar på bedömning (F18.1) hör inte till månadens belopp.
+    const iManaden = new Set(manadensRader.map((m) => m.id));
+    paSpel.avgjort = avgjorda.filter((a) => iManaden.has(a.mote)).reduce((s, a) => s + (a.belopp ?? 0), 0);
     for (const k of PIPE_KOLUMNER) paSpel[k] = Math.round(paSpel[k] * 100) / 100;
     provisionPaSpel = paSpel;
   }
@@ -508,23 +592,49 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
     const { data: bolag } = await supabase.from("mote_bolag").select("id, namn").in("id", [...new Set(vRader.map((v) => v.bolag_id))]).limit(MAX_KORT);
     for (const b of (bolag ?? []) as unknown as { id: string; namn: string }[]) bolagNamn.set(b.id, b.namn);
   }
+  // Skälet på ett nej och kedjans säljare (F3.1). `nej_skal` står på mote_kedja, inte i vyn, så det läses i en egen
+  // fråga, och säljaren i en annan: går en av dem inte saknas bara det på raden, veckolistan står kvar.
+  const vSkal = new Map<string, string | null>();
+  let vSaljare = new Map<string, string>();
+  if (vRader.length) {
+    const vIds = vRader.map((v) => v.kedja_id);
+    const [skalSvar, hallSvar] = await Promise.all([
+      supabase.from("mote_kedja").select("id, nej_skal").in("id", vIds).limit(MAX_KORT),
+      supabase.from("mote").select("kedja_id, halls_av, mote_tid, utfall").in("kedja_id", vIds).not("utfall", "is", null).limit(MAX_MOTEN),
+    ]);
+    for (const k of ((skalSvar.error ? [] : skalSvar.data ?? []) as unknown as { id: string; nej_skal: string | null }[])) vSkal.set(k.id, k.nej_skal);
+    vSaljare = saljarePerKedja((hallSvar.error ? [] : hallSvar.data ?? []) as unknown as { kedja_id: string; halls_av: string | null; mote_tid: string; utfall: string | null }[]);
+    const utanNamn = [...new Set([...vSaljare.values()].filter((id) => !namn.has(id)))];
+    if (utanNamn.length) {
+      const { data } = await supabaseAdmin().from("employee").select("id, first_name, last_name").in("id", utanNamn).limit(utanNamn.length);
+      for (const p of (data ?? []) as unknown as PersonRad[]) namn.set(p.id, fullName(p));
+    }
+  }
+  // Affärens order (F3.2): `order_id` står i vyn (0261), men läses i en egen fråga så att veckolistan står kvar om den inte går.
+  const vOrder = new Map<string, string>();
+  const affarIds = vRader.filter((v) => v.avslut === "affar").map((v) => v.kedja_id);
+  if (affarIds.length) {
+    const { data, error } = await supabase.from("mote_kedja_utfall").select("kedja_id, order_id").in("kedja_id", affarIds).limit(MAX_KORT);
+    for (const k of ((error ? [] : data ?? []) as unknown as { kedja_id: string; order_id: string | null }[])) if (k.order_id) vOrder.set(k.kedja_id, k.order_id);
+  }
   const vecka: NdMoten["vecka"] = { affar: 0, nej: 0, kedjor: [] };
   for (const v of vRader) {
     if (v.avslut === "affar") vecka.affar++;
     else vecka.nej++;
-    vecka.kedjor.push({ kedja: v.kedja_id, namn: bolagNamn.get(v.bolag_id) ?? "Bolaget", avslut: v.avslut as "affar" | "nej", nar: v.avslut_nar ? lokal(v.avslut_nar) : "" });
+    vecka.kedjor.push({ kedja: v.kedja_id, namn: bolagNamn.get(v.bolag_id) ?? "Bolaget", avslut: v.avslut as "affar" | "nej", nar: v.avslut_nar ? lokal(v.avslut_nar) : "", skal: nejSkal(v.avslut, vSkal.get(v.kedja_id)), saljare: namn.get(vSaljare.get(v.kedja_id) ?? "") ?? "", order: vOrder.get(v.kedja_id) ?? null });
   }
   vecka.kedjor.sort((a, b) => b.nar.localeCompare(a.nar));
 
   return {
     kort,
     avgjorda,
-    inst: { bekraftaDagar: inst.bekraftaDagar, kolumnnamn: inst.kolumnnamn, fragor: inst.fragor, rubrikPrefix: inst.rubrikPrefix },
+    inst: { bekraftaDagar: inst.bekraftaDagar, kolumnnamn: inst.kolumnnamn, fragor: inst.fragor, rubrikPrefix: inst.rubrikPrefix, val: motesVal() },
     installningar: farSeInstallningar(aktor) ? { ...inst, farPengar: farAndraInstallning(aktor, "moten.provision"), ifragasatta } : null,
     provisionPaSpel,
     vecka,
     saljare,
     kollegor,
     chef,
+    ...(arKapad(rader.length, MAX_KORT) ? { kapad: true as const } : {}),
   };
 }

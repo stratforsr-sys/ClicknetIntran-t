@@ -14,6 +14,22 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten-snabbare-tavla",
+    rubrik: "Möten går fortare: sök, tangenter, ångra och utkast",
+    ingress: "Sök direkt på tavlan, boka med N, ångra en bekräftelse och fortsätt på en bokning du stängde. Panelen bläddrar mellan korten och uppföljningen går att ändra.",
+    text: `I **Möten** filtrerar sökfältet tavlan medan du skriver (bolag, kontakt eller nummer), och talen i rubriken är
+knappar som visar just de korten. **N** bokar ett möte, **/** hoppar till sökfältet och **?** visar alla tangenter.
+Ett kort flyttar sig direkt när du bekräftar, och **Ångra** finns i kvittot. Stänger du en påbörjad bokning ligger
+den kvar som **utkast**. I tidsvalet står tre lediga tider som snabbval, och mötets längd går att välja. I kortets
+panel bläddrar du med pilarna eller **J** och **K**, kopierar nummer och mejl med ett klick och ändrar dag och text
+för en uppföljning. På startsidan öppnar **Nästa möte** kortet, och när mötet närmar sig står **Ring** eller
+**Öppna länken** där. Under **Statistik** sorteras tabellen med ett klick på rubriken, och raden bakom ett tal
+öppnar kortet.`,
+    datum: "2026-11-12",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "moten-tidsval-uppfoljningsmote",
     rubrik: "Välj tid som i Kalendern, och boka uppföljningen som ett möte",
     ingress: "När du bokar ett möte väljer du datum och tid och ser dagen för alla som är med. Hållet → Uppföljning kan bokas som ett riktigt möte.",

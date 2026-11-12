@@ -49,6 +49,12 @@ ok(
 );
 ok("nulägena", M.NULAGE.ingen === "Ingen SEO" && M.NULAGE.sjalv === "Gör själv" && M.NULAGE.byra === "Har byrå");
 ok("nej-skälen är Leads skäl", M.NEJ_SKAL === SKAL || JSON.stringify(M.NEJ_SKAL) === JSON.stringify(SKAL));
+{
+  // S1–S3: rutten prövar mot samma listor som läsningen skickar till gränssnittet (motesflode.ts är den enda platsen).
+  const F = await import("../src/lib/nav2/motesflode.ts");
+  ok("nuläget och nej-skälen prövas mot listorna som skickas till gränssnittet", JSON.stringify(M.NULAGE) === JSON.stringify(F.motesVal().nulage) && JSON.stringify(M.NEJ_SKAL) === JSON.stringify(F.motesVal().nejSkal));
+  ok("ett sparat nuläge och ett sparat skäl gäller fortfarande", ["ingen", "sjalv", "byra"].every((n) => n in M.NULAGE) && ["Har redan en byrå", "För dyrt", "Inte nu", "Fel kontaktperson", "Annat"].every((s) => M.NEJ_SKAL.includes(s)));
+}
 
 rubrik("normaliseraDoman");
 ok("adress med protokoll, www, gemener och sökväg", M.normaliseraDoman("https://www.Exempel.se/om-oss?x=1") === "exempel.se");
@@ -404,6 +410,18 @@ rubrik("A7: andringForKund, farAndraKedja och indata för mötets knappar");
   ok("flyttaIndata: mote, dag och start (också 'YYYY-MM-DD HH:MM')", (() => { const r = M.flyttaIndata({ mote: ID, dag: "2026-11-02", start: "10:30" }); const s = M.flyttaIndata({ mote: ID, start: "2026-11-02 10:30" }); return r.ok && r.varden.dag === "2026-11-02" && r.varden.start === "10:30" && s.ok && s.varden.dag === "2026-11-02" && !M.flyttaIndata({ mote: ID, dag: "2026-11-02", start: "10:33" }).ok && !M.flyttaIndata({ mote: "x", dag: "2026-11-02", start: "10:30" }).ok; })());
   ok("moteId: bara ett riktigt id", M.moteIndata({ mote: ID }).ok && !M.moteIndata({ mote: "x" }).ok && !M.moteIndata({}).ok);
   ok("kedjaFore: kedja och fore", (() => { const r = M.kedjaFore({ kedja: ID, fore: "2026-10-29T10:00:00.5+00:00" }); const n = M.kedjaFore({ kedja: ID, fore: null }); return r.ok && r.varden.fore === "2026-10-29T10:00:00.5+00:00" && n.ok && n.varden.fore === null && !M.kedjaFore({ kedja: "x", fore: null }).ok && !M.kedjaFore({ kedja: ID, fore: "igår" }).ok; })());
+  // Ändra uppföljningen (F8.3): dagen och raden på kortet.
+  const NU = { idag: "2026-11-12", datum: "2026-11-10" };
+  const ua = (o, nu = NU) => M.uppfoljningAndring({ kedja: ID, fore: null, datum: "2026-11-20", text: "Ring om offerten", ...o }, nu);
+  ok("uppfoljningAndring: kedjan, fore, dagen och raden (trimmad)", (() => { const r = ua({ fore: "2026-10-29T10:00:00.5+00:00", text: "  Ring om offerten  " }); return r.ok && r.varden.kedja === ID && r.varden.fore === "2026-10-29T10:00:00.5+00:00" && r.varden.lapp.uppfoljning_datum === "2026-11-20" && r.varden.lapp.uppfoljning_text === "Ring om offerten"; })());
+  ok("uppfoljningAndring: i dag går, i går går inte", ua({ datum: "2026-11-12" }).ok && !ua({ datum: "2026-11-11" }).ok);
+  ok("uppfoljningAndring: en passerad dag får stå kvar när bara raden ändras, en annan passerad dag går inte", ua({ datum: "2026-11-10", text: "Ny rad" }).ok && !ua({ datum: "2026-11-09" }).ok && !ua({ datum: "2026-11-10" }, { idag: "2026-11-12", datum: null }).ok);
+  ok("uppfoljningAndring: tom rad och bara mellanslag blir null", ua({ text: "" }).varden.lapp.uppfoljning_text === null && ua({ text: "   " }).varden.lapp.uppfoljning_text === null && ua({ text: undefined }).varden.lapp.uppfoljning_text === null);
+  ok("uppfoljningAndring: åäö, citattecken och emoji går igenom orörda", ua({ text: "Vill ha \"offerten\" på mejl åäö 🙂" }).varden.lapp.uppfoljning_text === "Vill ha \"offerten\" på mejl åäö 🙂");
+  ok("uppfoljningAndring: tusen tecken går, tusen och ett går inte", ua({ text: "a".repeat(1000) }).ok && !ua({ text: "a".repeat(1001) }).ok);
+  ok("uppfoljningAndring: en dag som inte finns, fel form och ingen dag nekas", !ua({ datum: "2026-02-30" }).ok && !ua({ datum: "20/11" }).ok && !ua({ datum: null }).ok && !ua({ datum: 20261120 }).ok);
+  ok("uppfoljningAndring: fel kedja och fel fore nekas", !ua({ kedja: "x" }).ok && !ua({ fore: "igår" }).ok);
+  ok("uppfoljningAndring: lappen rör bara dagen och raden, inte räknaren", Object.keys(ua({}).varden.lapp).sort().join() === "uppfoljning_datum,uppfoljning_text");
 }
 
 rubrik("Fixrunda 1: läsläge, bokning i befintlig kedja, flytt nollställer Bekräftat");
@@ -561,6 +579,109 @@ rubrik("Uppgift 6: vem bedömer, och svaren i anropen");
   ok("hållaren med halva svaren: fel (inget sparas)", typeof v({ svar: [{ id: "syfte", ja: true }] }).fel === "string");
   ok("kollegan med två ja: väntar ändå på bedömning", v({ farBedoma: false }).vantar === true);
   ok("noll aktiva frågor: hållaren låser kvalificerat utan svar", v({ fragor: F.map((f) => ({ ...f, aktiv: false })), svar: null }).niva === "kvalificerat");
+}
+
+console.log("\nÅngra (F6.1): indata");
+{
+  const T = "2026-11-12T09:00:00.123Z", MID = "00000000-0000-4000-8000-000000000001";
+  const r = M.angraIndata({ mote: MID, vad: "bekrafta", nar: T, fore: "2026-11-11T14:10:00.000Z" });
+  ok("bekrafta: mötet, vad och tiden går igenom, och fore gäller inte bekräftelsen", r.ok && r.varden.vad === "bekrafta" && r.varden.nar === T && r.varden.fore === null);
+  const f = M.angraIndata({ mote: MID, vad: "forsok", nar: T, fore: "2026-11-11T14:10:00.000Z" });
+  ok("forsok: fore följer med oförändrad, och får saknas", f.ok && f.varden.fore === "2026-11-11T14:10:00.000Z" && M.angraIndata({ mote: MID, vad: "forsok", nar: T }).varden.fore === null);
+  ok("okänt vad, fel möte, ingen tid och en tid som inte är en tid avvisas", !M.angraIndata({ mote: MID, vad: "utfall", nar: T }).ok && !M.angraIndata({ mote: "x", vad: "bekrafta", nar: T }).ok && !M.angraIndata({ mote: MID, vad: "bekrafta" }).ok && !M.angraIndata({ mote: MID, vad: "bekrafta", nar: "i går" }).ok && !M.angraIndata({ mote: MID, vad: "forsok", nar: T, fore: "2026-13-45T99:00:00Z" }).ok);
+  ok("arSkrivning('angra'): spärras i läsläge", M.arSkrivning("angra") === true);
+}
+
+rubrik("Veckans stängda: skälet och säljaren (F3.1)");
+{
+  ok("skälet står bara på ett nej", M.nejSkal("nej", "För dyrt") === "För dyrt" && M.nejSkal("affar", "För dyrt") === null);
+  ok("tomt, bara blanktecken, null och undefined är inget skäl", M.nejSkal("nej", "") === null && M.nejSkal("nej", "   ") === null && M.nejSkal("nej", null) === null && M.nejSkal("nej", undefined) === null);
+  ok("blanktecken runt skälet kapas", M.nejSkal("nej", "  Har byrå \n") === "Har byrå");
+  const A = "a", B = "b", C = "c";
+  const s = M.saljarePerKedja([
+    { kedja_id: "k1", halls_av: A, mote_tid: "2026-11-02T09:00:00Z", utfall: "hallet" },
+    { kedja_id: "k1", halls_av: B, mote_tid: "2026-11-09T09:00:00Z", utfall: "hallet" },
+    { kedja_id: "k1", halls_av: C, mote_tid: "2026-11-10T09:00:00Z", utfall: "uteblev" },
+    { kedja_id: "k2", halls_av: C, mote_tid: "2026-11-03T09:00:00Z", utfall: "avbokat" },
+    { kedja_id: "k2", halls_av: A, mote_tid: "2026-11-05T09:00:00Z", utfall: "uteblev" },
+    { kedja_id: "k3", halls_av: A, mote_tid: "2026-11-05T09:00:00Z", utfall: null },
+    { kedja_id: "k4", halls_av: null, mote_tid: "2026-11-05T09:00:00Z", utfall: "hallet" },
+  ]);
+  ok("säljaren är den som höll kedjans senaste hållna möte, också när ett senare möte uteblev", s.get("k1") === B);
+  ok("utan hållet möte: hållaren på det senaste mötet med utfall", s.get("k2") === A);
+  ok("ett möte utan utfall eller utan hållare ger ingen säljare", !s.has("k3") && !s.has("k4") && s.size === 2);
+  ok("ordningen på raderna spelar ingen roll", M.saljarePerKedja([{ kedja_id: "k1", halls_av: B, mote_tid: "2026-11-09T09:00:00Z", utfall: "hallet" }, { kedja_id: "k1", halls_av: A, mote_tid: "2026-11-02T09:00:00Z", utfall: "hallet" }]).get("k1") === B);
+}
+
+rubrik("Avgjort: väntande bedömningar över månadsskiftet (F18.1)");
+{
+  const man = [{ id: "m1", fran: "manad" }, { id: "m2", fran: "manad" }], vant = [{ id: "m2", fran: "vantande" }, { id: "g1", fran: "vantande" }, { id: "g1", fran: "dubblett" }];
+  const ihop = M.slaIhopAvgjorda(man, vant);
+  ok("ett möte står en gång, och månadens rad gäller", ihop.length === 3 && ihop.map((x) => x.id).join() === "m1,m2,g1" && ihop[1].fran === "manad" && ihop[2].fran === "vantande");
+  ok("utan väntande är listan månadens, och utan månadens de väntande", M.slaIhopAvgjorda(man, []).length === 2 && M.slaIhopAvgjorda([], vant).map((x) => x.id).join() === "m2,g1");
+  ok("indatan ändras inte", man.length === 2 && vant.length === 3);
+  const rader = [
+    { n: "nov-klar", vantarBedomning: false, tid: "2026-11-10 10:00" },
+    { n: "okt-vantar", vantarBedomning: true, tid: "2026-10-28 10:00" },
+    { n: "nov-vantar", vantarBedomning: true, tid: "2026-11-03 10:00" },
+    { n: "nov-klar-tidig", vantarBedomning: false, tid: "2026-11-02 10:00" },
+  ].sort(M.sorteraAvgjorda).map((x) => x.n).join();
+  ok("det som väntar på bedömning står överst också från förra månaden, sedan senaste först", rader === "nov-vantar,okt-vantar,nov-klar,nov-klar-tidig", rader);
+}
+
+rubrik("Tavlans tak (F5.3)");
+{
+  ok("under taket: inte kapad", M.arKapad(0, 1000) === false && M.arKapad(999, 1000) === false);
+  ok("på taket eller över: kapad (REST-vägen ger aldrig fler än taket)", M.arKapad(1000, 1000) === true && M.arKapad(1001, 1000) === true);
+  ok("ett tak på noll kapar ingenting", M.arKapad(0, 0) === false);
+}
+
+rubrik("Id-listor i skivor (G3)");
+{
+  const ids = Array.from({ length: 250 }, (_, i) => "id" + i);
+  const s = M.skivor(ids);
+  ok("250 id blir tre skivor om 100, 100 och 50", s.map((x) => x.length).join() === "100,100,50", s.map((x) => x.length).join());
+  ok("ordningen behålls och inget id tappas eller dubbleras", s.flat().join() === ids.join());
+  ok("en tom lista ger inga skivor (ingen fråga ställs)", M.skivor([]).length === 0);
+  ok("exakt en skiva full och en över", M.skivor(ids.slice(0, 100)).length === 1 && M.skivor(ids.slice(0, 101)).map((x) => x.length).join() === "100,1");
+  ok("egen storlek, och en orimlig storlek blir en i taget i stället för en evig slinga", M.skivor([1, 2, 3], 2).map((x) => x.join("")).join() === "12,3" && M.skivor([1, 2], 0).length === 2 && M.skivor([1, 2], -5).length === 2);
+  ok("förvalet är 100 (37 tecken per id ger under 4 000 tecken i adressen)", M.IN_SKIVA === 100);
+  ok("listan som delas ändras inte", ids.length === 250);
+}
+
+rubrik("Längden i lediga tider (G12)");
+{
+  ok("tomt, null och bara blanktecken ger förvalet", M.langdIndata(undefined).varden === M.MOTE_MINUTER && M.langdIndata(null).varden === M.MOTE_MINUTER && M.langdIndata("  ").varden === M.MOTE_MINUTER);
+  ok("ett tal och en sifferrad går igenom", M.langdIndata(45).varden === 45 && M.langdIndata("60").varden === 60 && M.langdIndata(15).ok && M.langdIndata(480).ok);
+  ok("under 15, över 480, decimaler, text och andra typer avvisas med samma text som i boka", [14, 481, 30.5, "trettio", "-30", true, {}, []].every((v) => { const r = M.langdIndata(v); return !r.ok && r.fel === "Mötets längd stämmer inte."; }));
+  const boka = (langd) => M.bokaIndata({ namn: "A", telefon: "0701234567", kalla: "x", hallsAv: "00000000-0000-4000-8000-000000000001", dag: "2026-10-30", start: "09:00", langd });
+  ok("bokaIndata och lediga delar gränserna: 45 går i boka, 14 och 481 avvisas med längdens text", boka(45).ok && boka(45).varden.langd === 45 && [14, 481].every((n) => boka(n).fel === "Mötets längd stämmer inte."), JSON.stringify([boka(45).fel, boka(14).fel]));
+  const IDAG = "2026-10-29", NU = "2026-10-29 13:10", block = [{ fran: "2026-10-29 15:00", till: "2026-10-29 15:30" }];
+  const start = (langd) => M.ledigaTider(block, IDAG, NU, langd).filter((x) => x.dag === IDAG).map((x) => x.start);
+  ok("30 min: 14:30 och 16:30 är lediga", start(30).includes("14:30") && start(30).includes("16:30") && !start(30).includes("15:00"), start(30).join());
+  ok("60 min: 14:30 ryms inte före blocket och 16:30 slutar efter dagen, 14:00 och 16:00 går", !start(60).includes("14:30") && !start(60).includes("16:30") && start(60).includes("14:00") && start(60).includes("16:00"), start(60).join());
+  ok("15 min: tiden direkt före blocket går", start(15).includes("14:30") && !start(15).includes("15:00"), start(15).join());
+}
+
+rubrik("Läsläget: varje gren i ruttens växel har en plats (G1)");
+{
+  // Rutten läses som text. En ny `case` som varken står i SKRIVANDE_HANDLINGAR eller i listan här fäller provet:
+  // den som lägger till grenen måste säga om den skriver.
+  const { readFileSync } = await import("node:fs");
+  const rutt = readFileSync(join(rot, "src", "app", "nav2", "moten", "route.ts"), "utf8");
+  const start = rutt.indexOf("switch (handling) {"), slut = rutt.indexOf("\n    default:", start);
+  const vaxel = start >= 0 && slut > start ? rutt.slice(start, slut) : "";
+  const grenar = [...vaxel.matchAll(/^    case "([a-z_]+)":/gm)].map((m) => m[1]);
+  const LASANDE = ["uppslag", "lediga", "samtal"];
+  ok("växeln hittas och har grenar", grenar.length >= 20, String(grenar.length));
+  ok("ingen gren står två gånger", new Set(grenar).size === grenar.length);
+  const utanPlats = grenar.filter((h) => !M.arSkrivning(h) && !LASANDE.includes(h));
+  ok("varje gren är en skrivning eller står bland de läsande", utanPlats.length === 0, utanPlats.join(", "));
+  const bada = grenar.filter((h) => M.arSkrivning(h) && LASANDE.includes(h));
+  ok("ingen gren är både skrivning och läsande", bada.length === 0, bada.join(", "));
+  const utanGren = [...M.SKRIVANDE_HANDLINGAR, ...LASANDE].filter((h) => !grenar.includes(h));
+  ok("listorna nämner ingen handling som rutten saknar", utanGren.length === 0, utanGren.join(", "));
+  ok("arSkrivning('uppfoljning_andra'): spärras i läsläge", M.arSkrivning("uppfoljning_andra") === true);
 }
 
 console.log(fel ? `\n\x1b[31m${fel} fel\x1b[0m` : "\n\x1b[32mAlla ✓\x1b[0m");

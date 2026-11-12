@@ -15,8 +15,10 @@ import {
   TYST_EFTER_INGET_SVAR,
   andraIndata,
   andringForKund,
+  angraIndata,
   arHallare,
   arSkrivning,
+  langdIndata,
   efterBokning,
   bokaIndata,
   type BokaVarden,
@@ -31,6 +33,7 @@ import {
   farSe,
   flyttaIndata,
   kedjaFore,
+  uppfoljningAndring,
   kollegorIndata,
   kundIndata,
   MAX_GASTER,
@@ -67,7 +70,7 @@ import {
   type Uppslag,
 } from "@/lib/nav2/motenforma";
 import { lokal } from "@/lib/nav2/leads";
-import { faltFor, lasInstallningar, niva, nivaSvar, omfattas, provaInstallning, radernaStammer, type Lage, type MotenInst } from "@/lib/nav2/motesflode";
+import { faltFor, lasInstallningar, motesTz, niva, nivaSvar, omfattas, provaAngra, provaInstallning, radernaStammer, type Lage, type MotenInst } from "@/lib/nav2/motesflode";
 import { ProvisionKonflikt, andraProvision, harLastProvision, harOmbokning, ifragasattProvision, latStaProvision, lasProvision, lastaRader, provisionsmottagare } from "@/lib/nav2/motesprovision-server";
 import { medNyckel } from "@/lib/nav2/nyckel";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
@@ -108,7 +111,8 @@ export const dynamic = "force-dynamic";
  * VERSIONSVILLKOR (A7, A8): varje skrivning är villkorad på tillståndet den ändrar från, så att ett
  * dubbelklick räknas en gång. `bekrafta` på `bekraftat_nar is null`, `utfall`/`avboka` på `utfall is
  * null`, `flytta` på `utfall is null` och mötets nuvarande tid, `kund`/`nej` på kedjans `avslut is
- * null`, och `inget_svar`/`prova_igen` på `uppfoljning_andrad is not distinct from fore`. Ingen rad
+ * null`, och `inget_svar`/`prova_igen` på `uppfoljning_andrad is not distinct from fore`. `angra` tar
+ * tillbaka en bekräftelse eller ett försök, villkorat på exakt den tid sparningen svarade med. Ingen rad
  * ändrad = 409. Ordningen när en handling rör flera ställen, och vad som städas om något fallerar,
  * står vid `sattUtfall`.
  *
@@ -134,7 +138,7 @@ const lista = (n: string[]) => (n.length < 2 ? n.join("") : `${n.slice(0, -1).jo
 
 /** "tis 21 okt 10:00" ur en tidpunkt, för svaret. */
 function nar(d: Date | string): string {
-  const s = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", weekday: "short" }).formatToParts(typeof d === "string" ? new Date(d) : d);
+  const s = new Intl.DateTimeFormat("sv-SE", { timeZone: motesTz(), day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", weekday: "short" }).formatToParts(typeof d === "string" ? new Date(d) : d);
   const p = Object.fromEntries(s.map((x) => [x.type, x.value]));
   return `${p.weekday} ${p.day} ${String(p.month).replace(".", "")} ${p.hour}:${p.minute}`;
 }
@@ -171,14 +175,18 @@ export async function POST(request: Request) {
     return p && p.status !== "offboarded" && arHallare((p.employee_role ?? []).map((r) => r.role)) ? fullName(p) : null;
   };
 
-  /** `mote_uppslag` som den inloggade. Ett fel ger tomt svar: uppslaget är en hjälp och spärrar aldrig. */
-  const slaUpp = async (telefon: string | null, doman: string | null, namn: string | null): Promise<Uppslag> => {
+  /**
+   * `mote_uppslag` som den inloggade. Ett fel ger null, aldrig ett tomt svar: handlingen `uppslag` svarar då med fel
+   * (annars läser användaren "inga träffar" när databasen inte svarade). I bokningen är uppslaget en hjälp som aldrig
+   * spärrar: där räknas null som inga träffar.
+   */
+  const slaUpp = async (telefon: string | null, doman: string | null, namn: string | null): Promise<Uppslag | null> => {
     try {
       const sb = await supabaseServer();
       const { data, error } = await sb.rpc("mote_uppslag", { p_telefon: telefon, p_doman: doman, p_namn: namn });
-      return error ? tolkaUppslag(null) : tolkaUppslag(data);
+      return error ? null : tolkaUppslag(data);
     } catch {
-      return tolkaUppslag(null);
+      return null;
     }
   };
 
@@ -312,6 +320,7 @@ export async function POST(request: Request) {
       const doman = bolagsDoman(typeof b.doman === "string" ? b.doman : null);
       const namn = typeof b.namn === "string" && b.namn.trim() ? b.namn.trim().slice(0, 200) : null;
       const u = await slaUpp(telefon, doman, namn);
+      if (!u) return svar({ fel: "Nav kunde inte läsa just nu." }, 500);
       return svar({ ok: "Uppslag.", ...u, varning: uppslagsVarning(u, nar) });
     }
 
@@ -325,10 +334,14 @@ export async function POST(request: Request) {
       // så att en egen tid kan säga vem den krockar med. Bara block, inga rubriker.
       const med = kollegorIndata(b.med, hallsAv);
       if (!med.ok) return svar({ fel: med.fel }, 400);
+      // Längden (G12): samma gränser som i boka. Utan den räknas luckorna för förvalet, och en tid som inte rymmer
+      // ett längre möte skulle se ledig ut.
+      const langd = langdIndata(b.langd);
+      if (!langd.ok) return svar({ fel: langd.fel }, 400);
       const alla = [hallsAv, ...med.varden];
       const upptaget = await hamtaUpptaget(alla, idag, till);
       const per = Object.fromEntries(alla.map((id) => [id, upptagetTillIntervall(upptaget[id])]));
-      const tider = ledigaTider(alla.flatMap((id) => per[id]), idag, lokalTidpunkt(idag, svenskaMinuter(nu)))
+      const tider = ledigaTider(alla.flatMap((id) => per[id]), idag, lokalTidpunkt(idag, svenskaMinuter(nu)), langd.varden)
         // Kalendern vet inget om dagarna efter `till`; de skulle se lediga ut.
         .filter((t) => t.dag <= till);
       return svar({ ok: "Lediga tider.", idag, till, tider, upptaget: per });
@@ -346,6 +359,8 @@ export async function POST(request: Request) {
       return forsok();
     case "bekrafta":
       return await bekrafta();
+    case "angra":
+      return await angra();
 
     case "flytta":
       return await flyttaMote();
@@ -385,6 +400,9 @@ export async function POST(request: Request) {
 
     case "prova_igen":
       return await uppfoljning("prova_igen");
+
+    case "uppfoljning_andra":
+      return await uppfoljning("andra");
 
     case "samtal": {
       // B4/varv 2: samtalen bakom statistikens tal Samtal, bara de på minst SAMTAL_MIN_SEK (varv 3, 0267). Samma krets som mote_samtal_vecka (0264): mote_statkrets()
@@ -444,7 +462,7 @@ export async function POST(request: Request) {
     const varningar: string[] = [];
 
     // Uppslaget först, innan något skapats: ett träff här är ett ANNAT bokat möte eller en kund.
-    const upp = await slaUpp(v.telefon, v.doman, v.namn);
+    const upp = (await slaUpp(v.telefon, v.doman, v.namn)) ?? tolkaUppslag(null);
     const uppVarning = uppslagsVarning(upp, nar);
     if (uppVarning) varningar.push(uppVarning);
 
@@ -606,9 +624,9 @@ export async function POST(request: Request) {
     // Inbjudan läser länken när den skickas, efter ångerfönstret, så kunden får den i första mejlet.
     if (v.lank && v.hallsAv === mig) {
       const { error } = await db.from("calendar_event").update({ online_url: v.lank }).eq("id", m.eventId);
-      if (error) varningar.push("Teams-länken kom inte med i kalendern. Lägg till den under Ändra.");
+      if (error) varningar.push("Möteslänken kom inte med i kalendern. Lägg till den under Ändra.");
     }
-    if (v.plats === videoNamn(null) && !v.lank) varningar.push("Teams-länken saknas. Lägg till den under Ändra, så får kunden den med mejl.");
+    if (v.plats === videoNamn(null) && !v.lank) varningar.push("Möteslänken saknas. Lägg till den under Ändra, så får kunden den med mejl.");
 
     // 7. Kopplingen till kalenderhändelsen. Mötet finns nu, så ett fel härifrån blir ett svar och inget kast.
     const { error: kopp } = await db.from("mote").update({ event_id: m.eventId }).eq("id", moteId);
@@ -756,9 +774,10 @@ export async function POST(request: Request) {
     const m = h.m;
     if (!farBekrafta(aktorn, m)) return svar({ fel: "Du har inte tillgång till det här mötet." }, 403);
     if (m.utfall) return svar({ fel: "Mötet har redan fått ett utfall." }, 409);
+    const nar = new Date().toISOString();
     const { data, error } = await db
       .from("mote")
-      .update({ bekraftat_nar: new Date().toISOString(), bekraftat_av: mig })
+      .update({ bekraftat_nar: nar, bekraftat_av: mig })
       .eq("id", m.id)
       .is("bekraftat_nar", null)
       .is("utfall", null)
@@ -766,7 +785,54 @@ export async function POST(request: Request) {
     if (error) return svar({ fel: "Bekräftelsen kunde inte sparas." }, 500);
     if (((data ?? []) as unknown[]).length === 0) return svar({ fel: "Mötet är redan bekräftat." }, 409);
     await skrivHandelse({ actorId: mig, action: "mote.confirmed", objectType: "mote", objectId: m.id, meta: { kedja: m.kedja_id } });
-    return svar({ ok: "Mötet är bekräftat.", mote: m.id });
+    // `nar` är det Ångra pekar ut bekräftelsen med (se `angra`).
+    return svar({ ok: "Mötet är bekräftat.", mote: m.id, nar });
+  }
+
+  /**
+   * Ångra Bekräfta eller Fick inte tag (F6.1). Bekräftelsen skriver bara `bekraftat_nar`/`bekraftat_av` (inget
+   * mejl, ingen notis), och provisionen läser `bekraftat_nar` först när utfallet låses, så den går att ta
+   * tillbaka så länge inget utfall finns. Regeln står i `provaAngra`; skrivningen är villkorad på samma saker,
+   * så att två som trycker samtidigt aldrig ångrar något annat än det som sparades. Ingen rad ändrad = 409.
+   */
+  async function angra(): Promise<Response> {
+    const r = angraIndata(b);
+    if (!r.ok) return svar({ fel: r.fel }, 400);
+    const v = r.varden;
+    const h = await moteForSe(v.mote);
+    if ("res" in h) return h.res;
+    const m = h.m;
+    if (!farBekrafta(aktorn, m)) return svar({ fel: "Du har inte tillgång till det här mötet." }, 403);
+    const p = provaAngra(m, { vad: v.vad, nar: v.nar, fore: v.fore, jag: mig });
+    if (!p.ok) return svar({ fel: p.fel }, p.status);
+    if (v.vad === "bekrafta") {
+      const { data, error } = await db
+        .from("mote")
+        .update({ bekraftat_nar: null, bekraftat_av: null })
+        .eq("id", m.id)
+        .eq("bekraftat_nar", m.bekraftat_nar as string)
+        .eq("bekraftat_av", mig)
+        .is("utfall", null)
+        .is("provision_last_nar", null)
+        .select("id");
+      if (error) return svar({ fel: "Bekräftelsen kunde inte ångras." }, 500);
+      if (((data ?? []) as unknown[]).length === 0) return svar({ fel: "Mötet har ändrats sedan du bekräftade det. Inget ångrades." }, 409);
+      await skrivHandelse({ actorId: mig, action: "mote.confirmation_undone", objectType: "mote", objectId: m.id, meta: { kedja: m.kedja_id } });
+      return svar({ ok: "Bekräftelsen är ångrad.", mote: m.id });
+    }
+    const { data, error } = await db
+      .from("mote")
+      .update({ forsok: m.forsok - 1, senast_forsok: v.fore })
+      .eq("id", m.id)
+      .eq("senast_forsok", m.senast_forsok as string)
+      .eq("forsok", m.forsok)
+      .is("utfall", null)
+      .is("bekraftat_nar", null)
+      .select("id");
+    if (error) return svar({ fel: "Försöket kunde inte ångras." }, 500);
+    if (((data ?? []) as unknown[]).length === 0) return svar({ fel: "Mötet har ändrats sedan försöket. Inget ångrades." }, 409);
+    await skrivHandelse({ actorId: mig, action: "mote.attempt_undone", objectType: "mote", objectId: m.id, meta: { kedja: m.kedja_id, forsok: m.forsok - 1 } });
+    return svar({ ok: "Försöket är ångrat.", mote: m.id, forsok: m.forsok - 1 });
   }
 
   /**
@@ -820,7 +886,8 @@ export async function POST(request: Request) {
     if (error) return svar({ fel: "Försöket kunde inte sparas." }, 500);
     if (((data ?? []) as unknown[]).length === 0) return svar({ fel: "Mötet har ändrats. Ladda om tavlan." }, 409);
     await skrivHandelse({ actorId: mig, action: "mote.attempt", objectType: "mote", objectId: m.id, meta: { kedja: m.kedja_id, forsok: m.forsok + 1 } });
-    return svar({ ok: "Försöket är sparat. Mötet ligger kvar.", mote: m.id, forsok: m.forsok + 1 });
+    // `nar` och `fore` är det Ångra behöver: försökets tid, och tiden som stod före (se `angra`).
+    return svar({ ok: "Försöket är sparat. Mötet ligger kvar.", mote: m.id, forsok: m.forsok + 1, nar: nuIso, fore: m.senast_forsok });
   }
 
   async function flyttaMote(): Promise<Response> {
@@ -1518,7 +1585,7 @@ export async function POST(request: Request) {
       const { error } = await db.from("mote_bolag").update(bolagLapp).eq("id", bo.id);
       if (error) varningar.push("Bolagets uppgifter kunde inte sparas. Försök igen.");
       else if (bolagLapp.telefon) {
-        const uv = uppslagsVarning(await slaUpp(bolagLapp.telefon, null, null), nar);
+        const uv = uppslagsVarning((await slaUpp(bolagLapp.telefon, null, null)) ?? tolkaUppslag(null), nar);
         if (uv) varningar.push(uv);
       }
     }
@@ -1597,7 +1664,7 @@ export async function POST(request: Request) {
       utOk.length ? `${lista(utOk)} får en avbokning med mejl.` : "",
       gastFel.length ? `${lista(gastFel)} gick inte att ändra. Försök igen, eller ändra i kalendern.` : "",
     ].filter(Boolean);
-    if (v.plats && platsNu === videoNamn(null) && !lankNu) varningar.push("Teams-länken saknas. Lägg till den under Ändra, så får kunden den med mejl.");
+    if (v.plats && platsNu === videoNamn(null) && !lankNu) varningar.push("Möteslänken saknas. Lägg till den under Ändra, så får kunden den med mejl.");
     return svar({ ok: delar.join(" "), mote: m.id, kedja: m.kedja_id, ...(varningar.length ? { varning: varningar.join(" ") } : {}) });
   }
 
@@ -1704,7 +1771,7 @@ export async function POST(request: Request) {
    * `kolumn + 1`; villkoret gör att det inte behövs.) Samma uppdatering som SQL: `SQL_INGET_SVAR` i
    * motenforma.ts, som `moten-db.mjs --inget-svar-prov` kör.
    */
-  async function uppfoljning(vilken: "inget_svar" | "prova_igen"): Promise<Response> {
+  async function uppfoljning(vilken: "inget_svar" | "prova_igen" | "andra"): Promise<Response> {
     const r = kedjaFore(b);
     if (!r.ok) return svar({ fel: r.fel }, 400);
     const h = await kedjaForAndra(r.varden.kedja);
@@ -1716,8 +1783,24 @@ export async function POST(request: Request) {
 
     const nu = new Date();
     const idag = svensktDatum(nu);
-    const lapp =
-      vilken === "inget_svar"
+    // Ändra uppföljningen (`uppfoljning_andra`): dagen och raden på kortet. Dagen som står nu läses i en egen fråga,
+    // eftersom en passerad dag får stå kvar när bara raden ändras. Samma villkor på `fore` som de andra två.
+    let andring: { uppfoljning_datum: string; uppfoljning_text: string | null } | null = null;
+    // Raden är fri text om kunden: händelsen bär bara om den ändrades, aldrig vad som står i den.
+    let radAndrad = false;
+    if (vilken === "andra") {
+      const { data: nuRad, error: lasfel } = await db.from("mote_kedja").select("uppfoljning_datum, uppfoljning_text").eq("id", k.id).maybeSingle();
+      if (lasfel) return svar({ fel: "Uppföljningen gick inte att läsa. Försök igen." }, 500);
+      const fore = nuRad as { uppfoljning_datum: string | null; uppfoljning_text: string | null } | null;
+      const star = fore?.uppfoljning_datum ?? null;
+      const a = uppfoljningAndring(b, { idag, datum: star ? String(star).slice(0, 10) : null });
+      if (!a.ok) return svar({ fel: a.fel }, 400);
+      andring = a.varden.lapp;
+      radAndrad = (fore?.uppfoljning_text ?? null) !== andring.uppfoljning_text;
+    }
+    const lapp = andring
+      ? { ...andring, uppfoljning_andrad: nu.toISOString() }
+      : vilken === "inget_svar"
         ? { ...efterIngetSvar(idag), inget_svar_i_rad: k.inget_svar_i_rad + 1, uppfoljning_andrad: nu.toISOString() }
         : { uppfoljning_datum: idag, inget_svar_i_rad: 0, uppfoljning_andrad: nu.toISOString() };
     const upd = db.from("mote_kedja").update(lapp).eq("id", k.id).is("avslut", null);
@@ -1727,14 +1810,14 @@ export async function POST(request: Request) {
     if (!rad) return svar({ fel: AENDRAT }, 409);
     await skrivHandelse({
       actorId: mig,
-      action: vilken === "inget_svar" ? "mote.no_answer" : "mote.retry",
+      action: andring ? "mote.followup_changed" : vilken === "inget_svar" ? "mote.no_answer" : "mote.retry",
       objectType: "mote_kedja",
       objectId: k.id,
-      meta: { uppfoljning_datum: rad.uppfoljning_datum, inget_svar_i_rad: rad.inget_svar_i_rad },
+      meta: { uppfoljning_datum: rad.uppfoljning_datum, inget_svar_i_rad: rad.inget_svar_i_rad, ...(andring ? { rad_andrad: radAndrad } : {}) },
     });
     const tyst = rad.inget_svar_i_rad >= TYST_EFTER_INGET_SVAR;
     return svar({
-      ok: vilken === "prova_igen" ? "Kortet ligger i Följ upp igen. Ring i dag." : tyst ? "Inget svar tre gånger. Kortet ligger i Tyst." : `Inget svar. Ring igen ${rad.uppfoljning_datum}.`,
+      ok: andring ? "Uppföljningen är sparad." : vilken === "prova_igen" ? "Kortet ligger i Följ upp igen. Ring i dag." : tyst ? "Inget svar tre gånger. Kortet ligger i Tyst." : `Inget svar. Ring igen ${rad.uppfoljning_datum}.`,
       kedja: k.id,
       uppfoljning_datum: rad.uppfoljning_datum,
       inget_svar_i_rad: rad.inget_svar_i_rad,

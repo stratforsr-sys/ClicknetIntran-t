@@ -8,7 +8,7 @@
 import {
   INST_FORVAL, PIPE_KOLUMNER, lasInstallningar, lokalDag, bekraftelseFonster, pipelineKolumn,
   bradska, niva, fordela, taptSkal, manadFor, kortFas, ursprungligBokare, sorteraFas, provaInstallning, INST_NYCKLAR,
-  omfattas, nivaSvar, raknaRader, andel, omraknadRad, rattelseNot, radernaStammer, harLastBelopp, vemPaminns, utanRedanSkickade,
+  sparadeSvar, motesTz, giltigTidszon, MOTES_NULAGE, MOTES_NEJ_SKAL, MOTES_KALLOR, motesVal, omfattas, nivaSvar, raknaRader, andel, omraknadRad, rattelseNot, radernaStammer, harLastBelopp, vemPaminns, utanRedanSkickade, provaAngra,
 } from "../src/lib/nav2/motesflode.ts";
 
 let fel = 0;
@@ -19,6 +19,25 @@ const ok = (namn, villkor) => {
 const text = (x) => JSON.stringify(x);
 const lika = (namn, fas, vantat) => ok(`${namn} (fick ${text(fas)})`, text(fas) === text(vantat));
 const tz = "Europe/Stockholm";
+
+console.log("\nBladens val på en plats (S1–S3): samma värden som före flytten");
+lika("nulägets nycklar och texter", MOTES_NULAGE, { ingen: "Ingen SEO", sjalv: "Gör själv", byra: "Har byrå" });
+lika("nej-skälen, i samma ordning", [...MOTES_NEJ_SKAL], ["Har redan en byrå", "För dyrt", "Inte nu", "Fel kontaktperson", "Annat"]);
+lika("källförslagen, i samma ordning", [...MOTES_KALLOR], ["Kallsamtal", "Hemsida", "Rekommendation", "Tidigare kund"]);
+lika("motesVal() skickar de tre listorna till gränssnittet", motesVal(), { nulage: { ingen: "Ingen SEO", sjalv: "Gör själv", byra: "Har byrå" }, nejSkal: ["Har redan en byrå", "För dyrt", "Inte nu", "Fel kontaktperson", "Annat"], kallor: ["Kallsamtal", "Hemsida", "Rekommendation", "Tidigare kund"] });
+ok("motesVal() ger kopior: en ändring hos mottagaren rör inte listorna", (() => { const v = motesVal(); v.nejSkal.push("x"); v.kallor.length = 0; v.nulage.ny = "y"; return MOTES_NEJ_SKAL.length === 5 && MOTES_KALLOR.length === 4 && !("ny" in MOTES_NULAGE); })());
+
+console.log("\nKlockslagens tidszon (B19)");
+ok("motesTz() är en tidszon som finns", giltigTidszon(motesTz()));
+ok("förvalet för inställningen moten.tidszon är samma zon som klockslagen går i", INST_FORVAL.tidszon === motesTz());
+ok("ett klockslag i motesTz() följer sommartiden (09:00 UTC i juli är 11:00)", new Intl.DateTimeFormat("sv-SE", { timeZone: motesTz(), hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date("2026-07-01T09:00:00Z")) === "11:00");
+
+console.log("\nSparade svar till bladet Ändra svaren (F18.2)");
+lika("svaren läses som id och ja, texten följer inte med", sparadeSvar([{ id: "a", text: "Fråga?", ja: true }, { id: "b", text: "Annan?", ja: false }]), [{ id: "a", ja: true }, { id: "b", ja: false }]);
+lika("ett svar utan id eller utan ja hoppas över", sparadeSvar([{ id: "a", ja: true }, { id: "", ja: true }, { ja: false }, { id: "c", ja: "ja" }, null, "x"]), [{ id: "a", ja: true }]);
+lika("tom kolumn ger null", sparadeSvar(null), null);
+lika("tom lista ger null", sparadeSvar([]), null);
+lika("ett objekt i stället för en lista ger null", sparadeSvar({ id: "a", ja: true }), null);
 
 console.log("Inställningar");
 lika("tom lista ger förvalet", lasInstallningar([]), INST_FORVAL);
@@ -289,6 +308,29 @@ ok("ett belopp över noll: låst", harLastBelopp([{ belopp: 0 }, { belopp: 300 }
 ok("bara nollor (tappat möte): inte låst", harLastBelopp([{ belopp: 0 }, { belopp: "0.00" }]) === false);
 ok("inga rader: inte låst", harLastBelopp([]) === false);
 ok("ett öre som sträng: låst", harLastBelopp([{ belopp: "0.01" }]) === true);
+
+console.log("Ångra Bekräfta och Fick inte tag (F6.1)");
+{
+  const JAG = "jag", T = "2026-11-12T09:00:00.123Z", TDB = "2026-11-12T09:00:00.123+00:00", FORE = "2026-11-11T14:10:00.000Z";
+  const m = (o = {}) => ({ bekraftat_nar: null, bekraftat_av: null, utfall: null, provision_last_nar: null, forsok: 0, senast_forsok: null, ...o });
+  const b = (o = {}) => ({ vad: "bekrafta", nar: T, fore: null, jag: JAG, ...o });
+  const f = (o = {}) => ({ vad: "forsok", nar: T, fore: null, jag: JAG, ...o });
+  const bekr = m({ bekraftat_nar: TDB, bekraftat_av: JAG });
+  lika("bekräftelsen: samma ögonblick och samma person går att ångra (databasens skrivsätt av tiden)", provaAngra(bekr, b()), { ok: true });
+  ok("bekräftelsen: en annan tid (någon bekräftade om) ger 409", provaAngra(m({ bekraftat_nar: "2026-11-12T09:00:00.124Z", bekraftat_av: JAG }), b()).status === 409);
+  ok("bekräftelsen: inte längre bekräftat (flyttat) ger 409", provaAngra(m(), b()).status === 409);
+  ok("bekräftelsen: någon annans bekräftelse ångras inte", provaAngra(m({ bekraftat_nar: TDB, bekraftat_av: "annan" }), b()).status === 409);
+  ok("bekräftelsen: mötet har fått utfall, ångras inte", provaAngra({ ...bekr, utfall: "hallet" }, b()).status === 409);
+  ok("bekräftelsen: provisionen är låst, ångras inte", provaAngra({ ...bekr, provision_last_nar: "2026-11-12T10:00:00Z" }, b()).status === 409);
+  const fors = m({ forsok: 2, senast_forsok: TDB });
+  lika("försöket: samma ögonblick, tiden före äldre", provaAngra(fors, f({ fore: FORE })), { ok: true });
+  lika("försöket: det första försöket har ingen tid före", provaAngra(m({ forsok: 1, senast_forsok: TDB }), f()), { ok: true });
+  ok("försöket: ett nyare försök har sparats, 409", provaAngra(m({ forsok: 3, senast_forsok: "2026-11-12T09:05:00.000Z" }), f({ fore: FORE })).status === 409);
+  ok("försöket: nollställt av en flytt, 409", provaAngra(m(), f()).status === 409);
+  ok("försöket: mötet har bekräftats under tiden, 409", provaAngra({ ...fors, bekraftat_nar: "2026-11-12T09:01:00Z", bekraftat_av: JAG }, f({ fore: FORE })).status === 409);
+  ok("försöket: mötet har fått utfall, 409", provaAngra({ ...fors, utfall: "uteblev" }, f({ fore: FORE })).status === 409);
+  ok("försöket: tiden före får inte vara samma som eller nyare än försöket, 400", provaAngra(fors, f({ fore: T })).status === 400 && provaAngra(fors, f({ fore: "2026-11-13T09:00:00Z" })).status === 400);
+}
 
 console.log(fel ? `\n${fel} fel` : "\nAllt grönt");
 process.exit(fel ? 1 : 0);
