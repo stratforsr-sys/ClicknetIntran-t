@@ -8,7 +8,7 @@
 import {
   INST_FORVAL, PIPE_KOLUMNER, lasInstallningar, lokalDag, bekraftelseFonster, pipelineKolumn,
   bradska, niva, fordela, taptSkal, manadFor, kortFas, ursprungligBokare, sorteraFas, provaInstallning, INST_NYCKLAR,
-  omfattas, nivaSvar, raknaRader, andel, omraknadRad, rattelseNot, radernaStammer, harLastBelopp, vemPaminns, utanRedanSkickade,
+  omfattas, nivaSvar, raknaRader, andel, omraknadRad, rattelseNot, radernaStammer, harLastBelopp, vemPaminns, utanRedanSkickade, provaAngra,
 } from "../src/lib/nav2/motesflode.ts";
 
 let fel = 0;
@@ -289,6 +289,29 @@ ok("ett belopp över noll: låst", harLastBelopp([{ belopp: 0 }, { belopp: 300 }
 ok("bara nollor (tappat möte): inte låst", harLastBelopp([{ belopp: 0 }, { belopp: "0.00" }]) === false);
 ok("inga rader: inte låst", harLastBelopp([]) === false);
 ok("ett öre som sträng: låst", harLastBelopp([{ belopp: "0.01" }]) === true);
+
+console.log("Ångra Bekräfta och Fick inte tag (F6.1)");
+{
+  const JAG = "jag", T = "2026-11-12T09:00:00.123Z", TDB = "2026-11-12T09:00:00.123+00:00", FORE = "2026-11-11T14:10:00.000Z";
+  const m = (o = {}) => ({ bekraftat_nar: null, bekraftat_av: null, utfall: null, provision_last_nar: null, forsok: 0, senast_forsok: null, ...o });
+  const b = (o = {}) => ({ vad: "bekrafta", nar: T, fore: null, jag: JAG, ...o });
+  const f = (o = {}) => ({ vad: "forsok", nar: T, fore: null, jag: JAG, ...o });
+  const bekr = m({ bekraftat_nar: TDB, bekraftat_av: JAG });
+  lika("bekräftelsen: samma ögonblick och samma person går att ångra (databasens skrivsätt av tiden)", provaAngra(bekr, b()), { ok: true });
+  ok("bekräftelsen: en annan tid (någon bekräftade om) ger 409", provaAngra(m({ bekraftat_nar: "2026-11-12T09:00:00.124Z", bekraftat_av: JAG }), b()).status === 409);
+  ok("bekräftelsen: inte längre bekräftat (flyttat) ger 409", provaAngra(m(), b()).status === 409);
+  ok("bekräftelsen: någon annans bekräftelse ångras inte", provaAngra(m({ bekraftat_nar: TDB, bekraftat_av: "annan" }), b()).status === 409);
+  ok("bekräftelsen: mötet har fått utfall, ångras inte", provaAngra({ ...bekr, utfall: "hallet" }, b()).status === 409);
+  ok("bekräftelsen: provisionen är låst, ångras inte", provaAngra({ ...bekr, provision_last_nar: "2026-11-12T10:00:00Z" }, b()).status === 409);
+  const fors = m({ forsok: 2, senast_forsok: TDB });
+  lika("försöket: samma ögonblick, tiden före äldre", provaAngra(fors, f({ fore: FORE })), { ok: true });
+  lika("försöket: det första försöket har ingen tid före", provaAngra(m({ forsok: 1, senast_forsok: TDB }), f()), { ok: true });
+  ok("försöket: ett nyare försök har sparats, 409", provaAngra(m({ forsok: 3, senast_forsok: "2026-11-12T09:05:00.000Z" }), f({ fore: FORE })).status === 409);
+  ok("försöket: nollställt av en flytt, 409", provaAngra(m(), f()).status === 409);
+  ok("försöket: mötet har bekräftats under tiden, 409", provaAngra({ ...fors, bekraftat_nar: "2026-11-12T09:01:00Z", bekraftat_av: JAG }, f({ fore: FORE })).status === 409);
+  ok("försöket: mötet har fått utfall, 409", provaAngra({ ...fors, utfall: "uteblev" }, f({ fore: FORE })).status === 409);
+  ok("försöket: tiden före får inte vara samma som eller nyare än försöket, 400", provaAngra(fors, f({ fore: T })).status === 400 && provaAngra(fors, f({ fore: "2026-11-13T09:00:00Z" })).status === 400);
+}
 
 console.log(fel ? `\n${fel} fel` : "\nAllt grönt");
 process.exit(fel ? 1 : 0);

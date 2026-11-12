@@ -499,6 +499,30 @@ export function utanRedanSkickade(
 }
 
 /** Ordningen på tavlan: kolumnvis, inom kolumnen efter tid, stigande (Avgjort fallande). */
+/**
+ * Får en envägsknapp ångras (F6.1)? Bara exakt den sparning servern svarade med (samma ögonblick), och bara
+ * när inget har hänt sedan dess: inget utfall och ingen låst mötesprovision. En bekräftelse ångras av den som
+ * bekräftade. Ett försök bär ingen person: det pekas ut av tiden ensam, och tiden som läggs tillbaka (`fore`)
+ * måste vara tom eller äldre än försöket. Rutten villkorar skrivningen på samma saker i databasen.
+ */
+export type AngraMote = { bekraftat_nar: string | null; bekraftat_av: string | null; utfall: string | null; provision_last_nar: string | null; forsok: number; senast_forsok: string | null };
+export function provaAngra(
+  m: AngraMote,
+  i: { vad: "bekrafta" | "forsok"; nar: string; fore: string | null; jag: string },
+): { ok: true } | { ok: false; fel: string; status: 400 | 409 } {
+  const samma = (a: string | null, b: string) => a !== null && Date.parse(a) === Date.parse(b);
+  if (m.utfall) return { ok: false, fel: "Mötet har redan fått ett utfall. Inget ångrades.", status: 409 };
+  if (m.provision_last_nar) return { ok: false, fel: "Mötesprovisionen är låst. Inget ångrades.", status: 409 };
+  if (i.vad === "bekrafta") {
+    if (!samma(m.bekraftat_nar, i.nar) || m.bekraftat_av !== i.jag) return { ok: false, fel: "Mötet har ändrats sedan du bekräftade det. Inget ångrades.", status: 409 };
+    return { ok: true };
+  }
+  if (m.bekraftat_nar) return { ok: false, fel: "Mötet är bekräftat. Försöket står kvar.", status: 409 };
+  if (m.forsok < 1 || !samma(m.senast_forsok, i.nar)) return { ok: false, fel: "Mötet har ändrats sedan försöket. Inget ångrades.", status: 409 };
+  if (i.fore !== null && !(Date.parse(i.fore) < Date.parse(i.nar))) return { ok: false, fel: "Det går inte att ångra längre. Ladda om tavlan.", status: 400 };
+  return { ok: true };
+}
+
 export function sorteraFas(a: { fas: PipeKolumn; tid: string }, b: { fas: PipeKolumn; tid: string }): number {
   const k = PIPE_KOLUMNER.indexOf(a.fas) - PIPE_KOLUMNER.indexOf(b.fas);
   if (k) return k;

@@ -563,5 +563,60 @@ rubrik("Uppgift 6: vem bedömer, och svaren i anropen");
   ok("noll aktiva frågor: hållaren låser kvalificerat utan svar", v({ fragor: F.map((f) => ({ ...f, aktiv: false })), svar: null }).niva === "kvalificerat");
 }
 
+console.log("\nÅngra (F6.1): indata");
+{
+  const T = "2026-11-12T09:00:00.123Z", MID = "00000000-0000-4000-8000-000000000001";
+  const r = M.angraIndata({ mote: MID, vad: "bekrafta", nar: T, fore: "2026-11-11T14:10:00.000Z" });
+  ok("bekrafta: mötet, vad och tiden går igenom, och fore gäller inte bekräftelsen", r.ok && r.varden.vad === "bekrafta" && r.varden.nar === T && r.varden.fore === null);
+  const f = M.angraIndata({ mote: MID, vad: "forsok", nar: T, fore: "2026-11-11T14:10:00.000Z" });
+  ok("forsok: fore följer med oförändrad, och får saknas", f.ok && f.varden.fore === "2026-11-11T14:10:00.000Z" && M.angraIndata({ mote: MID, vad: "forsok", nar: T }).varden.fore === null);
+  ok("okänt vad, fel möte, ingen tid och en tid som inte är en tid avvisas", !M.angraIndata({ mote: MID, vad: "utfall", nar: T }).ok && !M.angraIndata({ mote: "x", vad: "bekrafta", nar: T }).ok && !M.angraIndata({ mote: MID, vad: "bekrafta" }).ok && !M.angraIndata({ mote: MID, vad: "bekrafta", nar: "i går" }).ok && !M.angraIndata({ mote: MID, vad: "forsok", nar: T, fore: "2026-13-45T99:00:00Z" }).ok);
+  ok("arSkrivning('angra'): spärras i läsläge", M.arSkrivning("angra") === true);
+}
+
+rubrik("Veckans stängda: skälet och säljaren (F3.1)");
+{
+  ok("skälet står bara på ett nej", M.nejSkal("nej", "För dyrt") === "För dyrt" && M.nejSkal("affar", "För dyrt") === null);
+  ok("tomt, bara blanktecken, null och undefined är inget skäl", M.nejSkal("nej", "") === null && M.nejSkal("nej", "   ") === null && M.nejSkal("nej", null) === null && M.nejSkal("nej", undefined) === null);
+  ok("blanktecken runt skälet kapas", M.nejSkal("nej", "  Har byrå \n") === "Har byrå");
+  const A = "a", B = "b", C = "c";
+  const s = M.saljarePerKedja([
+    { kedja_id: "k1", halls_av: A, mote_tid: "2026-11-02T09:00:00Z", utfall: "hallet" },
+    { kedja_id: "k1", halls_av: B, mote_tid: "2026-11-09T09:00:00Z", utfall: "hallet" },
+    { kedja_id: "k1", halls_av: C, mote_tid: "2026-11-10T09:00:00Z", utfall: "uteblev" },
+    { kedja_id: "k2", halls_av: C, mote_tid: "2026-11-03T09:00:00Z", utfall: "avbokat" },
+    { kedja_id: "k2", halls_av: A, mote_tid: "2026-11-05T09:00:00Z", utfall: "uteblev" },
+    { kedja_id: "k3", halls_av: A, mote_tid: "2026-11-05T09:00:00Z", utfall: null },
+    { kedja_id: "k4", halls_av: null, mote_tid: "2026-11-05T09:00:00Z", utfall: "hallet" },
+  ]);
+  ok("säljaren är den som höll kedjans senaste hållna möte, också när ett senare möte uteblev", s.get("k1") === B);
+  ok("utan hållet möte: hållaren på det senaste mötet med utfall", s.get("k2") === A);
+  ok("ett möte utan utfall eller utan hållare ger ingen säljare", !s.has("k3") && !s.has("k4") && s.size === 2);
+  ok("ordningen på raderna spelar ingen roll", M.saljarePerKedja([{ kedja_id: "k1", halls_av: B, mote_tid: "2026-11-09T09:00:00Z", utfall: "hallet" }, { kedja_id: "k1", halls_av: A, mote_tid: "2026-11-02T09:00:00Z", utfall: "hallet" }]).get("k1") === B);
+}
+
+rubrik("Avgjort: väntande bedömningar över månadsskiftet (F18.1)");
+{
+  const man = [{ id: "m1", fran: "manad" }, { id: "m2", fran: "manad" }], vant = [{ id: "m2", fran: "vantande" }, { id: "g1", fran: "vantande" }, { id: "g1", fran: "dubblett" }];
+  const ihop = M.slaIhopAvgjorda(man, vant);
+  ok("ett möte står en gång, och månadens rad gäller", ihop.length === 3 && ihop.map((x) => x.id).join() === "m1,m2,g1" && ihop[1].fran === "manad" && ihop[2].fran === "vantande");
+  ok("utan väntande är listan månadens, och utan månadens de väntande", M.slaIhopAvgjorda(man, []).length === 2 && M.slaIhopAvgjorda([], vant).map((x) => x.id).join() === "m2,g1");
+  ok("indatan ändras inte", man.length === 2 && vant.length === 3);
+  const rader = [
+    { n: "nov-klar", vantarBedomning: false, tid: "2026-11-10 10:00" },
+    { n: "okt-vantar", vantarBedomning: true, tid: "2026-10-28 10:00" },
+    { n: "nov-vantar", vantarBedomning: true, tid: "2026-11-03 10:00" },
+    { n: "nov-klar-tidig", vantarBedomning: false, tid: "2026-11-02 10:00" },
+  ].sort(M.sorteraAvgjorda).map((x) => x.n).join();
+  ok("det som väntar på bedömning står överst också från förra månaden, sedan senaste först", rader === "nov-vantar,okt-vantar,nov-klar,nov-klar-tidig", rader);
+}
+
+rubrik("Tavlans tak (F5.3)");
+{
+  ok("under taket: inte kapad", M.arKapad(0, 1000) === false && M.arKapad(999, 1000) === false);
+  ok("på taket eller över: kapad (REST-vägen ger aldrig fler än taket)", M.arKapad(1000, 1000) === true && M.arKapad(1001, 1000) === true);
+  ok("ett tak på noll kapar ingenting", M.arKapad(0, 0) === false);
+}
+
 console.log(fel ? `\n\x1b[31m${fel} fel\x1b[0m` : "\n\x1b[32mAlla ✓\x1b[0m");
 process.exit(fel ? 1 : 0);

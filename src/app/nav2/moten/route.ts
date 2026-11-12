@@ -15,6 +15,7 @@ import {
   TYST_EFTER_INGET_SVAR,
   andraIndata,
   andringForKund,
+  angraIndata,
   arHallare,
   arSkrivning,
   efterBokning,
@@ -67,7 +68,7 @@ import {
   type Uppslag,
 } from "@/lib/nav2/motenforma";
 import { lokal } from "@/lib/nav2/leads";
-import { faltFor, lasInstallningar, niva, nivaSvar, omfattas, provaInstallning, radernaStammer, type Lage, type MotenInst } from "@/lib/nav2/motesflode";
+import { faltFor, lasInstallningar, niva, nivaSvar, omfattas, provaAngra, provaInstallning, radernaStammer, type Lage, type MotenInst } from "@/lib/nav2/motesflode";
 import { ProvisionKonflikt, andraProvision, harLastProvision, harOmbokning, ifragasattProvision, latStaProvision, lasProvision, lastaRader, provisionsmottagare } from "@/lib/nav2/motesprovision-server";
 import { medNyckel } from "@/lib/nav2/nyckel";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
@@ -108,7 +109,8 @@ export const dynamic = "force-dynamic";
  * VERSIONSVILLKOR (A7, A8): varje skrivning är villkorad på tillståndet den ändrar från, så att ett
  * dubbelklick räknas en gång. `bekrafta` på `bekraftat_nar is null`, `utfall`/`avboka` på `utfall is
  * null`, `flytta` på `utfall is null` och mötets nuvarande tid, `kund`/`nej` på kedjans `avslut is
- * null`, och `inget_svar`/`prova_igen` på `uppfoljning_andrad is not distinct from fore`. Ingen rad
+ * null`, och `inget_svar`/`prova_igen` på `uppfoljning_andrad is not distinct from fore`. `angra` tar
+ * tillbaka en bekräftelse eller ett försök, villkorat på exakt den tid sparningen svarade med. Ingen rad
  * ändrad = 409. Ordningen när en handling rör flera ställen, och vad som städas om något fallerar,
  * står vid `sattUtfall`.
  *
@@ -171,14 +173,18 @@ export async function POST(request: Request) {
     return p && p.status !== "offboarded" && arHallare((p.employee_role ?? []).map((r) => r.role)) ? fullName(p) : null;
   };
 
-  /** `mote_uppslag` som den inloggade. Ett fel ger tomt svar: uppslaget är en hjälp och spärrar aldrig. */
-  const slaUpp = async (telefon: string | null, doman: string | null, namn: string | null): Promise<Uppslag> => {
+  /**
+   * `mote_uppslag` som den inloggade. Ett fel ger null, aldrig ett tomt svar: handlingen `uppslag` svarar då med fel
+   * (annars läser användaren "inga träffar" när databasen inte svarade). I bokningen är uppslaget en hjälp som aldrig
+   * spärrar: där räknas null som inga träffar.
+   */
+  const slaUpp = async (telefon: string | null, doman: string | null, namn: string | null): Promise<Uppslag | null> => {
     try {
       const sb = await supabaseServer();
       const { data, error } = await sb.rpc("mote_uppslag", { p_telefon: telefon, p_doman: doman, p_namn: namn });
-      return error ? tolkaUppslag(null) : tolkaUppslag(data);
+      return error ? null : tolkaUppslag(data);
     } catch {
-      return tolkaUppslag(null);
+      return null;
     }
   };
 
@@ -312,6 +318,7 @@ export async function POST(request: Request) {
       const doman = bolagsDoman(typeof b.doman === "string" ? b.doman : null);
       const namn = typeof b.namn === "string" && b.namn.trim() ? b.namn.trim().slice(0, 200) : null;
       const u = await slaUpp(telefon, doman, namn);
+      if (!u) return svar({ fel: "Nav kunde inte läsa just nu." }, 500);
       return svar({ ok: "Uppslag.", ...u, varning: uppslagsVarning(u, nar) });
     }
 
@@ -346,6 +353,8 @@ export async function POST(request: Request) {
       return forsok();
     case "bekrafta":
       return await bekrafta();
+    case "angra":
+      return await angra();
 
     case "flytta":
       return await flyttaMote();
@@ -444,7 +453,7 @@ export async function POST(request: Request) {
     const varningar: string[] = [];
 
     // Uppslaget först, innan något skapats: ett träff här är ett ANNAT bokat möte eller en kund.
-    const upp = await slaUpp(v.telefon, v.doman, v.namn);
+    const upp = (await slaUpp(v.telefon, v.doman, v.namn)) ?? tolkaUppslag(null);
     const uppVarning = uppslagsVarning(upp, nar);
     if (uppVarning) varningar.push(uppVarning);
 
@@ -756,9 +765,10 @@ export async function POST(request: Request) {
     const m = h.m;
     if (!farBekrafta(aktorn, m)) return svar({ fel: "Du har inte tillgång till det här mötet." }, 403);
     if (m.utfall) return svar({ fel: "Mötet har redan fått ett utfall." }, 409);
+    const nar = new Date().toISOString();
     const { data, error } = await db
       .from("mote")
-      .update({ bekraftat_nar: new Date().toISOString(), bekraftat_av: mig })
+      .update({ bekraftat_nar: nar, bekraftat_av: mig })
       .eq("id", m.id)
       .is("bekraftat_nar", null)
       .is("utfall", null)
@@ -766,7 +776,54 @@ export async function POST(request: Request) {
     if (error) return svar({ fel: "Bekräftelsen kunde inte sparas." }, 500);
     if (((data ?? []) as unknown[]).length === 0) return svar({ fel: "Mötet är redan bekräftat." }, 409);
     await skrivHandelse({ actorId: mig, action: "mote.confirmed", objectType: "mote", objectId: m.id, meta: { kedja: m.kedja_id } });
-    return svar({ ok: "Mötet är bekräftat.", mote: m.id });
+    // `nar` är det Ångra pekar ut bekräftelsen med (se `angra`).
+    return svar({ ok: "Mötet är bekräftat.", mote: m.id, nar });
+  }
+
+  /**
+   * Ångra Bekräfta eller Fick inte tag (F6.1). Bekräftelsen skriver bara `bekraftat_nar`/`bekraftat_av` (inget
+   * mejl, ingen notis), och provisionen läser `bekraftat_nar` först när utfallet låses, så den går att ta
+   * tillbaka så länge inget utfall finns. Regeln står i `provaAngra`; skrivningen är villkorad på samma saker,
+   * så att två som trycker samtidigt aldrig ångrar något annat än det som sparades. Ingen rad ändrad = 409.
+   */
+  async function angra(): Promise<Response> {
+    const r = angraIndata(b);
+    if (!r.ok) return svar({ fel: r.fel }, 400);
+    const v = r.varden;
+    const h = await moteForSe(v.mote);
+    if ("res" in h) return h.res;
+    const m = h.m;
+    if (!farBekrafta(aktorn, m)) return svar({ fel: "Du har inte tillgång till det här mötet." }, 403);
+    const p = provaAngra(m, { vad: v.vad, nar: v.nar, fore: v.fore, jag: mig });
+    if (!p.ok) return svar({ fel: p.fel }, p.status);
+    if (v.vad === "bekrafta") {
+      const { data, error } = await db
+        .from("mote")
+        .update({ bekraftat_nar: null, bekraftat_av: null })
+        .eq("id", m.id)
+        .eq("bekraftat_nar", m.bekraftat_nar as string)
+        .eq("bekraftat_av", mig)
+        .is("utfall", null)
+        .is("provision_last_nar", null)
+        .select("id");
+      if (error) return svar({ fel: "Bekräftelsen kunde inte ångras." }, 500);
+      if (((data ?? []) as unknown[]).length === 0) return svar({ fel: "Mötet har ändrats sedan du bekräftade det. Inget ångrades." }, 409);
+      await skrivHandelse({ actorId: mig, action: "mote.confirmation_undone", objectType: "mote", objectId: m.id, meta: { kedja: m.kedja_id } });
+      return svar({ ok: "Bekräftelsen är ångrad.", mote: m.id });
+    }
+    const { data, error } = await db
+      .from("mote")
+      .update({ forsok: m.forsok - 1, senast_forsok: v.fore })
+      .eq("id", m.id)
+      .eq("senast_forsok", m.senast_forsok as string)
+      .eq("forsok", m.forsok)
+      .is("utfall", null)
+      .is("bekraftat_nar", null)
+      .select("id");
+    if (error) return svar({ fel: "Försöket kunde inte ångras." }, 500);
+    if (((data ?? []) as unknown[]).length === 0) return svar({ fel: "Mötet har ändrats sedan försöket. Inget ångrades." }, 409);
+    await skrivHandelse({ actorId: mig, action: "mote.attempt_undone", objectType: "mote", objectId: m.id, meta: { kedja: m.kedja_id, forsok: m.forsok - 1 } });
+    return svar({ ok: "Försöket är ångrat.", mote: m.id, forsok: m.forsok - 1 });
   }
 
   /**
@@ -820,7 +877,8 @@ export async function POST(request: Request) {
     if (error) return svar({ fel: "Försöket kunde inte sparas." }, 500);
     if (((data ?? []) as unknown[]).length === 0) return svar({ fel: "Mötet har ändrats. Ladda om tavlan." }, 409);
     await skrivHandelse({ actorId: mig, action: "mote.attempt", objectType: "mote", objectId: m.id, meta: { kedja: m.kedja_id, forsok: m.forsok + 1 } });
-    return svar({ ok: "Försöket är sparat. Mötet ligger kvar.", mote: m.id, forsok: m.forsok + 1 });
+    // `nar` och `fore` är det Ångra behöver: försökets tid, och tiden som stod före (se `angra`).
+    return svar({ ok: "Försöket är sparat. Mötet ligger kvar.", mote: m.id, forsok: m.forsok + 1, nar: nuIso, fore: m.senast_forsok });
   }
 
   async function flyttaMote(): Promise<Response> {
@@ -1518,7 +1576,7 @@ export async function POST(request: Request) {
       const { error } = await db.from("mote_bolag").update(bolagLapp).eq("id", bo.id);
       if (error) varningar.push("Bolagets uppgifter kunde inte sparas. Försök igen.");
       else if (bolagLapp.telefon) {
-        const uv = uppslagsVarning(await slaUpp(bolagLapp.telefon, null, null), nar);
+        const uv = uppslagsVarning((await slaUpp(bolagLapp.telefon, null, null)) ?? tolkaUppslag(null), nar);
         if (uv) varningar.push(uv);
       }
     }

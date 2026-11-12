@@ -246,6 +246,8 @@ const RUBRIK: Record<string, string> = {
   "manager_commission_rate.future_removed": "Kommande chefssats borttagen",
   "manager_commission_rate.set": "Chefens sats satt",
   "mote.attempt": "Möte: fick inte tag på kunden",
+  "mote.attempt_undone": "Möte: försöket ångrat",
+  "mote.confirmation_undone": "Möte: bekräftelsen ångrad",
   "mote.confirmed": "Möte bekräftat",
   "mote.edited": "Möte ändrat",
   "mote.moved": "Möte flyttat",
