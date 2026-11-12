@@ -69,7 +69,7 @@ import {
   type Uppslag,
 } from "@/lib/nav2/motenforma";
 import { lokal } from "@/lib/nav2/leads";
-import { faltFor, lasInstallningar, niva, nivaSvar, omfattas, provaAngra, provaInstallning, radernaStammer, type Lage, type MotenInst } from "@/lib/nav2/motesflode";
+import { faltFor, lasInstallningar, motesTz, niva, nivaSvar, omfattas, provaAngra, provaInstallning, radernaStammer, type Lage, type MotenInst } from "@/lib/nav2/motesflode";
 import { ProvisionKonflikt, andraProvision, harLastProvision, harOmbokning, ifragasattProvision, latStaProvision, lasProvision, lastaRader, provisionsmottagare } from "@/lib/nav2/motesprovision-server";
 import { medNyckel } from "@/lib/nav2/nyckel";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
@@ -137,7 +137,7 @@ const lista = (n: string[]) => (n.length < 2 ? n.join("") : `${n.slice(0, -1).jo
 
 /** "tis 21 okt 10:00" ur en tidpunkt, för svaret. */
 function nar(d: Date | string): string {
-  const s = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", weekday: "short" }).formatToParts(typeof d === "string" ? new Date(d) : d);
+  const s = new Intl.DateTimeFormat("sv-SE", { timeZone: motesTz(), day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", weekday: "short" }).formatToParts(typeof d === "string" ? new Date(d) : d);
   const p = Object.fromEntries(s.map((x) => [x.type, x.value]));
   return `${p.weekday} ${p.day} ${String(p.month).replace(".", "")} ${p.hour}:${p.minute}`;
 }
@@ -619,9 +619,9 @@ export async function POST(request: Request) {
     // Inbjudan läser länken när den skickas, efter ångerfönstret, så kunden får den i första mejlet.
     if (v.lank && v.hallsAv === mig) {
       const { error } = await db.from("calendar_event").update({ online_url: v.lank }).eq("id", m.eventId);
-      if (error) varningar.push("Teams-länken kom inte med i kalendern. Lägg till den under Ändra.");
+      if (error) varningar.push("Möteslänken kom inte med i kalendern. Lägg till den under Ändra.");
     }
-    if (v.plats === videoNamn(null) && !v.lank) varningar.push("Teams-länken saknas. Lägg till den under Ändra, så får kunden den med mejl.");
+    if (v.plats === videoNamn(null) && !v.lank) varningar.push("Möteslänken saknas. Lägg till den under Ändra, så får kunden den med mejl.");
 
     // 7. Kopplingen till kalenderhändelsen. Mötet finns nu, så ett fel härifrån blir ett svar och inget kast.
     const { error: kopp } = await db.from("mote").update({ event_id: m.eventId }).eq("id", moteId);
@@ -1659,7 +1659,7 @@ export async function POST(request: Request) {
       utOk.length ? `${lista(utOk)} får en avbokning med mejl.` : "",
       gastFel.length ? `${lista(gastFel)} gick inte att ändra. Försök igen, eller ändra i kalendern.` : "",
     ].filter(Boolean);
-    if (v.plats && platsNu === videoNamn(null) && !lankNu) varningar.push("Teams-länken saknas. Lägg till den under Ändra, så får kunden den med mejl.");
+    if (v.plats && platsNu === videoNamn(null) && !lankNu) varningar.push("Möteslänken saknas. Lägg till den under Ändra, så får kunden den med mejl.");
     return svar({ ok: delar.join(" "), mote: m.id, kedja: m.kedja_id, ...(varningar.length ? { varning: varningar.join(" ") } : {}) });
   }
 

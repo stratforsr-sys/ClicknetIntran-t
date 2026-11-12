@@ -16,6 +16,8 @@
  * sommartidsskiftet aldrig flyttar en dag.
  */
 
+import { SKAL } from "./leadsforma.ts";
+
 export type PipeKolumn = "bokat" | "att_bekrafta" | "bekraftat" | "hos_saljaren" | "avgjort";
 export const PIPE_KOLUMNER: readonly PipeKolumn[] = ["bokat", "att_bekrafta", "bekraftat", "hos_saljaren", "avgjort"];
 
@@ -68,6 +70,36 @@ export const INST_NYCKLAR: Record<keyof MotenInst, string> = {
 export const GRANSER = { dagarMax: 14, fragorMax: 5, fragaText: 120, kolumnnamn: 24, prefix: 40, belopp: 100000 } as const;
 
 const arObjekt = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+
+/**
+ * Tidszonen som Mötens klockslag räknas och visas i (bokningen, tavlan, svaren, statistikens veckor). I dag en
+ * konstant: inställningen `moten.tidszon` styr dagarna (bekräftelsefönstret, provisionens månad, påminnelsen om
+ * utfall), inte klockslagen (S6 i docs/saljbarhet.md). Den dag klockslagen ska följa inställningen ändras den här
+ * funktionen, inte anropen. Utkastet har samma funktion som `moTz()`.
+ */
+export function motesTz(): string {
+  return "Europe/Stockholm";
+}
+
+/**
+ * Valen som bladen erbjuder (S1–S3 i docs/saljbarhet.md): nuläget inför mötet, skälen till ett nej och förslagen
+ * på källor. EN plats: rutten prövar indata mot de här listorna (`NULAGE` och `NEJ_SKAL` i motenforma.ts är samma
+ * värden) och läsningen skickar dem till gränssnittet i `ND.moten.inst.val`, så utkastet har inga egna kopior.
+ *
+ * Värdena är desamma som före flytten och får inte byta stavning: nulägets nyckel (`mote.nulage`) och skälets text
+ * (`mote_kedja.nej_skal`, samma lista som Leads `lead_skal`) ligger sparade i databasen. Att göra listorna till
+ * inställningar per företag är ett eget varv; då ändras det här stället, inte anropen.
+ */
+export const MOTES_NULAGE = { ingen: "Ingen SEO", sjalv: "Gör själv", byra: "Har byrå" } as const;
+/** Samma skäl som Leads, så att ett Nej betyder samma sak på båda ställena. */
+export const MOTES_NEJ_SKAL = SKAL;
+/** Förslag i fältet Källa. Källan är fri text; förslagen sparas inte någonstans. */
+export const MOTES_KALLOR = ["Kallsamtal", "Hemsida", "Rekommendation", "Tidigare kund"] as const;
+export type MotesVal = { nulage: Record<string, string>; nejSkal: string[]; kallor: string[] };
+/** Listorna i den form gränssnittet läser dem. Kopior, så att mottagaren inte kan ändra källan. */
+export function motesVal(): MotesVal {
+  return { nulage: { ...MOTES_NULAGE }, nejSkal: [...MOTES_NEJ_SKAL], kallor: [...MOTES_KALLOR] };
+}
 
 export function giltigTidszon(tz: unknown): tz is string {
   if (typeof tz !== "string" || !tz) return false;
@@ -344,6 +376,20 @@ export function omfattas(moteTid: string, gallerFran: string | null): boolean {
   const t = Date.parse(moteTid);
   const g = Date.parse(gallerFran);
   return Number.isFinite(t) && Number.isFinite(g) && t >= g;
+}
+
+/**
+ * De sparade svaren (`mote.niva_svar`) i den form bladet Ändra svaren fyller i: bara id och ja, och bara de svar som
+ * går att läsa. Null när inget går att läsa (kolumnen är tom, eller har en annan form än väntat).
+ */
+export function sparadeSvar(v: unknown): { id: string; ja: boolean }[] | null {
+  if (!Array.isArray(v)) return null;
+  const ut: { id: string; ja: boolean }[] = [];
+  for (const x of v as unknown[]) {
+    const s = x as { id?: unknown; ja?: unknown } | null;
+    if (s && typeof s === "object" && typeof s.id === "string" && s.id !== "" && typeof s.ja === "boolean") ut.push({ id: s.id, ja: s.ja });
+  }
+  return ut.length ? ut : null;
 }
 
 /** Svaren på de aktiva frågorna, i frågornas ordning och med deras text just nu. Svar på andra frågor följer inte med. */

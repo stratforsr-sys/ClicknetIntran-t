@@ -49,6 +49,12 @@ ok(
 );
 ok("nulägena", M.NULAGE.ingen === "Ingen SEO" && M.NULAGE.sjalv === "Gör själv" && M.NULAGE.byra === "Har byrå");
 ok("nej-skälen är Leads skäl", M.NEJ_SKAL === SKAL || JSON.stringify(M.NEJ_SKAL) === JSON.stringify(SKAL));
+{
+  // S1–S3: rutten prövar mot samma listor som läsningen skickar till gränssnittet (motesflode.ts är den enda platsen).
+  const F = await import("../src/lib/nav2/motesflode.ts");
+  ok("nuläget och nej-skälen prövas mot listorna som skickas till gränssnittet", JSON.stringify(M.NULAGE) === JSON.stringify(F.motesVal().nulage) && JSON.stringify(M.NEJ_SKAL) === JSON.stringify(F.motesVal().nejSkal));
+  ok("ett sparat nuläge och ett sparat skäl gäller fortfarande", ["ingen", "sjalv", "byra"].every((n) => n in M.NULAGE) && ["Har redan en byrå", "För dyrt", "Inte nu", "Fel kontaktperson", "Annat"].every((s) => M.NEJ_SKAL.includes(s)));
+}
 
 rubrik("normaliseraDoman");
 ok("adress med protokoll, www, gemener och sökväg", M.normaliseraDoman("https://www.Exempel.se/om-oss?x=1") === "exempel.se");

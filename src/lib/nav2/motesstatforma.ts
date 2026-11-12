@@ -27,6 +27,8 @@ export type Veckotal = {
   samtal: number; bokade: number; per100: number | null; hallna: Kvot; raddade: number;
   affarer: Kvot; forstaMote: Kvot; bokatTillAffar: number; oppnaOfferter: number; tysta: number; utanUtfall: number;
 };
+import { motesTz } from "./motesflode.ts";
+
 export type Period = { fran: string; till: string };
 
 // Beställaren 2026-11-01: samtal kortare än 5 minuter räknas inte (samma 300 i 0267 och i rutten).
@@ -39,7 +41,7 @@ const TRETTIO_MIN = 30 * 60_000;
 // söndag är måndag i Sverige, och det är svenska dagar säljarna räknar i.
 // Samma mönster som dag() i avtalforma.ts.
 const stockholmsdag = (ts: string | number | Date): string =>
-  new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ts));
+  new Intl.DateTimeFormat("sv-SE", { timeZone: motesTz(), year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(ts));
 
 // Båda ändarna räknas in. YYYY-MM-DD sorterar rätt som text.
 const iVeckan = (ts: string | null, v: Period): boolean => {
@@ -310,7 +312,7 @@ const stockholmsMidnatt = (dag: string): string => {
   const klockan = (t: number) => {
     const p = Object.fromEntries(
       new Intl.DateTimeFormat("sv-SE", {
-        timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit", day: "2-digit",
+        timeZone: motesTz(), year: "numeric", month: "2-digit", day: "2-digit",
         hour: "2-digit", minute: "2-digit", hourCycle: "h23",
       }).formatToParts(new Date(t)).map((x) => [x.type, x.value]),
     );

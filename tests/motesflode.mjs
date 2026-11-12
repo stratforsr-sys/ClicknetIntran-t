@@ -8,7 +8,7 @@
 import {
   INST_FORVAL, PIPE_KOLUMNER, lasInstallningar, lokalDag, bekraftelseFonster, pipelineKolumn,
   bradska, niva, fordela, taptSkal, manadFor, kortFas, ursprungligBokare, sorteraFas, provaInstallning, INST_NYCKLAR,
-  omfattas, nivaSvar, raknaRader, andel, omraknadRad, rattelseNot, radernaStammer, harLastBelopp, vemPaminns, utanRedanSkickade, provaAngra,
+  sparadeSvar, motesTz, giltigTidszon, MOTES_NULAGE, MOTES_NEJ_SKAL, MOTES_KALLOR, motesVal, omfattas, nivaSvar, raknaRader, andel, omraknadRad, rattelseNot, radernaStammer, harLastBelopp, vemPaminns, utanRedanSkickade, provaAngra,
 } from "../src/lib/nav2/motesflode.ts";
 
 let fel = 0;
@@ -19,6 +19,25 @@ const ok = (namn, villkor) => {
 const text = (x) => JSON.stringify(x);
 const lika = (namn, fas, vantat) => ok(`${namn} (fick ${text(fas)})`, text(fas) === text(vantat));
 const tz = "Europe/Stockholm";
+
+console.log("\nBladens val på en plats (S1–S3): samma värden som före flytten");
+lika("nulägets nycklar och texter", MOTES_NULAGE, { ingen: "Ingen SEO", sjalv: "Gör själv", byra: "Har byrå" });
+lika("nej-skälen, i samma ordning", [...MOTES_NEJ_SKAL], ["Har redan en byrå", "För dyrt", "Inte nu", "Fel kontaktperson", "Annat"]);
+lika("källförslagen, i samma ordning", [...MOTES_KALLOR], ["Kallsamtal", "Hemsida", "Rekommendation", "Tidigare kund"]);
+lika("motesVal() skickar de tre listorna till gränssnittet", motesVal(), { nulage: { ingen: "Ingen SEO", sjalv: "Gör själv", byra: "Har byrå" }, nejSkal: ["Har redan en byrå", "För dyrt", "Inte nu", "Fel kontaktperson", "Annat"], kallor: ["Kallsamtal", "Hemsida", "Rekommendation", "Tidigare kund"] });
+ok("motesVal() ger kopior: en ändring hos mottagaren rör inte listorna", (() => { const v = motesVal(); v.nejSkal.push("x"); v.kallor.length = 0; v.nulage.ny = "y"; return MOTES_NEJ_SKAL.length === 5 && MOTES_KALLOR.length === 4 && !("ny" in MOTES_NULAGE); })());
+
+console.log("\nKlockslagens tidszon (B19)");
+ok("motesTz() är en tidszon som finns", giltigTidszon(motesTz()));
+ok("förvalet för inställningen moten.tidszon är samma zon som klockslagen går i", INST_FORVAL.tidszon === motesTz());
+ok("ett klockslag i motesTz() följer sommartiden (09:00 UTC i juli är 11:00)", new Intl.DateTimeFormat("sv-SE", { timeZone: motesTz(), hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date("2026-07-01T09:00:00Z")) === "11:00");
+
+console.log("\nSparade svar till bladet Ändra svaren (F18.2)");
+lika("svaren läses som id och ja, texten följer inte med", sparadeSvar([{ id: "a", text: "Fråga?", ja: true }, { id: "b", text: "Annan?", ja: false }]), [{ id: "a", ja: true }, { id: "b", ja: false }]);
+lika("ett svar utan id eller utan ja hoppas över", sparadeSvar([{ id: "a", ja: true }, { id: "", ja: true }, { ja: false }, { id: "c", ja: "ja" }, null, "x"]), [{ id: "a", ja: true }]);
+lika("tom kolumn ger null", sparadeSvar(null), null);
+lika("tom lista ger null", sparadeSvar([]), null);
+lika("ett objekt i stället för en lista ger null", sparadeSvar({ id: "a", ja: true }), null);
 
 console.log("Inställningar");
 lika("tom lista ger förvalet", lasInstallningar([]), INST_FORVAL);

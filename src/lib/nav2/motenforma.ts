@@ -15,10 +15,9 @@
  */
 
 import { arArbetsdag, dagPlus } from "../saljtakt.ts";
-import { SKAL } from "./leadsforma.ts";
+import { MOTES_NEJ_SKAL, MOTES_NULAGE, niva, nivaSvar, type Fraga, type NivaSvar } from "./motesflode.ts";
 import { normaliseraEpost, normaliseraTelefon } from "../leads.ts";
 import { nivaFor } from "./forma.ts";
-import { niva, nivaSvar, type Fraga, type NivaSvar } from "./motesflode.ts";
 
 export const KOLUMNER = ["bokat", "bekraftat", "utfall_saknas", "folj_upp", "tyst"] as const;
 export type Kolumn = (typeof KOLUMNER)[number];
@@ -30,10 +29,11 @@ export const KOLUMN_NAMN: Record<Kolumn, string> = {
   tyst: "Tyst",
 };
 
-export const NULAGE = { ingen: "Ingen SEO", sjalv: "Gör själv", byra: "Har byrå" } as const;
+/** Nulägets val. Listan ligger på ett ställe, motesflode.ts (S1), och skickas därifrån till gränssnittet. */
+export const NULAGE = MOTES_NULAGE;
 
 /** Samma skäl som Leads (`lead_skal`), så att ett Nej betyder samma sak på båda ställena. */
-export const NEJ_SKAL = SKAL;
+export const NEJ_SKAL = MOTES_NEJ_SKAL;
 
 /** Fasta värden ur specen. */
 export const TYST_EFTER_INGET_SVAR = 3;

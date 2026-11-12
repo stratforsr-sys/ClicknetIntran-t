@@ -7,8 +7,8 @@ import { dagarBakat, svenskTidpunkt, svenskVeckodag, svensktDatum } from "@/lib/
 import { lokal } from "./leads";
 import { arHallare, arKapad, nejSkal, saljarePerKedja, slaIhopAvgjorda, sorteraAvgjorda, farAndraInstallning, farRattaUtfall, farSeInstallningar, KOLUMNER, MOTE_PLATS, platsTyp, type Kolumn, type Platstyp } from "./motenforma";
 import {
-  bekraftelseFonster, bradska, fordela, kortFas, lasInstallningar, manadFor, PIPE_KOLUMNER, sorteraFas, ursprungligBokare,
-  type MotenInst, type PipeKolumn,
+  bekraftelseFonster, bradska, fordela, kortFas, lasInstallningar, manadFor, motesVal, PIPE_KOLUMNER, sorteraFas, sparadeSvar, ursprungligBokare,
+  type MotenInst, type MotesVal, type PipeKolumn,
 } from "./motesflode";
 
 /**
@@ -125,13 +125,18 @@ export type NdIfragasatt = {
   niva: "kvalificerat" | "hallet" | null;
   /** När nivån ifrågasattes, svensk lokal "YYYY-MM-DD HH:MM". */
   ifragasattNar: string;
+  /** Svaren som gav nivån (F18.2), för bladet Ändra svaren. Null när de inte finns eller inte gick att läsa. */
+  svar?: { id: string; ja: boolean }[] | null;
 };
 
 export type NdMoten = {
   kort: NdMoteKort[];
   avgjorda: NdAvgjort[];
   /** Det som går att ställa in per företag och som tavlan behöver. */
-  inst: Pick<MotenInst, "bekraftaDagar" | "kolumnnamn" | "fragor" | "rubrikPrefix">;
+  inst: Pick<MotenInst, "bekraftaDagar" | "kolumnnamn" | "fragor" | "rubrikPrefix"> & {
+    /** Bladens val (S1–S3): nuläge, nej-skäl och källförslag, från ett ställe i motesflode.ts. */
+    val: MotesVal;
+  };
   /** Inställningsrutan: hela inställningen för Admin och Superadmin, null för alla andra. `farPengar`: får ändra beloppen och vilka som får mötesprovision. */
   installningar: (MotenInst & { farPengar: boolean; ifragasatta: NdIfragasatt[] }) | null;
   /** Betraktarens egen andel per kolumn, i kronor. Null för den som inte får mötesprovision. */
@@ -227,7 +232,7 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
   const chef = hasRole(user, ...CHEFSROLLER);
   const instTom = lasInstallningar([]);
   const tom: NdMoten = {
-    kort: [], avgjorda: [], inst: { bekraftaDagar: instTom.bekraftaDagar, kolumnnamn: instTom.kolumnnamn, fragor: instTom.fragor, rubrikPrefix: instTom.rubrikPrefix },
+    kort: [], avgjorda: [], inst: { bekraftaDagar: instTom.bekraftaDagar, kolumnnamn: instTom.kolumnnamn, fragor: instTom.fragor, rubrikPrefix: instTom.rubrikPrefix, val: motesVal() },
     installningar: null, provisionPaSpel: null, vecka: { affar: 0, nej: 0, kedjor: [] }, saljare: [], kollegor: [], chef,
   };
   if (!user.employee) return tom;
@@ -492,6 +497,16 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
       const moteIds = [...new Set(irader.map((r) => r.mote_id))];
       const { data: md } = await supabaseAdmin().from("mote").select("id, kedja_id, mote_tid, niva").in("id", moteIds).limit(200);
       const mrader = (md ?? []) as unknown as { id: string; kedja_id: string; mote_tid: string; niva: string | null }[];
+      // De gamla svaren (F18.2): `niva_svar` (0287) läses i en egen fråga som får misslyckas. Då öppnas Ändra svaren
+      // utan ifyllda svar, som förut, och listan över ifrågasatta står kvar.
+      const gamlaSvar = new Map<string, { id: string; ja: boolean }[]>();
+      const { data: sd, error: sfel } = await supabaseAdmin().from("mote").select("id, niva_svar").in("id", moteIds).limit(200);
+      if (!sfel) {
+        for (const r of (sd ?? []) as unknown as { id: string; niva_svar: unknown }[]) {
+          const sv = sparadeSvar(r.niva_svar);
+          if (sv) gamlaSvar.set(r.id, sv);
+        }
+      }
       const ikedjor = [...new Set(mrader.map((m) => m.kedja_id))];
       const { data: ik } = ikedjor.length ? await supabaseAdmin().from("mote_kedja").select("id, bolag_id").in("id", ikedjor).limit(200) : { data: [] };
       const ikMap = new Map(((ik ?? []) as unknown as { id: string; bolag_id: string }[]).map((k) => [k.id, k.bolag_id]));
@@ -515,6 +530,7 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
           bokare: personer.join(" och "),
           niva: m.niva === "kvalificerat" || m.niva === "hallet" ? m.niva : null,
           ifragasattNar: lokal(tidigast),
+          svar: gamlaSvar.get(m.id) ?? null,
         });
       }
       ifragasatta.sort((a, b) => a.ifragasattNar.localeCompare(b.ifragasattNar));
@@ -594,7 +610,7 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
   return {
     kort,
     avgjorda,
-    inst: { bekraftaDagar: inst.bekraftaDagar, kolumnnamn: inst.kolumnnamn, fragor: inst.fragor, rubrikPrefix: inst.rubrikPrefix },
+    inst: { bekraftaDagar: inst.bekraftaDagar, kolumnnamn: inst.kolumnnamn, fragor: inst.fragor, rubrikPrefix: inst.rubrikPrefix, val: motesVal() },
     installningar: farSeInstallningar(aktor) ? { ...inst, farPengar: farAndraInstallning(aktor, "moten.provision"), ifragasatta } : null,
     provisionPaSpel,
     vecka,
