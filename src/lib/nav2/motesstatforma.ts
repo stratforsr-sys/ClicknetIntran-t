@@ -9,6 +9,7 @@
  * `node --experimental-strip-types`. En kvot vars nämnare är 0 får `andel: null`
  * (gränssnittet visar `–`), aldrig NaN eller Infinity.
  */
+import { motesTz } from "./motesflode.ts";
 
 export type StatMote = {
   id: string; kedja: string; bokatAv: string; hallsAv: string; bokatNar: string; moteTid: string;
@@ -27,7 +28,6 @@ export type Veckotal = {
   samtal: number; bokade: number; per100: number | null; hallna: Kvot; raddade: number;
   affarer: Kvot; forstaMote: Kvot; bokatTillAffar: number; oppnaOfferter: number; tysta: number; utanUtfall: number;
 };
-import { motesTz } from "./motesflode.ts";
 
 export type Period = { fran: string; till: string };
 

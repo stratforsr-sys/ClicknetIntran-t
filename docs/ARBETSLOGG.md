@@ -5,6 +5,47 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-12 · Möten: lyftet av vyn (grenen `moten-lyft`, väntar på ja, ingen migration)
+
+**Vad:** ett förbättringsvarv av hela vyn Möten, 22 delar, minst två märkbara förbättringar per del, i sju omgångar,
+följt av en oberoende granskning och ett rättningsvarv. Se `docs/NASTA_SESSION.md` för läget och listan över det som
+ska provas skarpt.
+
+**Beslut som inte går att läsa ur koden:**
+
+- **En lyssnare för tangenterna.** Möten har EN `keydown`-lyssnare (`moTangent`, fångstfasen) som anropar fokusfällan
+  `moFalla` på Tab. Två lyssnare gav krockar om Esc och om vilken som hann först. Nya tangenter läggs i
+  `MOTANGENTER` och syns då i `?`-rutan av sig själva.
+- **Omläsningen när fliken visas går inte genom `ndOmlas`.** `moFarska` hämtar själv, för `ndOmlasKor` laddar om
+  sidan när den lätta vägen inte går, och det vill ingen ha när man bara byter flik.
+- **Nya läsningar ligger i egna frågor som får misslyckas.** Säljare och skäl i Veckans stängda, orderns id, de
+  sparade svaren och chefens `affar`/`ombokat` läses var för sig. En felstavad kolumn tar då bara bort det nya, inte
+  tavlan. Undantaget är bolagsnamn och belopp i Avgjort: går de inte att läsa svarar läsningen som ett läsfel, för
+  0 kr är värre än "Mötena gick inte att hämta."
+- **Ångra är villkorad på exakt den tid servern svarade med**, på att det var jag som bekräftade, och på att inget
+  utfall och ingen låst mötesprovision finns. Noll ändrade rader = 409, inget ångras. Ett kontaktförsök bär ingen
+  person i databasen, så där litar Ångra på tiden klienten skickar; räknaren används bara för visning.
+- **Kolumnen visar minst tolv kort, men alltid alla som ska göras i dag.** Ett hårt tak på tolv gömde möten som
+  måste bekräftas i dag.
+- **Kort dras bara när någon kolumn tar emot dem.** En teamledare som inte är med på mötet kan inte längre lyfta ett
+  kort som ändå inte gick att släppa.
+- **Utkastet ligger i `sessionStorage`, aldrig `localStorage`,** och bär den inloggades id: det innehåller
+  kunduppgifter och får inte överleva fliken eller följa med till nästa inloggade.
+- **Uppföljningens text loggas inte.** Händelsen `mote.followup_changed` bär bara om raden ändrades. Granskningen
+  hittade fritexten i loggens meta innan något gått ut.
+- **En möteslänk som klistras in byter plats till Video bara i platsens adressfält.** I alla andra fält hamnar
+  texten där den klistrades.
+- **Fokus när panelen öppnas** går till kortets första handling bara när den går att ångra eller öppnar ett blad.
+  Inget svar och Prova igen sparar direkt, så där går fokus till Ändra.
+- **Bladens val (nuläge, nej-skäl, källförslag) ligger på en plats på servern** (`motesflode.ts`) och skickas i
+  `ND.moten.inst.val`. Värdena är oförändrade (de ligger sparade i databasen); att göra dem till inställningar per
+  företag är ett eget varv. Se `docs/saljbarhet.md`.
+- **Inte byggt, medvetet:** byt hållare i Ändra, byt vecka i statistiken, klick i rutnätet väljer tid, skäl "Annat"
+  med text, Ångra för Nej och Inget svar, tidszonen för klockslagen (S6).
+
+**Bevis:** 670 klicksteg mot en provsida med stubbad server (0 fel, 0 konsolfel), 710 kontroller i de fyra rena
+proven, `tsc` med samma två gamla fel som före, Vercels förhandsbygge grönt. Inget är kört mot databasen.
+
 ## 2026-11-12 · Möten: tidsvalet, uppföljningsmötet, kundmötena i Kalendern och bokaren med, byggsteg 4 av 4 (ingen migration)
 
 **Varför.** Det sista av beställningen 2026-11-11: tidsknapparna i bokningen ersätts av Kalenderns sätt att välja tid,

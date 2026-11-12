@@ -40,8 +40,9 @@ export const TYST_EFTER_INGET_SVAR = 3;
 export const TYST_EFTER_DAGAR = 21;
 export const MOTE_MINUTER = 30;
 export const MOTE_PLATS = "Telefon";
-/** Fler från Clicknet (kollegor i kalendern) och fler hos kunden (gäster med e-post), utöver hållaren och kontakten. */
+/** Fler från det egna företaget (kollegor i kalendern) och fler hos kunden (gäster med e-post), utöver hållaren och kontakten. */
 export const MAX_KOLLEGOR = 10;
+export const MAX_GASTER = 10;
 /** Veckans stängda (F3.1): skälet står bara på ett nej. Blanktecken kapas, och ett tomt skäl är inget skäl. */
 export function nejSkal(avslut: string, skal: string | null | undefined): string | null {
   const s = (skal ?? "").trim();
@@ -72,7 +73,17 @@ export const sorteraAvgjorda = (a: { vantarBedomning: boolean; tid: string }, b:
   Number(b.vantarBedomning) - Number(a.vantarBedomning) || b.tid.localeCompare(a.tid);
 /** Tavlans tak (F5.3). REST-vägen ger aldrig fler rader än taket, så ett fullt svar betyder att kort kan saknas. */
 export const arKapad = (antal: number, tak: number): boolean => tak > 0 && antal >= tak;
-export const MAX_GASTER = 10;
+/**
+ * En id-lista i skivor (G3). Id:na i en `.in()` står i adressen, och en för lång adress ger inget svar alls:
+ * läsningarna tar därför högst `storlek` id åt gången. Ordningen behålls, en tom lista ger inga skivor.
+ */
+export const IN_SKIVA = 100;
+export function skivor<T>(lista: readonly T[], storlek: number = IN_SKIVA): T[][] {
+  const n = Math.max(1, Math.floor(storlek));
+  const ut: T[][] = [];
+  for (let i = 0; i < lista.length; i += n) ut.push(lista.slice(i, i + n));
+  return ut;
+}
 
 /**
  * Rubriken på mötet i kalendern, och därmed i kundens inbjudan: "Clicknet - <bolaget>: Möte" (beställaren
@@ -554,6 +565,13 @@ function dagOchStart(dag: unknown, start: unknown): Resultat<{ dag: string; star
 }
 
 const nej = (fel: string): { ok: false; fel: string } => ({ ok: false, fel });
+/** Mötets längd i minuter ur ett anrop (boka och lediga, G12): tomt ger förvalet, annars ett heltal 15–480. */
+export function langdIndata(v: unknown): Resultat<number> {
+  if (tom(v)) return { ok: true, varden: MOTE_MINUTER };
+  const n = typeof v === "number" ? v : typeof v === "string" && /^\d+$/.test(v.trim()) ? Number(v) : NaN;
+  if (!Number.isInteger(n) || n < 15 || n > 480) return nej("Mötets längd stämmer inte.");
+  return { ok: true, varden: n };
+}
 
 export type BokaVarden = {
   namn: string;
@@ -626,12 +644,9 @@ export function bokaIndata(body: unknown): Resultat<BokaVarden> {
   const tidpunkt = dagOchStart(b.dag, b.start);
   if (!tidpunkt.ok) return tidpunkt;
 
-  let langd: number = MOTE_MINUTER;
-  if (!tom(b.langd)) {
-    const n = typeof b.langd === "number" ? b.langd : typeof b.langd === "string" && /^\d+$/.test(b.langd.trim()) ? Number(b.langd) : NaN;
-    if (!Number.isInteger(n) || n < 15 || n > 480) return nej("Mötets längd stämmer inte.");
-    langd = n;
-  }
+  const l = langdIndata(b.langd);
+  if (!l.ok) return l;
+  const langd = l.varden;
 
   let nulage: BokaVarden["nulage"] = null;
   if (!tom(b.nulage)) {
@@ -745,7 +760,7 @@ export const SQL_INGET_SVAR = `update public.mote_kedja
  * igenom resten (`uppslag`, `lediga`, och `samtal` från B4), som bara läser. En okänd handling är
  * ingen skrivning och får sitt vanliga 400.
  */
-export const SKRIVANDE_HANDLINGAR = ["boka", "paminn", "forsok", "installningar", "bekrafta", "flytta", "avboka", "utfall", "bedom", "ifragasatt", "ratta_utfall", "ifragasatt_beslut", "kund", "nej", "inget_svar", "prova_igen", "radera", "andra", "angra"] as const;
+export const SKRIVANDE_HANDLINGAR = ["boka", "paminn", "forsok", "installningar", "bekrafta", "flytta", "avboka", "utfall", "bedom", "ifragasatt", "ratta_utfall", "ifragasatt_beslut", "kund", "nej", "inget_svar", "prova_igen", "radera", "andra", "angra", "uppfoljning_andra"] as const;
 export const arSkrivning = (handling: string): boolean => (SKRIVANDE_HANDLINGAR as readonly string[]).includes(handling);
 
 /**

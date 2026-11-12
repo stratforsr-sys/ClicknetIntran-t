@@ -18,6 +18,7 @@ import {
   angraIndata,
   arHallare,
   arSkrivning,
+  langdIndata,
   efterBokning,
   bokaIndata,
   type BokaVarden,
@@ -333,10 +334,14 @@ export async function POST(request: Request) {
       // så att en egen tid kan säga vem den krockar med. Bara block, inga rubriker.
       const med = kollegorIndata(b.med, hallsAv);
       if (!med.ok) return svar({ fel: med.fel }, 400);
+      // Längden (G12): samma gränser som i boka. Utan den räknas luckorna för förvalet, och en tid som inte rymmer
+      // ett längre möte skulle se ledig ut.
+      const langd = langdIndata(b.langd);
+      if (!langd.ok) return svar({ fel: langd.fel }, 400);
       const alla = [hallsAv, ...med.varden];
       const upptaget = await hamtaUpptaget(alla, idag, till);
       const per = Object.fromEntries(alla.map((id) => [id, upptagetTillIntervall(upptaget[id])]));
-      const tider = ledigaTider(alla.flatMap((id) => per[id]), idag, lokalTidpunkt(idag, svenskaMinuter(nu)))
+      const tider = ledigaTider(alla.flatMap((id) => per[id]), idag, lokalTidpunkt(idag, svenskaMinuter(nu)), langd.varden)
         // Kalendern vet inget om dagarna efter `till`; de skulle se lediga ut.
         .filter((t) => t.dag <= till);
       return svar({ ok: "Lediga tider.", idag, till, tider, upptaget: per });
@@ -1781,13 +1786,17 @@ export async function POST(request: Request) {
     // Ändra uppföljningen (`uppfoljning_andra`): dagen och raden på kortet. Dagen som står nu läses i en egen fråga,
     // eftersom en passerad dag får stå kvar när bara raden ändras. Samma villkor på `fore` som de andra två.
     let andring: { uppfoljning_datum: string; uppfoljning_text: string | null } | null = null;
+    // Raden är fri text om kunden: händelsen bär bara om den ändrades, aldrig vad som står i den.
+    let radAndrad = false;
     if (vilken === "andra") {
-      const { data: nuRad, error: lasfel } = await db.from("mote_kedja").select("uppfoljning_datum").eq("id", k.id).maybeSingle();
+      const { data: nuRad, error: lasfel } = await db.from("mote_kedja").select("uppfoljning_datum, uppfoljning_text").eq("id", k.id).maybeSingle();
       if (lasfel) return svar({ fel: "Uppföljningen gick inte att läsa. Försök igen." }, 500);
-      const star = (nuRad as { uppfoljning_datum: string | null } | null)?.uppfoljning_datum ?? null;
+      const fore = nuRad as { uppfoljning_datum: string | null; uppfoljning_text: string | null } | null;
+      const star = fore?.uppfoljning_datum ?? null;
       const a = uppfoljningAndring(b, { idag, datum: star ? String(star).slice(0, 10) : null });
       if (!a.ok) return svar({ fel: a.fel }, 400);
       andring = a.varden.lapp;
+      radAndrad = (fore?.uppfoljning_text ?? null) !== andring.uppfoljning_text;
     }
     const lapp = andring
       ? { ...andring, uppfoljning_andrad: nu.toISOString() }
@@ -1804,7 +1813,7 @@ export async function POST(request: Request) {
       action: andring ? "mote.followup_changed" : vilken === "inget_svar" ? "mote.no_answer" : "mote.retry",
       objectType: "mote_kedja",
       objectId: k.id,
-      meta: { uppfoljning_datum: rad.uppfoljning_datum, inget_svar_i_rad: rad.inget_svar_i_rad, ...(andring ? { uppfoljning_text: andring.uppfoljning_text } : {}) },
+      meta: { uppfoljning_datum: rad.uppfoljning_datum, inget_svar_i_rad: rad.inget_svar_i_rad, ...(andring ? { rad_andrad: radAndrad } : {}) },
     });
     const tyst = rad.inget_svar_i_rad >= TYST_EFTER_INGET_SVAR;
     return svar({

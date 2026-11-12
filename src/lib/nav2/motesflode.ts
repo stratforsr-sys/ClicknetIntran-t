@@ -544,7 +544,6 @@ export function utanRedanSkickade(
   return att.filter((p) => !skickat.has(`${nyckel(p.kalla, p.moteId, idag)}:${p.till}`));
 }
 
-/** Ordningen på tavlan: kolumnvis, inom kolumnen efter tid, stigande (Avgjort fallande). */
 /**
  * Får en envägsknapp ångras (F6.1)? Bara exakt den sparning servern svarade med (samma ögonblick), och bara
  * när inget har hänt sedan dess: inget utfall och ingen låst mötesprovision. En bekräftelse ångras av den som
@@ -569,6 +568,7 @@ export function provaAngra(
   return { ok: true };
 }
 
+/** Ordningen på tavlan: kolumnvis, inom kolumnen efter tid, stigande (Avgjort fallande). */
 export function sorteraFas(a: { fas: PipeKolumn; tid: string }, b: { fas: PipeKolumn; tid: string }): number {
   const k = PIPE_KOLUMNER.indexOf(a.fas) - PIPE_KOLUMNER.indexOf(b.fas);
   if (k) return k;

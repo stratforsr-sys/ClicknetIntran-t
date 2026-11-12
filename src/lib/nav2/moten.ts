@@ -5,7 +5,7 @@ import { fullName, hasRole, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { dagarBakat, svenskTidpunkt, svenskVeckodag, svensktDatum } from "@/lib/klocka";
 import { lokal } from "./leads";
-import { arHallare, arKapad, nejSkal, saljarePerKedja, slaIhopAvgjorda, sorteraAvgjorda, farAndraInstallning, farRattaUtfall, farSeInstallningar, KOLUMNER, MOTE_PLATS, platsTyp, type Kolumn, type Platstyp } from "./motenforma";
+import { arHallare, arKapad, nejSkal, saljarePerKedja, skivor, slaIhopAvgjorda, sorteraAvgjorda, farAndraInstallning, farRattaUtfall, farSeInstallningar, KOLUMNER, MOTE_PLATS, platsTyp, type Kolumn, type Platstyp } from "./motenforma";
 import {
   bekraftelseFonster, bradska, fordela, kortFas, lasInstallningar, manadFor, motesVal, PIPE_KOLUMNER, sorteraFas, sparadeSvar, ursprungligBokare,
   type MotenInst, type MotesVal, type PipeKolumn,
@@ -228,6 +228,20 @@ export function veckansGranser(nu: Date): { fran: string; till: string } {
   return { fran: svenskTidpunkt(mandag, "00:00").toISOString(), till: svenskTidpunkt(nastaMandag, "00:00").toISOString() };
 }
 
+/**
+ * En `.in()`-läsning i skivor om högst 100 id (G3), en skiva i taget. `null` = någon skiva gick inte att läsa:
+ * den som anropar avgör om det är ett läsfel eller något som får saknas.
+ */
+async function lasISkivor<T>(ids: string[], las: (skiva: string[]) => PromiseLike<{ data: unknown; error: unknown }>): Promise<T[] | null> {
+  const ut: T[] = [];
+  for (const skiva of skivor(ids)) {
+    const { data, error } = await las(skiva);
+    if (error) return null;
+    ut.push(...((data ?? []) as T[]));
+  }
+  return ut;
+}
+
 export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Promise<NdMoten> {
   const chef = hasRole(user, ...CHEFSROLLER);
   const instTom = lasInstallningar([]);
@@ -435,26 +449,30 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
   const avgjorda: NdAvgjort[] = [];
   if (avgjortRader.length) {
     const kedjeIds = [...new Set(avgjortRader.map((m) => m.kedja_id))];
-    const [{ data: kd }, { data: pv }] = await Promise.all([
-      supabase.from("mote_kedja").select("id, bolag_id, deltagare").in("id", kedjeIds).limit(MAX_KORT),
-      supabase.from("mote_provision").select("mote_id, belopp, skal").eq("employee_id", jag).in("mote_id", avgjortRader.map((m) => m.id)).limit(MAX_MOTEN),
+    const moteIds = avgjortRader.map((m) => m.id);
+    // Id-listorna läses i skivor (G3). Går bolagsnamnen eller beloppen inte att läsa är det ett läsfel, som när
+    // korten inte går att läsa: Avgjort får aldrig visa 0 kr för att frågan inte gick.
+    const [kd, pv] = await Promise.all([
+      lasISkivor<{ id: string; bolag_id: string; deltagare: string[] | null }>(kedjeIds, (ids) => supabase.from("mote_kedja").select("id, bolag_id, deltagare").in("id", ids).limit(MAX_KORT)),
+      lasISkivor<{ mote_id: string; belopp: number | string; skal: string | null }>(moteIds, (ids) => supabase.from("mote_provision").select("mote_id, belopp, skal").eq("employee_id", jag).in("mote_id", ids).limit(MAX_MOTEN)),
     ]);
-    const kedjor = new Map(((kd ?? []) as { id: string; bolag_id: string; deltagare: string[] | null }[]).map((k) => [k.id, k]));
-    const { data: bd } = await supabase.from("mote_bolag").select("id, namn").in("id", [...new Set([...kedjor.values()].map((k) => k.bolag_id))]).limit(MAX_KORT);
-    const bolagNamnA = new Map(((bd ?? []) as { id: string; namn: string }[]).map((b) => [b.id, b.namn]));
-    const prov = new Map(((pv ?? []) as { mote_id: string; belopp: number | string; skal: string | null }[]).map((p) => [p.mote_id, p]));
+    if (!kd || !pv) return { ...tom, fel: true };
+    const kedjor = new Map(kd.map((k) => [k.id, k]));
+    const bd = await lasISkivor<{ id: string; namn: string }>([...new Set(kd.map((k) => k.bolag_id))], (ids) => supabase.from("mote_bolag").select("id, namn").in("id", ids).limit(MAX_KORT));
+    if (!bd) return { ...tom, fel: true };
+    const bolagNamnA = new Map(bd.map((b) => [b.id, b.namn]));
+    const prov = new Map(pv.map((p) => [p.mote_id, p]));
     // Rätta utfall (F8.1): det servern inte tar (affär, ombokat) läses i två egna frågor som får misslyckas. Då saknas
     // bara fälten, knappen visas och servern säger nej. Bara för den som kan rätta (chef).
     let affarer: Set<string> | null = null;
     let ombokade: Set<string> | null = null;
     if (chef) {
-      const ids = avgjortRader.map((m) => m.id);
       const [res, omb] = await Promise.all([
-        supabase.from("mote").select("id, resultat").in("id", ids).limit(MAX_MOTEN),
-        supabase.from("mote").select("foregaende_id").in("foregaende_id", ids).limit(MAX_MOTEN),
+        lasISkivor<{ id: string; resultat: string | null }>(moteIds, (ids) => supabase.from("mote").select("id, resultat").in("id", ids).limit(MAX_MOTEN)),
+        lasISkivor<{ foregaende_id: string | null }>(moteIds, (ids) => supabase.from("mote").select("foregaende_id").in("foregaende_id", ids).limit(MAX_MOTEN)),
       ]);
-      if (!res.error) affarer = new Set(((res.data ?? []) as { id: string; resultat: string | null }[]).filter((r) => r.resultat === "affar").map((r) => r.id));
-      if (!omb.error) ombokade = new Set(((omb.data ?? []) as { foregaende_id: string | null }[]).map((r) => r.foregaende_id).filter((x): x is string => !!x));
+      if (res) affarer = new Set(res.filter((r) => r.resultat === "affar").map((r) => r.id));
+      if (omb) ombokade = new Set(omb.map((r) => r.foregaende_id).filter((x): x is string => !!x));
     }
     for (const m of avgjortRader) {
       const k = kedjor.get(m.kedja_id);

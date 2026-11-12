@@ -636,5 +636,53 @@ rubrik("Tavlans tak (F5.3)");
   ok("ett tak på noll kapar ingenting", M.arKapad(0, 0) === false);
 }
 
+rubrik("Id-listor i skivor (G3)");
+{
+  const ids = Array.from({ length: 250 }, (_, i) => "id" + i);
+  const s = M.skivor(ids);
+  ok("250 id blir tre skivor om 100, 100 och 50", s.map((x) => x.length).join() === "100,100,50", s.map((x) => x.length).join());
+  ok("ordningen behålls och inget id tappas eller dubbleras", s.flat().join() === ids.join());
+  ok("en tom lista ger inga skivor (ingen fråga ställs)", M.skivor([]).length === 0);
+  ok("exakt en skiva full och en över", M.skivor(ids.slice(0, 100)).length === 1 && M.skivor(ids.slice(0, 101)).map((x) => x.length).join() === "100,1");
+  ok("egen storlek, och en orimlig storlek blir en i taget i stället för en evig slinga", M.skivor([1, 2, 3], 2).map((x) => x.join("")).join() === "12,3" && M.skivor([1, 2], 0).length === 2 && M.skivor([1, 2], -5).length === 2);
+  ok("förvalet är 100 (37 tecken per id ger under 4 000 tecken i adressen)", M.IN_SKIVA === 100);
+  ok("listan som delas ändras inte", ids.length === 250);
+}
+
+rubrik("Längden i lediga tider (G12)");
+{
+  ok("tomt, null och bara blanktecken ger förvalet", M.langdIndata(undefined).varden === M.MOTE_MINUTER && M.langdIndata(null).varden === M.MOTE_MINUTER && M.langdIndata("  ").varden === M.MOTE_MINUTER);
+  ok("ett tal och en sifferrad går igenom", M.langdIndata(45).varden === 45 && M.langdIndata("60").varden === 60 && M.langdIndata(15).ok && M.langdIndata(480).ok);
+  ok("under 15, över 480, decimaler, text och andra typer avvisas med samma text som i boka", [14, 481, 30.5, "trettio", "-30", true, {}, []].every((v) => { const r = M.langdIndata(v); return !r.ok && r.fel === "Mötets längd stämmer inte."; }));
+  const boka = (langd) => M.bokaIndata({ namn: "A", telefon: "0701234567", kalla: "x", hallsAv: "00000000-0000-4000-8000-000000000001", dag: "2026-10-30", start: "09:00", langd });
+  ok("bokaIndata och lediga delar gränserna: 45 går i boka, 14 och 481 avvisas med längdens text", boka(45).ok && boka(45).varden.langd === 45 && [14, 481].every((n) => boka(n).fel === "Mötets längd stämmer inte."), JSON.stringify([boka(45).fel, boka(14).fel]));
+  const IDAG = "2026-10-29", NU = "2026-10-29 13:10", block = [{ fran: "2026-10-29 15:00", till: "2026-10-29 15:30" }];
+  const start = (langd) => M.ledigaTider(block, IDAG, NU, langd).filter((x) => x.dag === IDAG).map((x) => x.start);
+  ok("30 min: 14:30 och 16:30 är lediga", start(30).includes("14:30") && start(30).includes("16:30") && !start(30).includes("15:00"), start(30).join());
+  ok("60 min: 14:30 ryms inte före blocket och 16:30 slutar efter dagen, 14:00 och 16:00 går", !start(60).includes("14:30") && !start(60).includes("16:30") && start(60).includes("14:00") && start(60).includes("16:00"), start(60).join());
+  ok("15 min: tiden direkt före blocket går", start(15).includes("14:30") && !start(15).includes("15:00"), start(15).join());
+}
+
+rubrik("Läsläget: varje gren i ruttens växel har en plats (G1)");
+{
+  // Rutten läses som text. En ny `case` som varken står i SKRIVANDE_HANDLINGAR eller i listan här fäller provet:
+  // den som lägger till grenen måste säga om den skriver.
+  const { readFileSync } = await import("node:fs");
+  const rutt = readFileSync(join(rot, "src", "app", "nav2", "moten", "route.ts"), "utf8");
+  const start = rutt.indexOf("switch (handling) {"), slut = rutt.indexOf("\n    default:", start);
+  const vaxel = start >= 0 && slut > start ? rutt.slice(start, slut) : "";
+  const grenar = [...vaxel.matchAll(/^    case "([a-z_]+)":/gm)].map((m) => m[1]);
+  const LASANDE = ["uppslag", "lediga", "samtal"];
+  ok("växeln hittas och har grenar", grenar.length >= 20, String(grenar.length));
+  ok("ingen gren står två gånger", new Set(grenar).size === grenar.length);
+  const utanPlats = grenar.filter((h) => !M.arSkrivning(h) && !LASANDE.includes(h));
+  ok("varje gren är en skrivning eller står bland de läsande", utanPlats.length === 0, utanPlats.join(", "));
+  const bada = grenar.filter((h) => M.arSkrivning(h) && LASANDE.includes(h));
+  ok("ingen gren är både skrivning och läsande", bada.length === 0, bada.join(", "));
+  const utanGren = [...M.SKRIVANDE_HANDLINGAR, ...LASANDE].filter((h) => !grenar.includes(h));
+  ok("listorna nämner ingen handling som rutten saknar", utanGren.length === 0, utanGren.join(", "));
+  ok("arSkrivning('uppfoljning_andra'): spärras i läsläge", M.arSkrivning("uppfoljning_andra") === true);
+}
+
 console.log(fel ? `\n\x1b[31m${fel} fel\x1b[0m` : "\n\x1b[32mAlla ✓\x1b[0m");
 process.exit(fel ? 1 : 0);

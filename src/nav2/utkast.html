@@ -9715,7 +9715,7 @@ const ACTIONS = () => [
   {l:'Sjukanmäl dig', i:'sjuk', run:()=>{ closePal(); frGa(null, 'sick'); }, k:'sjuk'},
   {l:'Ny order', i:'order', run:()=>{ closePal(); ordNyStart(); }, k:'order affär sälj'},
   // Möten (F1.1): bokningsbladet öppnas ovanpå tavlan, var man än står.
-  ...(typeof moSyns === 'function' && moSyns() ? [{l:'Boka möte', i:'mote', run:()=>{ closePal(); moGa(); ndMoDialog('boka'); }, k:'möte kund träff'}] : []),
+  ...(typeof moSyns === 'function' && moSyns() ? [{l:'Boka möte', i:'mote', run:()=>{ closePal(); moBokaUtifran(); }, k:'möte kund träff'}] : []),
   {l:'Ny uppgift', i:'plus', run:()=>toast('Ny uppgift öppnas.')},
   {l:'Nytt ärende', i:'inbox', run:()=>{ closePal(); arNytt(); }},
   {l:'Rapportera fel', i:'fel', run:()=>{ closePal(); felRapportera(); }, k:'bugg trasigt fungerar inte'}
@@ -25858,8 +25858,12 @@ async function ndOmlasKor(){
 }
 // Den gamla vägen: läget i sessionStorage, och sidan laddas om.
 function ndOmlasReserv(ko){
+  // Två anmälningar kan dela nyckel (Mötens 'mo' och 'mo-latt'): det köade slås ihop per nyckel före skrivningen,
+  // så att den ena inte skriver över den andra (G17). En nyckel med en anmälan skrivs som förut.
+  const perNyckel = new Map();
   new Map([...ko, ...NDOMLASKO]).forEach((extra, vy) => { const v = NDOMLAS[vy];
-    if (v.nyckel) try { sessionStorage.setItem(v.nyckel, JSON.stringify({...(v.lage ? v.lage() : {}), ...extra})); } catch(_){} });
+    if (v.nyckel) perNyckel.set(v.nyckel, {...(perNyckel.get(v.nyckel) || {}), ...(v.lage ? v.lage() : {}), ...extra}); });
+  perNyckel.forEach((lage, nyckel) => { try { sessionStorage.setItem(nyckel, JSON.stringify(lage)); } catch(_){} });
   NDOMLASKO.clear();
   setTimeout(() => location.reload(), 300);
 }
@@ -36971,7 +36975,7 @@ async function ndMoPost(handling, data = {}, {ladda = true, tyst = false, kedja 
 }
 (() => { if (!ndMo()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-mo') || 'null'); sessionStorage.removeItem('nd-mo'); } catch(_){}
   if (m) setTimeout(() => {
-    moInit(); S.view = 'moten'; S.moOpen = m.open || null; S.moFilter = m.filter || null; S.moPerson = m.person || null; S.moAlla = m.alla || null; S.moStat = !!m.stat; S.moQ = m.q || ''; S.moNy = m.kedja || null; S.moVarn = m.varning || null; render(); window.scrollTo(0, 0);
+    moInit(); S.view = 'moten'; S.moOpen = m.open || null; moOpenKvar(); S.moFilter = m.filter || null; S.moPerson = m.person || null; S.moAlla = m.alla || null; S.moStat = !!m.stat; S.moQ = m.q || ''; S.moNy = m.kedja || null; S.moVarn = m.varning || null; render(); window.scrollTo(0, 0);
     if (m.msg) toast(m.msg);
     // Omläsningen efter Bekräfta eller Fick inte tag gick inte och sidan laddades om: kvittot visas igen, med Ångra ur datan.
     if (m.angra && m.angra.svar && m.angra.svar.nar) toast(m.angra.text, () => moAngra({...m.angra, angrat:false, p:Promise.resolve(true)}, m.angra.kedja));
@@ -36981,7 +36985,11 @@ async function ndMoPost(handling, data = {}, {ladda = true, tyst = false, kedja 
 // Läget som följer med över en omläsning och över reservvägen (sidan laddas om): öppet kort, filter, person, utfällda
 // kolumner, fliken och texten i sökfältet (F1.2). Ett nytt vyläge läggs här och i återläsningen ovanför.
 const moOmLage = () => ({open:S.moOpen || null, filter:S.moFilter || null, person:S.moPerson || null, alla:S.moAlla || null, stat:!!S.moStat, q:S.moQ || null});
-const moOmIn = m => { MOL.last = Date.now(); moEnvagIgen(); if (m.kedja){ S.moNy = m.kedja; setTimeout(() => { S.moNy = null; }, 2500); } if (m.varning) S.moVarn = m.varning; if (m.msg) toast(m.msg); };
+// G11: kortet som panelen visar kan ha försvunnit vid en omläsning (någon annan stängde det). Utan kort ritas ingen
+// panel, så läget nollas med ett besked: annars väntar tavlans tangenter på ett Esc som inte stänger något.
+// Ett läsfel är inget försvunnet kort. Båda anmälningarna kör mottagningen: beskedet kommer en gång, för läget är nollat.
+function moOpenKvar(){ const d = ndMo(); if (!S.moOpen || !d || d.fel || d.kort.some(k => k.kedja === S.moOpen)) return; S.moOpen = null; toast('Kortet finns inte längre på tavlan.'); }
+const moOmIn = m => { MOL.last = Date.now(); moOpenKvar(); moEnvagIgen(); if (m.kedja){ S.moNy = m.kedja; setTimeout(() => { S.moNy = null; }, 2500); } if (m.varning) S.moVarn = m.varning; if (m.msg) toast(m.msg); };
 if (ndMo()){
   ndOmlasAnmal('mo', {delar:['moten', 'motesstat', 'kalender', 'leads', 'order', 'provision'], laser:['moten', 'motesstat'], nyckel:'nd-mo', lage:moOmLage, in:moOmIn});
   // Den lätta omläsningen (F22.2): Bekräfta, Fick inte tag och Ångra rör bara tavlan och statistiken, så två delar
@@ -37069,10 +37077,14 @@ function ndMoDialog(typ, kort, forval, fokus){
   if (typ === 'boka' && D.f.telefon) moDlgUppslag();
 }
 // Ändra öppnades från kortets panel: Avbryt går tillbaka dit.
-function moDlgStang(){ const D = S.moDlg; S.moDlg = null;
+function moDlgStang(tyst){ const D = S.moDlg; S.moDlg = null;
   // Ett påbörjat Boka möte (F10.1) ligger kvar som utkast, hur bladet än stängdes: Esc, krysset, Avbryt eller ett klick utanför.
-  if (D && D.utkast && D.rort){ moUtkastSpara(D); if (MOUTKAST) toast('Utkastet finns kvar.', moUtkastFortsatt, 'Fortsätt'); }
+  // `tyst` (G9): ingen toast, för den som öppnar utkastet igen i samma tag.
+  if (D && D.utkast && D.rort){ moUtkastSpara(D); if (MOUTKAST && tyst !== true) toast('Utkastet finns kvar.', moUtkastFortsatt, 'Fortsätt'); }
   if (D && D.tillPanel && D.kedja){ S.moOpen = D.kedja; setTimeout(() => document.querySelector(`.rxpanel [data-moa^="${D.typ}|"]`)?.focus({preventScroll:true}), 0); } if (D && D.typ === 'andra' && D.kedja) S.moOpen = D.kedja; if (D && D.tillbaka) S.moInst = {fel:{}, sparar:null, sparat:null, fragor:null}; render(); if (D && D.typ === 'andra') document.querySelector('.rxpanel [data-moa^="andra|"]')?.focus({preventScroll:true}); }
+// Boka möte utifrån (paletten, startsidan; G9). Ett påbörjat Boka möte stängs som annars (moDlgStang), så att det blir
+// utkast och bladet som öppnas tar upp det. Ett blad som sparas just nu rörs inte: det är på väg att bli ett möte.
+function moBokaUtifran(){ if (S.moDlg && S.moDlg.utkast && !S.moDlg.sparar) moDlgStang(true); moGa(); ndMoDialog('boka'); }
 function moDlgRita(){   // ritar om och behåller rullning, fokus och markering
   const a = document.activeElement, i = a && a.closest && a.closest('.mo-dlg') ? a : null;
   const id = i && i.id, at = i && [...i.attributes].find(x => x.name.startsWith('data-mo')), sel = i && i.selectionStart != null ? [i.selectionStart, i.selectionEnd] : null;
@@ -37083,18 +37095,25 @@ function moDlgRita(){   // ritar om och behåller rullning, fokus och markering
   if (n){ n.focus({preventScroll:true}); if (sel && n.setSelectionRange) try { n.setSelectionRange(sel[0], sel[1]); } catch(_){} }
 }
 // Tiderna för den som håller mötet. En nyare begäran (hållaren byttes) slår ut en äldre.
-function moHamtaTider(){
+function moHamtaTider(latt){
   const D = S.moDlg; if (!D) return;
+  // `latt` (G12, längden byttes): luckorna som står framme står kvar tills de nya är inne, och dagen man tittar på
+  // likaså, så att fältet man står i inte ritas om under händerna. Utan luckor framme hämtas som vanligt.
+  const lugn = latt === true && !!D.tider && !!D.tider.tider, dagFore = lugn ? D.dag : null;
   // Mötets egen tid i Ändra står kvar: den är upptagen av mötet självt och finns därför aldrig bland luckorna.
-  const tok = ++D.tok, forra = D.egen ? null : D.tid; D.tider = {laddar:true}; D.dag = null; D.tid = D.egen ? moEgenProva(D.egen).tid : forra && forra === moNuTid(D) ? forra : null; D.tidBort = null; delete D.fel.tid; moTidRita();
-  ndMoPost('lediga', {hallsAv:D.f.hallsAv, ...(D.f.med && D.f.med.length ? {med:D.f.med} : {})}, {ladda:false, tyst:true}).then(s => {
+  const tok = ++D.tok, forra = D.egen ? null : D.tid, tidEfter = () => D.egen ? moEgenProva(D.egen).tid : forra && forra === moNuTid(D) ? forra : null;
+  if (!lugn){ D.tider = {laddar:true}; D.dag = null; D.tid = tidEfter(); D.tidBort = null; delete D.fel.tid; moTidRita(); }
+  // Längden följer med (G12): servern räknar luckorna för mötets längd, inte för förvalet.
+  ndMoPost('lediga', {hallsAv:D.f.hallsAv, ...(D.f.med && D.f.med.length ? {med:D.f.med} : {}), ...(D.f.langd ? {langd:D.f.langd} : {})}, {ladda:false, tyst:true}).then(s => {
     if (S.moDlg !== D || D.tok !== tok) return;
-    if (s.pagar){ setTimeout(() => { if (S.moDlg === D && D.tok === tok) moHamtaTider(); }, 400); return; }
+    if (s.pagar){ setTimeout(() => { if (S.moDlg === D && D.tok === tok) moHamtaTider(latt); }, 400); return; }
+    if (lugn){ D.tid = tidEfter(); D.tidBort = null; }
     // lediga ger {dag:"YYYY-MM-DD", start:"HH:MM", nara}; `lokal` är den svenska lokaltiden "YYYY-MM-DD HH:MM" som resten av vyn räknar med.
     D.tider = s.fel ? {fel:s.fel} : {tider:(s.tider || []).map(x => ({...x, lokal:`${x.dag} ${x.start}`})), idag:s.idag, till:s.till || null, upptaget:s.upptaget || null};
     if (D.tider.tider && D.tider.tider.length) D.dag = D.egen && moPer(D.tider)[D.egen.dag] ? D.egen.dag : D.tid && moPer(D.tider)[D.tid.slice(0, 10)] ? D.tid.slice(0, 10) : D.tider.tider[0].dag;
     // En vald lucka står kvar när den passar också efter bytet (en kollega till, en annan hållare); annars sägs det.
     if (forra && !D.tid){ if (!D.tider.tider) D.tid = forra; else if (D.tider.tider.some(x => x.lokal === forra)){ D.tid = forra; D.dag = forra.slice(0, 10); } else D.tidBort = forra; }
+    if (dagFore && D.tider.tider && moPer(D.tider)[dagFore]) D.dag = dagFore;
     // skriver man i den egna tiden när svaret kommer ritas bara luckorna om
     if (document.activeElement?.closest?.('.mo-egen') && document.getElementById('moTidL')) moLuckorRita(); else moTidRita();
   });
@@ -37272,7 +37291,7 @@ function moSag(t){
 }
 const moFokus = id => { const el = document.getElementById(id); if (el){ el.focus({preventScroll:true}); try { el.setSelectionRange(el.value.length, el.value.length); } catch(_){} } };
 
-// Senast tillagda kollegor (F12.1) står först bland förslagen. Minns som nav2-movem: läst en gång, värdet prövat.
+// Senast tillagda kollegor (F12.1) står först bland förslagen. Minns som nav2-momed: läst en gång, värdet prövat.
 const MOMEDSENAST = (() => { let l = null; try { l = JSON.parse(localStorage.getItem('nav2-momed') || '[]'); } catch(_){} return Array.isArray(l) ? l.filter(x => typeof x === 'string').slice(0, 8) : []; })();
 function moMedMinns(id){
   const i = MOMEDSENAST.indexOf(id); if (i >= 0) MOMEDSENAST.splice(i, 1);
@@ -37369,7 +37388,7 @@ const moFler = k => k.mote ? (k.mote.med || []).length + (k.mote.gaster || []).f
    Teams-möten själv: länken klistras in, och "Skapa mötet i Teams" öppnar Teams nya möte med rubriken och tiden
    ifyllda (Teams djuplänk /l/meeting/new). Adresserna man skrivit föreslås nästa gång, som källorna. */
 const MOPLATS = [['telefon', 'Telefon', 'phone'], ['teams', 'Video', 'movideo'], ['plats', 'På plats', 'moplats']];
-// Senast valda plats (F13.2) är förval i Boka. Minns som nav2-movem: läst en gång, värdet prövat mot MOPLATS.
+// Senast valda plats (F13.2) är förval i Boka. Minns som nav2-moplats: läst en gång, värdet prövat mot MOPLATS.
 let MOPLATSSENAST = (() => { let v = null; try { v = localStorage.getItem('nav2-moplats'); } catch(_){} return MOPLATS.some(x => x[0] === v) ? v : 'telefon'; })();
 const moPlatsTypMinns = typ => { MOPLATSSENAST = typ; try { localStorage.setItem('nav2-moplats', typ); } catch(_){} };
 // Samma ritning som Kalenderns (KIKON), som inte ligger i P.
@@ -37387,15 +37406,16 @@ function moTeamsNytt(D){
   if (D.tid){ q.set('startTime', moUtcIso(D.tid)); q.set('endTime', moUtcIso(moLokalPlus(D.tid, moLangd(D)))); }
   return 'https://teams.microsoft.com/l/meeting/new?' + q.toString();
 }
-// En inklistrad möteslänk väljer Video själv (F13.1). Tjänsterna känns igen på adressen; i adressfältet räcker det att
-// texten är en https-adress (en gatuadress är aldrig det).
+// En möteslänk som klistras in i platsens adressfält väljer Video själv (F13.1, G16). I alla andra fält hamnar texten
+// där den klistrades: platsen byts aldrig utan att man bett om det. Tjänsterna känns igen på adressen; skriven i
+// adressfältet räcker det att texten är en https-adress (en gatuadress är aldrig det).
 const MOMOTESLANK = /^https:\/\/([\w-]+\.)*(teams\.microsoft\.com|teams\.live\.com|meet\.google\.com|zoom\.us|whereby\.com|webex\.com)\/\S+$/i;
 function moLankIn(D, lank){
   D.f.platsTyp = 'teams'; D.f.lank = lank; delete D.fel.lank; delete D.fel.adress; D.rort = true;
   moDlgRita(); moFokus('mod-lank'); moSag('Möteslänken är inlagd, och platsen är Video.');
 }
 document.addEventListener('paste', e => {
-  const D = S.moDlg; if (!D || (D.typ !== 'boka' && D.typ !== 'andra') || !ndMo() || S.view !== 'moten' || !e.target.closest || !e.target.closest('.mo-dlg') || e.target.id === 'mod-lank') return;
+  const D = S.moDlg; if (!D || (D.typ !== 'boka' && D.typ !== 'andra') || !ndMo() || S.view !== 'moten' || !e.target.closest || !e.target.closest('.mo-dlg') || e.target.id !== 'mod-adress') return;
   const text = String((e.clipboardData && e.clipboardData.getData('text')) || '').trim();
   if (!MOMOTESLANK.test(text)) return;
   e.preventDefault(); moLankIn(D, text);
@@ -37431,7 +37451,8 @@ const moMedSvar = (D, id) => { const p = D.typ === 'andra' && D.k && D.k.mote &&
    Bara den tomma bokningen (knappen, N, paletten, startsidan). En bokning från ett kort eller ur uppslaget har sina
    egna förifyllda fält: den varken sparar eller tar över utkastet. Utkastet ligger i minnet och i sessionStorage
    (aldrig localStorage: det är kunduppgifter), läst en gång och prövat fält för fält. Ett utkast utan innehåll är
-   inget utkast. Det släpps när mötet är bokat eller när man väljer Börja om. */
+   inget utkast. Det släpps när mötet är bokat eller när man väljer Börja om. Utkastet bär den som skrev det
+   (`jag`, G8): står en annan inloggad i samma flik, eller saknas ägaren, slängs det vid läsningen. */
 const MOUTKASTNYCKEL = 'nav2-moutkast', MOUTKASTFALT = ['namn', 'kontakt', 'telefon', 'epost', 'doman', 'kalla', 'mal', 'adress', 'lank'];
 function moUtkastProva(u){
   if (!u || typeof u !== 'object' || !u.f || typeof u.f !== 'object') return null;
@@ -37447,8 +37468,10 @@ function moUtkastProva(u){
   const egen = u.egen && typeof u.egen === 'object' && /^\d{4}-\d{2}-\d{2}$/.test(u.egen.dag || '') && /^\d{2}:\d{2}$/.test(u.egen.tid || '') ? {dag:u.egen.dag, tid:u.egen.tid} : null;
   return MOUTKASTFALT.some(n => f[n].trim()) || f.med.length || f.gaster.length || f.nulage || tid || egen ? {f, tid, egen} : null;
 }
-let MOUTKAST = (() => { let u = null; try { u = JSON.parse(sessionStorage.getItem(MOUTKASTNYCKEL) || 'null'); } catch(_){} return moUtkastProva(u); })();
-const moUtkastSkriv = u => { MOUTKAST = u; try { if (u) sessionStorage.setItem(MOUTKASTNYCKEL, JSON.stringify(u)); else sessionStorage.removeItem(MOUTKASTNYCKEL); } catch(_){} };
+const moUtkastJag = () => (ND && ND.jag && ND.jag.id) || null;
+let MOUTKAST = (() => { let u = null; try { u = JSON.parse(sessionStorage.getItem(MOUTKASTNYCKEL) || 'null');
+  if (u && (!moUtkastJag() || u.jag !== moUtkastJag())){ u = null; sessionStorage.removeItem(MOUTKASTNYCKEL); } } catch(_){ u = null; } return moUtkastProva(u); })();
+const moUtkastSkriv = u => { MOUTKAST = u; try { if (u) sessionStorage.setItem(MOUTKASTNYCKEL, JSON.stringify({...u, jag:moUtkastJag()})); else sessionStorage.removeItem(MOUTKASTNYCKEL); } catch(_){} };
 function moUtkastSpara(D){
   if (String(D.gastQ || '').trim()) moGastLas(D);   // adresserna som står kvar i fältet blir brickor, som vid Spara
   moUtkastSkriv(moUtkastProva({f:D.f, tid:D.tid, egen:D.egen}));
@@ -37570,9 +37593,11 @@ function ndMoRatta(a){
   setTimeout(() => document.querySelector('.mo-dlg .mo-segb:not([disabled])')?.focus({preventScroll:true}), 40);
 }
 function moRattaDel(D){
-  const m = D.m, e = D.fel;
-  const val = `<div class="mo-fl bred"><span class="mo-lbl" id="mo-rl">Vad hände med mötet?</span><div class="mo-useg tre" role="radiogroup" aria-labelledby="mo-rl">${MORATTA.map(([n, t], i) => `<button type="button" class="mo-segb" role="radio" aria-checked="${D.u === n}" data-moru="${n}"${i === 0 ? ' id="mod-u"' : ''}${n === 'hallet' && m.ombokat ? ' disabled' : ''}>${t}</button>`).join('')}</div><p class="mo-err" id="moe-u" ${e.u ? '' : 'hidden'}>${esc(e.u || '')}</p></div>`;
-  const hinder = m.ombokat ? '<p class="muted mo-hint">Mötet har bokats om. Hållet rättas på det nya mötet.</p>' : '';
+  // G7: den som själv får mötesprovision för mötet får inte sätta nivån (serverns EGEN_PROVISION), och ett rättat
+  // Hållet behöver nivån. Valet stängs av med en rad om varför, som vid ett ombokat möte.
+  const m = D.m, e = D.fel, egen = moEgenProv(m);
+  const val = `<div class="mo-fl bred"><span class="mo-lbl" id="mo-rl">Vad hände med mötet?</span><div class="mo-useg tre" role="radiogroup" aria-labelledby="mo-rl">${MORATTA.map(([n, t], i) => `<button type="button" class="mo-segb" role="radio" aria-checked="${D.u === n}" data-moru="${n}"${i === 0 ? ' id="mod-u"' : ''}${n === 'hallet' && (m.ombokat || egen) ? ' disabled' : ''}>${t}</button>`).join('')}</div><p class="mo-err" id="moe-u" ${e.u ? '' : 'hidden'}>${esc(e.u || '')}</p></div>`;
+  const hinder = m.ombokat ? '<p class="muted mo-hint">Mötet har bokats om. Hållet rättas på det nya mötet.</p>' : egen ? '<p class="muted mo-hint">Du får mötesprovision för mötet och kan inte sätta nivån själv. En annan administratör rättar till Hållet.</p>' : '';
   return val + hinder + (D.u === 'hallet' && moFarBedoma(m) ? moBedomDel(D) : '');
 }
 function moRattaBygg(D){
@@ -37670,10 +37695,10 @@ function moMerVy(D){
       ${moFalt(D, 'doman', 'Webbadress', moInp(D, 'doman', {ph:'bolaget.se'}), {bred:true})}
       ${moGastVy(D)}
       ${moFalt(D, 'mal', 'Mål', `<textarea class="uin" id="mod-mal" name="mal" rows="3" maxlength="2000" placeholder="Vad vill kunden få ut av mötet?">${esc(f.mal)}</textarea>`, {bred:true})}
-      <div class="mo-fl bred"><span class="mo-lbl">Nuläge</span><div class="mo-chips" role="group" aria-label="Nuläge">${Object.entries(moVal().nulage).map(([n, t]) => `<button type="button" class="chip" data-monul="${n}" aria-pressed="${f.nulage === n}">${t}</button>`).join('')}</div></div>`;
+      <div class="mo-fl bred"><span class="mo-lbl">Nuläge</span><div class="mo-chips" role="group" aria-label="Nuläge">${Object.entries(moVal().nulage).map(([n, t]) => `<button type="button" class="chip" data-monul="${esc(n)}" aria-pressed="${f.nulage === n}">${esc(t)}</button>`).join('')}</div></div>`;
 }
 function moSkalFalt(D){
-  return `<div class="mo-fl bred"><span class="mo-lbl" id="mo-sl">Skäl</span><div class="mo-chips" role="group" aria-labelledby="mo-sl">${moVal().nejSkal.map((t, i) => `<button type="button" class="chip" data-moskal="${i}" aria-pressed="${D.f.skal === t}">${t}</button>`).join('')}</div><p class="mo-err" id="moe-skal" ${D.fel.skal ? '' : 'hidden'}>${D.fel.skal ? esc(D.fel.skal) : ''}</p></div>`;
+  return `<div class="mo-fl bred"><span class="mo-lbl" id="mo-sl">Skäl</span><div class="mo-chips" role="group" aria-labelledby="mo-sl">${moVal().nejSkal.map((t, i) => `<button type="button" class="chip" data-moskal="${i}" aria-pressed="${D.f.skal === t}">${esc(t)}</button>`).join('')}</div><p class="mo-err" id="moe-skal" ${D.fel.skal ? '' : 'hidden'}>${D.fel.skal ? esc(D.fel.skal) : ''}</p></div>`;
 }
 
 // Det som skickas, eller felen vid fälten. Samma regler som rutten, så att felet syns före anropet.
@@ -37814,10 +37839,12 @@ async function moDlgSkicka(){
   if (D.typ === 'boka') moPlatsTypMinns(D.f.platsTyp);
   if ((D.typ === 'boka' || D.typ === 'andra') && D.f.platsTyp === 'plats' && String(D.f.adress || '').trim()) moPlatsMinns(String(D.f.adress).trim());
   const s = await ndMoPost(b.handling, b.data, {kedja:D.kedja, visaFel:false, tyst409:true});
+  // G9: mötet är bokat, så utkastet är förbrukat också när bladet hunnit bytas mot ett annat medan det sparades.
+  if (s.ok && !s.fel && D.utkast) moUtkastSkriv(null);
   if (s.pagar || S.moDlg !== D) return;
   // Sparat: bladet stängs, och tavlan ritas om på plats när datan är inne (ndOmlas) med kortet i sin nya kolumn.
   // Ändra går tillbaka till kortets panel, som visar det nya när datan är inne.
-  if (s.ok && !s.fel){ if (D.utkast) moUtkastSkriv(null); if (S.moDlg === D){ S.moDlg = null; if (D.typ === 'andra' || D.tillPanel) S.moOpen = D.kedja; if (D.tillbaka) S.moInst = {fel:{}, sparar:null, sparat:null, fragor:null}; render(); moBedomNasta(D); } return; }
+  if (s.ok && !s.fel){ if (S.moDlg === D){ S.moDlg = null; if (D.typ === 'andra' || D.tillPanel) S.moOpen = D.kedja; if (D.tillbaka) S.moInst = {fel:{}, sparar:null, sparat:null, fragor:null}; render(); moBedomNasta(D); } return; }
   D.sparar = false;
   // 5xx i Boka (F10.1): mötet kan ligga halvvägs (i kalendern men inte på tavlan), och omförsöksnyckeln är släppt, så
   // ett nytt tryck kunde boka dubbelt. Tavlan läses om, bladet stängs med serverns besked i rutan på tavlan (det står
@@ -38112,7 +38139,9 @@ const MOLASFELTEXT = 'Mötena gick inte att hämta.';
 const MOKAPAD = 'Tavlan kan vara ofullständig: alla kort gick inte att läsa.';
 // Ett konto utan ett enda möte (F5.2): en mening och en knapp, inte fem tomma kolumner. Räknat på allt i datan, inte på filtret.
 const moHeltTomt = d => !d.fel && !d.kort.length && !(d.avgjorda || []).length;
-const moTomtVy = () => `<div class="mo-ett"><p>Inga möten än.</p><button class="btn btn-s" data-moboka>${I('plus')}Boka möte</button></div>`;
+// G13: "än" stämmer bara när veckan inte heller har stängda kedjor. Annars är det de öppna som saknas.
+const moTomtText = d => ((d.vecka || {}).kedjor || []).length ? 'Inga öppna möten.' : 'Inga möten än.';
+const moTomtVy = () => `<div class="mo-ett"><p>${moTomtText(ndMo())}</p><button class="btn btn-s" data-moboka>${I('plus')}Boka möte</button></div>`;
 // Sökningen träffade inget kort (F4.1). Med ett filter eller ett personval på säger meningen att det är urvalet som är tomt.
 const moIngenVy = () => `<div class="mo-ett" role="status"><p>${S.moFilter || S.moPerson ? 'Inget kort i urvalet.' : 'Inget kort på tavlan.'} Stängda möten syns inte här.</p><button class="btn btn-s" data-mosokx>Rensa sökningen</button></div>`;
 function moLasfelVy(){
@@ -38202,7 +38231,7 @@ function ndMoVy(){
     ${S.moVarn ? `<div class="mo-upp mo-varn" role="status"><div class="mo-uh"><b>Tänk på</b><button class="tlink" data-movarnx aria-label="Stäng">${I('x')}</button></div><p class="mo-vr">${esc(S.moVarn)}</p></div>` : ''}
     ${!stat && moIfrAntal() ? `<p class="mo-ifrr"><button class="tlink" data-moinst="ifr" aria-haspopup="dialog">${moIfrAntal() === 1 ? '1 nivå är ifrågasatt' : moIfrAntal() + ' nivåer är ifrågasatta'}</button></p>` : ''}
     ${stat ? '' : moUppVy()}
-    ${S.moFilter && !stat ? `<div class="mo-filt"><span class="chip on">Filtrerat: ${MOFILTER[S.moFilter] || esc(S.moFilter)}<button data-mofiltx aria-label="Ta bort filtret">${I('x')}</button></span></div>` : ''}
+    ${S.moFilter && !stat ? `<div class="mo-filt"><span class="chip on">Filtrerat: ${esc(MOFILTER[S.moFilter] || S.moFilter)}<button data-mofiltx aria-label="Ta bort filtret">${I('x')}</button></span></div>` : ''}
     ${stat ? '<section class="card mo-stat" id="moStat" aria-label="Statistik"></section>' : d.fel ? moLasfelVy() : moHeltTomt(d) ? moTomtVy() : ingen ? moIngenVy() : `<div class="mo-tavla" role="list">${MOPIPE.map(kolVy).join('')}</div>${d.kapad ? `<p class="ms-fot" data-mo-kapad>${MOKAPAD}</p>` : ''}`}
     ${S.moOpen ? moPanel(d.kort.find(k => k.kedja === S.moOpen)) : ''}
     ${S.moDlg ? moDlgVy(S.moDlg) : ''}
@@ -38422,8 +38451,12 @@ function moStegVy(k){
   const g = moGrannar(k); if (g.i < 0 || g.n < 2) return '';
   return `<span class="mo-steg" role="group" aria-label="Kort ${g.i + 1} av ${g.n} i kolumnen"><button class="ibtn" data-mosteg="-1" ${g.fore ? '' : 'disabled'} aria-label="Föregående kort" title="Föregående kort (K)">↑</button><button class="ibtn" data-mosteg="1" ${g.nasta ? '' : 'disabled'} aria-label="Nästa kort" title="Nästa kort (J)">↓</button></span>`;
 }
-// Fokus i panelen: kortets första handling, annars Ändra eller Ring i huvudet, annars krysset.
-const moPanelFokus = () => (document.querySelector('.rxpanel:not(.mo-dlg) .mo-kn.pan .btn') || document.querySelector('.rxpanel:not(.mo-dlg) .rxpverk .btn') || document.querySelector('.rxpanel:not(.mo-dlg) .rxph [data-mostang]'))?.focus({preventScroll:true});
+// Fokus i panelen: kortets första handling, annars Ändra eller Ring i huvudet, annars krysset. Inget svar och Prova
+// igen sparar direkt och går inte att ångra (G15): står någon av dem först går fokus till Ändra i huvudet, så att
+// ett Enter till efter att kortet öppnats inte flyttar uppföljningen.
+const MODIREKT = ['ingetsvar', 'prova'];
+const moPanelFokus = () => { const p = '.rxpanel:not(.mo-dlg) ', forsta = document.querySelector(p + '.mo-kn.pan .btn'), direkt = !!forsta && MODIREKT.includes(String(forsta.dataset.moa || '').split('|')[0]);
+  ((!direkt && forsta) || document.querySelector(p + '.rxpverk .btn') || document.querySelector(p + '.rxph [data-mostang]'))?.focus({preventScroll:true}); };
 // Stega till grannen utan att stänga panelen. Från tangenterna går fokus till kortets första handling; från pilarna
 // står det kvar på pilen (på den andra när den första blev inaktiv i kolumnens ände).
 function moSteg(d, franTangent){
@@ -38704,7 +38737,7 @@ document.addEventListener('input', e => {   // Formuläret behåller det som skr
   if (df && S.moDlg){   // fälten ritas inte om medan man skriver; bara felet vid fältet försvinner
     const D = S.moDlg, n = e.target.name;
     queueMicrotask(moSumRita);   // knappens räkning och raden ovanför Spara (F14.1), när det skrivna är inne
-    if (e.target.dataset.molangd !== undefined){ D.f.langd = +e.target.value; D.rort = true; moLuckorRita(); return; }
+    if (e.target.dataset.molangd !== undefined){ D.f.langd = +e.target.value; D.rort = true; moLuckorRita(); moHamtaTider(true); return; }
     if (e.target.dataset.moegen !== undefined){ moEgenIn(D); return; }
     if (e.target.dataset.momedq !== undefined){ D.medQ = e.target.value; D.medLista = true; D.medAkt = 0; moMedRita(); return; }
     if (e.target.dataset.mogastq !== undefined){
@@ -38836,6 +38869,7 @@ function moTangent(e){
   const moten = S.view === 'moten' && !!ndMo();
   if (e.key === 'Escape'){
     if (moten && S.keysOverlay) return;   // ?-rutan ligger överst: Navs egen Esc stänger den
+    if (document.getElementById('pal')) return;   // paletten ligger överst (G10): Navs egen Esc stänger den, Möten rör inget
     if (S.moInst && S.view === 'moten'){ e.preventDefault(); e.stopImmediatePropagation(); S.moInst = null; render(); document.querySelector('[data-moinst]')?.focus({preventScroll:true}); return; }
     if (moten && S.moDlg){ e.preventDefault(); e.stopImmediatePropagation(); if (S.moDlg.medLista){ S.moDlg.medLista = false; moMedRita(); return; } if (!S.moDlg.sparar) moDlgStang(); return; }
     if (moten && S.moOpen){ e.preventDefault(); e.stopImmediatePropagation(); moStang(); return; }
@@ -38887,7 +38921,11 @@ if (moSyns()){
   keysOverlay = function(){
     const forst = S.view === 'moten', ar = UPGTANGENTER[0] === MOTANGENTRUTA[0];
     if (forst !== ar){ MOTANGENTRUTA.forEach(g => UPGTANGENTER.splice(UPGTANGENTER.indexOf(g), 1)); if (forst) UPGTANGENTER.unshift(...MOTANGENTRUTA); else UPGTANGENTER.push(...MOTANGENTRUTA); }
-    return _moKeysOverlay();
+    // G14: i Möten gäller Mötens N och /. Navs rader för samma tangenter visas inte där, så att listan inte säger
+    // två saker om en tangent. Gruppen ställs tillbaka efter ritningen: utanför Möten står raderna som förut.
+    const nav = forst ? UPGTANGENTER.find(g => g[0] === 'Var som helst') : null, rader = nav && nav[1], egna = MOTANGENTER.vy.rader.map(r => r.visa);
+    if (rader) nav[1] = rader.filter(r => !egna.includes(r[0]));
+    try { return _moKeysOverlay(); } finally { if (rader) nav[1] = rader; }
   };
 }
 
@@ -38990,7 +39028,7 @@ function ndMoHemKort(){
   // Läsningen gick inte (ND.moten.fel, B16): kortet säger det, i stället för att försvinna som om ingenting fanns.
   if (d.fel) return `<section class="card mo-hem" id="moHem" aria-label="Möten">${huvud}<p class="mo-hlugn" role="status">${MOLASFELTEXT}</p></section>`;
   // Ett konto utan ett enda möte (F21.2): en mening och en knapp, som tavlans tomläge.
-  if (moHeltTomt(d)) return `<section class="card mo-hem" id="moHem" aria-label="Möten">${huvud}<div class="mo-htomt"><p class="mo-hlugn">Inga möten än.</p><button class="btn btn-s btn-sm" data-mohem="boka">${I('plus')}Boka möte</button></div></section>`;
+  if (moHeltTomt(d)) return `<section class="card mo-hem" id="moHem" aria-label="Möten">${huvud}<div class="mo-htomt"><p class="mo-hlugn">${moTomtText(d)}</p><button class="btn btn-s btn-sm" data-mohem="boka">${I('plus')}Boka möte</button></div></section>`;
   if (!kravs && !kort.length) return '';
   const nu = moNuMin(), nasta = kort.filter(k => k.mote && moMin(k.mote.tid) + k.mote.langd > nu).sort((a, b) => a.mote.tid.localeCompare(b.mote.tid))[0];
   let rad = '';
@@ -39020,7 +39058,7 @@ document.addEventListener('click', e => {
   const b = moSyns() && S.view === 'hem' && e.target.closest && e.target.closest('[data-mohem]'); if (!b) return;
   e.preventDefault(); e.stopImmediatePropagation();
   const f = b.dataset.mohem; moInit();
-  if (f === 'boka'){ moGa(); ndMoDialog('boka'); return; }
+  if (f === 'boka'){ moBokaUtifran(); return; }
   Object.assign(S, {moFilter:MOFILTERFN[f] ? f : null, moPerson:null, moOpen:null, moDlg:null, moUpp:null, moVarn:null, moStat:false});   // tavlan, också när Statistik stod framme sist
   S.view = 'moten'; render(); window.scrollTo(0, 0);
 }, true);
