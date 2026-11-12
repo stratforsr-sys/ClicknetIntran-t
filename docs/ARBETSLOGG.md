@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-12 · Möten: lyftet av vyn (grenen `moten-lyft`, väntar på ja, ingen migration)
+## 2026-11-12 · Möten: lyftet av vyn (på `main` som `f3b1d8a`, ingen migration, skarpa provet kvar)
 
 **Vad:** ett förbättringsvarv av hela vyn Möten, 22 delar, minst två märkbara förbättringar per del, i sju omgångar,
 följt av en oberoende granskning och ett rättningsvarv. Se `docs/NASTA_SESSION.md` för läget och listan över det som
