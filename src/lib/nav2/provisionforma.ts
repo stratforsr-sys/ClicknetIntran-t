@@ -20,10 +20,14 @@ import {
   type Bonusniva,
   type Chefspost,
   type KvIndata,
+  type Motespost,
   type Underlag,
 } from "../provision-motor.ts";
+import { byggMotenProvision, type MotesvyIndata, type NdMotesprovision } from "./motesprovision.ts";
 import { arbetsdagarIManad, takta, type Saljmal } from "../saljtakt.ts";
 import { gallandePolicy, kvManad, maxpoangPerVecka, veckansTorsdag, veckonummer, veckostart, type KvKriterium, type KvPolicy, type KvSamtal } from "../kv.ts";
+
+export type { NdMotesprovision, NdMotesrad } from "./motesprovision.ts";
 
 export type Niva = { t: number; a: number; enhet: string };
 export type NdPvRad = { slag: string; text: string; belopp: number; orderId: string | null; bokford: boolean; note: string | null; dag: string | null };
@@ -37,6 +41,8 @@ export type NdPvUnderlag = {
   kv: { godkanda: number; bedomda: number; procent: number; belopp: number; perVecka: number; tak: number } | null;
   ovrig: number;
   chefs: { antal: number; makulerade: number; belopp: number; per: Record<string, number> } | null;
+  /** Mötesprovisionen i månaden (antal möten och belopp), ur motorn. Null utan mötesposter. */
+  moten: { antal: number; belopp: number } | null;
   varde: number;
   utanVarde: number;
   utkop: number;
@@ -86,6 +92,11 @@ export type NdProvision = {
   chefssats?: NdChefssats | null;
   /** Konsekvenstrappan for ogiltig franvaro (0037), i ordning. Alla ser den; saljchef och VD andrar (`malchef`). */
   konsekvens?: { ordning: number; antal: number; manader: number; atgard: string; notifiera: boolean }[];
+  /**
+   * Betraktarens mötesprovision (Möten): null för den som inte får mötesprovision och aldrig haft en rad,
+   * då visas ingen sektion. Raderna gäller betraktaren själv, aldrig den som chefsvyn råkar visa.
+   */
+  moten: NdMotesprovision | null;
 };
 
 /**
@@ -128,6 +139,10 @@ export type ProvisionIndata = {
   kvPerManad: Map<string, Map<string, KvIndata>>;
   mal: Saljmal[];
   chefsposter: Chefspost[];
+  /** De låsta mötesbeloppen som motorn räknar in, per månad (`hamtaMotesposter`). Utelämnad = inga. */
+  motesposter?: Motespost[];
+  /** Betraktarens egna mötesrader för sektionen i vyn (`hamtaMotesvy`). Utelämnad = ingen sektion. */
+  motesvy?: MotesvyIndata | null;
   kvSamtal: KvSamtal[];
   policyer: KvPolicy[];
   kriterier: KvKriterium[];
@@ -140,6 +155,7 @@ const fullName = (e: { first_name: string; last_name: string }) => `${e.first_na
 
 export function formaProvision(x: ProvisionIndata): NdProvision {
   const { mig, provisionschef, malchef, bokforare, idag, idagsDatum, poster, material, nivaer, perioder, minaHandelser, regler, godkanda, kvPerManad, mal, chefsposter, kvSamtal, policyer, kriterier, personrader } = x;
+  const motesposter = x.motesposter ?? [];
   const manader = Array.from({ length: 12 }, (_, i) => manadFore(idag, i));
   const namnFor = new Map((personrader ?? []).map((p) => [p.id as string, fullName(p)]));
     const saljarIds = new Set(
@@ -164,8 +180,8 @@ export function formaProvision(x: ProvisionIndata): NdProvision {
     const lagenM = lagenPerPerson(godkanda, m);
 
     const lista: Underlag[] = provisionschef
-      ? underlagForAlla(material, m, nivaer, kvM, lagenM, chefsposter)
-      : [raknaUnderlag(mig, material, m, nivaer, kvM.get(mig) ?? null, lagenM.get(mig) ?? null, chefsposter.filter((p) => p.manager_id === mig))];
+      ? underlagForAlla(material, m, nivaer, kvM, lagenM, chefsposter, motesposter)
+      : [raknaUnderlag(mig, material, m, nivaer, kvM.get(mig) ?? null, lagenM.get(mig) ?? null, chefsposter.filter((p) => p.manager_id === mig), motesposter.filter((p) => p.employee_id === mig))];
     // Saljarna och jag sjalv ska alltid ha en rad, aven en tom manad. Och var
     // och en med poster i manaden: en saljare som slutat med en eftersläpande
     // order, eller en icke-saljare med en ovrig bonus (granskningen S06, D5).
@@ -175,7 +191,7 @@ export function formaProvision(x: ProvisionIndata): NdProvision {
       ? [...new Set([...saljarIds, mig, ...poster.filter((p) => p.period_month === m).map((p) => p.employee_id)])]
       : [];
     for (const id of extra) {
-      if (!har.has(id)) lista.push(raknaUnderlag(id, material, m, nivaer, kvM.get(id) ?? null, lagenM.get(id) ?? null, chefsposter));
+      if (!har.has(id)) lista.push(raknaUnderlag(id, material, m, nivaer, kvM.get(id) ?? null, lagenM.get(id) ?? null, chefsposter, motesposter));
     }
 
     underlag[nyckel] = {};
@@ -207,6 +223,16 @@ export function formaProvision(x: ProvisionIndata): NdProvision {
         chefs = { ...u.chefsprovision, per };
       }
 
+      // Mötesprovisionen i månaden. FASTSTÄLLD: huvudbokens post, aldrig motorns räkning
+      // av raderna som de ser ut i dag — en ändring i efterhand är en rättelse i
+      // innevarande månad, och månaden själv står orörd. ÖPPEN: motorns.
+      const motePoster = iManaden.filter((p) => slagetFor(p) === "motesprovision");
+      const moten: NdPvUnderlag["moten"] = stangd
+        ? motePoster.length > 0
+          ? { antal: motePoster.reduce((s, p) => s + (p.deals ?? 0), 0), belopp: motePoster.reduce((s, p) => s + p.amount, 0) }
+          : null
+        : u.motesprovision;
+
       const kv = u.kv
         ? {
             godkanda: u.kv.godkanda,
@@ -229,6 +255,7 @@ export function formaProvision(x: ProvisionIndata): NdProvision {
         kv,
         ovrig: iManaden.filter((p) => slagetFor(p) === "ovrig_bonus").reduce((s, p) => s + p.amount, 0),
         chefs,
+        moten,
         varde: u.ordervarde.netto,
         utanVarde: u.ordervarde.utanVarde,
         utkop: u.ordervarde.utkop,
@@ -330,6 +357,7 @@ export function formaProvision(x: ProvisionIndata): NdProvision {
       vl && sist
         ? { antal: vl.antal, sist, nollstalls: vl.nollstallsDen, nasta: vl.nasta ? ATGARD_ETIKETT[vl.nasta.atgard] : lageNu?.bonusforlust ? "bonusforlust" : null }
         : null,
+    moten: byggMotenProvision(mig, x.motesvy, poster, idag),
     ovriga: poster
       .filter((p) => slagetFor(p) === "ovrig_bonus")
       .map((p) => ({ id: p.id, vemId: p.employee_id, m: m7(p.period_month), belopp: p.amount, skal: p.note ?? "", bokford: perioder.some((x) => String(x.period_month).slice(0, 10) === p.period_month) })),

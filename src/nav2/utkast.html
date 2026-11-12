@@ -4200,6 +4200,22 @@ button.pv-stopp:focus-visible{outline:2px solid var(--hub-brand);outline-offset:
 .pv-sort button{font-size:12px;padding:5px 10px}
 .pv-rfilter .pv-sok{margin-left:0}
 .pv-rlista li .pill{margin-left:6px;font-size:10.5px;vertical-align:1px}
+.pv-mo-tot{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 16px;padding:0 0 12px}
+.pv-mo-tot b{font:600 26px/1 var(--f-display);letter-spacing:-.01em}
+.pv-mo-tot small{font-size:12.5px;color:var(--ink-3)}
+.pv-mo-lista{list-style:none;margin:0;padding:0}
+.pv-mo-lista li{display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:start;gap:14px;padding:10px 0;border-top:1px solid var(--line);font-size:13.5px}
+.pv-mo-dag{font-size:11.5px;color:var(--ink-3);line-height:1.3}
+.pv-mo-dag b{display:block;font-size:15px;font-weight:600;color:var(--ink)}
+.pv-mo-co{font-weight:600}
+.pv-mo-lista small{display:block;margin-top:2px;font-size:12px;color:var(--ink-3)}
+.pv-mo-lista small .tlink{font-size:12px;padding:0;color:var(--brand-ink);text-decoration:underline;text-underline-offset:2px}
+.pv-mo-lage.ok{color:var(--brand-ink)}.pv-mo-lage.tapp{color:var(--danger-ink)}
+.pv-mo-lista li>b,.pv-mo-lista li>s{text-align:right;white-space:nowrap}
+.pv-mo-lista li>b{font-weight:600}
+.pv-mo-lista li.tappat>s{color:var(--ink-3)}
+.pv-mo-lista li.tappat .pv-mo-co,.pv-mo-lista li.vantar .pv-mo-co{color:var(--ink-2)}
+.pv-mo-vant{color:var(--ink-3)}
 .pv-rlista li.sen{background:color-mix(in srgb,var(--signal) 6%,transparent)}
 .pv-rlista li.pv-summa.liten{border-top-width:1px;font-weight:500;color:var(--ink-2)}
 .pv-kort3.tva{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -8043,6 +8059,30 @@ body.nd-riktig :is(.pv-lagrad,.arow[data-agenda],.pv-tab tbody tr[data-pvupers],
 .mo-val:hover{border-color:var(--line-2)}
 .mo-val[aria-checked="true"]{border-color:var(--brand);background:var(--brand-soft)}
 .mo-val[aria-checked="true"] b{color:var(--brand-ink)}
+/* Utfallsrutan (0289): ett val av fyra, ja/nej-par för frågorna och raden som säger vad mötet räknas som. */
+.mo-seg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.mo-segb{padding:9px 4px;border:1px solid var(--line-2);border-radius:8px;background:var(--surface);font:500 13px var(--f-body,inherit);color:var(--ink);text-align:center;transition:border-color .15s,background .15s}
+.mo-segb:hover{border-color:var(--ink-3)}
+.mo-segb[aria-checked="true"]{background:var(--brand-soft);border-color:var(--brand);color:var(--brand-ink);font-weight:600}
+.mo-yn{display:flex;gap:6px}
+.mo-ynb{min-width:60px;padding:8px 12px;border:1px solid var(--line-2);border-radius:8px;background:var(--surface);font:500 13px var(--f-body,inherit);color:var(--ink);text-align:center;transition:border-color .15s,background .15s,color .15s}
+.mo-ynb:hover{border-color:var(--ink-3)}
+.mo-ynb[aria-checked="true"]{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.mo-segb:focus-visible,.mo-ynb:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.mo-res{margin:0;padding:10px 12px;border-radius:10px;background:var(--surface-2);border:1px dashed var(--line-2);font-size:12.5px;line-height:1.45;color:var(--ink-2)}
+.mo-res b{color:var(--brand-ink);font-weight:600;animation:moResIn .22s ease-out}
+@keyframes moResIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+.mo-hb{padding:10px 12px;border-radius:10px;background:var(--surface-2);border:1px solid var(--line)}
+.mo-hb b{font-size:13.5px}
+.mo-hb small{font-size:12.5px;line-height:1.4;color:var(--ink-3)}
+.mo-hint{margin:0;font-size:12.5px;line-height:1.45}
+.mo-ifg{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:9px 0;border-top:1px solid var(--line)}
+.mo-ifg:first-of-type{border-top:0}
+.mo-ifgt{display:flex;flex-direction:column;gap:1px;min-width:0}
+.mo-ifgt small{font-size:12px;color:var(--ink-3)}
+.mo-ifgt .mo-err{margin-top:2px}
+.mo-ifgk{display:flex;gap:6px}
+@media (prefers-reduced-motion:reduce){.mo-res b{animation:none}.mo-segb,.mo-ynb{transition:none}}
 
 .mo-df{padding:12px 16px 14px;border-top:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;gap:10px}
 .mo-fe{margin:0;padding:8px 10px;border-radius:8px;background:var(--danger-soft,var(--warn-soft));color:var(--danger-ink);font-size:13px;line-height:1.4}
@@ -16577,12 +16617,13 @@ function pvPersonVy(vem){
     ${arChef ? (live ? pvChefTakt(u, t) : '') : `<div class="pv-kort3">${live ? pvDagKort(vem, t, mal) + pvTaktKort(u, t) : pvFacitKort(u)}${pvMalKort(u, t, mal, live)}</div>`}
     ${!arChef && u.kv ? pvKvKort(u) : ''}
     ${arChef && u.chefs && Object.keys(u.chefs.per || {}).length ? pvOvertackPer(u) : ''}
+    ${jag ? pvMoteVy(u) : ''}
     ${pvRaderVy(u, jag)}
     ${arChef ? pvChefFakta(u) : ''}`;
 }
 function pvPanel(u, t, lage, jag, arChef){
-  const delar = arChef ? [['Övertäck', u.chefs ? u.chefs.belopp : 0, 'chef'], ['Egen försäljning', u.grund, 'order'], ['Övrig bonus', u.ovrig, 'ovrig']]
-    : [['Grundprovision', u.grund, 'order'], ['Volymbonus', u.volym, 'volym'], ...(u.kv ? [['K&V-bonus', u.kv.belopp, 'kv']] : []), ...(u.ovrig ? [['Övrig bonus', u.ovrig, 'ovrig']] : []), ...(u.sena.length ? [['Sena order', u.sena.reduce((s, o) => s + oProv(o), 0), 'sen']] : [])];
+  const delar = arChef ? [['Övertäck', u.chefs ? u.chefs.belopp : 0, 'chef'], ['Egen försäljning', u.grund, 'order'], ['Övrig bonus', u.ovrig, 'ovrig'], ...(u.moten ? [['Mötesprovision', u.moten.belopp, 'mote']] : [])]
+    : [['Grundprovision', u.grund, 'order'], ['Volymbonus', u.volym, 'volym'], ...(u.kv ? [['K&V-bonus', u.kv.belopp, 'kv']] : []), ...(u.ovrig ? [['Övrig bonus', u.ovrig, 'ovrig']] : []), ...(u.moten ? [['Mötesprovision', u.moten.belopp, 'mote']] : []), ...(u.sena.length ? [['Sena order', u.sena.reduce((s, o) => s + oProv(o), 0), 'sen']] : [])];
   const pr = !arChef && u.m === PVMAN ? pvPrognosNasta(u) : null, sd = pvSammaDag(u);
   const namn = jag ? (arChef ? 'Din provision som säljchef' : 'Du') : u.vem;
   return `<section class="pv-panel" aria-label="Månadens provision">${note(312)}
@@ -28951,8 +28992,8 @@ pvSt = function(){
 pvFrys = function(m){ if (!ndP()) return; };
 
 /* ---------- Motorn: repots underlag i utkastets form ---------- */
-const NDPVSLAG = {order:'order', makulering:'avdrag', volymbonus:'bonus', kv_bonus:'bonus', ovrig_bonus:'bonus', avdrag:'avdrag', chefsprovision:'chef', chefsprovision_makulering:'avdrag', rattelse:'bonus', hand:'bonus'};
-const NDPVDEL = {volymbonus:'volym', kv_bonus:'kv', ovrig_bonus:'ovrig', chefsprovision:'chef', rattelse:'ovrig', hand:'ovrig'};
+const NDPVSLAG = {order:'order', makulering:'avdrag', volymbonus:'bonus', kv_bonus:'bonus', ovrig_bonus:'bonus', avdrag:'avdrag', chefsprovision:'chef', chefsprovision_makulering:'avdrag', rattelse:'bonus', hand:'bonus', motesprovision:'bonus'};
+const NDPVDEL = {volymbonus:'volym', kv_bonus:'kv', ovrig_bonus:'ovrig', chefsprovision:'chef', rattelse:'ovrig', hand:'ovrig', motesprovision:'mote'};
 function ndPvRad(r, x){
   const o = r.orderId ? ORDER.find(y => y.id === r.orderId) : null;
   const slag = r.slag === 'rattelse' || r.slag === 'hand' ? (r.belopp < 0 ? 'avdrag' : 'bonus') : NDPVSLAG[r.slag] || 'bonus';
@@ -28982,7 +29023,7 @@ pvUnderlag = function(vem, m, raknaLive){
   const nasta = d.nasta ? {niva:{t:d.nasta.t, a:d.nasta.a}, kvar:d.nasta.kvar} : !x && tr.length ? {niva:tr[0], kvar:tr[0].t} : null;
   return {vem, m, stangd, rader:d.rader.map(r => ndPvRad(r, d)), grund:d.grund, antal:{signerade:d.antal.signerade, makulerade:d.antal.makulerade, netto:d.antal.netto},
     bonusantal:d.antal.bonusgrundande, volym:d.volym, niva:d.niva ? {t:d.niva.t, a:d.niva.a} : null, nasta, trappa:tr,
-    kv:d.kv ? {...d.kv, veckor:ndPvKvVeckor(id, m)} : null, ovrig:d.ovrig, chefs, varde:d.varde, summa:d.summa, forlust:d.forlust,
+    kv:d.kv ? {...d.kv, veckor:ndPvKvVeckor(id, m)} : null, ovrig:d.ovrig, moten:d.moten || null, chefs, varde:d.varde, summa:d.summa, forlust:d.forlust,
     varn:jag && !arChef ? ndPvVarning(m, d.forlust) : null, sena:[],
     vantar:m === PVMAN ? egnaM.filter(o => o.st === 'inskickad') : [], utkast:m === PVMAN ? egnaM.filter(o => o.st === 'utkast') : []};
 };
@@ -29062,6 +29103,37 @@ async function ndPvPost(handling, data = {}, ladda = true){
     ndSkrivFel(s); return s;
   } catch(_){ toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
 }
+/* ---------- Mötesprovisionen (Möten, uppgift 7) ----------
+   ND.provision.moten är betraktarens egna rader (null för den som inte får mötesprovision och aldrig haft en),
+   en rad per möte med nivå och belopp. Ett tappat möte (uteblev, avbokat) visar det möjliga beloppet överstruket
+   och skälet. Hållet-nivån har länken Ifrågasätt, som lägger ärendet hos en admin (/nav2/moten). Väntande möten
+   visar "väntar på bedömning" utan belopp. Summorna räknas ur raderna för den valda månaden. */
+const PVMOMAN = ['', 'jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+const pvMoKr = n => n.toLocaleString('sv-SE', {minimumFractionDigits:Number.isInteger(n) ? 0 : 2, maximumFractionDigits:2}) + ' kr';
+const pvMoSum = l => Math.round(l.reduce((s, x) => s + x, 0) * 100) / 100;
+function pvMoteVy(u){
+  const P = typeof ndP === 'function' ? ndP() : null, M = P && P.moten; if (!M) return '';
+  const rader = M.rader.filter(r => r.manad === u.m), hallda = rader.filter(r => !r.vantar && r.niva), tappade = rader.filter(r => !r.vantar && !r.niva);
+  const summa = pvMoSum(hallda.map(r => r.belopp)), tappat = pvMoSum(tappade.map(r => r.mojligt)), kval = hallda.filter(r => r.niva === 'kvalificerat').length;
+  const rad = r => {
+    const tapp = !r.vantar && !r.niva;
+    const lage = r.vantar ? 'väntar på bedömning' : tapp ? (/^Avbokat/.test(r.skal || '') ? 'avbokat' : 'uteblev') : r.niva === 'kvalificerat' ? 'kvalificerat' : 'hållet';
+    const varfor = [r.skal ? esc(r.skal) : '', r.kanIfragasatta ? `<button class="tlink inl" data-pvmoteifr="${esc(r.moteId)}">Ifrågasätt</button>` : ''].filter(Boolean).join(' · ');
+    const ratt = r.rattadI ? `Ändrad efter fastställelsen, rättelsen bokförd i ${pvManNamn(r.rattadI)}` : '';
+    const belopp = r.vantar ? '<span class="pv-mo-vant">–</span>' : tapp ? `<s class="num" title="Det mötet hade kunnat ge">${pvMoKr(r.mojligt)}</s>` : `<b class="num">${pvMoKr(r.belopp)}</b>`;
+    return `<li class="${tapp ? 'tappat' : r.vantar ? 'vantar' : ''}"><span class="pv-mo-dag num"><b>${+r.dag.slice(8, 10)}</b>${PVMOMAN[+r.dag.slice(5, 7)]}</span>
+      <span class="pv-rt"><span class="pv-mo-co">${esc(r.bolag)}</span><small>${esc(r.saljare)} · <span class="pv-mo-lage ${r.niva === 'kvalificerat' ? 'ok' : tapp ? 'tapp' : ''}">${lage}</span>${r.delatMed ? ` · delat med ${esc(r.delatMed)}` : ''}</small>${varfor ? `<small>${varfor}</small>` : ''}${ratt ? `<small>${ratt}</small>` : ''}</span>${belopp}</li>`;
+  };
+  return `<section class="card pv-mote" id="pvMote"><div class="chead"><h2>Mötesprovision</h2><span class="meta">${pvManNamn(u.m)}</span></div>
+    ${rader.length ? `<div class="pv-mo-tot"><b class="num">${pvMoKr(summa)}</b><small>${hallda.length} ${hallda.length === 1 ? 'hållet möte' : 'hållna möten'} · ${kval} kvalificerade · ${tappade.length} tappade${tappat ? `, ${pvMoKr(tappat)}` : ''}${rader.some(r => r.vantar) ? ` · ${rader.filter(r => r.vantar).length} väntar` : ''}</small></div>
+      <ul class="pv-mo-lista">${rader.map(rad).join('')}</ul>`
+      : `<p class="muted pv-tomt">Inga möten i ${pvManNamn(u.m)}.</p>`}
+    <p class="pv-kf">Beloppet låses när mötet bedöms och ändras inte om satserna ändras. Ett möte som ändras efter att månaden fastställts rättas i innevarande månad, månaden själv står orörd.</p></section>`;
+}
+async function pvMoteIfr(moteId){
+  const s = await ndMoPost('ifragasatt', {mote:moteId}, {ladda:false});
+  if (s && s.ok && !s.fel) ndOmlas('pv');
+}
 // Efter en omladdning: tillbaka till samma flik och månad.
 (() => { if (!ndP()) return; let m = null; try { m = JSON.parse(sessionStorage.getItem('nd-pv') || 'null'); sessionStorage.removeItem('nd-pv'); } catch(_){}
   if (m) setTimeout(() => { pvSt(); S.view = 'provision'; if (m.flik) S.pvFlik = m.flik; if (m.m) S.pvM = m.m; if (m.vem) S.pvVem = m.vem; render(); }, 0); })();
@@ -29087,6 +29159,7 @@ document.addEventListener('click', e => {
   if (!ndP() || S.view !== 'provision') return;
   const b = e.target.closest && e.target.closest('button, a'); if (!b || !b.dataset) return;
   const d = b.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  if (d.pvmoteifr){ stopp(); pvMoteIfr(d.pvmoteifr); return; }
   if (d.pvfaststall){ stopp(); ndPvPost('faststall', {manad:d.pvfaststall}); return; }
   if (d.pvpamin){ stopp(); ndPvPost('pamin', {dag:d.pvpamin, manadNamn:pvManNamn(PVMAN)}, false).then(s => { if (s.ok){ S.pvPamint = true; render(); } }); return; }
   if (d.pvbonusta){ stopp(); ndPvPost('bonus-bort', {id:d.pvbonusta}); return; }
@@ -36556,8 +36629,9 @@ window.addEventListener('resize', () => { const t = document.querySelector('#moS
    Det som sparar går till /nav2/moten; i läsläge svarar rutten 423 och
    ingenting ändras. Envägsknapparna (Bekräftat, Avbokat, Inget svar, Prova
    igen) kopplas här. Allt som kräver ett formulär går till ndMoDialog(typ,
-   kort): Boka möte och Boka nytt möte, Flyttat, Hållet och Uteblev (utfallet),
-   Nej med skäl, och Affär (Orders formulär; kortet stängs när ordern är lagd).
+   kort): Boka möte och Boka nytt möte, Flyttat (före mötet), Utfall (Hållet, Uteblev,
+   Flyttat och Avbokat i EN ruta efter mötet), Nej med skäl, och Affär (Orders formulär;
+   kortet stängs när ordern är lagd). Bedöm (ndMoBedom) är samma frågor utan utfallsvalet.
 
    Efter en lyckad skrivning laddas sidan om (som Leads): kedjans `fore`
    (uppfoljning.andrad) är nytt först då. Kortet som flyttade sig kommer fram
@@ -36747,16 +36821,17 @@ function ndMoDialog(typ, kort){
     Object.assign(D, {tid:m.tid, dag:m.tid.slice(0, 10), tidOppen:false, medQ:'', medOppen:false, medLista:false, medAkt:0, gastQ:'', gastOppen:false});
   }
   // Flyttat och Uteblev: tiderna letas för hållaren och kollegorna på mötet (de som inte tackat nej).
-  if (typ === 'flyttat' || typ === 'uteblev') D.f = {hallsAv:k.mote.hallsAv, med:(k.mote.med || []).filter(p => p.svar !== 'nej').map(p => p.id)};
-  if (typ === 'hallet') D.f = {val:'', skal:'', datum:aeArbFram(ndIdag(), 3), text:''};
+  if (typ === 'flyttat' || typ === 'utfall') D.f = {hallsAv:k.mote.hallsAv, med:(k.mote.med || []).filter(p => p.svar !== 'nej').map(p => p.id)};
+  // Utfall: en ruta för Hållet, Uteblev, Flyttat och Avbokat. `u` är valet, `svar` svaren på frågorna ({id: sant/falskt}).
+  if (typ === 'utfall'){ Object.assign(D, {u:'', svar:{}}); Object.assign(D.f, {val:'', skal:'', datum:aeArbFram(ndIdag(), 3), text:''}); }
   if (typ === 'nej') D.f = {skal:''};
   render();
-  setTimeout(() => document.querySelector(typ === 'andra' ? '.mo-dlg .rxpb :is(input:not([type=hidden]), select, textarea, [data-momedin])' : '.mo-dlg select, .mo-dlg input:not([type=hidden]), .mo-dlg .mo-val')?.focus({preventScroll:true}), 40);
-  if (D.f.hallsAv) moHamtaTider();
+  setTimeout(() => document.querySelector(typ === 'andra' ? '.mo-dlg .rxpb :is(input:not([type=hidden]), select, textarea, [data-momedin])' : '.mo-dlg select, .mo-dlg input:not([type=hidden]), .mo-dlg .mo-val, .mo-dlg .mo-segb')?.focus({preventScroll:true}), 40);
+  if (D.f.hallsAv && typ !== 'utfall') moHamtaTider();   // i utfallsrutan hämtas tiderna när Uteblev eller Flyttat väljs
   if (typ === 'boka' && D.f.telefon) moDlgUppslag();
 }
 // Ändra öppnades från kortets panel: Avbryt går tillbaka dit.
-function moDlgStang(){ const D = S.moDlg; S.moDlg = null; if (D && D.typ === 'andra' && D.kedja) S.moOpen = D.kedja; render(); if (D && D.typ === 'andra') document.querySelector('.rxpanel [data-moa^="andra|"]')?.focus({preventScroll:true}); }
+function moDlgStang(){ const D = S.moDlg; S.moDlg = null; if (D && D.typ === 'andra' && D.kedja) S.moOpen = D.kedja; if (D && D.tillbaka) S.moInst = {fel:{}, sparar:null, sparat:null, fragor:null}; render(); if (D && D.typ === 'andra') document.querySelector('.rxpanel [data-moa^="andra|"]')?.focus({preventScroll:true}); }
 function moDlgRita(){   // ritar om och behåller rullning, fokus och markering
   const a = document.activeElement, i = a && a.closest && a.closest('.mo-dlg') ? a : null;
   const id = i && i.id, at = i && [...i.attributes].find(x => x.name.startsWith('data-mo')), sel = i && i.selectionStart != null ? [i.selectionStart, i.selectionEnd] : null;
@@ -36792,7 +36867,7 @@ function moTidFast(D){
   return `<p class="mo-vald"><b>${moNar(v)}</b> · ${moRel(moMin(v) - moNuMin())}${krock ? ` · <span class="mo-krock">${esc(krock)}</span>` : ''}</p><button type="button" class="mo-lagg" data-motidbyt>${I('kal')}Byt tid</button>`;
 }
 function moTidVy(D){
-  const ny = D.typ === 'uteblev';
+  const ny = moTyp(D) === 'uteblev';
   const ingen = ny ? `<button type="button" class="chip mo-ingen" data-moingen aria-pressed="${D.ingenNy}">Ingen ny tid</button>` : '';
   if (!D.tider) return '';
   return `<div id="moTidL" class="mo-luckor">${moLuckorVy(D)}</div>${moEgenVy(D)}<div id="moTidV">${moValdVy(D)}</div>${ingen}`;
@@ -36883,7 +36958,7 @@ const moLokalPlus = (tid, min) => new Date((moMin(tid) + min) * 60000).toISOStri
 // Mötet som flyttas ligger själv i hållarens kalender och räknas inte.
 function moUpptagna(D, tid){
   const u = D.tider && D.tider.upptaget; if (!u || (D.tider.till && tid.slice(0, 10) > D.tider.till)) return null;
-  const slut = moLokalPlus(tid, MOLANGD), m = (D.typ === 'flyttat' || D.typ === 'andra') && D.k && D.k.mote, eget = m ? [m.tid, moLokalPlus(m.tid, m.langd)] : null;
+  const slut = moLokalPlus(tid, MOLANGD), m = (moTyp(D) === 'flyttat' || D.typ === 'andra') && D.k && D.k.mote, eget = m ? [m.tid, moLokalPlus(m.tid, m.langd)] : null;
   // Mötet ligger själv i kalendern hos dem som redan är med; en kollega som läggs till i Ändra har det inte.
   const redan = new Set([D.f.hallsAv, ...(D.typ === 'andra' ? D.orig.med : D.f.med || [])]);
   return [D.f.hallsAv, ...(D.f.med || [])].filter(id => (u[id] || []).some(x => tid < x.till && slut > x.fran && !(eget && redan.has(id) && x.fran === eget[0] && x.till === eget[1])));
@@ -37053,11 +37128,71 @@ function moTidFalt(D, etikett = 'Tid'){
   return `<div class="mo-fl bred"><span class="mo-lbl">${etikett}</span><div id="moDlgTid" class="mo-tidv">${moTidInner(D)}</div><p class="mo-err" id="moe-tid" ${D.fel.tid ? '' : 'hidden'}>${D.fel.tid ? esc(D.fel.tid) : ''}</p></div>`;
 }
 const MODLGETIKETT = {boka:'Boka mötet', flyttat:'Flytta mötet', nej:'Spara Nej', andra:'Spara ändringar'};
+/* ---------- Utfallsrutan och bedömningen (0289) ----------
+   D.typ 'utfall': D.u är valet (hallet, uteblev, flyttat, avbokat) och moTyp(D) säger vad rutan just nu är, så att
+   Hållet, Uteblev och Flyttat delar kod med sina gamla dialoger. D.typ 'bedom': bara frågorna, för ett hållet möte som väntar
+   på bedömning, eller för en admin som ändrar svaren på ett ifrågasatt möte (D.ifr). Frågorna är ND.moten.inst.fragor (de aktiva);
+   svaren D.svar = {frågans id: sant/falskt}. Nivån räknas som i motesflode.ts: ja på alla = kvalificerat, annars hållet. Inget belopp visas. */
+function moTyp(D){ return D.typ === 'utfall' ? (D.u || 'utfall') : D.typ; }
+function moFragor(){ const d = ndMo(); return ((d && d.inst && d.inst.fragor) || []).filter(q => q.aktiv); }
+// Speglar serverns farBedoma och farSattaNivaPa: hållaren, eller säljchef, VD och admin, men aldrig den som får
+// mötesprovision för mötet (hon bokade det och står i moten.mottagare, vilket provisionPaSpel visar). Då väntar mötet på hållaren.
+const moEgenProv = m => !!m && !!m.bokatAv && m.bokatAv === ND.jag.id && m.hallsAv !== ND.jag.id && !!(ndMo() || {}).provisionPaSpel;
+const moFarBedoma = m => !!m && (m.hallsAv === ND.jag.id || (moAdmin() && !moEgenProv(m)));
+const MOUTFALL = [['hallet', 'Hållet'], ['uteblev', 'Uteblev'], ['flyttat', 'Flyttat'], ['avbokat', 'Avbokat']];
+function moUtfallVal(D){
+  return `<div class="mo-fl bred"><span class="mo-lbl" id="mo-ul">Hur gick det?</span><div class="mo-seg" role="radiogroup" aria-labelledby="mo-ul">${MOUTFALL.map(([n, t], i) => `<button type="button" class="mo-segb" role="radio" aria-checked="${D.u === n}" data-mou="${n}"${i === 0 ? ' id="mod-u"' : ''}>${t}</button>`).join('')}</div><p class="mo-err" id="moe-u" ${D.fel.u ? '' : 'hidden'}>${esc(D.fel.u || '')}</p></div>`;
+}
+// Raden under frågorna: vad mötet räknas som, och för vem. Uppdateras vid varje svar. Aldrig något belopp.
+function moNivaRad(D, q, m){
+  const sv = D.svar || {}, bok = m.bokare || moFor(m.bokatAvNamn) || 'bokaren';
+  if (!q.every(x => typeof sv[x.id] === 'boolean')) return `<p class="mo-res" id="moRes">Svara på ${q.length === 1 ? 'frågan' : 'frågorna'} så syns vad mötet räknas som för ${esc(bok)}.</p>`;
+  const kv = q.every(x => sv[x.id]);
+  return `<p class="mo-res" id="moRes">Räknas som <b data-niva="${kv ? 'kvalificerat' : 'hallet'}">${kv ? 'kvalificerat möte' : 'hållet möte'}</b> för ${esc(bok)}.</p>`;
+}
+// Frågedelen. Den som inte är hållare eller admin svarar inte: mötet väntar på hållaren. Noll aktiva frågor = ingen frågedel.
+function moBedomDel(D){
+  const m = D.typ === 'bedom' ? D.m : D.k.mote, q = moFragor(), sv = D.svar || {}, e = D.fel;
+  if (!moFarBedoma(m)) return `<div class="mo-fl bred mo-hb"><b>Hållaren bedömer mötet</b><small>Mötet väntar på bedömning tills ${esc(moFor(m.hallsAvNamn) || 'hållaren')} har svarat på frågorna.</small></div>`;
+  if (!q.length) return D.typ === 'bedom' ? '<p class="muted mo-hint">Inga frågor används just nu.</p>' : '';
+  const fr = q.map((x, i) => `<div class="mo-fl bred mo-q"><span class="mo-lbl" id="mo-q-${esc(x.id)}">${esc(x.text)}</span><div class="mo-yn" role="radiogroup" aria-labelledby="mo-q-${esc(x.id)}">${[['1', 'Ja'], ['0', 'Nej']].map(([v, t]) => `<button type="button" class="mo-ynb" role="radio" aria-checked="${sv[x.id] === (v === '1')}" data-mosv="${esc(x.id)}|${v}"${i === 0 && v === '1' ? ' id="mod-svar"' : ''}>${t}</button>`).join('')}</div></div>`).join('');
+  return `${fr}<p class="mo-err" id="moe-svar" ${e.svar ? '' : 'hidden'}>${esc(e.svar || '')}</p><div class="mo-fl bred">${moNivaRad(D, q, m)}</div>`;
+}
+// Svaren som skickas: null när frågorna inte ställs (inte hållare eller admin, eller inga aktiva frågor), {fel} när något saknas.
+function moSvarData(D){
+  const m = D.typ === 'bedom' ? D.m : D.k.mote, q = moFragor(), sv = D.svar || {};
+  if (!moFarBedoma(m) || !q.length) return null;
+  if (!q.every(x => typeof sv[x.id] === 'boolean')) return {fel:'Svara på frågorna.'};
+  return q.map(x => ({id:x.id, ja:sv[x.id]}));
+}
+function moBedomBygg(D){
+  const sv = moSvarData(D);
+  if (sv && sv.fel) return {e:{svar:sv.fel}};
+  return {handling:'bedom', data:{mote:D.m.id, svar:sv || []}};
+}
+function moDlgEtikett(D){
+  const T = moTyp(D);
+  if (T === 'hallet') return D.f.val === 'affar' ? 'Öppna ordern' : 'Spara utfallet';
+  if (T === 'uteblev') return D.ingenNy ? 'Spara utan ny tid' : 'Spara och boka ny tid';
+  if (T === 'flyttat') return 'Flytta mötet';
+  if (T === 'avbokat') return 'Spara som avbokat';
+  if (D.typ === 'utfall') return 'Spara utfallet';
+  if (D.typ === 'bedom') return D.ifr ? 'Spara nya svar' : 'Spara bedömningen';
+  return MODLGETIKETT[D.typ];
+}
+// Bedöm ett hållet möte som väntar, eller (ifr) ändra svaren på ett ifrågasatt. `m` = {id, namn, tid, hallsAv, hallsAvNamn, bokatAvNamn | bokare}.
+function ndMoBedom(m, ifr, tillbaka){
+  S.moOpen = null; if (tillbaka) S.moInst = null;
+  S.moDlg = {typ:'bedom', k:null, m, kedja:null, f:{}, fel:{}, fe:'', sparar:false, rort:false, tider:null, tok:0, dag:null, tid:null, ingenNy:false, upp:null, svar:{}, ifr:!!ifr, tillbaka:!!tillbaka};
+  render();
+  setTimeout(() => document.querySelector('.mo-dlg .mo-ynb')?.focus({preventScroll:true}), 40);
+}
 function moDlgVy(D){
   const k = D.k, f = D.f, e = D.fel;
-  const titel = {boka:k ? 'Boka nytt möte' : 'Boka möte', flyttat:'Flytta mötet', hallet:'Hållet', uteblev:'Uteblev', nej:'Nej', andra:'Ändra mötet'}[D.typ];
-  const under = {boka:k ? `${k.namn}. Uppgifterna är ifyllda från kortet.` : 'Ett kort per bolag. Är numret redan bokat får du veta det.', flyttat:`${k && k.namn}. Nu ${k && k.mote ? moNar(k.mote.tid) : ''}. En ny tid är inte bekräftad.`, hallet:`${k && k.namn}. Vad ledde mötet till?`, uteblev:`${k && k.namn}. Ombokning inom 48 timmar räddar en del av dessa möten.`, nej:`${k && k.namn}. Kortet lämnar tavlan.`, andra:`${k && k.namn}. De som är med får besked om det som rör dem.`}[D.typ];
-  let kropp = '';
+  const titel = {boka:k ? 'Boka nytt möte' : 'Boka möte', flyttat:'Flytta mötet', nej:'Nej', andra:'Ändra mötet', utfall:'Sätt utfall', bedom:D.ifr ? 'Ändra svaren' : 'Bedöm mötet'}[D.typ];
+  const under = {boka:k ? `${k.namn}. Uppgifterna är ifyllda från kortet.` : 'Ett kort per bolag. Är numret redan bokat får du veta det.', flyttat:`${k && k.namn}. Nu ${k && k.mote ? moNar(k.mote.tid) : ''}. En ny tid är inte bekräftad.`, nej:`${k && k.namn}. Kortet lämnar tavlan.`, andra:`${k && k.namn}. De som är med får besked om det som rör dem.`, utfall:`${k && k.namn}. ${k && k.mote ? moNar(k.mote.tid) : ''}.`, bedom:`${D.m ? D.m.namn : ''}. ${D.m ? moNar(D.m.tid) : ''}.${D.ifr ? ' Nivån är ifrågasatt. De nya svaren ersätter de gamla.' : ''}`}[D.typ];
+  const T = moTyp(D);
+  let kropp = D.typ === 'utfall' ? moUtfallVal(D) : '';
   if (D.typ === 'boka' || D.typ === 'andra'){
     const sal = ndMo().saljare, hn = moPersNamn(f.hallsAv);
     // I Ändra står hållaren fast: kalenderns arrangör byts inte på ett möte som redan är bokat.
@@ -37078,18 +37213,23 @@ function moDlgVy(D){
       ${moFalt(D, 'kalla', 'Källa', moInp(D, 'kalla', {extra:'maxlength="80" list="moKallor" required'}) + `<datalist id="moKallor">${moKallor().map(x => `<option value="${esc(x)}">`).join('')}</datalist>`, {bred:true})}
       ${moFalt(D, 'mal', 'Mål', `<textarea class="uin" id="mod-mal" name="mal" rows="3" maxlength="2000" placeholder="Vad vill kunden få ut av mötet?">${esc(f.mal)}</textarea>`, {bred:true})}
       <div class="mo-fl bred"><span class="mo-lbl">Nuläge</span><div class="mo-chips" role="group" aria-label="Nuläge">${Object.entries(MONULAGE).map(([n, t]) => `<button type="button" class="chip" data-monul="${n}" aria-pressed="${f.nulage === n}">${t}</button>`).join('')}</div></div>`;
-  } else if (D.typ === 'flyttat' || D.typ === 'uteblev'){
-    kropp = moTidFalt(D, D.typ === 'uteblev' ? 'Ny tid' : 'Ny tid');
+  } else if (T === 'flyttat' || T === 'uteblev'){
+    kropp += (T === 'uteblev' ? '<p class="muted mo-hint">Ombokning inom 48 timmar räddar en del av dessa möten.</p>' : '') + moTidFalt(D, 'Ny tid');
+  } else if (T === 'avbokat'){
+    kropp += '<p class="muted mo-hint">Mötet markeras som avbokat och ger ingen mötesprovision. Det går inte att ångra.</p>';
+  } else if (D.typ === 'bedom'){
+    kropp = moBedomDel(D);
   } else if (D.typ === 'nej'){
     kropp = moSkalFalt(D);
-  } else if (D.typ === 'hallet'){
+  } else if (T === 'hallet'){
+    kropp += moBedomDel(D);
     const val = [['affar', 'Affär', 'Ordern öppnas med bolagets uppgifter ifyllda.'], ['nej', 'Nej', 'Kunden tackar nej. Kortet lämnar tavlan.'], ['offert', 'Offert skickad', 'Kortet går till Följ upp med ett samtal inbokat.'], ['uppfoljning', 'Uppföljning', 'Kunden vill tänka utan att ha fått en offert.']];
-    kropp = `<div class="mo-fl bred"><span class="mo-lbl" id="mo-vl">Vad ledde mötet till?</span><div class="mo-vals" role="radiogroup" aria-labelledby="mo-vl">${val.map(([n, t, h]) => `<button type="button" class="mo-val" role="radio" aria-checked="${f.val === n}" data-moval="${n}"><b>${t}</b><small>${h}</small></button>`).join('')}</div><p class="mo-err" id="moe-val" ${e.val ? '' : 'hidden'}>${esc(e.val || '')}</p></div>`;
+    kropp += `<div class="mo-fl bred"><span class="mo-lbl" id="mo-vl">Vad ledde mötet till?</span><div class="mo-vals" role="radiogroup" aria-labelledby="mo-vl">${val.map(([n, t, h]) => `<button type="button" class="mo-val" role="radio" aria-checked="${f.val === n}" data-moval="${n}"><b>${t}</b><small>${h}</small></button>`).join('')}</div><p class="mo-err" id="moe-val" ${e.val ? '' : 'hidden'}>${esc(e.val || '')}</p></div>`;
     if (f.val === 'nej') kropp += moSkalFalt(D);
     if (f.val === 'offert' || f.val === 'uppfoljning') kropp += moFalt(D, 'datum', f.val === 'offert' ? 'Ring kunden' : 'Följ upp den', moInp(D, 'datum', {typ:'date', extra:`min="${ndIdag()}" required`}));
     if (f.val === 'uppfoljning') kropp += moFalt(D, 'text', 'Vad ska sägas', moInp(D, 'text', {ph:'En rad, till exempel: vill prata med sin kollega', extra:'maxlength="1000"'}), {bred:true});
   }
-  const etikett = D.typ === 'hallet' ? (f.val === 'affar' ? 'Öppna ordern' : 'Spara utfallet') : D.typ === 'uteblev' ? (D.ingenNy ? 'Spara utan ny tid' : 'Spara och boka ny tid') : MODLGETIKETT[D.typ];
+  const etikett = moDlgEtikett(D);
   return `<div class="rxbak" data-modlgbak></div><aside class="rxpanel mo-dlg" role="dialog" aria-modal="true" aria-labelledby="mopd">
     <header class="rxph"><div><h2 id="mopd">${titel}</h2><small>${esc(under)}</small></div><button type="button" class="ibtn rxpx" data-modlgx aria-label="Stäng">${I('x')}</button></header>
     <form class="mo-dform" data-modlg novalidate><div class="rxpb"><div class="mo-fg">${kropp}</div></div>
@@ -37101,6 +37241,9 @@ function moSkalFalt(D){
 
 // Det som skickas, eller felen vid fälten. Samma regler som rutten, så att felet syns före anropet.
 function moDlgBygg(D){
+  const T = moTyp(D);
+  if (D.typ === 'bedom') return moBedomBygg(D);
+  if (T === 'utfall') return {e:{u:'Välj vad som hände med mötet.'}};
   const f = D.f, e = {}, k = D.k, idag = ndIdag(), tid = D.tid ? {dag:D.tid.slice(0, 10), start:D.tid.slice(11, 16)} : null;
   const t = v => String(v || '').trim();
   if (D.typ === 'boka' || D.typ === 'andra'){
@@ -37124,24 +37267,28 @@ function moDlgBygg(D){
     if (D.kedja) data.kedja = D.kedja;
     return {handling:'boka', data};
   }
-  if (D.typ === 'flyttat'){
+  if (T === 'flyttat'){
     if (!tid) return {e:{tid:moEgenFel(D) || 'Välj en ny tid.'}};
     // båda är svensk lokal tid "YYYY-MM-DD HH:MM" (NdMoteKort.mote.tid kommer ur lokal(), inte UTC-ISO)
     if (k.mote && D.tid === k.mote.tid) return {e:{tid:'Mötet ligger redan då.'}};
     return {handling:'flytta', data:{mote:k.mote.id, dag:tid.dag, start:tid.start}};
   }
-  if (D.typ === 'uteblev'){
+  if (T === 'uteblev'){
     if (!tid && !D.ingenNy) return {e:{tid:moEgenFel(D) || 'Välj en ny tid, eller Ingen ny tid.'}};
     return {handling:'utfall', data:{mote:k.mote.id, utfall:'uteblev', ...(tid ? {nyTid:tid} : {})}};
   }
+  if (T === 'avbokat') return {handling:'utfall', data:{mote:k.mote.id, utfall:'avbokat'}};
   if (D.typ === 'nej'){
     if (!f.skal) return {e:{skal:'Välj ett skäl.'}};
     return {handling:'nej', data:{kedja:k.kedja, skal:f.skal}};
   }
-  if (D.typ === 'hallet'){
-    if (!f.val) return {e:{val:'Välj vad mötet ledde till.'}};
-    if (f.val === 'affar') return {affar:true};
-    const data = {mote:k.mote.id, utfall:'hallet', resultat:f.val === 'offert' ? 'offert' : f.val};
+  if (T === 'hallet'){
+    const sv = moSvarData(D);
+    if (sv && sv.fel) e.svar = sv.fel;
+    if (!f.val) e.val = 'Välj vad mötet ledde till.';
+    if (Object.keys(e).length) return {e};
+    if (f.val === 'affar') return {affar:true, svar:sv};
+    const data = {mote:k.mote.id, utfall:'hallet', resultat:f.val === 'offert' ? 'offert' : f.val, ...(sv ? {svar:sv} : {})};
     if (f.val === 'nej'){ if (!f.skal) return {e:{skal:'Välj ett skäl.'}}; data.skal = f.skal; }
     if (f.val === 'offert' || f.val === 'uppfoljning'){
       if (!/^\d{4}-\d{2}-\d{2}$/.test(f.datum || '')) return {e:{datum:'Välj ett datum.'}};
@@ -37177,7 +37324,7 @@ async function moDlgSkicka(){
     if (el) el.focus({preventScroll:false}); else document.getElementById('moe-' + forst)?.scrollIntoView({block:'nearest'});
     return;
   }
-  if (b.affar){ moAffar(D.k, D.k.mote ? D.k.mote.id : null); return; }
+  if (b.affar){ moAffar(D.k, D.k.mote ? D.k.mote.id : null, b.svar); return; }
   if (b.inget){ moDlgStang(); toast('Inget ändrades.'); return; }
   D.sparar = true; D.fel = {}; D.fe = ''; D.laslage = false; moDlgRita();
   if (D.typ === 'boka' || (D.typ === 'andra' && 'kalla' in b.data)) moKallaMinns(String(D.f.kalla).trim());
@@ -37186,7 +37333,7 @@ async function moDlgSkicka(){
   if (s.pagar || S.moDlg !== D) return;
   // Sparat: bladet stängs, och tavlan ritas om på plats när datan är inne (ndOmlas) med kortet i sin nya kolumn.
   // Ändra går tillbaka till kortets panel, som visar det nya när datan är inne.
-  if (s.ok && !s.fel){ if (S.moDlg === D){ S.moDlg = null; if (D.typ === 'andra') S.moOpen = D.kedja; render(); } return; }
+  if (s.ok && !s.fel){ if (S.moDlg === D){ S.moDlg = null; if (D.typ === 'andra') S.moOpen = D.kedja; if (D.tillbaka) S.moInst = {fel:{}, sparar:null, sparat:null, fragor:null}; render(); } return; }
   D.sparar = false;
   if (s.laslage){ D.laslage = true; D.fe = 'Möten är i läsläge. Inget har sparats.'; }
   else if (s.utloggad) D.fe = s.fel;
@@ -37199,20 +37346,22 @@ async function moDlgSkicka(){
 
 // Affär: Orders formulär, förifyllt, och när ordern är lagd stängs kortet (kund). Som Leads, men Order laddar inte om
 // sidan förrän andra skrivningen är klar, så att den inte klipps av omladdningen.
-function moAffar(k, moteId){
+function moAffar(k, moteId, svar){
   if (typeof ordNyStart !== 'function'){ toast('Orders formulär finns inte i den här versionen.'); return; }
   S.moDlg = null; S.moOpen = null;
-  ordNyStart({bolag:k.namn, kontakt:k.kontakt || '', tel:k.telefon || '', mejl:k.epost || '', moteKedja:k.kedja, moteId:moteId || null, note:`Från Möten: ${k.namn}${k.mote ? ', mötet ' + moNar(k.mote.tid) : ''}.`});
+  ordNyStart({bolag:k.namn, kontakt:k.kontakt || '', tel:k.telefon || '', mejl:k.epost || '', moteKedja:k.kedja, moteId:moteId || null, moteSvar:svar || null, note:`Från Möten: ${k.namn}${k.mote ? ', mötet ' + moNar(k.mote.tid) : ''}.`});
 }
 const _ndMoOrdPost = typeof ndOrdPost === 'function' ? ndOrdPost : null;
 if (_ndMoOrdPost) ndOrdPost = async function(handling, data, opt){
-  const kedja = handling === 'skapa' && S.ordNy && S.ordNy.moteKedja, mote = kedja ? S.ordNy.moteId : null;
+  const kedja = handling === 'skapa' && S.ordNy && S.ordNy.moteKedja, mote = kedja ? S.ordNy.moteId : null, svar = kedja ? S.ordNy.moteSvar : null;
   if (!kedja || !ndMo()) return _ndMoOrdPost(handling, data, opt);
   const ladda = !opt || opt.ladda !== false;
   const s = await _ndMoOrdPost(handling, data, {...(opt || {}), ladda:false});
   if (s && s.ok && s.id){
     const kund = await ndMoPost('kund', {kedja, order:s.id, ...(mote ? {mote} : {})}, {ladda:false, tyst:true, tyst409:true});
     if (kund.fel) toast(`Ordern är lagd, men kortet kunde inte stängas som affär: ${kund.fel}`);
+    // Svaren på frågorna, om hållaren gav dem i utfallsrutan: affären satte Hållet, och nu sätts nivån.
+    else if (mote && svar){ const bs = await ndMoPost('bedom', {mote, svar}, {ladda:false, tyst:true, tyst409:true, visaFel:false}); if (bs.fel) toast(`Ordern är lagd, men svaren på frågorna sparades inte: ${bs.fel}`); }
     if (ladda) ndOmlas('ord');
   } else if (s && s.ok && ladda) ndOmlas('ord');
   return s;
@@ -37246,8 +37395,7 @@ function moKnappar(k, alla = false){
   if (f === 'bokat') return (mer ? moKnapp('Bekräftat', 'bekrafta', k) + moKnapp('Fick inte tag', 'forsok', k) + flytt : '') + merKn;
   if (f === 'bekraftat') return (mer ? flytt : '') + merKn;
   if (f === 'hos_saljaren') return moFarUtfall(k)
-    ? (mer ? moKnapp('Hållet', 'hallet', k, {p:true}) + moKnapp('Uteblev', 'uteblev', k) + moKnapp('Flyttat', 'flyttat', k) + moKnapp('Avbokat', 'utfallavbokat', k)
-      : `<button class="btn btn-p btn-sm" data-moa="mer|${k.kedja}" aria-expanded="false">Sätt utfall</button>`)
+    ? `<button class="btn btn-p btn-sm" data-moa="utfall|${k.kedja}">Sätt utfall</button>`
     : (alla ? `<span class="mo-vantar">Väntar på ${esc(moFor(m.hallsAvNamn))}</span>` : '');
   const o = k.kolumn === 'tyst' ? moKnapp('Prova igen', 'prova', k, {p:true}) : '';
   return `${o}${moKnapp('Inget svar', 'ingetsvar', k)}${moKnapp('Boka nytt möte', 'nytt', k)}${moKnapp('Affär', 'affar', k)}${moKnapp('Nej', 'nej', k)}`;
@@ -37295,7 +37443,7 @@ function moAvgKort(a){
   const namn = oppen ? `<button class="mo-ks" data-moopen="${a.kedja}"><b>${esc(a.namn)}</b></button>` : `<b>${esc(a.namn)}</b>`;
   return `<article class="mo-kort mo-pipe ${a.utfall === 'hallet' ? '' : 'mo-tapp'}" data-mote="${a.mote}">
     <span class="mo-pt2"><span>${+a.tid.slice(8, 10)} ${FRMK[+a.tid.slice(5, 7)]}</span><span class="mo-ut ${ton}">${txt}${kr}</span></span>${namn}
-    <div class="mo-pf"><span class="mo-ini" aria-hidden="true">${esc(moIni(a.hallsAvNamn))}</span><span>${esc(moFor(a.hallsAvNamn))}</span></div>${a.skal && a.utfall !== 'hallet' && visa ? `<small class="mo-skal" title="${esc(a.skal)}">${esc(a.skal)}</small>` : ''}</article>`;
+    <div class="mo-pf"><span class="mo-ini" aria-hidden="true">${esc(moIni(a.hallsAvNamn))}</span><span>${esc(moFor(a.hallsAvNamn))}</span></div>${a.skal && a.utfall !== 'hallet' && visa ? `<small class="mo-skal" title="${esc(a.skal)}">${esc(a.skal)}</small>` : ''}${a.vantarBedomning && moFarBedoma(a) ? `<div class="mo-kn"><button class="btn btn-p btn-sm" data-mobedom="${a.mote}">Bedöm</button></div>` : ''}</article>`;
 }
 function moKortVy(k){
   if (k.mote && moFas(k) !== 'avgjort') return moPipeKort(k);
@@ -37420,6 +37568,7 @@ function moInstVy(){
   return `<div class="rxbak" data-moinstx></div><aside class="rxpanel mo-inst" role="dialog" aria-modal="true" aria-labelledby="moin">
     <header class="rxph"><span class="ldav stor">${I('moinst')}</span><div><h2 id="moin">Inställningar för Möten</h2><small>Gäller alla i företaget. Varje ändring sparas direkt.</small></div><button class="ibtn rxpx" data-moinstx aria-label="Stäng">${I('x')}</button></header>
     <div class="rxpb">
+      ${moIfrSek(v, T)}
       <section class="rxsek"><h3>Bekräftelsen</h3>
         <div class="mo-ir"><label for="moi-dagar">Bekräfta</label><input class="uin" id="moi-dagar" type="number" min="0" max="14" step="1" data-moi="bekraftaDagar" value="${v.bekraftaDagar}"><label for="moi-dagar">dagar före mötet</label>${moInstStatus('bekraftaDagar')}</div>
         <p class="muted">Kortet hamnar i ${esc(moKolNamn('att_bekrafta'))} så många dagar före mötesdagen. Senast dagen före ska mötet vara bekräftat, eller samma dag om det bokades så sent.</p>
@@ -37450,6 +37599,26 @@ function moInstVy(){
         ${v.gallerFran ? `<p class="muted">Bekräftelser och mötesprovision gäller möten från ${esc(moLokal(v.gallerFran) ? moNar(moLokal(v.gallerFran)) : v.gallerFran)}.</p>` : ''}
       </section>
     </div></aside>`;
+}
+// Ifrågasatta möten som väntar på en admin: Ändra svaren öppnar frågorna (bedom), Låt stå sätter beslutet utan någon pengaändring.
+function moIfrSek(v, T){
+  const l = v.ifragasatta || []; if (!l.length) return '';
+  const rad = i => {
+    const fel = T.ifrFel && T.ifrFel.mote === i.mote ? `<p class="mo-err" role="alert">${esc(T.ifrFel.text)}</p>` : '';
+    return `<div class="mo-ifg" data-moifrad="${i.mote}"><div class="mo-ifgt"><b>${esc(i.namn)}</b><small class="num">${esc(moNar(i.tid))} · ${i.niva === 'kvalificerat' ? 'kvalificerat' : 'hållet'}</small><small>${esc(i.bokare)} ifrågasatte ${esc(moNar(i.ifragasattNar))}</small>${fel}</div>
+      <span class="mo-ifgk"><button class="btn btn-s btn-sm" data-moifa="${i.mote}">Ändra svaren</button><button class="btn btn-s btn-sm" data-moifl="${i.mote}"${T.ifrPa === i.mote ? ' disabled aria-busy="true"' : ''}>Låt stå</button></span></div>`;
+  };
+  return `<section class="rxsek" id="moIfr"><h3>Ifrågasatta ${l.length}</h3><p class="muted">Säljaren menar att nivån är fel. Ändra svaren om de var fel, eller låt nivån stå. Att låta den stå ändrar inga belopp.</p>${l.map(rad).join('')}</section>`;
+}
+async function moIfLatSta(mote){
+  const I = S.moInst; if (!I || I.ifrPa) return;
+  I.ifrPa = mote; I.ifrFel = null; moInstRita();
+  const s = await ndMoPost('ifragasatt_beslut', {mote, lat_sta:true}, {ladda:false, tyst:true, tyst409:true, visaFel:false});
+  if (S.moInst !== I) return;
+  I.ifrPa = null;
+  if (s && s.ok && !s.fel){ const v = ndMo().installningar; v.ifragasatta = (v.ifragasatta || []).filter(x => x.mote !== mote); toast(s.ok); }
+  else I.ifrFel = {mote, text:(s && s.fel) || 'Det gick inte att spara.'};
+  moInstRita();
 }
 // Ritar om och behåller rullningen och fokus i bladet (som moDlgRita).
 function moInstRita(){
@@ -37483,11 +37652,13 @@ function moInstFragor(fr){
 }
 document.addEventListener('click', e => {
   if (!ndMo() || S.view !== 'moten') return;
-  const b = e.target.closest && e.target.closest('[data-moinst], [data-moinstx], [data-moifq]'); if (!b) return;
+  const b = e.target.closest && e.target.closest('[data-moinst], [data-moinstx], [data-moifq], [data-moifa], [data-moifl]'); if (!b) return;
   e.preventDefault(); e.stopImmediatePropagation();
   const ds = b.dataset;
   if (ds.moinst !== undefined){ S.moInst = {fel:{}, sparar:null, sparat:null, fragor:null}; S.moOpen = null; render(); setTimeout(() => document.querySelector('.mo-inst .rxph .ibtn')?.focus(), 20); return; }
   if (ds.moinstx !== undefined){ S.moInst = null; render(); document.querySelector('[data-moinst]')?.focus({preventScroll:true}); return; }
+  if (ds.moifa){ const i = ((ndMo().installningar || {}).ifragasatta || []).find(x => x.mote === ds.moifa); if (i) ndMoBedom({id:i.mote, namn:i.namn, tid:i.tid, hallsAv:'', hallsAvNamn:'', bokare:i.bokare.split(' och ').map(moFor).join(' och ')}, true, true); return; }
+  if (ds.moifl){ moIfLatSta(ds.moifl); return; }
   const I = S.moInst; if (!I) return;
   const fr = (I.fragor || ndMo().installningar.fragor).map(f => ({...f})), [vad, i] = ds.moifq.split('|'), j = +i;
   if (vad === 'ny'){ if (fr.length >= 5) return; fr.push({id:'f' + Date.now().toString(36), text:'', aktiv:true}); I.fragor = fr; moInstRita(); setTimeout(() => document.querySelector(`.mo-inst [data-moif="text|${fr.length - 1}"]`)?.focus(), 10); return; }
@@ -37574,17 +37745,17 @@ function moBekrTva(nyckel, sel){
 function moKor(a, kedja){
   const k = ndMo().kort.find(x => x.kedja === kedja); if (!k) return;
   const m = k.mote, u = moUpp(k);
-  if (a === 'avboka' || a === 'utfallavbokat' || a === 'radera'){   // Avbokat och Radera kan inte ångras: ett andra tryck bekräftar.
+  if (a === 'avboka' || a === 'radera'){   // Avbokat och Radera kan inte ångras: ett andra tryck bekräftar.
     if (!moBekrTva(a + '|' + kedja, `[data-moa="${a}|${kedja}"]`)) return;
     if (a === 'radera') return m ? ndMoPost('radera', {mote:m.id}, {kedja}) : undefined;
-    return a === 'avboka' ? ndMoPost('avboka', {mote:m.id}, {kedja}) : ndMoPost('utfall', {mote:m.id, utfall:'avbokat'}, {kedja});
+    return ndMoPost('avboka', {mote:m.id}, {kedja});
   }
   if (a === 'bekrafta') return ndMoPost('bekrafta', {mote:m.id}, {kedja});
   if (a === 'forsok') return ndMoPost('forsok', {mote:m.id}, {kedja});
   if (a === 'mer'){ S.moMer = S.moMer === kedja ? null : kedja; moBekrRita(`.mo-tavla [data-moa="mer|${kedja}"], .mo-tavla [data-kedja="${kedja}"] .mo-kn .btn`, true); return; }
   if (a === 'ingetsvar') return ndMoPost('inget_svar', {kedja, fore:u.andrad || null}, {kedja});
   if (a === 'prova') return ndMoPost('prova_igen', {kedja, fore:u.andrad || null}, {kedja});
-  ndMoDialog({flyttat:'flyttat', hallet:'hallet', uteblev:'uteblev', nytt:'boka', affar:'affar', nej:'nej', andra:'andra'}[a], k);
+  ndMoDialog({flyttat:'flyttat', utfall:'utfall', nytt:'boka', affar:'affar', nej:'nej', andra:'andra'}[a], k);
 }
 document.addEventListener('click', e => {
   if (!ndMo() || S.view !== 'moten') return;
@@ -37606,6 +37777,8 @@ document.addEventListener('click', e => {
     if (ds.momedx){ stopp(); moMedTa(D, ds.momedx); return; }
     if (ds.mogastin !== undefined){ stopp(); D.gastOppen = true; moDlgRita(); moFokus('mod-gaster'); return; }
     if (ds.mogastx){ stopp(); D.f.gaster = D.f.gaster.filter(a => a !== ds.mogastx); D.gastOppen = true; delete D.fel.gaster; D.rort = true; moDlgRita(); moFokus('mod-gaster'); moSag(`${ds.mogastx} är borttagen.`); return; }
+    if (ds.mou){ stopp(); D.u = ds.mou; D.fel = {}; D.fe = ''; D.rort = true; if ((ds.mou === 'flyttat' || ds.mou === 'uteblev') && !D.tider) moHamtaTider(); moDlgRita(); return; }
+    if (ds.mosv){ stopp(); const [qid, v] = ds.mosv.split('|'); D.svar[qid] = v === '1'; delete D.fel.svar; D.rort = true; moDlgRita(); const r = document.getElementById('moRes'); if (r && /^Räknas/.test(r.textContent)) moSag(r.textContent); return; }
     if (ds.moval){ stopp(); D.f.val = ds.moval; D.fel = {}; D.rort = true; moDlgRita(); return; }
     if (ds.moskal !== undefined){ stopp(); D.f.skal = MONEJSKAL[+ds.moskal]; delete D.fel.skal; D.rort = true; moDlgRita(); return; }
     if (ds.monul){ stopp(); D.f.nulage = D.f.nulage === ds.monul ? '' : ds.monul; D.rort = true; moDlgRita(); return; }
@@ -37619,6 +37792,7 @@ document.addEventListener('click', e => {
   if (ds.moa){ stopp(); const [a, kedja] = ds.moa.split('|'); moKor(a, kedja); return; }
   if (ds.mohr){ stopp(); const [id, kedja] = ds.mohr.split('|'); if (moBekrTva('hr|' + id, `[data-mohr="${ds.mohr}"]`)) ndMoPost('radera', {mote:id}, {kedja}); return; }
   if (ds.moboka !== undefined){ stopp(); ndMoDialog('boka'); return; }
+  if (ds.mobedom){ stopp(); const a = ndMo().avgjorda.find(x => x.mote === ds.mobedom); if (a) ndMoBedom({id:a.mote, namn:a.namn, tid:a.tid, hallsAv:a.hallsAv, hallsAvNamn:a.hallsAvNamn, bokatAvNamn:a.bokatAvNamn}); return; }
   if (ds.mostat !== undefined){ stopp(); S.moStat = !S.moStat; render(); return; }
   if (ds.movy){ stopp(); S.moStat = ds.movy === 'stat'; render(); document.querySelector(`[data-movy="${ds.movy}"]`)?.focus({preventScroll:true}); return; }
   if (ds.movem){ stopp(); S.moPerson = ds.movem === 'mina' ? ND.jag.id : null; render(); document.querySelector(`[data-movem="${ds.movem}"]`)?.focus({preventScroll:true}); return; }
@@ -37719,7 +37893,7 @@ document.addEventListener('keydown', e => {
 
 
 /* ---------- Dra och släpp (0287) ----------
-   Ett kort dras till Bekräftat (= Bekräftat) eller till Avgjort (= kortets panel med utfallen, för den som får sätta
+   Ett kort dras till Bekräftat (= Bekräftat) eller till Avgjort (= utfallsrutan, för den som får sätta
    utfall). Bokat och Hos säljaren tar inte emot: dit flyttar klockan korten. Ett ogiltigt släpp lägger tillbaka kortet
    utan besked. Mus: HTML5-drag. Telefon: håll kvar fingret, sedan dra (pekarhändelser). */
 const moDra = {kedja:null, slut:0, pek:null};
@@ -37740,7 +37914,7 @@ function moSlapp(fas, kedja){
   if (!moTar(fas, kedja)) return;
   const k = ndMo().kort.find(x => x.kedja === kedja);
   if (fas === 'bekraftat') return ndMoPost('bekrafta', {mote:k.mote.id}, {kedja});
-  S.moOpen = kedja; render(); setTimeout(() => document.querySelector('.rxpanel .mo-kn.pan .btn')?.focus(), 20);
+  ndMoDialog('utfall', k);
 }
 document.addEventListener('dragstart', e => {
   const a = S.view === 'moten' && ndMo() && e.target.closest && e.target.closest('.mo-kort[data-drag]'); if (!a) return;

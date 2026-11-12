@@ -14,6 +14,7 @@ import {
 } from "@/lib/provision-motor";
 import { gallandePolicy, kvManad, type KvPolicy, type KvSamtal } from "@/lib/kv";
 import { hamtaKonsekvensPerPerson } from "@/lib/konsekvens-server";
+import { hamtaMotesposter } from "@/lib/motesposter-server";
 import type { Order } from "@/lib/order";
 
 export type StangningState = { fel?: string; ok?: string };
@@ -105,12 +106,21 @@ export async function faststallPeriod(
     // bokforingen alls — hens overtack hade raknats live hela manaden och sedan
     // tyst uteblivit ur lonekorningen. Samma sorts fel som de tva som ratades
     // 2026-09-08, och det gar at det hall dar ingen saknar sina pengar.
-    const [order, nivaer, kvPerPerson, konsekvensPerPerson, chefsposter] = await Promise.all([
+    //
+    // OCH MOTESPOSTERNA, av exakt samma skal: en bokare utan en enda order och med
+    // tre moten i manaden finns bara i `underlagForAlla` om raderna ges dit. De
+    // lases med SERVICE ROLE (hela kretsen, inte attestantens RLS-utsnitt) och
+    // raknas bara i sin egen manad. Den har funktionen kor aldrig en manad som
+    // redan ar faststalld (`redan` ovan), sa en andring i efterhand av ett mote i
+    // en stangd manad hamnar aldrig har utan som en `rattelse` i innevarande manad
+    // (0288) — ingen dubbelrakning.
+    const [order, nivaer, kvPerPerson, konsekvensPerPerson, chefsposter, motesposter] = await Promise.all([
       hamtaAllaOrder(manad),
       hamtaAllaNivaer(),
       hamtaKvPerPerson(manad),
       hamtaKonsekvensPerPerson(manad),
       hamtaAllaChefsposter(manad),
+      hamtaMotesposter(manad, db),
     ]);
 
     const rader = underlagForAlla(
@@ -120,6 +130,7 @@ export async function faststallPeriod(
       kvPerPerson,
       konsekvensPerPerson,
       chefsposter,
+      motesposter,
     ).flatMap((u) =>
       bokforingsposter(u).map((p) => ({
         employee_id: u.employee_id,

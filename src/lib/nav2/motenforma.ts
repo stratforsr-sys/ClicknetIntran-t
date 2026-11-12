@@ -18,6 +18,7 @@ import { arArbetsdag, dagPlus } from "../saljtakt.ts";
 import { SKAL } from "./leadsforma.ts";
 import { normaliseraEpost, normaliseraTelefon } from "../leads.ts";
 import { nivaFor } from "./forma.ts";
+import { niva, nivaSvar, type Fraga, type NivaSvar } from "./motesflode.ts";
 
 export const KOLUMNER = ["bokat", "bekraftat", "utfall_saknas", "folj_upp", "tyst"] as const;
 export type Kolumn = (typeof KOLUMNER)[number];
@@ -213,6 +214,49 @@ export const farSe = (u: Aktor, m: MoteParter): boolean => arMedPaMote(u, m) || 
 /** Samma krets som får se mötet får bekräfta det. */
 export const farBekrafta = (u: Aktor, m: MoteParter): boolean => farSe(u, m);
 export const farSattaUtfall = (u: Aktor, m: MoteParter): boolean => arMedPaMote(u, m) || harRoll(u, UTFALL_ROLLER);
+/**
+ * Nivån (kvalificeringsfrågorna) sätts av mötets hållare eller av en admin, aldrig av bokaren eller kollegorna:
+ * bokaren hade då bedömt sin egen mötesprovision. Sätter någon annan Hållet väntar mötet på bedömning.
+ */
+export const farBedoma = (u: Aktor, m: { halls_av: string }): boolean => u.id === m.halls_av || harRoll(u, UTFALL_ROLLER);
+/**
+ * Ingen som får, eller skulle få, mötesprovision för mötet sätter eller ändrar dess nivå, inte heller en säljchef,
+ * VD eller admin: det vore att bedöma sin egen provision. `mottagare` är de låsta radernas personer, eller för ett
+ * olåst möte de `fordela` ger med inställningen som gäller nu (`provisionsmottagare` i motesprovision-server.ts).
+ */
+export const farSattaNiva = (aktorId: string, mottagare: readonly string[]): boolean => !mottagare.includes(aktorId);
+/**
+ * Sätter den här aktören nivån när hon sparar Hållet? Hållaren eller en admin, men aldrig den som får mötesprovision
+ * för mötet. Får hon det sparas Hållet utan nivå och mötet väntar på bedömning (inte 403: utfallet ska gå att sätta).
+ */
+export const farSattaNivaPa = (u: Aktor, m: { halls_av: string }, mottagare: readonly string[]): boolean =>
+  farBedoma(u, m) && farSattaNiva(u.id, mottagare);
+/** Uteblev (eller Avbokat) rättat till Hållet när ett senare möte bokats om från det: båda mötena hade gett provision. */
+export function ombokatHinder(till: "hallet" | "uteblev" | "avbokat", harOmbokning: boolean): string | null {
+  return till === "hallet" && harOmbokning
+    ? "Mötet har redan bokats om. Rätta det nya mötet i stället, annars ger båda mötena provision."
+    : null;
+}
+/** Ett möte med låst mötesprovision (ett belopp över noll) raderas inte: raderingen tar raderna med sig. */
+export const RADERA_LAST = "Mötet har låst mötesprovision. Ändra utfallet först.";
+export const EGEN_PROVISION = "Du får mötesprovision för det här mötet och kan inte sätta eller ändra nivån själv. Hållaren eller en annan admin gör det.";
+/** Rätta ett utfall i efterhand, eller bedöma om ett redan bedömt möte: bara admin (säljchef, VD, admin). */
+export const farRattaUtfall = (u: Aktor): boolean => harRoll(u, UTFALL_ROLLER);
+
+/**
+ * Vad Hållet gör med nivån. Hållaren eller en admin med svar på alla aktiva frågor låser nivån; utan svar, eller
+ * när någon annan satte Hållet, väntar mötet på bedömning. Svar som inte räcker är ett fel innan något sparas.
+ * Noll aktiva frågor: hållaren låser kvalificerat utan svar.
+ */
+export function nivaVidHallet(i: { farBedoma: boolean; fragor: Fraga[]; svar: { id: string; ja: boolean }[] | null }):
+  | { niva: "kvalificerat" | "hallet"; svar: NivaSvar[] }
+  | { vantar: true }
+  | { fel: string } {
+  if (!i.farBedoma) return { vantar: true };
+  const n = niva(i.fragor, i.svar ?? []);
+  if (typeof n === "object") return i.svar === null ? { vantar: true } : { fel: n.fel };
+  return { niva: n, svar: nivaSvar(i.fragor, i.svar ?? []) };
+}
 /**
  * Radera ett möte (V6a). Utan utfall: den som är med på mötet, eller en säljchef. Med utfall: bara en säljchef, eftersom ett
  * avslutat möte är underlag för statistiken och historiken. En teamledare som inte är med räcker inte.
@@ -667,7 +711,7 @@ export const SQL_INGET_SVAR = `update public.mote_kedja
  * igenom resten (`uppslag`, `lediga`, och `samtal` från B4), som bara läser. En okänd handling är
  * ingen skrivning och får sitt vanliga 400.
  */
-export const SKRIVANDE_HANDLINGAR = ["boka", "paminn", "forsok", "installningar", "bekrafta", "flytta", "avboka", "utfall", "kund", "nej", "inget_svar", "prova_igen", "radera", "andra"] as const;
+export const SKRIVANDE_HANDLINGAR = ["boka", "paminn", "forsok", "installningar", "bekrafta", "flytta", "avboka", "utfall", "bedom", "ifragasatt", "ratta_utfall", "ifragasatt_beslut", "kund", "nej", "inget_svar", "prova_igen", "radera", "andra"] as const;
 export const arSkrivning = (handling: string): boolean => (SKRIVANDE_HANDLINGAR as readonly string[]).includes(handling);
 
 /**
@@ -793,7 +837,45 @@ export function andraIndata(body: unknown): Resultat<AndraVarden> {
   return { ok: true, varden: v };
 }
 
-export function utfallIndata(body: unknown): Resultat<{ mote: string; inn: UtfallIn }> {
+/** Svaren på kvalificeringsfrågorna: `[{ id, ja }]`, varje fråga en gång. */
+export function svarIndata(v: unknown): Resultat<{ id: string; ja: boolean }[]> {
+  if (!Array.isArray(v) || v.length > 20) return nej("Svaren stämmer inte.");
+  const sedda = new Set<string>();
+  const ut: { id: string; ja: boolean }[] = [];
+  for (const x of v) {
+    const s = (x ?? {}) as Record<string, unknown>;
+    if (typeof s.id !== "string" || !/^[a-z0-9_-]{1,40}$/.test(s.id) || typeof s.ja !== "boolean" || sedda.has(s.id)) return nej("Svaren stämmer inte.");
+    sedda.add(s.id);
+    ut.push({ id: s.id, ja: s.ja });
+  }
+  return { ok: true, varden: ut };
+}
+
+export function bedomIndata(body: unknown): Resultat<{ mote: string; svar: { id: string; ja: boolean }[] }> {
+  const b = (body ?? {}) as Record<string, unknown>;
+  if (!ID(b.mote)) return nej("Mötet stämmer inte.");
+  const s = svarIndata(b.svar);
+  return s.ok ? { ok: true, varden: { mote: b.mote, svar: s.varden } } : s;
+}
+
+/** Låt stå: en admin låter den ifrågasatta nivån stå kvar. Sanningsflaggen är med flit: ett tomt anrop beslutar ingenting. */
+export function ifragasattBeslutIndata(body: unknown): Resultat<{ mote: string }> {
+  const b = (body ?? {}) as Record<string, unknown>;
+  if (!ID(b.mote)) return nej("Mötet stämmer inte.");
+  return b.lat_sta === true ? { ok: true, varden: { mote: b.mote } } : nej("Välj vad som ska hända med ifrågasättandet.");
+}
+
+export function rattaUtfallIndata(body: unknown): Resultat<{ mote: string; utfall: "hallet" | "uteblev" | "avbokat"; svar: { id: string; ja: boolean }[] | null }> {
+  const b = (body ?? {}) as Record<string, unknown>;
+  if (!ID(b.mote)) return nej("Mötet stämmer inte.");
+  if (b.utfall !== "hallet" && b.utfall !== "uteblev" && b.utfall !== "avbokat") return nej("Välj vad som hände med mötet.");
+  if (tom(b.svar)) return { ok: true, varden: { mote: b.mote, utfall: b.utfall, svar: null } };
+  if (b.utfall !== "hallet") return nej("Svaren hör till Hållet.");
+  const s = svarIndata(b.svar);
+  return s.ok ? { ok: true, varden: { mote: b.mote, utfall: b.utfall, svar: s.varden } } : s;
+}
+
+export function utfallIndata(body: unknown): Resultat<{ mote: string; inn: UtfallIn; svar: { id: string; ja: boolean }[] | null }> {
   const b = (body ?? {}) as Record<string, unknown>;
   if (!ID(b.mote)) return nej("Mötet stämmer inte.");
   if (b.utfall !== "hallet" && b.utfall !== "uteblev" && b.utfall !== "avbokat") return nej("Välj vad som hände med mötet.");
@@ -820,7 +902,14 @@ export function utfallIndata(body: unknown): Resultat<{ mote: string; inn: Utfal
     if (!tid.ok) return tid;
     inn.nyTid = tid.varden;
   }
-  return { ok: true, varden: { mote: b.mote, inn } };
+  let svar: { id: string; ja: boolean }[] | null = null;
+  if (!tom(b.svar)) {
+    if (b.utfall !== "hallet") return nej("Svaren hör till Hållet.");
+    const s = svarIndata(b.svar);
+    if (!s.ok) return s;
+    svar = s.varden;
+  }
+  return { ok: true, varden: { mote: b.mote, inn, svar } };
 }
 
 export function nejIndata(body: unknown): Resultat<{ kedja: string; skal: string }> {

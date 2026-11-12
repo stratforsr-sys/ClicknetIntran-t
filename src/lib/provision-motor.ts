@@ -60,6 +60,11 @@ export const RADSLAG = [
   // rakningen och 0050 for var raderna kommer ifran.
   "chefsprovision",
   "chefsprovision_makulering",
+  // Mötesprovisionen (0287/0288): bokarens belopp per hållet möte, låst på
+  // `mote_provision`. EN SLAG och inte två: en ändring i efterhand av ett möte i
+  // en fastställd månad bokförs som `rattelse` i innevarande månad, aldrig som
+  // en andra mötespost. Se `Motespost` nedan.
+  "motesprovision",
 ] as const;
 
 export type Radslag = (typeof RADSLAG)[number];
@@ -173,6 +178,13 @@ export type Underlag = {
   chefsprovision: { antal: number; makulerade: number; belopp: number } | null;
 
   /**
+   * Mötesprovisionen i månaden: antal möten och beloppet, eller null utan
+   * mötesposter. Delningen är densamma som för övertäcket. Ett möte hojer aldrig
+   * `antal.netto` — det är inga order.
+   */
+  motesprovision: { antal: number; belopp: number } | null;
+
+  /**
    * Nasta niva och hur langt dit. Prognosen i saljarens progressvy.
    *
    * Star med i UNDERLAGET och inte bara i vyn for att den ska raknas ur samma
@@ -241,9 +253,15 @@ export function avrunda(belopp: number): number {
   return belopp < 0 ? -Math.round(-belopp) : Math.round(belopp);
 }
 
-/** Summan av rader. Det enda satt en summa far raknas fram pa. */
+/**
+ * Summan av rader. Det enda satt en summa far raknas fram pa.
+ *
+ * Avrundad till ore: mötesprovisionen är i kronor med två decimaler, och
+ * 0,1 + 0,2 ska bli 0,3 och inte 0,30000000000000004 i en bokförd post. På hela
+ * kronor (allt annat) ändrar avrundningen ingenting.
+ */
 export function summaAv(rader: Underlagsrad[]): number {
-  return rader.reduce((s, r) => s + r.belopp, 0);
+  return Math.round(rader.reduce((s, r) => s + r.belopp, 0) * 100) / 100;
 }
 
 // -----------------------------------------------------------------------------
@@ -291,6 +309,11 @@ function chefsmakuleringstext(p: Chefspost): string {
   return `Makulerat övertäck, ${p.company_name} tecknad ${p.signed_on}`;
 }
 
+function motestext(p: Motespost): string {
+  const delat = p.delat_med_namn ? `, delat med ${p.delat_med_namn}` : "";
+  return `Möte ${p.bolag} ${p.dag}, ${p.niva === "hallet" ? "hållet" : "kvalificerat"}${delat}`;
+}
+
 // -----------------------------------------------------------------------------
 // Saljchefens overtack — steg 11
 //
@@ -319,6 +342,40 @@ export type Chefspost = {
   signed_on: string;
   company_name: string;
   makulerad: boolean;
+};
+
+// -----------------------------------------------------------------------------
+// Mötesprovisionen — Möten, uppgift 7
+//
+// INGET BELOPP STAR HAR. Posten kommer färdigräknad ur `mote_provision`: beloppet
+// låstes på mötet när nivån sattes (`moten.provision` ändrar aldrig ett låst
+// möte), och den här filen multiplicerar det aldrig med något.
+//
+// EN POST RÄKNAS BARA I SIN EGEN MÅNAD (`manad`), exakt som raderna ser ut när
+// den månaden stängs. Det är det som hindrar dubbelräkning: en rad vars månad
+// redan är fastställd räknas inte om av motorn (`faststallPeriod` kör aldrig en
+// stängd månad igen). En ändring av en sådan rad bokar SQL-funktionen som en
+// `rattelse` i innevarande månad (0288), och den betalas av rättelsehanteringen.
+// En rad för en öppen månad räknas live och ändrar sig själv.
+// -----------------------------------------------------------------------------
+
+/**
+ * Ett låst mötesbelopp. Bara rader med en nivå och ett belopp över noll kommer
+ * hit (`hamtaMotesposter`): ett tappat möte har inget att betala ut.
+ */
+export type Motespost = {
+  mote_id: string;
+  employee_id: string;
+  /** Mötestidens månad i installationens tidszon, "YYYY-MM-01". */
+  manad: string;
+  belopp: number;
+  niva: "kvalificerat" | "hallet";
+  /** Bolagets namn, för radtexten. */
+  bolag: string;
+  /** Mötesdagen, "YYYY-MM-DD" i installationens tidszon. */
+  dag: string;
+  /** Den andra i en delad post, för radtexten. Null när posten är hel. */
+  delat_med_namn: string | null;
 };
 
 // -----------------------------------------------------------------------------
@@ -461,6 +518,7 @@ export function raknaUnderlag(
   kv: KvIndata | null = null,
   konsekvens: Konsekvenslage | null = null,
   chefsposter: Chefspost[] = [],
+  motesposter: Motespost[] = [],
 ): Underlag {
   const mina = forSaljare(order, employee_id);
 
@@ -645,6 +703,21 @@ export function raknaUnderlag(
       ? { antal: chefsIn.length, makulerade: chefsUt.length, belopp: chefsbelopp }
       : null;
 
+  // MÖTESPROVISIONEN LÄGGS SIST, efter övertäcket, av samma skäl: allt ovanför är
+  // redan räknat, och inget av det här rör trappan, K&V eller en bonusförlust. Den
+  // är ersättning för utfört arbete, inte en bonus. Månaden är radens egen
+  // (`manad`), aldrig dagens: se rubriken ovanför `Motespost`.
+  const minaMoten = motesposter.filter(
+    (p) => p.employee_id === employee_id && p.manad.slice(0, 10) === manad.slice(0, 10),
+  );
+  for (const p of minaMoten) {
+    rader.push({ slag: "motesprovision", text: motestext(p), belopp: p.belopp });
+  }
+  const motesprovision =
+    minaMoten.length > 0
+      ? { antal: minaMoten.length, belopp: summaAv(rader.filter((r) => r.slag === "motesprovision")) }
+      : null;
+
   return {
     employee_id,
     manad,
@@ -653,6 +726,7 @@ export function raknaUnderlag(
     grundprovision: grund,
     ordervarde: ordervarde(mina, manad),
     chefsprovision,
+    motesprovision,
     volymbonus,
     kv: kvBonus,
     // PROGNOSEN RAKNAS PA DEN NYA TRAPPAN. Efter en konsekvens ar "3 order kvar
@@ -684,6 +758,7 @@ export function underlagForAlla(
   kvPerPerson: Map<string, KvIndata> = new Map(),
   konsekvensPerPerson: Map<string, Konsekvenslage> = new Map(),
   chefsposter: Chefspost[] = [],
+  motesposter: Motespost[] = [],
 ): Underlag[] {
   const personer = new Set<string>();
   for (const o of [...orderIPeriod(order, manad), ...makuleradeIPeriod(order, manad)]) {
@@ -716,6 +791,13 @@ export function underlagForAlla(
     }
   }
 
+  // SAMMA SKAL FÖR MÖTESPOSTERNA: en bokare utan en enda order och med tre möten i
+  // månaden ska finnas i stängningen, annars uteblir hens provision tyst ur
+  // lönekörningen. Månadsfiltret står här också, av samma skäl som ovan.
+  for (const p of motesposter) {
+    if (p.manad.slice(0, 10) === manad.slice(0, 10)) personer.add(p.employee_id);
+  }
+
   return [...personer]
     .sort()
     .map((id) =>
@@ -727,6 +809,7 @@ export function underlagForAlla(
         kvPerPerson.get(id) ?? null,
         konsekvensPerPerson.get(id) ?? null,
         chefsposter,
+        motesposter,
       ),
     );
 }
@@ -939,6 +1022,22 @@ export function bokforingsposter(u: Underlag): Bokforingspost[] {
           ? `Övertäck på ${rader.length} ${rader.length === 1 ? "order" : "order"}`
           : `Makulerat övertäck, ${rader.length} ${rader.length === 1 ? "order" : "order"}`,
     });
+  }
+
+  // MÖTESPROVISIONEN: EN POST, `antal` = antal möten bakom den. Beloppet är aldrig
+  // negativt här (ändringar i efterhand kommer som rättelser, inte som motpost),
+  // så `deals`-villkoret (`>= 0`) ger inget problem. En nolla bokförs inte.
+  const moten = av("motesprovision");
+  if (moten.length > 0) {
+    const belopp = summaAv(moten);
+    if (belopp !== 0) {
+      poster.push({
+        slag: "motesprovision",
+        belopp,
+        antal: moten.length,
+        text: `Mötesprovision, ${moten.length} ${moten.length === 1 ? "möte" : "möten"}`,
+      });
+    }
   }
 
   return poster;

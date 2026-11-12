@@ -8,6 +8,7 @@
 import {
   INST_FORVAL, PIPE_KOLUMNER, lasInstallningar, lokalDag, bekraftelseFonster, pipelineKolumn,
   bradska, niva, fordela, taptSkal, manadFor, kortFas, ursprungligBokare, sorteraFas, provaInstallning, INST_NYCKLAR,
+  omfattas, nivaSvar, raknaRader, andel, omraknadRad, rattelseNot, radernaStammer, harLastBelopp, vemPaminns, utanRedanSkickade,
 } from "../src/lib/nav2/motesflode.ts";
 
 let fel = 0;
@@ -176,6 +177,118 @@ lika("uteblev bekräftat", taptSkal("uteblev", true), "Uteblev trots bekräftels
 lika("avbokat", taptSkal("avbokat", true), "Avbokat");
 lika("månaden i Stockholm", manadFor("2026-11-30T23:30:00Z", tz), "2026-12-01");
 lika("månaden mitt i", manadFor("2026-11-16T08:00:00Z", tz), "2026-11-01");
+
+console.log("Låsningen: vilka möten");
+ok("möte efter galler-fran omfattas", omfattas("2026-11-12T09:00:00Z", "2026-11-11T22:07:25Z") === true);
+ok("möte på sekunden omfattas", omfattas("2026-11-11T22:07:25Z", "2026-11-11T22:07:25Z") === true);
+ok("möte före galler-fran omfattas inte", omfattas("2026-11-11T09:00:00Z", "2026-11-11T22:07:25Z") === false);
+ok("utan galler-fran omfattas inget (som vantarBedomning i moten.ts)", omfattas("2026-11-12T09:00:00Z", null) === false);
+
+console.log("Svaren sparas med frågans text");
+lika("bara aktiva frågor, med texten", nivaSvar(
+  [{ id: "a", text: "Fråga A?", aktiv: true }, { id: "b", text: "Fråga B?", aktiv: false }, { id: "c", text: "Fråga C?", aktiv: true }],
+  [{ id: "c", ja: false }, { id: "a", ja: true }, { id: "b", ja: true }, { id: "okand", ja: true }],
+), [{ id: "a", text: "Fråga A?", ja: true }, { id: "c", text: "Fråga C?", ja: false }]);
+
+console.log("Raderna som låses");
+{
+  const S = { kvalificerat: 600, hallet: 300 };
+  const KV = { niva: "kvalificerat", svar: [] };
+  const r = (o) => raknaRader({ ursprunglig: "O", bokatAv: "O", hallsAv: "S", mottagare: ["O", "R"], regel: "ny", satser: S, lage: KV, bekraftat: true, manad: "2026-11-01", ...o });
+  lika("kvalificerat: en hel rad med satsen", r({}), [{ employee_id: "O", niva: "kvalificerat", belopp: 600, mojligt: 600, skal: null, satser: S, delat_med: null, del: "hel", manad: "2026-11-01" }]);
+  lika("hållet: lägre belopp, samma möjliga", r({ lage: { niva: "hallet", svar: [] } }).map((x) => [x.belopp, x.mojligt, x.niva]), [[300, 600, "hallet"]]);
+  lika("bokare utan markering: inga rader", r({ mottagare: ["R"] }), []);
+  lika("uppföljning (ursprunglig null): inga rader", r({ ursprunglig: null }), []);
+  lika("uteblev obekräftat: belopp 0, skälet, ingen nivå", r({ lage: { tappat: "uteblev" }, bekraftat: false }).map((x) => [x.niva, x.belopp, x.mojligt, x.skal]),
+    [[null, 0, 600, "Inte bekräftat före mötet"]]);
+  lika("avbokat", r({ lage: { tappat: "avbokat" } }).map((x) => [x.belopp, x.skal]), [[0, "Avbokat"]]);
+  const d = r({ bokatAv: "R", regel: "dela", satser: { kvalificerat: 600.01, hallet: 300 } });
+  lika("dela: två rader, öret till den som bokade om", d.map((x) => [x.employee_id, x.belopp, x.mojligt, x.del, x.delat_med]),
+    [["O", 300, 300, "forsta_halvan", "R"], ["R", 300.01, 300.01, "andra_halvan", "O"]]);
+  ok("dela: summan är satsen på öret", Math.round(d.reduce((s, x) => s + x.belopp * 100, 0)) === 60001);
+  lika("ny: hela till den som bokade om", r({ bokatAv: "R" }).map((x) => [x.employee_id, x.belopp, x.del]), [["R", 600, "hel"]]);
+  lika("dela när hållaren är ursprunglig: hela till R", r({ bokatAv: "R", regel: "dela", hallsAv: "O" }).map((x) => [x.employee_id, x.belopp, x.del, x.delat_med]), [["R", 600, "hel", null]]);
+  const sk = r({});
+  sk[0].satser.kvalificerat = 1;
+  ok("satserna i raden är en kopia", S.kvalificerat === 600);
+}
+
+console.log("Omräkning ur raden (aldrig ur dagens inställning)");
+{
+  lika("andel hel", andel(600.01, "hel"), 600.01);
+  lika("andel första halvan", andel(600.01, "forsta_halvan"), 300);
+  lika("andel andra halvan", andel(600.01, "andra_halvan"), 300.01);
+  const rad = { satser: { kvalificerat: 600.01, hallet: 300 }, del: "andra_halvan" };
+  lika("hållet till kvalificerat, andra halvan", omraknadRad(rad, { niva: "kvalificerat", svar: [] }, true), { niva: "kvalificerat", belopp: 300.01, mojligt: 300.01, skal: null });
+  lika("till hållet, första halvan", omraknadRad({ ...rad, del: "forsta_halvan" }, { niva: "hallet", svar: [] }, true), { niva: "hallet", belopp: 150, mojligt: 300, skal: null });
+  lika("till uteblev, bekräftat", omraknadRad(rad, { tappat: "uteblev" }, true), { niva: null, belopp: 0, mojligt: 300.01, skal: "Uteblev trots bekräftelse" });
+}
+
+console.log("Rättelsens text och omkörningen");
+lika("texten", rattelseNot("Bolaget AB", "2026-10-15"), "Rättelse möte Bolaget AB 2026-10-15");
+{
+  const S = { kvalificerat: 600.01, hallet: 300 };
+  const rader = [{ niva: null, belopp: 0, skal: "Uteblev trots bekräftelse", satser: S, del: "forsta_halvan" }, { niva: null, belopp: 0, skal: "Uteblev trots bekräftelse", satser: S, del: "andra_halvan" }];
+  ok("raderna har redan uteblev: stämmer", radernaStammer(rader, { tappat: "uteblev" }, true) === true);
+  ok("annat skäl (obekräftat): stämmer inte", radernaStammer(rader, { tappat: "uteblev" }, false) === false);
+  ok("hållet: stämmer inte", radernaStammer(rader, { niva: "hallet", svar: [] }, true) === false);
+  ok("kvalificerat med rätt belopp (belopp som sträng): stämmer",
+    radernaStammer([{ niva: "kvalificerat", belopp: "300.01", skal: null, satser: S, del: "andra_halvan" }], { niva: "kvalificerat", svar: [] }, true) === true);
+  ok("inga rader: stämmer", radernaStammer([], { niva: "hallet", svar: [] }, true) === true);
+}
+
+console.log("Påminnelserna: vem ska påminnas");
+{
+  const inst = { ...INST_FORVAL, gallerFran: "2026-11-01T00:00:00Z" };
+  const admins = ["a1", "a2"];
+  // Alla tider i Stockholm i november: UTC+1. 18:00 lokal = 17:00Z.
+  const m = (o) => ({ id: "m1", slut: "2026-11-10T14:00:00Z", utfall: null, niva: null, utfallNar: null, hallsAv: "h1", ...o });
+  const kor = (moten, nuIso, i = inst) => vemPaminns(moten, admins, new Date(nuIso), i);
+  lika("utfall saknas, före 18:00: ingenting", kor([m({})], "2026-11-10T16:59:00Z"), []);
+  lika("utfall saknas, 18:00: hållaren", kor([m({})], "2026-11-10T17:00:00Z"), [{ kalla: "mote-utfall-saknas", till: "h1", moteId: "m1" }]);
+  lika("utfall saknas, sluttiden inte passerad: ingenting", kor([m({ slut: "2026-11-10T18:30:00Z" })], "2026-11-10T18:00:00Z"), []);
+  lika("utfall saknas, nästa dag: ingenting till hållaren", kor([m({})], "2026-11-11T17:00:00Z"), []);
+  lika("utfall saknas, två dagar efter 18:00: alla admins", kor([m({})], "2026-11-12T17:00:00Z"),
+    [{ kalla: "mote-utfall-saknas", till: "a1", moteId: "m1" }, { kalla: "mote-utfall-saknas", till: "a2", moteId: "m1" }]);
+  lika("utfall saknas, två dagar efter före 18:00: ingenting", kor([m({})], "2026-11-12T16:00:00Z"), []);
+  lika("hållet utan nivå, samma dag 18:00: bedömning till hållaren",
+    kor([m({ utfall: "hallet", utfallNar: "2026-11-10T15:00:00Z" })], "2026-11-10T17:00:00Z"), [{ kalla: "mote-bedomning-saknas", till: "h1", moteId: "m1" }]);
+  lika("hållet utan nivå, före 18:00: ingenting",
+    kor([m({ utfall: "hallet", utfallNar: "2026-11-10T08:00:00Z" })], "2026-11-10T16:00:00Z"), []);
+  lika("hållet utan nivå, två dagar efter utfallet: admins",
+    kor([m({ utfall: "hallet", utfallNar: "2026-11-10T15:00:00Z" })], "2026-11-12T17:30:00Z"),
+    [{ kalla: "mote-bedomning-saknas", till: "a1", moteId: "m1" }, { kalla: "mote-bedomning-saknas", till: "a2", moteId: "m1" }]);
+  lika("hållet med nivå: ingenting", kor([m({ utfall: "hallet", niva: "hallet", utfallNar: "2026-11-10T15:00:00Z" })], "2026-11-10T17:00:00Z"), []);
+  lika("uteblev: ingenting", kor([m({ utfall: "uteblev", utfallNar: "2026-11-10T15:00:00Z" })], "2026-11-10T17:00:00Z"), []);
+  lika("före galler-fran: ingenting", kor([m({ slut: "2026-10-30T14:00:00Z" })], "2026-10-30T17:00:00Z"), []);
+  lika("galler-fran saknas: ingenting", kor([m({})], "2026-11-10T17:00:00Z", { ...inst, gallerFran: null }), []);
+  lika("påminnelsetiden är inställningen", kor([m({})], "2026-11-10T16:00:00Z", { ...inst, utfallPaminnelse: "17:00" }), [{ kalla: "mote-utfall-saknas", till: "h1", moteId: "m1" }]);
+  lika("dagen räknas i tidszonen: 00:30 lokal tid är redan nästa dag", kor([m({ slut: "2026-11-10T22:30:00Z" })], "2026-11-10T23:30:00Z"), []);
+  lika("två körningar samma dag: samma lista", kor([m({})], "2026-11-10T17:00:00Z"), kor([m({})], "2026-11-10T20:00:00Z"));
+  lika("sommartid: 18:00 lokal är 16:00Z", kor([m({ slut: "2026-10-20T12:00:00Z" })], "2026-10-20T16:00:00Z", { ...inst, gallerFran: "2026-10-01T00:00:00Z" }), [{ kalla: "mote-utfall-saknas", till: "h1", moteId: "m1" }]);
+  lika("ingen admin: tom lista två dagar efter", vemPaminns([m({})], [], new Date("2026-11-12T17:00:00Z"), inst), []);
+}
+
+console.log("Påminnelserna: redan skickade");
+{
+  const nyckel = (k, id, d) => `${k}-${id}-${d}`;
+  const att = [{ kalla: "mote-utfall-saknas", till: "h1", moteId: "m1" }, { kalla: "mote-utfall-saknas", till: "a1", moteId: "m1" }];
+  const sk = (o = {}) => ({ employee_id: "h1", kalla: "mote-utfall-saknas", object_id: "m1", created_at: "2026-11-10T17:00:00Z", ...o });
+  lika("ett läsfel ger null: inget skickas den körningen", utanRedanSkickade(att, { data: null, error: { message: "timeout" } }, "2026-11-10", tz, nyckel), null);
+  lika("ett läsfel ger null även när data följer med", utanRedanSkickade(att, { data: [sk()], error: { message: "x" } }, "2026-11-10", tz, nyckel), null);
+  lika("utan data och utan fel ger också null (aldrig 'allt är nytt')", utanRedanSkickade(att, { data: null, error: null }, "2026-11-10", tz, nyckel), null);
+  lika("en tom lista utan fel: allt är nytt", utanRedanSkickade(att, { data: [], error: null }, "2026-11-10", tz, nyckel), att);
+  lika("redan skickad i dag: hållaren utesluts, admin kvar", utanRedanSkickade(att, { data: [sk()], error: null }, "2026-11-10", tz, nyckel), [att[1]]);
+  lika("skickad igår: ingen utesluts", utanRedanSkickade(att, { data: [sk({ created_at: "2026-11-09T17:00:00Z" })], error: null }, "2026-11-10", tz, nyckel), att);
+  lika("dagen räknas i tidszonen: 23:30 lokal är samma dag", utanRedanSkickade(att, { data: [sk({ created_at: "2026-11-10T22:30:00Z" })], error: null }, "2026-11-10", tz, nyckel), [att[1]]);
+  lika("annan källa utesluter inte", utanRedanSkickade(att, { data: [sk({ kalla: "mote-bedomning-saknas" })], error: null }, "2026-11-10", tz, nyckel), att);
+}
+
+console.log("Radering med låst provision (slutfix 2)");
+ok("ett belopp över noll: låst", harLastBelopp([{ belopp: 0 }, { belopp: 300 }]) === true);
+ok("bara nollor (tappat möte): inte låst", harLastBelopp([{ belopp: 0 }, { belopp: "0.00" }]) === false);
+ok("inga rader: inte låst", harLastBelopp([]) === false);
+ok("ett öre som sträng: låst", harLastBelopp([{ belopp: "0.01" }]) === true);
 
 console.log(fel ? `\n${fel} fel` : "\nAllt grönt");
 process.exit(fel ? 1 : 0);

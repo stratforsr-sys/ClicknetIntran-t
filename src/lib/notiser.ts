@@ -592,6 +592,15 @@ export const NOTIS_KALLOR = [
   "mote-bokat",
   /** Nav 2.0, Möten (2026-11-03): någon annan ändrade ett möte du håller (tid, plats, vilka som är med). Samma skäl. */
   "mote-andrat",
+  /**
+   * Nav 2.0, Möten (2026-11-11): påminnelserna efter mötet. Utfallet saknas efter fristen, och ett hållet möte
+   * väntar på hållarens bedömning (efter två dagar går det till en admin). Händelser: de skickas av jobbet när
+   * fristen gått ut, och mejl skickas aldrig (inte i MEJLKALLOR).
+   */
+  "mote-utfall-saknas",
+  "mote-bedomning-saknas",
+  /** Nav 2.0, Möten (2026-11-11): bokaren ifrågasätter nivån på ett möte. Går till alla admins, som avgör. */
+  "mote-ifragasatt",
 
   /**
    * Fel i Nav 2.0 (0082). Båda är HÄNDELSER: ett svar i tråden och att ett fel
@@ -798,6 +807,9 @@ export const HANDELSEKALLOR = [
   "lead-paminn",
   "mote-bokat",
   "mote-andrat",
+  "mote-utfall-saknas",
+  "mote-bedomning-saknas",
+  "mote-ifragasatt",
   "fel-meddelande",
   "fel-lagad",
   "kampanjsida-nere",

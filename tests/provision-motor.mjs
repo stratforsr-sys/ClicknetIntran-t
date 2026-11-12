@@ -32,6 +32,7 @@ import {
   volymbonusBelopp,
 } from "../src/lib/provision-motor.ts";
 import { periodFor } from "../src/lib/order.ts";
+import { slagetFor, SLAGSETIKETT, SLAGSORDNING } from "../src/lib/provision.ts";
 
 let fel = 0;
 const ok = (namn, villkor, extra = "") => {
@@ -584,6 +585,61 @@ console.log("\nK&V-bonusen bokfors som en egen post");
   ok("tre poster", poster.length === 3, poster.map((p) => p.slag).join(", "));
   ok("K&V star for sig", poster.some((p) => p.slag === "kv_bonus" && p.belopp === 550));
   ok("summan av posterna ar underlagets summa", poster.reduce((s, p) => s + p.belopp, 0) === u.summa);
+}
+
+console.log("\nMotesprovisionen gar in som Chefspost-monstret: per manad, per person, en post per slag");
+{
+  const mp = (id, vem, manad, belopp, niva = "kvalificerat", dag = "2026-11-11", bolag = "Ekholm Transport", delatMed = null) => ({
+    mote_id: id, employee_id: vem, manad, belopp, niva, bolag, dag, delat_med_namn: delatMed,
+  });
+  const poster = [
+    mp("m1", "s1", "2026-11-01", 600),
+    mp("m2", "s1", "2026-11-01", 300, "hallet", "2026-11-09", "Sjoberg El"),
+    mp("m3", "s1", "2026-12-01", 600, "kvalificerat", "2026-12-02"),
+    mp("m4", "s2", "2026-11-01", 600),
+  ];
+
+  const nov = raknaUnderlag("s1", [], "2026-11-01", [], null, null, [], poster);
+  const mrader = nov.rader.filter((r) => r.slag === "motesprovision");
+  ok("tva motesrader i november, 900 kr", mrader.length === 2 && mrader.reduce((s, r) => s + r.belopp, 0) === 900, JSON.stringify(mrader.map((r) => r.belopp)));
+  ok("summan ar raderna: 900", nov.summa === 900, String(nov.summa));
+  ok("sammanfattningen: antal och belopp", nov.motesprovision?.antal === 2 && nov.motesprovision?.belopp === 900, JSON.stringify(nov.motesprovision));
+  ok("texten: kvalificerat", mrader.some((r) => r.text === "Möte Ekholm Transport 2026-11-11, kvalificerat"), mrader.map((r) => r.text).join(" | "));
+  ok("texten: hallet", mrader.some((r) => r.text === "Möte Sjoberg El 2026-11-09, hållet"));
+  ok("raderna bar ingen order", mrader.every((r) => r.order_id === undefined));
+  ok("december rors inte av novembers underlag (men ligger i decembers)", raknaUnderlag("s1", [], "2026-12-01", [], null, null, [], poster).summa === 600);
+  ok("en annan persons mote lacker inte in", !nov.rader.some((r) => r.belopp === 600 && r.text.includes("2026-12")) && nov.summa === 900);
+  ok("en manad utan motesposter har ingen sammanfattning", raknaUnderlag("s1", [], "2026-10-01", [], null, null, [], poster).motesprovision === null);
+
+  const delad = raknaUnderlag("s2", [], "2026-11-01", [], null, null, [], [mp("m9", "s2", "2026-11-01", 150.1, "kvalificerat", "2026-11-04", "Brandt Maleri", "Sara")]);
+  ok("delat med namnet star i texten", delad.rader[0]?.text === "Möte Brandt Maleri 2026-11-04, kvalificerat, delat med Sara", delad.rader[0]?.text);
+
+  // Oren: summan ska inte bli 0.30000000000000004.
+  const oren = raknaUnderlag("s3", [], "2026-11-01", [], null, null, [], [mp("a", "s3", "2026-11-01", 0.1), mp("b", "s3", "2026-11-01", 0.2)]);
+  ok("oren summeras utan flyttalsbrus", oren.summa === 0.3 && oren.motesprovision?.belopp === 0.3, String(oren.summa));
+
+  // Utan parametern beter sig allt som forut.
+  const utan = raknaUnderlag("s1", [], "2026-11-01", [], null, null, []);
+  ok("utan motesposter: inga motesrader och ingen sammanfattning", utan.rader.length === 0 && utan.motesprovision === null);
+
+  // Personlistan: den som bara har motesposter ska finnas (samma skal som overtacket).
+  const alla = underlagForAlla([], "2026-11-01", [], new Map(), new Map(), [], poster);
+  ok("underlagForAlla tar med personer som bara har motesposter", alla.map((u) => u.employee_id).join(",") === "s1,s2", alla.map((u) => u.employee_id).join(","));
+  ok("och deras summor ar 900 och 600", alla[0].summa === 900 && alla[1].summa === 600);
+  const maj = underlagForAlla([], "2026-10-01", [], new Map(), new Map(), [], poster);
+  ok("en manad utan motesposter ger ingen tom rad", maj.length === 0);
+
+  // Bokforingen: en post per slag, antal = antal moten.
+  const bok = bokforingsposter(nov);
+  const mp1 = bok.filter((p) => p.slag === "motesprovision");
+  ok("bokforingsposter: en post, 900 kr, 2 moten", mp1.length === 1 && mp1[0].belopp === 900 && mp1[0].antal === 2, JSON.stringify(mp1));
+  ok("posten har en text", typeof mp1[0].text === "string" && mp1[0].text.length > 0, mp1[0]?.text);
+  ok("summan av posterna ar underlagets summa", bok.reduce((s, p) => s + p.belopp, 0) === nov.summa);
+
+  // Slaget lases ur external_ref, och har en etikett och en plats i ordningen.
+  ok("slagetFor ger motesprovision", slagetFor({ kind: null, source: "motor", external_ref: "2026-11-01:x:motesprovision" }) === "motesprovision");
+  ok("etiketten", SLAGSETIKETT.motesprovision === "Mötesprovision");
+  ok("i SLAGSORDNING direkt efter Overtack", SLAGSORDNING.indexOf("Mötesprovision") === SLAGSORDNING.indexOf("Övertäck") + 1, SLAGSORDNING.join(", "));
 }
 
 console.log(fel === 0 ? "\n\x1b[32mAllt gront.\x1b[0m\n" : `\n\x1b[31m${fel} fel.\x1b[0m\n`);

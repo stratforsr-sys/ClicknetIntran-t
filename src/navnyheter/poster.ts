@@ -14,6 +14,31 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "provision-overtack-preliminart",
+    rubrik: "Övertäcket syns redan före stängningen",
+    ingress: "De preliminära provisionstalen för en månad som inte är stängd räknar nu med säljchefens övertäck, som attesten redan gjorde.",
+    text: `Förut kom övertäcket med först när månaden fastställdes, så att talen under **Provision** kunde
+ändras vid stängningen. Nu räknas det med från början, liksom bokarnas mötesprovision.`,
+    datum: "2026-11-12",
+    roller: ["sales_manager", "ceo", "finance", "admin"],
+    href: "/provision",
+  },
+  {
+    slug: "moten-utfall-provision",
+    rubrik: "Utfallet efter mötet är en ruta, och mötet kan ge provision",
+    ingress: "Sätt utfall öppnar en ruta med Hållet, Uteblev, Flyttat och Avbokat. Vid Hållet svarar du på frågorna, och mötet räknas som kvalificerat eller hållet.",
+    text: `Under **Hos säljaren** står **Sätt utfall** på varje möte som har hållits. Du kan också dra kortet till
+**Avgjort**. Rutan frågar först hur det gick. Vid **Hållet** står frågorna efter mötet där direkt, med Ja och Nej,
+och raden under säger vad mötet räknas som för den som bokade det. Är du inte den som höll mötet bedömer hållaren
+det i stället, och mötet står som väntar på bedömning i **Avgjort** tills hen har svarat (knappen **Bedöm**).
+Klockan 18.00 samma dag får hållaren en påminnelse om utfallet saknas, och två dagar senare får en admin den.
+Den som tycker att nivån blev fel kan **ifrågasätta** den i Provision. En admin hittar de ifrågasatta mötena
+överst i **Inställningar** i Möten och väljer **Ändra svaren** eller **Låt stå**.`,
+    datum: "2026-11-12",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "moten-installningar",
     rubrik: "Ställ in Möten för ert företag",
     ingress: "Under Inställningar i Möten väljer du hur många dagar före mötet det ska bekräftas, vilka frågor säljaren svarar på efteråt och vad kolumnerna heter.",

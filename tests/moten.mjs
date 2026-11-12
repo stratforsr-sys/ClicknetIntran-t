@@ -498,5 +498,61 @@ rubrik("0287: vem ändrar Mötens inställningar (farAndraInstallning)");
   ok("ekonomi, säljchef, VD och admin ändrar beloppen", ["finance", "sales_manager", "ceo", "admin"].every((r) => M.farAndraInstallning(u(r), "moten.provision") && M.farAndraInstallning(u(r), "moten.mottagare") && M.farAndraInstallning(u(r), "moten.ombokning-provision")));
 }
 
+rubrik("Uppgift 6: vem bedömer, och svaren i anropen");
+{
+  const u = (id, ...roller) => ({ id, roller });
+  const m6 = { bokat_av: "b", halls_av: "h", med: ["k"] };
+  ok("hållaren bedömer", M.farBedoma(u("h", "salesperson"), m6) === true);
+  ok("bokaren bedömer inte (det vore hennes egen provision)", M.farBedoma(u("b", "salesperson"), m6) === false);
+  ok("kollegan på mötet bedömer inte", M.farBedoma(u("k", "salesperson"), m6) === false);
+  ok("teamledaren bedömer inte", M.farBedoma(u("t", "team_lead"), m6) === false);
+  ok("säljchef, VD och admin bedömer", ["sales_manager", "ceo", "admin"].every((r) => M.farBedoma(u("x", r), m6)));
+  ok("bara säljchef, VD och admin rättar ett utfall", ["sales_manager", "ceo", "admin"].every((r) => M.farRattaUtfall(u("x", r))) && !M.farRattaUtfall(u("h", "salesperson")) && !M.farRattaUtfall(u("t", "team_lead")));
+  ok("den som får provision för mötet sätter inte nivån, inte heller som admin", M.farSattaNiva("b", ["b", "r"]) === false && M.farSattaNiva("r", ["b", "r"]) === false);
+  ok("den som inte får provision sätter nivån", M.farSattaNiva("h", ["b", "r"]) === true && M.farSattaNiva("a", []) === true);
+  // Slutfix 1: en markerad bokare som är admin sparar Hållet på sitt eget möte, men utan nivå (mötet väntar).
+  ok("admin som får provision för mötet sätter inte nivån när hon sparar Hållet", M.farSattaNivaPa(u("b", "sales_manager"), m6, ["b"]) === false);
+  ok("admin utan provision för mötet sätter nivån", M.farSattaNivaPa(u("a", "admin"), m6, ["b"]) === true);
+  ok("hållaren sätter nivån", M.farSattaNivaPa(u("h", "salesperson"), m6, ["b"]) === true);
+  ok("kollegan sätter inte nivån", M.farSattaNivaPa(u("k", "salesperson"), m6, []) === false);
+  ok("egen provision + nivVidHallet: väntar på bedömning, också med svar och noll frågor", (() => {
+    const satter = M.farSattaNivaPa(u("b", "admin"), m6, ["b"]);
+    return M.nivaVidHallet({ farBedoma: satter, fragor: [], svar: null }).vantar === true
+      && M.nivaVidHallet({ farBedoma: satter, fragor: [{ id: "syfte", text: "S?", aktiv: true }], svar: [{ id: "syfte", ja: true }] }).vantar === true;
+  })());
+  // Slutfix 3: Uteblev → Hållet på ett möte som redan bokats om.
+  ok("rättat till Hållet efter ombokning: hinder", typeof M.ombokatHinder("hallet", true) === "string");
+  ok("rättat till Hållet utan ombokning: inget hinder", M.ombokatHinder("hallet", false) === null);
+  ok("rättat till Uteblev/Avbokat efter ombokning: inget hinder (tappade ger 0)", M.ombokatHinder("uteblev", true) === null && M.ombokatHinder("avbokat", true) === null);
+  ok("raderingens text", M.RADERA_LAST === "Mötet har låst mötesprovision. Ändra utfallet först.");
+  ok("de nya handlingarna spärras i läsläge", ["bedom", "ifragasatt", "ratta_utfall", "ifragasatt_beslut"].every((h) => M.arSkrivning(h)));
+
+  const ID6 = "11111111-2222-4333-8444-555555555555";
+  const JA = [{ id: "beslutsfattare", ja: true }, { id: "syfte", ja: true }];
+  ok("svarIndata: en lista med id och ja", (() => { const r = M.svarIndata(JA); return r.ok && r.varden.length === 2; })());
+  ok("svarIndata: ja måste vara sant eller falskt", !M.svarIndata([{ id: "syfte", ja: "ja" }]).ok);
+  ok("svarIndata: samma fråga två gånger nekas", !M.svarIndata([{ id: "syfte", ja: true }, { id: "syfte", ja: false }]).ok);
+  ok("svarIndata: inget id nekas", !M.svarIndata([{ ja: true }]).ok && !M.svarIndata("ja").ok);
+  ok("utfallIndata: Hållet tar svaren", (() => { const r = M.utfallIndata({ mote: ID6, utfall: "hallet", resultat: "offert", svar: JA }); return r.ok && r.varden.svar?.length === 2; })());
+  ok("utfallIndata: utan svar är svaren null", (() => { const r = M.utfallIndata({ mote: ID6, utfall: "hallet", resultat: "offert" }); return r.ok && r.varden.svar === null; })());
+  ok("utfallIndata: svar efter Uteblev nekas", !M.utfallIndata({ mote: ID6, utfall: "uteblev", svar: JA }).ok);
+  ok("bedomIndata: mötet och svaren", (() => { const r = M.bedomIndata({ mote: ID6, svar: JA }); return r.ok && r.varden.mote === ID6 && r.varden.svar.length === 2; })());
+  ok("bedomIndata: svaren krävs", !M.bedomIndata({ mote: ID6 }).ok);
+  ok("ifragasattBeslutIndata: mötet och lat_sta", (() => { const r = M.ifragasattBeslutIndata({ mote: ID6, lat_sta: true }); return r.ok && r.varden.mote === ID6; })());
+  ok("ifragasattBeslutIndata: lat_sta måste vara sant", !M.ifragasattBeslutIndata({ mote: ID6 }).ok && !M.ifragasattBeslutIndata({ mote: ID6, lat_sta: "ja" }).ok && !M.ifragasattBeslutIndata({ mote: ID6, lat_sta: false }).ok);
+  ok("ifragasattBeslutIndata: mötet krävs", !M.ifragasattBeslutIndata({ lat_sta: true }).ok);
+  ok("rattaUtfallIndata: utfall och valfria svar", (() => { const r = M.rattaUtfallIndata({ mote: ID6, utfall: "uteblev" }); return r.ok && r.varden.utfall === "uteblev" && r.varden.svar === null; })());
+  ok("rattaUtfallIndata: okänt utfall nekas", !M.rattaUtfallIndata({ mote: ID6, utfall: "flyttat" }).ok);
+
+  const F = [{ id: "beslutsfattare", text: "Var rätt beslutsfattare med?", aktiv: true }, { id: "syfte", text: "Visste kunden vad mötet gällde?", aktiv: true }];
+  const v = (o) => M.nivaVidHallet({ farBedoma: true, fragor: F, svar: JA, ...o });
+  ok("hållaren med två ja: kvalificerat, svaren med texten", (() => { const r = v({}); return r.niva === "kvalificerat" && r.svar[1].text === "Visste kunden vad mötet gällde?"; })());
+  ok("hållaren med ett nej: hållet", v({ svar: [{ id: "beslutsfattare", ja: true }, { id: "syfte", ja: false }] }).niva === "hallet");
+  ok("hållaren utan svar: väntar på bedömning", v({ svar: null }).vantar === true);
+  ok("hållaren med halva svaren: fel (inget sparas)", typeof v({ svar: [{ id: "syfte", ja: true }] }).fel === "string");
+  ok("kollegan med två ja: väntar ändå på bedömning", v({ farBedoma: false }).vantar === true);
+  ok("noll aktiva frågor: hållaren låser kvalificerat utan svar", v({ fragor: F.map((f) => ({ ...f, aktiv: false })), svar: null }).niva === "kvalificerat");
+}
+
 console.log(fel ? `\n\x1b[31m${fel} fel\x1b[0m` : "\n\x1b[32mAlla ✓\x1b[0m");
 process.exit(fel ? 1 : 0);

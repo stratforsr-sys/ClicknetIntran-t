@@ -5,7 +5,7 @@ import { fullName, hasRole, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { dagarBakat, svenskTidpunkt, svenskVeckodag, svensktDatum } from "@/lib/klocka";
 import { lokal } from "./leads";
-import { arHallare, farAndraInstallning, farSeInstallningar, KOLUMNER, MOTE_PLATS, platsTyp, type Kolumn, type Platstyp } from "./motenforma";
+import { arHallare, farAndraInstallning, farRattaUtfall, farSeInstallningar, KOLUMNER, MOTE_PLATS, platsTyp, type Kolumn, type Platstyp } from "./motenforma";
 import {
   bekraftelseFonster, bradska, fordela, kortFas, lasInstallningar, manadFor, PIPE_KOLUMNER, sorteraFas, ursprungligBokare,
   type MotenInst, type PipeKolumn,
@@ -109,13 +109,27 @@ export type NdAvgjort = {
   skal: string | null;
 };
 
+/** Ett ifrågasatt möte som väntar på en admin (Ändra svaren eller Låt stå), i inställningsrutan. */
+export type NdIfragasatt = {
+  mote: string;
+  kedja: string;
+  namn: string;
+  /** Mötets tid, svensk lokal "YYYY-MM-DD HH:MM". */
+  tid: string;
+  /** Den som ifrågasatte (bokaren, eller den som bokade om). */
+  bokare: string;
+  niva: "kvalificerat" | "hallet" | null;
+  /** När nivån ifrågasattes, svensk lokal "YYYY-MM-DD HH:MM". */
+  ifragasattNar: string;
+};
+
 export type NdMoten = {
   kort: NdMoteKort[];
   avgjorda: NdAvgjort[];
   /** Det som går att ställa in per företag och som tavlan behöver. */
   inst: Pick<MotenInst, "bekraftaDagar" | "kolumnnamn" | "fragor" | "rubrikPrefix">;
   /** Inställningsrutan: hela inställningen för Admin och Superadmin, null för alla andra. `farPengar`: får ändra beloppen och vilka som får mötesprovision. */
-  installningar: (MotenInst & { farPengar: boolean }) | null;
+  installningar: (MotenInst & { farPengar: boolean; ifragasatta: NdIfragasatt[] }) | null;
   /** Betraktarens egen andel per kolumn, i kronor. Null för den som inte får mötesprovision. */
   provisionPaSpel: Record<PipeKolumn, number> | null;
   vecka: { affar: number; nej: number; kedjor: { kedja: string; namn: string; avslut: "affar" | "nej"; nar: string }[] };
@@ -415,6 +429,50 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
     avgjorda.sort((a, b) => b.tid.localeCompare(a.tid));
   }
 
+  // Ifrågasatta möten utan beslut: bara för den som får avgöra dem (säljchef, VD, admin). Läses med service role,
+  // eftersom beslutsfattarna inte nödvändigtvis har läsrätt till andras provisionsrader.
+  const ifragasatta: NdIfragasatt[] = [];
+  if (farRattaUtfall(aktor)) {
+    const { data: ip } = await supabaseAdmin()
+      .from("mote_provision")
+      .select("mote_id, ifragasatt_nar, ifragasatt_av")
+      .not("ifragasatt_nar", "is", null)
+      .is("beslut_nar", null)
+      .limit(200);
+    const irader = (ip ?? []) as unknown as { mote_id: string; ifragasatt_nar: string; ifragasatt_av: string | null }[];
+    if (irader.length) {
+      const moteIds = [...new Set(irader.map((r) => r.mote_id))];
+      const { data: md } = await supabaseAdmin().from("mote").select("id, kedja_id, mote_tid, niva").in("id", moteIds).limit(200);
+      const mrader = (md ?? []) as unknown as { id: string; kedja_id: string; mote_tid: string; niva: string | null }[];
+      const ikedjor = [...new Set(mrader.map((m) => m.kedja_id))];
+      const { data: ik } = ikedjor.length ? await supabaseAdmin().from("mote_kedja").select("id, bolag_id").in("id", ikedjor).limit(200) : { data: [] };
+      const ikMap = new Map(((ik ?? []) as unknown as { id: string; bolag_id: string }[]).map((k) => [k.id, k.bolag_id]));
+      const ibolag = [...new Set([...ikMap.values()])];
+      const { data: ib } = ibolag.length ? await supabaseAdmin().from("mote_bolag").select("id, namn").in("id", ibolag).limit(200) : { data: [] };
+      const ibMap = new Map(((ib ?? []) as unknown as { id: string; namn: string }[]).map((b) => [b.id, b.namn]));
+      const ipers = [...new Set(irader.map((r) => r.ifragasatt_av).filter((x): x is string => !!x && !namn.has(x)))];
+      if (ipers.length) {
+        const { data: pd } = await supabaseAdmin().from("employee").select("id, first_name, last_name").in("id", ipers).limit(ipers.length);
+        for (const p of (pd ?? []) as unknown as PersonRad[]) namn.set(p.id, fullName(p));
+      }
+      for (const m of mrader) {
+        const mina = irader.filter((r) => r.mote_id === m.id);
+        const personer = [...new Set(mina.map((r) => (r.ifragasatt_av ? namn.get(r.ifragasatt_av) ?? "en kollega" : "en kollega")))];
+        const tidigast = mina.map((r) => r.ifragasatt_nar).sort()[0] as string;
+        ifragasatta.push({
+          mote: m.id,
+          kedja: m.kedja_id,
+          namn: ibMap.get(ikMap.get(m.kedja_id) ?? "") ?? "Bolaget",
+          tid: lokal(m.mote_tid),
+          bokare: personer.join(" och "),
+          niva: m.niva === "kvalificerat" || m.niva === "hallet" ? m.niva : null,
+          ifragasattNar: lokal(tidigast),
+        });
+      }
+      ifragasatta.sort((a, b) => a.ifragasattNar.localeCompare(b.ifragasattNar));
+    }
+  }
+
   // Provision på spel: bara för den som får mötesprovision. Öppna kolumner räknas med dagens satser och
   // kvalificerat belopp (det möjliga), Avgjort med betraktarens låsta belopp i månaden.
   let provisionPaSpel: NdMoten["provisionPaSpel"] = null;
@@ -462,7 +520,7 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
     kort,
     avgjorda,
     inst: { bekraftaDagar: inst.bekraftaDagar, kolumnnamn: inst.kolumnnamn, fragor: inst.fragor, rubrikPrefix: inst.rubrikPrefix },
-    installningar: farSeInstallningar(aktor) ? { ...inst, farPengar: farAndraInstallning(aktor, "moten.provision") } : null,
+    installningar: farSeInstallningar(aktor) ? { ...inst, farPengar: farAndraInstallning(aktor, "moten.provision"), ifragasatta } : null,
     provisionPaSpel,
     vecka,
     saljare,

@@ -4,6 +4,7 @@ import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { svenskaMinuter, svensktDatum, svenskTidpunkt } from "@/lib/klocka";
 import { SAMTAL_MIN_SEK, samtalsfonster, samtalTillatet } from "@/lib/nav2/motesstatforma";
 import { notifiera, notifieraFlera } from "@/lib/notishandelse-server";
+import { skrivFel } from "@/lib/fel-server";
 import { skrivHandelse } from "@/lib/handelselogg-server";
 import { dagPlus } from "@/lib/saljtakt";
 import { lk } from "@/lib/leveranskalender-server";
@@ -48,13 +49,26 @@ import {
   utfallIndata,
   arEgenRubrik,
   farAndraInstallning,
+  farBedoma,
+  farRattaUtfall,
+  farSattaNiva,
+  farSattaNivaPa,
+  ombokatHinder,
+  RADERA_LAST,
+  EGEN_PROVISION,
+  nivaVidHallet,
+  bedomIndata,
+  ifragasattBeslutIndata,
+  rattaUtfallIndata,
+  UTFALL_ROLLER,
   moteRubrik,
   type Aktor,
   type UtfallIn,
   type Uppslag,
 } from "@/lib/nav2/motenforma";
 import { lokal } from "@/lib/nav2/leads";
-import { faltFor, lasInstallningar, provaInstallning, type MotenInst } from "@/lib/nav2/motesflode";
+import { faltFor, lasInstallningar, niva, nivaSvar, omfattas, provaInstallning, radernaStammer, type Lage, type MotenInst } from "@/lib/nav2/motesflode";
+import { ProvisionKonflikt, andraProvision, harLastProvision, harOmbokning, ifragasattProvision, latStaProvision, lasProvision, lastaRader, provisionsmottagare } from "@/lib/nav2/motesprovision-server";
 import { medNyckel } from "@/lib/nav2/nyckel";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 
@@ -170,7 +184,7 @@ export async function POST(request: Request) {
 
   // Gemensamt för mötets knappar och uppföljningen (A7, A8). Före `switch`: `const` hissas inte.
   const aktorn: Aktor = { id: mig, roller: user.roles as string[] };
-  const MOTE_FALT = "id, kedja_id, event_id, bokat_av, halls_av, mote_tid, langd_min, kalla, mal, nulage, bekraftat_nar, bekraftat_av, utfall, antal_flyttningar, forsok, senast_forsok, flyttad_nar";
+  const MOTE_FALT = "id, kedja_id, event_id, bokat_av, halls_av, mote_tid, langd_min, kalla, mal, nulage, bekraftat_nar, bekraftat_av, utfall, resultat, antal_flyttningar, forsok, senast_forsok, flyttad_nar, niva, provision_last_nar";
   type MoteRad = {
     id: string;
     kedja_id: string;
@@ -185,11 +199,15 @@ export async function POST(request: Request) {
     bekraftat_nar: string | null;
     bekraftat_av: string | null;
     utfall: string | null;
+    resultat: string | null;
     antal_flyttningar: number;
     /** Försöken att nå kunden (0287). En flytt nollställer dem: nytt fönster, nya försök. */
     forsok: number;
     senast_forsok: string | null;
     flyttad_nar: string | null;
+    /** Nivån och låsningen av mötesprovisionen (0287, uppgift 6). */
+    niva: string | null;
+    provision_last_nar: string | null;
     /** Kollegorna i kalenderhändelsen (läses av `hamtaMote`, står inte på mötesraden). */
     med: string[];
   };
@@ -337,6 +355,18 @@ export async function POST(request: Request) {
 
     case "utfall":
       return await utfallHandling(false);
+
+    case "bedom":
+      return await bedom();
+
+    case "ifragasatt":
+      return await ifragasatt();
+
+    case "ifragasatt_beslut":
+      return await ifragasattBeslut();
+
+    case "ratta_utfall":
+      return await rattaUtfall();
 
     case "radera":
       return await radera();
@@ -858,6 +888,7 @@ export async function POST(request: Request) {
   async function utfallHandling(avboka: boolean): Promise<Response> {
     let mote: string;
     let inn: UtfallIn;
+    let svarIn: { id: string; ja: boolean }[] | null = null;
     if (avboka) {
       const r = moteIndata(b);
       if (!r.ok) return svar({ fel: r.fel }, 400);
@@ -868,6 +899,7 @@ export async function POST(request: Request) {
       if (!r.ok) return svar({ fel: r.fel }, 400);
       mote = r.varden.mote;
       inn = r.varden.inn;
+      svarIn = r.varden.svar;
     }
     const h = await moteForSe(mote);
     if ("res" in h) return h.res;
@@ -875,6 +907,29 @@ export async function POST(request: Request) {
     // Avboka kräver bara `farSe` (prövat ovan); ett utfall, också Avbokat som utfall, kräver `farSattaUtfall`.
     if (!avboka && !farSattaUtfall(aktorn, m)) return svar({ fel: "Bara de som är med på mötet eller en säljchef sätter utfallet." }, 403);
     if (m.utfall) return svar({ fel: "Mötet har redan fått ett utfall." }, 409);
+
+    // Nivån prövas innan något sparas: svar som inte räcker ger 400 och inget utfall. Bara hållaren eller en admin
+    // sätter nivån (`farBedoma`), och aldrig den som får mötesprovision för mötet (`farSattaNivaPa`, också en admin
+    // som bokade mötet). Sätter någon annan Hållet sparas det utan nivå och mötet väntar på bedömning. Låsningen sist.
+    const inst = await lasInst();
+    const omfattat = omfattas(m.mote_tid, inst.gallerFran);
+    let lage: Lage | null = null;
+    if (inn.utfall === "hallet") {
+      let satter = farBedoma(aktorn, m);
+      if (satter && omfattat) {
+        try {
+          satter = farSattaNivaPa(aktorn, m, await provisionsmottagare(db, m, inst));
+        } catch {
+          // Mottagarna gick inte att läsa: Hållet sparas ändå, utan nivå. Hållaren eller en admin bedömer sedan.
+          satter = false;
+        }
+      }
+      const beslut = nivaVidHallet({ farBedoma: satter, fragor: inst.fragor, svar: svarIn });
+      if ("fel" in beslut && omfattat) return svar({ fel: beslut.fel }, 400);
+      if ("niva" in beslut) lage = beslut;
+    } else {
+      lage = { tappat: inn.utfall === "uteblev" ? "uteblev" : "avbokat" };
+    }
 
     const kedja = await hamtaKedja(m.kedja_id);
     if (!kedja) return svar({ fel: "Kedjan finns inte." }, 404);
@@ -994,8 +1049,267 @@ export async function POST(request: Request) {
       const kalFel = await stallInIKalender(m);
       if (kalFel) varning = [varning, `Mötet är avbokat på tavlan, men kunde inte ställas in i kalendern (${kalFel}). Ställ in det där.`].filter(Boolean).join(" ");
     }
+    // 5. Mötesprovisionen, sist. Fallerar den står utfallet kvar: svaret är ok med en varning, felet rapporteras,
+    //    och mötet har `provision_last_nar is null` så att jobbet låser om det.
+    let lastNiva: string | null = null;
+    if (lage && omfattat) {
+      const l = await lasSist({ ...m, utfall: inn.utfall }, inst, lage);
+      if (l.varning) varning = [varning, l.varning].filter(Boolean).join(" ");
+      else if ("niva" in lage) {
+        lastNiva = lage.niva;
+        await skrivHandelse({ actorId: mig, action: "mote.bedomt", objectType: "mote", objectId: m.id, meta: { niva: lage.niva, svar: lage.svar, bokfort: l.bokfort } });
+      }
+    }
+    const vantarBedomning = inn.utfall === "hallet" && omfattat && !lastNiva;
     const text = inn.utfall === "avbokat" ? "Mötet är avbokat." : inn.utfall === "uteblev" ? "Uteblev sparat." : "Utfallet är sparat.";
-    return svar({ ok: `${text}${bokat ? " " + bokat : ""}`, mote: m.id, ...(nyttMoteId ? { nytt_mote: nyttMoteId } : {}), ...(varning ? { varning } : {}) });
+    return svar({
+      ok: `${text}${bokat ? " " + bokat : ""}`,
+      mote: m.id,
+      niva: lastNiva,
+      vantarBedomning,
+      ...(nyttMoteId ? { nytt_mote: nyttMoteId } : {}),
+      ...(varning ? { varning } : {}),
+    });
+  }
+
+  /**
+   * Lås mötesprovisionen efter att utfallet sparats. Ett fel välter aldrig utfallet: det rapporteras till
+   * `error_report` (ett spår per möte) och blir en varning i svaret. Låstes inget (`provision_last_nar is null`)
+   * låser jobbet om mötet; låstes det men bokföringen fallerade är rapporten spåret för ekonomi.
+   */
+  async function lasSist(m: MoteRad, inst: MotenInst, lage: Lage): Promise<{ varning: string | null; bokfort: string[] }> {
+    try {
+      const r = await lasProvision(db, m, inst, lage, mig);
+      return { varning: null, bokfort: r.bokfort };
+    } catch (e) {
+      await skrivFel({
+        kind: "automatic",
+        path: "/nav2/moten",
+        digest: `moten-provision-${m.id}`,
+        message: `Mötesprovisionen låstes eller bokfördes inte för mötet ${m.id}: ${e instanceof Error ? e.message : String(e)}`,
+        blocking: false,
+        reporterId: mig,
+      });
+      return { varning: "Utfallet är sparat, men mötesprovisionen gick inte att låsa eller bokföra. Felet är rapporterat.", bokfort: [] };
+    }
+  }
+
+  /** Ett fel i en ändring av mötesprovisionen: 409 vid en konflikt, annars rapporterat och 500. */
+  async function provisionsfel(m: MoteRad, e: unknown, vad: string): Promise<Response> {
+    if (e instanceof ProvisionKonflikt) return svar({ fel: e.message }, 409);
+    await skrivFel({
+      kind: "automatic",
+      path: "/nav2/moten",
+      digest: `moten-provision-${m.id}`,
+      message: `${vad} för mötet ${m.id}: ${e instanceof Error ? e.message : String(e)}`,
+      blocking: false,
+      reporterId: mig,
+    });
+    return svar({ fel: `${vad}. Felet är rapporterat.` }, 500);
+  }
+
+  /**
+   * Får aktören mötesprovision för mötet (låsta rader, eller `fordela` med dagens inställning för ett olåst möte)?
+   * Då ett färdigt 403-svar: ingen sätter eller ändrar nivån på sin egen provision. Ett läsfel ger 500, aldrig ett ja.
+   */
+  async function egenProvision(m: MoteRad, inst: MotenInst): Promise<Response | null> {
+    let mottagare: string[];
+    try {
+      mottagare = await provisionsmottagare(db, m, inst);
+    } catch {
+      return svar({ fel: "Mötesprovisionen gick inte att läsa. Försök igen." }, 500);
+    }
+    return farSattaNiva(mig, mottagare) ? null : svar({ fel: EGEN_PROVISION }, 403);
+  }
+
+  /**
+   * Bedöm ett hållet möte: svaren på kvalificeringsfrågorna ger nivån, och mötesprovisionen låses. Hållaren eller en
+   * admin (`farBedoma`). Villkorad på `niva is null` (i `mote_las_provision`): ett dubbelklick ger 409. Ett redan
+   * bedömt möte bedöms om bara av en admin, och då räknas beloppen om ur de låsta raderna (`andraProvision`).
+   */
+  async function bedom(): Promise<Response> {
+    const r = bedomIndata(b);
+    if (!r.ok) return svar({ fel: r.fel }, 400);
+    const m = await hamtaMote(r.varden.mote);
+    if (!m) return svar({ fel: "Mötet finns inte." }, 404);
+    if (!farBedoma(aktorn, m)) return svar({ fel: "Bara den som håller mötet, eller en admin, svarar på frågorna." }, 403);
+    if (m.utfall !== "hallet") return svar({ fel: "Bara ett hållet möte bedöms." }, 409);
+    const inst = await lasInst();
+    if (!omfattas(m.mote_tid, inst.gallerFran)) return svar({ fel: "Mötet hölls innan mötesprovisionen började gälla och bedöms inte." }, 409);
+    const n = niva(inst.fragor, r.varden.svar);
+    if (typeof n === "object") return svar({ fel: n.fel }, 400);
+    const lage: Lage = { niva: n, svar: nivaSvar(inst.fragor, r.varden.svar) };
+    const egen = await egenProvision(m, inst);
+    if (egen) return egen;
+
+    if (m.niva || m.provision_last_nar) {
+      if (!farRattaUtfall(aktorn)) return svar({ fel: "Mötet är redan bedömt." }, 409);
+      let bokfort: string[];
+      try {
+        bokfort = (await andraProvision(db, m.id, lage, mig, inst.tidszon)).bokfort;
+      } catch (e) {
+        return await provisionsfel(m, e, "Bedömningen kunde inte ändras");
+      }
+      await skrivHandelse({ actorId: mig, action: "mote.bedomt", objectType: "mote", objectId: m.id, meta: { niva: n, forra: m.niva, svar: lage.svar, andring: true, bokfort } });
+      return svar({ ok: n === m.niva ? "Nivån står kvar." : "Nivån är ändrad.", mote: m.id, niva: n, ...(bokfort.length ? { rattelse: bokfort[0] } : {}) });
+    }
+
+    let bokfort: string[];
+    try {
+      bokfort = (await lasProvision(db, m, inst, lage, mig)).bokfort;
+    } catch (e) {
+      if (e instanceof ProvisionKonflikt) return svar({ fel: "Mötet är redan bedömt." }, 409);
+      return await provisionsfel(m, e, "Bedömningen kunde inte sparas");
+    }
+    await skrivHandelse({ actorId: mig, action: "mote.bedomt", objectType: "mote", objectId: m.id, meta: { niva: n, svar: lage.svar, bokfort } });
+    return svar({ ok: "Bedömt.", mote: m.id, niva: n });
+  }
+
+  /**
+   * Ifrågasätt: den som har en rad med nivån hållet för mötet (bokaren, eller den som bokade om), en gång.
+   * Ärendet går som notis till alla admins (säljchef, VD, admin) som inte slutat. De avgör med `bedom`.
+   */
+  async function ifragasatt(): Promise<Response> {
+    const r = moteIndata(b);
+    if (!r.ok) return svar({ fel: r.fel }, 400);
+    const m = await hamtaMote(r.varden.mote);
+    if (!m) return svar({ fel: "Mötet finns inte." }, 404);
+    let utfall: "ok" | "redan" | "ingen";
+    try {
+      utfall = await ifragasattProvision(db, m.id, mig);
+    } catch {
+      return svar({ fel: "Ifrågasättandet kunde inte sparas." }, 500);
+    }
+    if (utfall === "ingen") return svar({ fel: "Bara den som fått mötesprovision för ett möte som räknas som hållet kan ifrågasätta nivån." }, 403);
+    if (utfall === "redan") return svar({ fel: "Nivån är redan ifrågasatt." }, 409);
+
+    await skrivHandelse({ actorId: mig, action: "mote.ifragasatt", objectType: "mote", objectId: m.id, meta: { niva: m.niva } });
+    const { data: roller } = await db.from("employee_role").select("employee_id").in("role", [...UTFALL_ROLLER]).limit(500);
+    const admins = await aktiva([...new Set(((roller ?? []) as { employee_id: string }[]).map((x) => x.employee_id))]);
+    const { data: kRad } = await db.from("mote_kedja").select("bolag_id").eq("id", m.kedja_id).maybeSingle();
+    const bolagId = (kRad as { bolag_id: string } | null)?.bolag_id ?? null;
+    const { data: bRad } = bolagId ? await db.from("mote_bolag").select("namn").eq("id", bolagId).maybeSingle() : { data: null };
+    const bolag = (bRad as { namn: string } | null)?.namn ?? "Mötet";
+    await notifieraFlera(admins, {
+      av: mig,
+      kalla: "mote-ifragasatt",
+      typ: "kalender",
+      rubrik: `${forFor(fullName(user!.employee!))} ifrågasätter nivån på ett möte`,
+      detalj: `${bolag} · ${nar(m.mote_tid)} · räknas som hållet`,
+      href: `/moten/${m.id}`,
+      objekt: { typ: "mote", id: m.id },
+    });
+    return svar({ ok: "Nivån är ifrågasatt. En admin avgör.", mote: m.id });
+  }
+
+  /**
+   * Låt stå: en admin låter en ifrågasatt nivå stå kvar. Bara säljchef, VD och admin. Villkorad på att mötet har en
+   * ifrågasatt rad utan beslut: en redan avgjord eller aldrig ifrågasatt nivå ger 409. Ingen pengaändring. Att ändra
+   * svaren är `bedom`, som sätter beslutet själv.
+   */
+  async function ifragasattBeslut(): Promise<Response> {
+    if (!farRattaUtfall(aktorn)) return svar({ fel: "Bara en admin avgör ett ifrågasatt möte." }, 403);
+    const r = ifragasattBeslutIndata(b);
+    if (!r.ok) return svar({ fel: r.fel }, 400);
+    const m = await hamtaMote(r.varden.mote);
+    if (!m) return svar({ fel: "Mötet finns inte." }, 404);
+    let antal: number;
+    try {
+      antal = await latStaProvision(db, m.id, mig);
+    } catch (e) {
+      return await provisionsfel(m, e, "Beslutet kunde inte sparas");
+    }
+    if (antal === 0) return svar({ fel: "Mötet är inte ifrågasatt, eller någon har redan avgjort det. Ladda om tavlan." }, 409);
+    await skrivHandelse({ actorId: mig, action: "mote.ifragasatt_beslut", objectType: "mote", objectId: m.id, meta: { niva: m.niva, beslut: "lat_sta", rader: antal } });
+    return svar({ ok: "Nivån står kvar.", mote: m.id });
+  }
+
+  /**
+   * Rätta ett utfall i efterhand (till exempel Hållet → Uteblev). Bara admin. Är mötesprovisionen låst räknas den
+   * om ur de låsta raderna (`andraProvision`), och en fastställd månad får en rättelse i innevarande, aldrig en tyst
+   * omskrivning. Är den inte låst sparas utfallet och mötet låses som om utfallet satts nu. Kedjan rörs inte.
+   */
+  async function rattaUtfall(): Promise<Response> {
+    const r = rattaUtfallIndata(b);
+    if (!r.ok) return svar({ fel: r.fel }, 400);
+    const m = await hamtaMote(r.varden.mote);
+    if (!m) return svar({ fel: "Mötet finns inte." }, 404);
+    if (!farRattaUtfall(aktorn)) return svar({ fel: "Bara en admin rättar ett utfall." }, 403);
+    if (!m.utfall) return svar({ fel: "Mötet har inget utfall att rätta." }, 409);
+    const till = r.varden.utfall;
+    const sammaUtfall = till === m.utfall;
+    if (m.resultat === "affar") return svar({ fel: "Mötet ledde till en affär. Det utfallet rättas inte här." }, 409);
+    if (till === "hallet") {
+      let ombokat: boolean;
+      try {
+        ombokat = await harOmbokning(db, m.id);
+      } catch {
+        return svar({ fel: "Mötets ombokningar gick inte att läsa. Försök igen." }, 500);
+      }
+      const hinder = ombokatHinder(till, ombokat);
+      if (hinder) return svar({ fel: hinder }, 409);
+    }
+    const inst = await lasInst();
+    const omfattat = omfattas(m.mote_tid, inst.gallerFran);
+    let lage: Lage;
+    if (till === "hallet") {
+      const beslut = nivaVidHallet({ farBedoma: true, fragor: inst.fragor, svar: r.varden.svar });
+      if ("fel" in beslut && omfattat) return svar({ fel: beslut.fel }, 400);
+      if (!("niva" in beslut) && omfattat) return svar({ fel: "Svara på frågorna: ett rättat Hållet behöver nivån." }, 400);
+      lage = "niva" in beslut ? beslut : { niva: "hallet", svar: [] };
+    } else {
+      lage = { tappat: till };
+    }
+    if (omfattat) {
+      const egen = await egenProvision(m, inst);
+      if (egen) return egen;
+    }
+
+    // En omkörning går igenom: står mötet redan på utfallet görs bara det som saknas. Finns inget som saknas
+    // (raderna har redan det läget, eller mötet omfattas inte) är svaret 409.
+    let varning: string | null = null;
+    let bokfort: string[] = [];
+    if (omfattat && m.provision_last_nar) {
+      if (sammaUtfall) {
+        let rader: Awaited<ReturnType<typeof lastaRader>>;
+        try {
+          rader = await lastaRader(db, m.id);
+        } catch {
+          return svar({ fel: "Mötesprovisionen gick inte att läsa. Försök igen." }, 500);
+        }
+        const nivaLika = !("niva" in lage) || m.niva === lage.niva;
+        if (nivaLika && radernaStammer(rader, lage, !!m.bekraftat_nar)) return svar({ fel: "Mötet har redan det utfallet." }, 409);
+      }
+      try {
+        bokfort = (await andraProvision(db, m.id, lage, mig, inst.tidszon)).bokfort;
+      } catch (e) {
+        return await provisionsfel(m, e, "Utfallet kunde inte rättas");
+      }
+    } else {
+      if (sammaUtfall && !omfattat) return svar({ fel: "Mötet har redan det utfallet." }, 409);
+      const lapp: Record<string, unknown> =
+        till === "hallet"
+          ? { utfall: "hallet" }
+          : { utfall: till, resultat: null, resultat_nar: null, resultat_av: null, nej_skal: null, niva: null, niva_svar: null, niva_nar: null, niva_av: null };
+      if (!sammaUtfall) {
+        const { data, error } = await db.from("mote").update(lapp).eq("id", m.id).eq("utfall", m.utfall).select("id");
+        if (error) return svar({ fel: "Utfallet kunde inte rättas." }, 500);
+        if (((data ?? []) as unknown[]).length === 0) return svar({ fel: "Mötet har ändrats. Ladda om tavlan." }, 409);
+      }
+      if (omfattat) {
+        const l = await lasSist({ ...m, utfall: till, niva: null }, inst, lage);
+        varning = l.varning;
+        bokfort = l.bokfort;
+      }
+    }
+    await skrivHandelse({
+      actorId: mig,
+      action: "mote.utfall_rattat",
+      objectType: "mote",
+      objectId: m.id,
+      meta: { fran: m.utfall, till, niva: "niva" in lage && omfattat ? lage.niva : null, svar: "niva" in lage ? lage.svar : null, bokfort },
+    });
+    return svar({ ok: "Utfallet är rättat.", mote: m.id, ...(bokfort.length ? { rattelse: bokfort[0] } : {}), ...(varning ? { varning } : {}) });
   }
 
   /**
@@ -1012,6 +1326,14 @@ export async function POST(request: Request) {
     const m = await hamtaMote(r.varden.mote);
     if (!m) return svar({ fel: "Mötet finns inte." }, 404);
     if (!farRadera(aktorn, m)) return svar({ fel: "Bara de som är med på mötet kan radera det, och bara innan det fått ett utfall. Ett möte med utfall raderas av en säljchef." }, 403);
+    // `mote_radera` tar mötets rader i mote_provision med sig (on delete cascade): ett låst belopp försvann då tyst.
+    if (m.provision_last_nar) {
+      try {
+        if (await harLastProvision(db, m.id)) return svar({ fel: RADERA_LAST }, 409);
+      } catch {
+        return svar({ fel: "Mötesprovisionen gick inte att läsa. Försök igen." }, 500);
+      }
+    }
 
     const { data, error } = await db.rpc("mote_radera", { p_mote: m.id, p_bara_oppet: m.utfall === null });
     if (error) return svar({ fel: "Mötet kunde inte raderas." }, 500);

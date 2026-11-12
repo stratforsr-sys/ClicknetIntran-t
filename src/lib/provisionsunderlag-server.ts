@@ -2,7 +2,8 @@ import "server-only";
 import { supabaseServer } from "@/lib/supabase/server";
 import { fullName } from "@/lib/auth";
 import { hamtaNivaer } from "@/lib/bonus-server";
-import { hamtaOrder } from "@/lib/order-server";
+import { hamtaOrder, hamtaChefsposter } from "@/lib/order-server";
+import { hamtaMotesposter } from "@/lib/motesposter-server";
 import { hamtaGodkandaFran } from "@/lib/konsekvens-server";
 import { lagenPerPerson } from "@/lib/konsekvens";
 import { underlagForAlla } from "@/lib/provision-motor";
@@ -80,16 +81,18 @@ export async function hamtaUnderlag(manad: string): Promise<Underlagsdokument> {
   }
 
   if (!faststalld) {
-    const [order, nivaer, godkanda] = await Promise.all([
+    const [order, nivaer, godkanda, chefsposter, motesposter] = await Promise.all([
       hamtaOrder(manad),
       hamtaNivaer(),
       hamtaGodkandaFran(manad),
+      hamtaChefsposter(manad),
+      hamtaMotesposter(manad),
     ]);
 
     // Samma anrop som `faststallPeriod` gor. Skulle de tva glida isar visar
     // det preliminara underlaget ett annat tal an attesten sedan bokfor, och
     // den avvikelsen upptacks forst nar nagon jamfor tva papper.
-    for (const u of underlagForAlla(order, manad, nivaer, undefined, lagenPerPerson(godkanda, manad))) {
+    for (const u of underlagForAlla(order, manad, nivaer, undefined, lagenPerPerson(godkanda, manad), chefsposter, motesposter)) {
       const r = rad(u.employee_id);
       for (const post of u.rader) {
         r.poster.push({ slag: post.slag, text: post.text, belopp: post.belopp });

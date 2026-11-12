@@ -5,6 +5,27 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-12 · Möten: utfall, kvalificering och mötesprovision, byggsteg 3 av 4 (lokalt, 0289 ej körd)
+
+**Varför.** Mötet ska ge bokaren provision i två nivåer, och nivån ska komma ur säljarens svar på kvalificeringsfrågorna,
+inte ur en uppskattning. Allt ställs in per installation (steg 2), så koden har bara förval.
+
+**Besluten (uppgift 8).** Utfallsrutan är ett blad med de fyra utfallen i stället för fyra dialoger, och återanvänder
+Hållet-, Uteblev- och Flyttat-koden genom `moTyp(D)` i stället för att skrivas om. Inget är förvalt: ett förvalt Hållet hade
+sparat fel utfall för den som trycker Spara snabbt. Frågorna är obligatoriska för den som får bedöma (hållaren/admin): ett
+halvt svar sparar ingenting. Den som inte får bedöma ser "Hållaren bedömer mötet", skickar inga svar och mötet väntar på
+bedömning; hållaren eller en admin bedömer med Bedöm i Avgjort. Låt stå är en egen handling, villkorad på
+`ifragasatt_nar is not null and beslut_nar is null`, och rör inga belopp. Jobbet är bara notiser: "samma dag" är
+mötets (eller utfallets) kalenderdag i `moten.tidszon`, och den som påminns kommer ur `vemPaminns`, en ren funktion med
+eget prov. Idempotensen: ingen notis per (källa, möte, kalenderdag) skrivs två gånger, kontrollerat mot `notification_event`
+(`notisId(källa, möte, dag)` är nyckeln). Reparationen använder mötets `utfall_av` som `av`, eftersom
+`commission_entry.entered_by` är NOT NULL, och låser inget som utfallet satts för mindre än fem minuter sedan.
+
+**Provat.** `tests/motesflode.mjs` (`vemPaminns`: före 18:00, sluttiden, två dagar, galler-fran, sommartid, tidszon),
+`tests/moten.mjs` (`ifragasattBeslutIndata`), `tests/moten-db.mjs` (Låt stå mot riktiga databasen i en transaktion),
+roboten `pipeline-prov.mjs --utfall` och `--ifr` plus de äldre lägena.
+**Ej provat:** jobbet mot produktionen (rutten finns inte förrän pushen), notiserna i klockan, Affär-vägen med en riktig order.
+
 ## 2026-11-12 · Möten: inställningarna, byggsteg 2 av 4 (på `main`, ingen migration)
 
 **Varför.** Nav säljs, så allt som skiljer ett företag från ett annat ska vara en inställning, och inställningarna

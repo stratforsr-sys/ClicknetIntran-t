@@ -6,6 +6,7 @@ import { svensktDatum } from "@/lib/klocka";
 import { hamtaAllProvision, hamtaProvision } from "@/lib/provision-server";
 import { manadFore, manadsnyckel } from "@/lib/provision";
 import { hamtaChefsposter, hamtaOrder, hamtaOrderFor, type Orderrad } from "@/lib/order-server";
+import { hamtaMotesposter, hamtaMotesvy } from "@/lib/motesposter-server";
 import { hamtaNivaer, hamtaPerioder } from "@/lib/bonus-server";
 import { hamtaKriterier, hamtaKvPerManad, hamtaPolicyer, hamtaSamtal } from "@/lib/kv-server";
 import { hamtaMal } from "@/lib/saljmal-server";
@@ -23,7 +24,8 @@ export type { NdProvision } from "./provisionforma";
  * UTKASTETS EGEN MOTOR ANVANDS INTE. Varje manad, varje person, raknas har med
  * repots `raknaUnderlag` / `underlagForAlla` pa samma material som sidan:
  * orderna (RLS), trappan (`hamtaNivaer`), K&V (`hamtaKvPerManad`),
- * konsekvenslaget (`lagenPerPerson`) och overtacken (`hamtaChefsposter`).
+ * konsekvenslaget (`lagenPerPerson`), overtacken (`hamtaChefsposter`) och
+ * motesprovisionen (`hamtaMotesposter`, en rad per mote med ett last belopp).
  *
  * En STANGD manad ar huvudboken (`commission_entry`), precis som pa sidan:
  * summan ar det bokforda och raderna ar posterna. En OPPEN manad ar motorns
@@ -58,7 +60,7 @@ export async function byggProvision(supabase: SupabaseClient, user: CurrentUser)
   const manader = Array.from({ length: 12 }, (_, i) => manadFore(idag, i));
   const franOchMed = manader[manader.length - 1];
 
-  const [poster, material, nivaer, perioder, minaHandelser, regler, godkanda, kvPerManad, mal, chefsposter, kvSamtal, policyer, kriterier, { data: personrader }] =
+  const [poster, material, nivaer, perioder, minaHandelser, regler, godkanda, kvPerManad, mal, chefsposter, kvSamtal, policyer, kriterier, motesposter, motesvy, { data: personrader }] =
     await Promise.all([
       provisionschef ? hamtaAllProvision(franOchMed) : hamtaProvision(mig, franOchMed),
       provisionschef ? hamtaOrder(franOchMed) : hamtaOrderFor(mig, franOchMed),
@@ -73,6 +75,8 @@ export async function byggProvision(supabase: SupabaseClient, user: CurrentUser)
       hamtaSamtal(franOchMed),
       hamtaPolicyer(),
       hamtaKriterier(),
+      hamtaMotesposter(franOchMed),
+      hamtaMotesvy(supabase, mig, franOchMed),
       supabase.from("employee").select("id, first_name, last_name, status, employee_number, employee_role!employee_role_employee_id_fkey(role)"),
     ]);
 
@@ -106,6 +110,7 @@ export async function byggProvision(supabase: SupabaseClient, user: CurrentUser)
     poster: poster as Post[],
     material: material as Orderrad[],
     nivaer, perioder, minaHandelser, regler, godkanda, kvPerManad, mal, chefsposter,
+    motesposter, motesvy,
     kvSamtal, policyer, kriterier, personrader: personer,
   });
   const konsekvens = regler.map((r) => ({ ordning: r.ordning, antal: r.antal_handelser, manader: r.periodlangd_manader, atgard: r.atgard, notifiera: r.notifiera }));

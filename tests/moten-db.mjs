@@ -35,6 +35,8 @@ const MIGRATIONER = join(HAR, "..", "supabase", "migrations");
 const FILER = ["0260_moten.sql", "0261_moten_kolumn.sql", "0262_moten_uppslag.sql"];
 // V6a: mote_radera. Läses alltid från disk och körs inne i transaktionen (create or replace), så att det är filens text som provas.
 const MIGRATION_0268 = join(MIGRATIONER, "0268_moten_radera.sql");
+// Uppgift 6 (fixvarv 1): låsningen, ändringen och rättelsen i en transaktion. Läses från disk och körs i transaktionen.
+const MIGRATION_0288 = join(MIGRATIONER, "0288_moten_provision_bokforing.sql");
 
 if (!process.env.DATABASE_URL) {
   console.error("DATABASE_URL behovs.\n  set -a; . ~/.clicknet/nav.env; set +a; TZ=UTC node tests/moten-db.mjs");
@@ -1023,7 +1025,10 @@ async function main() {
     await ok("ekonomi kan inte skriva", async () =>
       somAnstalld(EKO.authId, async () => (await laggIn(rad({ employee_id: EKO.id }))) !== null));
 
-    sektion("0287: mote_las_provision");
+    sektion("0287/0288: mote_las_provision");
+    if (!existsSync(MIGRATION_0288)) throw new Error("0288_moten_provision_bokforing.sql saknas");
+    await db.query(readFileSync(MIGRATION_0288, "utf8"));
+    console.log("  (0288 körd i transaktionen)");
     const moteL = await ett(
       `insert into mote (kedja_id, bokat_av, halls_av, mote_tid, kalla, art, utfall, utfall_nar)
        values ($1, $2, $3, now() - interval '3 hours', 'prov', 'ny', 'hallet', now()) returning id`,
@@ -1032,7 +1037,7 @@ async function main() {
     const raderL = JSON.stringify([{ employee_id: BOK.id, niva: "kvalificerat", belopp: 600, mojligt: 600, skal: null,
       satser: { kvalificerat: 600, hallet: 300 }, delat_med: null, manad: "2026-11-01", del: "hel" }]);
     const svarL = JSON.stringify([{ id: "beslutsfattare", text: "Var rätt beslutsfattare med?", ja: true }]);
-    const las = () => felkod(`select public.mote_las_provision($1, 'kvalificerat', $2::jsonb, $3, $4::jsonb)`, [moteL.id, svarL, HALL.id, raderL]);
+    const las = () => felkod(`select public.mote_las_provision($1, 'kvalificerat', $2::jsonb, $3, $4::jsonb, null, null)`, [moteL.id, svarL, HALL.id, raderL]);
     await ok("första låsningen går", async () => (await las()) === null);
     await ok("mötet har nivå, svar och låstid", async () => {
       const r = await ett(`select niva, niva_svar, niva_av, provision_last_nar from mote where id = $1`, [moteL.id]);
@@ -1053,7 +1058,7 @@ async function main() {
       );
       const rader = JSON.stringify([{ employee_id: BOK.id, niva: null, belopp: 0, mojligt: 600, skal: "Inte bekräftat före mötet",
         satser: { kvalificerat: 600, hallet: 300 }, delat_med: null, manad: "2026-11-01", del: "hel" }]);
-      const kod = await felkod(`select public.mote_las_provision($1, null, null, $2, $3::jsonb)`, [t.id, HALL.id, rader]);
+      const kod = await felkod(`select public.mote_las_provision($1, null, null, $2, $3::jsonb, null, null)`, [t.id, HALL.id, rader]);
       const m = await ett(`select niva, provision_last_nar from mote where id = $1`, [t.id]);
       return kod === null && m.niva === null && m.provision_last_nar !== null;
     });
@@ -1063,21 +1068,350 @@ async function main() {
          values ($1, $2, $3, now() - interval '5 hours', 'prov', 'ny', 'avbokat', now()) returning id`,
         [kedjaP.id, BOK.id, HALL.id],
       );
-      return (await felkod(`select public.mote_las_provision($1, 'hallet', '[]'::jsonb, $2, '[]'::jsonb)`, [t.id, HALL.id])) === "P0409";
+      return (await felkod(`select public.mote_las_provision($1, 'hallet', '[]'::jsonb, $2, '[]'::jsonb, null, null)`, [t.id, HALL.id])) === "P0409";
     });
     await ok("authenticated får inte anropa funktionen", async () =>
       somAnstalld(HALL.authId, async () => (await las()) === "42501"));
-    await ok("funktionen: security definer, search_path, bara service_role", async () => {
+    const rattighet = (sig) => ett(
+      `select p.prosecdef, p.proconfig,
+              has_function_privilege('anon', p.oid, 'execute') as anon,
+              has_function_privilege('authenticated', p.oid, 'execute') as auth,
+              has_function_privilege('service_role', p.oid, 'execute') as service
+         from pg_proc p where p.oid = $1::regprocedure`, [sig]);
+    for (const sig of ["public.mote_las_provision(uuid,text,jsonb,uuid,jsonb,date,text)", "public.mote_andra_provision(uuid,text,timestamptz,text,text,jsonb,uuid,jsonb,date,text)"]) {
+      await ok(`${sig.split("(")[0]}: security definer, search_path, bara service_role`, async () => {
+        const r = await rattighet(sig);
+        return r.prosecdef === true && (r.proconfig ?? []).some((c) => c.startsWith("search_path=")) && !r.anon && !r.auth && r.service === true;
+      });
+    }
+    await ok("mote_bokfor_rattelse: ingen utifrån får köra den (bara funktionerna ovan)", async () => {
+      const r = await rattighet("public.mote_bokfor_rattelse(uuid,uuid,date,int,numeric,date,text,uuid)");
+      return !r.anon && !r.auth && !r.service && (r.proconfig ?? []).some((c) => c.startsWith("search_path="));
+    });
+    await ok("0287:s version med fem argument finns inte kvar (en väg)", async () =>
+      (await ett(`select count(*)::int as n from pg_proc where proname = 'mote_las_provision'`)).n === 1);
+
+    }
+
+    // ---- Uppgift 6: utfallet med nivån, och låsningen ------------------------
+    // motesprovision-server.ts körs på riktigt mot databasen, i provets transaktion, genom
+    // `pgSupabase` nedan (de anrop modulen gör, översatta till SQL med samma svar som PostgREST).
+    {
+    const MF = await import("../src/lib/nav2/motesflode.ts");
+    const MFo = await import("../src/lib/nav2/motenforma.ts");
+    const MP = await import("../src/lib/nav2/motesprovision-server.ts");
+    const sb = pgSupabase(db);
+    const B6 = await anstalld("salesperson", "Bokare6");
+    const R6 = await anstalld("salesperson", "Ombokare6");
+    const U6 = await anstalld("salesperson", "Omarkerad6");
+    const H6 = await anstalld("salesperson", "Hallare6");
+    const K6 = await anstalld("salesperson", "Kollega6");
+    const A6 = await anstalld("admin", "Admin6");
+    // En öppen kedja per bolag (mote_kedja_en_oppen): varje provkedja får ett eget bolag med samma namn.
+    const nyKedja6 = async () => {
+      const bo = await ett(`insert into mote_bolag (namn, kalla) values ('PROV moten u6 AB', 'prov') returning id`);
+      return (await ett(`insert into mote_kedja (bolag_id) values ($1) returning id`, [bo.id])).id;
+    };
+    const kedja6 = await nyKedja6();
+    const S6 = { kvalificerat: 600, hallet: 300 };
+    const inst6 = { ...structuredClone(MF.INST_FORVAL), satser: S6, mottagare: [B6.id, R6.id], ombokning: "ny", gallerFran: "2026-01-01T00:00:00Z" };
+    const TZ6 = inst6.tidszon;
+    const JA6 = [{ id: "beslutsfattare", ja: true }, { id: "syfte", ja: true }];
+    const NEJ6 = [{ id: "beslutsfattare", ja: true }, { id: "syfte", ja: false }];
+    const innevarande6 = MF.manadFor(new Date().toISOString(), TZ6);
+    const nyttMote6 = async (o = {}) => {
+      const v = { bokat: B6.id, halls: H6.id, tid: "now() - interval '2 hours'", art: "ny", foregaende: null, utfall: "hallet", bekraftat: true, kedja: kedja6, ...o };
       const r = await ett(
-        `select p.prosecdef, p.proconfig,
-                has_function_privilege('anon', p.oid, 'execute') as anon,
-                has_function_privilege('authenticated', p.oid, 'execute') as auth,
-                has_function_privilege('service_role', p.oid, 'execute') as service
-           from pg_proc p where p.oid = 'public.mote_las_provision(uuid,text,jsonb,uuid,jsonb)'::regprocedure`,
+        `insert into mote (kedja_id, bokat_av, halls_av, mote_tid, kalla, art, foregaende_id, utfall, utfall_nar, bekraftat_nar)
+         values ($1, $2, $3, ${v.tid}, 'prov', $4, $5, $6::text, case when $6::text is null then null else now() end,
+                 case when $7::boolean then now() - interval '3 days' end)
+         returning id, kedja_id, bokat_av, halls_av, mote_tid, bekraftat_nar`,
+        [v.kedja, v.bokat, v.halls, v.art, v.foregaende, v.utfall, v.bekraftat],
       );
-      return r.prosecdef === true && (r.proconfig ?? []).some((c) => c.startsWith("search_path=")) && !r.anon && !r.auth && r.service === true;
+      return { ...r, mote_tid: r.mote_tid.toISOString(), bekraftat_nar: r.bekraftat_nar ? r.bekraftat_nar.toISOString() : null };
+    };
+    const moteRad6 = (id) => ett(`select utfall, niva, niva_svar, niva_av, provision_last_nar from mote where id = $1`, [id]);
+    const rader6 = async (id) => (await db.query(
+      `select employee_id, niva, belopp::float8 as belopp, mojligt::float8 as mojligt, skal, satser, delat_med, del, manad::text as manad, version,
+              ifragasatt_nar, beslut_nar, beslut_av
+         from mote_provision where mote_id = $1 order by del, employee_id`, [id])).rows;
+    const poster6 = async (anst, manad) => (await db.query(
+      `select amount::float8 as amount, kind, source, external_ref, note, entered_by from commission_entry
+        where employee_id = $1 and period_month = $2::date order by entered_at, external_ref`, [anst, manad])).rows;
+    const kastar6 = async (f) => { try { await f(); return null; } catch (e) { return e; } };
+    // Oktober 2026 fastställd i transaktionen (rullas tillbaka). Finns raden redan står den kvar.
+    await db.query(`insert into commission_period (period_month, status, closed_by) values ('2026-10-01', 'faststalld', $1) on conflict do nothing`, [A6.id]);
+
+    sektion("Uppgift 6: Hållet med nivån");
+    const m1 = await nyttMote6();
+    const b1 = MFo.nivaVidHallet({ farBedoma: MFo.farBedoma({ id: H6.id, roller: ["salesperson"] }, { ...m1, med: [] }), fragor: inst6.fragor, svar: JA6 });
+    await ok("hållaren med två ja: nivån kvalificerat", b1.niva === "kvalificerat");
+    await MP.lasProvision(sb, m1, inst6, b1, H6.id);
+    await ok("mötet: niva kvalificerat, svaren med frågornas text, låst", async () => {
+      const r = await moteRad6(m1.id);
+      return r.niva === "kvalificerat" && r.niva_svar.length === 2 && r.niva_svar[0].text === "Var rätt beslutsfattare med?" && r.niva_av === H6.id && r.provision_last_nar !== null;
+    });
+    await ok("en rad: bokaren, belopp = kvalificerat-satsen, hel, satserna sparade", async () => {
+      const r = await rader6(m1.id);
+      return r.length === 1 && r[0].employee_id === B6.id && r[0].belopp === 600 && r[0].mojligt === 600 && r[0].del === "hel"
+        && r[0].satser.kvalificerat === 600 && r[0].satser.hallet === 300 && r[0].manad === MF.manadFor(m1.mote_tid, TZ6) && r[0].version === 1;
+    });
+    await ok("öppen månad: ingen post i huvudboken", async () => (await poster6(B6.id, innevarande6)).length === 0);
+
+    const m2 = await nyttMote6();
+    const b2 = MFo.nivaVidHallet({ farBedoma: MFo.farBedoma({ id: K6.id, roller: ["salesperson"] }, { ...m2, med: [K6.id] }), fragor: inst6.fragor, svar: null });
+    await ok("kollegan (0286) sätter Hållet utan svar: väntar på bedömning", b2.vantar === true);
+
+    sektion("Uppgift 6: bedöm två gånger");
+    const m3 = await nyttMote6();
+    await MP.lasProvision(sb, m3, inst6, { niva: "kvalificerat", svar: MF.nivaSvar(inst6.fragor, JA6) }, H6.id);
+    const e3 = await kastar6(() => MP.lasProvision(sb, m3, inst6, { niva: "hallet", svar: MF.nivaSvar(inst6.fragor, NEJ6) }, H6.id));
+    await ok("andra bedömningen ger ProvisionKonflikt (rutten svarar 409)", e3 instanceof MP.ProvisionKonflikt);
+    await ok("nivån och raden står kvar från första", async () => (await moteRad6(m3.id)).niva === "kvalificerat" && (await rader6(m3.id)).map((r) => r.belopp).join() === "600");
+
+    sektion("Uppgift 6: fastställd månad");
+    const m4 = await nyttMote6({ tid: "'2026-10-15 10:00+02'" });
+    await MP.lasProvision(sb, m4, inst6, { niva: "kvalificerat", svar: MF.nivaSvar(inst6.fragor, JA6) }, H6.id);
+    await ok("hållarens första bedömning: raden i oktober", async () => (await rader6(m4.id))[0]?.manad === "2026-10-01");
+    await ok("och en rättelse på hela beloppet i innevarande månad (gammalt 0)", async () => {
+      const p = await poster6(B6.id, innevarande6);
+      return p.length === 1 && p[0].amount === 600 && p[0].kind === "rattelse" && p[0].source === "motor"
+        && p[0].external_ref === `${innevarande6}:${B6.id}:rattelse:mote:${m4.id}:v1`
+        && p[0].note === "Rättelse möte PROV moten u6 AB 2026-10-15" && p[0].entered_by === H6.id;
+    });
+    await ok("ingen post i den fastställda månaden", async () => (await poster6(B6.id, "2026-10-01")).length === 0);
+
+    sektion("Uppgift 6: vem som får rader");
+    const m5 = await nyttMote6({ bokat: U6.id });
+    await MP.lasProvision(sb, m5, inst6, { niva: "kvalificerat", svar: MF.nivaSvar(inst6.fragor, JA6) }, H6.id);
+    await ok("bokare utan markering: noll rader, men låst och med nivå", async () => {
+      const r = await moteRad6(m5.id);
+      return (await rader6(m5.id)).length === 0 && r.provision_last_nar !== null && r.niva === "kvalificerat";
+    });
+    const kU = await nyKedja6();
+    const mUa = await nyttMote6({ kedja: kU });
+    const mUb = await nyttMote6({ kedja: kU, art: "uppfoljning", utfall: "uteblev" });
+    const mUc = await nyttMote6({ kedja: kU, art: "ombokning", foregaende: mUb.id, bokat: R6.id });
+    await ok("ombokning av ett uppföljningsmöte: ingen ursprunglig bokare", async () => (await MP.ursprungligBokare(sb, mUc.id)) === null);
+    await MP.lasProvision(sb, mUc, inst6, { niva: "kvalificerat", svar: MF.nivaSvar(inst6.fragor, JA6) }, H6.id);
+    await ok("och noll rader", async () => (await rader6(mUc.id)).length === 0 && (await moteRad6(mUc.id)).provision_last_nar !== null);
+    await ok("det första mötet i en ombokad kedja är den ursprungliga bokarens", async () => {
+      const kO = await nyKedja6();
+      const a = await nyttMote6({ kedja: kO, utfall: "uteblev" });
+      const b = await nyttMote6({ kedja: kO, art: "ombokning", foregaende: a.id, bokat: H6.id });
+      return (await MP.ursprungligBokare(sb, b.id)) === B6.id && mUa.id !== null;
+    });
+    await ok("möte före moten.galler-fran: inga rader och ingen låsning", async () => {
+      const m = await nyttMote6();
+      const svar = await MP.lasProvision(sb, m, { ...inst6, gallerFran: new Date(Date.now() + 60_000).toISOString() }, { niva: "kvalificerat", svar: [] }, H6.id);
+      const r = await moteRad6(m.id);
+      return svar.last === false && r.niva === null && r.provision_last_nar === null && (await rader6(m.id)).length === 0;
     });
 
+    sektion("Uppgift 6: tappade möten");
+    const m8 = await nyttMote6({ utfall: "uteblev", bekraftat: false });
+    await MP.lasProvision(sb, m8, inst6, { tappat: "uteblev" }, K6.id);
+    await ok("uteblev på obekräftat möte: skälet, belopp 0, möjligt = kvalificerat", async () => {
+      const r = await rader6(m8.id);
+      return r.length === 1 && r[0].skal === "Inte bekräftat före mötet" && r[0].belopp === 0 && r[0].mojligt === 600 && r[0].niva === null;
+    });
+    await ok("mötet: ingen nivå, men låst", async () => { const r = await moteRad6(m8.id); return r.niva === null && r.provision_last_nar !== null; });
+    await ok("en andra låsning av det tappade mötet ger ProvisionKonflikt", async () =>
+      (await kastar6(() => MP.lasProvision(sb, m8, inst6, { tappat: "uteblev" }, K6.id))) instanceof MP.ProvisionKonflikt);
+
+    sektion("Uppgift 6: dela, och omräkning ur raden");
+    const kD = await nyKedja6();
+    const mD = await nyttMote6({ kedja: kD, utfall: "uteblev" });
+    const mE = await nyttMote6({ kedja: kD, art: "ombokning", foregaende: mD.id, bokat: R6.id });
+    const instDela = { ...inst6, ombokning: "dela", satser: { kvalificerat: 600.01, hallet: 300 } };
+    await MP.lasProvision(sb, mE, instDela, { niva: "kvalificerat", svar: MF.nivaSvar(inst6.fragor, JA6) }, H6.id);
+    await ok("ombokning av en annan markerad bokare, dela: två rader som summerar till satsen", async () => {
+      const r = await rader6(mE.id);
+      const b = r.find((x) => x.employee_id === B6.id);
+      const o = r.find((x) => x.employee_id === R6.id);
+      return r.length === 2 && b.del === "forsta_halvan" && b.belopp === 300 && b.delat_med === R6.id
+        && o.del === "andra_halvan" && o.belopp === 300.01 && o.delat_med === B6.id && Math.round((b.belopp + o.belopp) * 100) === 60001;
+    });
+    // Markeringen och regeln ändras (och satserna): omräkningen tar ändå radens del och satser.
+    await db.query(`insert into nav_setting (key, value) values ('moten.provision', '{"kvalificerat": 9999, "hallet": 1}'::jsonb)
+                    on conflict (key) do update set value = excluded.value`);
+    await db.query(`insert into nav_setting (key, value) values ('moten.ombokning-provision', '"ny"'::jsonb), ('moten.mottagare', '[]'::jsonb)
+                    on conflict (key) do update set value = excluded.value`);
+    await ok("ändrad sats efter låsningen ändrar inte raden", async () => {
+      const inst = MF.lasInstallningar((await db.query(`select key, value from nav_setting where key like 'moten.%'`)).rows);
+      const r = await rader6(m1.id);
+      return inst.satser.kvalificerat === 9999 && r[0].belopp === 600 && r[0].satser.kvalificerat === 600;
+    });
+    await MP.andraProvision(sb, mE.id, { niva: "hallet", svar: MF.nivaSvar(inst6.fragor, NEJ6) }, A6.id, TZ6);
+    await ok("admin bedömer om efter att markeringen och regeln ändrats: radens del och satser", async () => {
+      const r = await rader6(mE.id);
+      const b = r.find((x) => x.employee_id === B6.id);
+      const o = r.find((x) => x.employee_id === R6.id);
+      return r.length === 2 && b.belopp === 150 && o.belopp === 150 && b.niva === "hallet" && b.version === 2 && o.version === 2 && b.satser.kvalificerat === 600.01;
+    });
+    await ok("mötet har den nya nivån och adminens svar", async () => { const r = await moteRad6(mE.id); return r.niva === "hallet" && r.niva_av === A6.id && r.niva_svar[1].ja === false; });
+    await MP.andraProvision(sb, m1.id, { niva: "kvalificerat", svar: MF.nivaSvar(inst6.fragor, JA6) }, A6.id, TZ6);
+    await ok("samma nivå efter ändrad sats: beloppet står kvar (radens satser)", async () => (await rader6(m1.id))[0].belopp === 600);
+
+    sektion("Uppgift 6: ändring i en fastställd månad");
+    await db.query(`insert into commission_entry (employee_id, period_month, amount, source, note, entered_by) values ($1, '2026-10-01', 1234, 'manual', 'PROV moten u6', $2)`, [B6.id, A6.id]);
+    const okt6 = JSON.stringify(await poster6(B6.id, "2026-10-01"));
+    await MP.andraProvision(sb, m4.id, { niva: "hallet", svar: MF.nivaSvar(inst6.fragor, NEJ6) }, A6.id, TZ6);
+    await ok("admin sänker nivån: rättelse ny − gammal (−300) i innevarande, v2", async () => {
+      const p = (await poster6(B6.id, innevarande6)).filter((x) => x.external_ref?.includes(m4.id));
+      return p.length === 2 && p[1].amount === -300 && p[1].external_ref === `${innevarande6}:${B6.id}:rattelse:mote:${m4.id}:v2` && p[1].entered_by === A6.id;
+    });
+    await ok("den fastställda månadens poster är oförändrade", async () => JSON.stringify(await poster6(B6.id, "2026-10-01")) === okt6);
+    await ok("raden: hållet, 300, version 2", async () => { const r = (await rader6(m4.id))[0]; return r.belopp === 300 && r.niva === "hallet" && r.version === 2; });
+    await MP.andraProvision(sb, m4.id, { tappat: "uteblev" }, A6.id, TZ6);
+    await ok("admin rättar Hållet till Uteblev: mötet utan nivå, raden 0 med skälet", async () => {
+      const m = await moteRad6(m4.id);
+      const r = (await rader6(m4.id))[0];
+      return m.utfall === "uteblev" && m.niva === null && r.belopp === 0 && r.niva === null && r.skal === "Uteblev trots bekräftelse" && r.version === 3;
+    });
+    await ok("och en rättelse på −300 (v3); oktober fortfarande orörd", async () => {
+      const p = (await poster6(B6.id, innevarande6)).filter((x) => x.external_ref?.includes(m4.id));
+      return p.length === 3 && p[2].amount === -300 && p[2].external_ref.endsWith(":v3") && JSON.stringify(await poster6(B6.id, "2026-10-01")) === okt6;
+    });
+    await ok("summan av rättelserna är det nya beloppet (600 − 300 − 300 = 0)", async () =>
+      (await poster6(B6.id, innevarande6)).filter((x) => x.external_ref?.includes(m4.id)).reduce((s, x) => s + x.amount, 0) === 0);
+
+    sektion("Uppgift 6 (0288): en transaktion, en gång per version");
+    const rattelse = (anst, version, innevarande) => ett(
+      `select public.mote_bokfor_rattelse($1, $2, '2026-10-01', $3, 50, $4::date, 'PROV', $5) as m`, [m4.id, anst, version, innevarande, A6.id]);
+    await ok("samma version körd om en senare månad: ingen andra post", async () => {
+      const a = await rattelse(R6.id, 9, innevarande6);
+      const b = await rattelse(R6.id, 9, MF.manadFor(new Date(Date.now() + 40 * 864e5).toISOString(), TZ6));
+      const n = (await ett(`select count(*)::int as n from commission_entry where employee_id = $1 and external_ref like '%:rattelse:mote:' || $2 || ':v9'`, [R6.id, m4.id])).n;
+      return a.m !== null && b.m === null && n === 1;
+    });
+    await ok("version 1 och version 10 är olika rättelser (mönstret slutar på versionen)", async () => {
+      await rattelse(R6.id, 1, innevarande6);
+      return (await rattelse(R6.id, 10, innevarande6)).m !== null;
+    });
+    await ok("innevarande månad också fastställd: P0422, inget bokfört", async () =>
+      (await felkod(`select public.mote_bokfor_rattelse($1, $2, '2026-10-01', 11, 50, '2026-10-01', 'PROV', $3)`, [m4.id, R6.id, A6.id])) === "P0422"
+      && (await poster6(R6.id, "2026-10-01")).length === 0);
+    await ok("nollskillnad bokförs inte", async () => (await ett(
+      `select public.mote_bokfor_rattelse($1, $2, '2026-10-01', 13, 0, $3::date, 'PROV', $4) as m`, [m4.id, R6.id, innevarande6, A6.id])).m === null);
+    await ok("låsning i fastställd månad när innevarande också är fastställd: kastar, mötet är olåst och utan rader", async () => {
+      const m = await nyttMote6({ tid: "'2026-10-16 10:00+02'" });
+      const e = await kastar6(() => MP.lasProvision(sb, m, inst6, { niva: "kvalificerat", svar: [] }, H6.id, new Date("2026-10-20T12:00:00Z")));
+      const r = await moteRad6(m.id);
+      return e instanceof Error && !(e instanceof MP.ProvisionKonflikt) && r.niva === null && r.provision_last_nar === null && (await rader6(m.id)).length === 0;
+    });
+    await ok("fel efter mötesskrivningen i låsningen (negativt belopp): inget skrivet", async () => {
+      const m = await nyttMote6({ tid: "'2026-10-17 10:00+02'" });
+      const rader = JSON.stringify([
+        { employee_id: B6.id, niva: "kvalificerat", belopp: 600, mojligt: 600, skal: null, satser: S6, delat_med: null, manad: "2026-10-01", del: "hel" },
+        { employee_id: R6.id, niva: "kvalificerat", belopp: -1, mojligt: 600, skal: null, satser: S6, delat_med: null, manad: "2026-10-01", del: "hel" },
+      ]);
+      const fore = (await poster6(B6.id, innevarande6)).length;
+      const kod = await felkod(`select public.mote_las_provision($1, 'kvalificerat', '[]'::jsonb, $2, $3::jsonb, $4::date, 'PROV')`, [m.id, H6.id, rader, innevarande6]);
+      const r = await moteRad6(m.id);
+      return kod === "23514" && r.niva === null && r.provision_last_nar === null && (await rader6(m.id)).length === 0 && (await poster6(B6.id, innevarande6)).length === fore;
+    });
+    await ok("fel efter mötesskrivningen i ändringen (negativt belopp): mötet, raderna och huvudboken orörda", async () => {
+      const m = await nyttMote6({ tid: "'2026-10-18 10:00+02'" });
+      await MP.lasProvision(sb, m, inst6, { niva: "kvalificerat", svar: [] }, H6.id);
+      const fore = await moteRad6(m.id);
+      const foreNar = (await ett(`select niva_nar::text as t from mote where id = $1`, [m.id])).t;
+      const forePoster = JSON.stringify(await poster6(B6.id, innevarande6));
+      const kod = await felkod(
+        `select public.mote_andra_provision($1, 'hallet', $2::timestamptz, 'hallet', 'hallet', '[]'::jsonb, $3, $4::jsonb, $5::date, 'PROV')`,
+        [m.id, foreNar, A6.id, JSON.stringify([{ employee_id: B6.id, version: 1, niva: "hallet", belopp: -5, mojligt: 600, skal: null }]), innevarande6]);
+      const efter = await moteRad6(m.id);
+      const r = (await rader6(m.id))[0];
+      return kod === "23514" && efter.niva === fore.niva && efter.niva === "kvalificerat" && r.belopp === 600 && r.version === 1
+        && JSON.stringify(await poster6(B6.id, innevarande6)) === forePoster;
+    });
+    await ok("ändringen med en gammal version: P0409, inget skrivet", async () => {
+      const t = (await ett(`select niva_nar::text as t from mote where id = $1`, [m4.id])).t;
+      const kod = await felkod(
+        `select public.mote_andra_provision($1, 'uteblev', $2::timestamptz, 'avbokat', null, null, $3, $4::jsonb, $5::date, 'PROV')`,
+        [m4.id, t, A6.id, JSON.stringify([{ employee_id: B6.id, version: 1, niva: null, belopp: 0, mojligt: 600, skal: "Avbokat" }]), innevarande6]);
+      return kod === "P0409" && (await moteRad6(m4.id)).utfall === "uteblev" && (await rader6(m4.id))[0].version === 3;
+    });
+    await ok("ändringen utan alla rader: P0409", async () => {
+      const kod = await felkod(
+        `select public.mote_andra_provision($1, 'hallet', $2::timestamptz, 'hallet', 'kvalificerat', '[]'::jsonb, $3, '[]'::jsonb, $4::date, 'PROV')`,
+        [mE.id, (await ett(`select niva_nar::text as t from mote where id = $1`, [mE.id])).t, A6.id, innevarande6]);
+      return kod === "P0409";
+    });
+
+    sektion("Uppgift 6: vem som får provision (ingen sätter nivån på sin egen)");
+    await ok("olåst möte: mottagarna är de fordela ger med dagens inställning", async () => {
+      const m = await nyttMote6({ utfall: "hallet" });
+      const mott = await MP.provisionsmottagare(sb, { ...m, provision_last_nar: null }, inst6);
+      return mott.length === 1 && mott[0] === B6.id && !MFo.farSattaNiva(B6.id, mott) && MFo.farSattaNiva(A6.id, mott);
+    });
+    await ok("låst möte: mottagarna är raderna (dela: båda)", async () => {
+      const mott = await MP.provisionsmottagare(sb, { ...mE, provision_last_nar: "x" }, { ...inst6, mottagare: [] });
+      return mott.length === 2 && mott.includes(B6.id) && mott.includes(R6.id);
+    });
+    await ok("en admin som bokade mötet får det som mottagare (rutten svarar 403)", async () => {
+      const m = await nyttMote6({ bokat: A6.id, utfall: "hallet" });
+      const mott = await MP.provisionsmottagare(sb, { ...m, provision_last_nar: null }, { ...inst6, mottagare: [A6.id] });
+      return !MFo.farSattaNiva(A6.id, mott);
+    });
+
+    sektion("Slutfix: radering och ombokning");
+    await ok("mote_radera tar mote_provision med sig (on delete cascade): därför spärren", async () =>
+      (await ett(`select confdeltype from pg_constraint where conrelid = 'public.mote_provision'::regclass and contype = 'f' and confrelid = 'public.mote'::regclass`)).confdeltype === "c");
+    await ok("möte med låst belopp över noll: harLastProvision ja (rutten svarar 409)", async () => (await MP.harLastProvision(sb, m1.id)) === true);
+    await ok("tappat möte (belopp 0): harLastProvision nej, går att radera", async () => (await MP.harLastProvision(sb, m8.id)) === false);
+    await ok("olåst möte utan rader: nej", async () => (await MP.harLastProvision(sb, m2.id)) === false);
+    await ok("uteblivet möte som bokats om: harOmbokning ja, och rättat till Hållet är ett hinder", async () =>
+      (await MP.harOmbokning(sb, mD.id)) === true && typeof MFo.ombokatHinder("hallet", await MP.harOmbokning(sb, mD.id)) === "string");
+    await ok("det senare mötet (inget pekar på det): harOmbokning nej", async () => (await MP.harOmbokning(sb, mE.id)) === false);
+
+    sektion("Uppgift 6: Ifrågasätt");
+    const m6 = await nyttMote6();
+    await MP.lasProvision(sb, m6, inst6, { niva: "hallet", svar: MF.nivaSvar(inst6.fragor, NEJ6) }, H6.id);
+    await ok("bokaren ifrågasätter ett hållet möte", async () => (await MP.ifragasattProvision(sb, m6.id, B6.id)) === "ok");
+    await ok("en gång till: redan ifrågasatt (409)", async () => (await MP.ifragasattProvision(sb, m6.id, B6.id)) === "redan");
+    await ok("ett kvalificerat möte går inte att ifrågasätta", async () => (await MP.ifragasattProvision(sb, m1.id, B6.id)) === "ingen");
+    await ok("den som inte har en rad kan inte ifrågasätta", async () => (await MP.ifragasattProvision(sb, m6.id, K6.id)) === "ingen");
+    await MP.andraProvision(sb, m6.id, { niva: "hallet", svar: MF.nivaSvar(inst6.fragor, NEJ6) }, A6.id, TZ6);
+    await ok("admin låter svaren stå: beslutet loggas på raden, beloppet oförändrat", async () => {
+      const r = (await rader6(m6.id))[0];
+      return r.beslut_nar !== null && r.belopp === 300 && r.version === 2;
+    });
+
+    sektion("Uppgift 8: Låt stå");
+    const mLat = await nyttMote6();
+    await MP.lasProvision(sb, mLat, inst6, { niva: "hallet", svar: MF.nivaSvar(inst6.fragor, NEJ6) }, H6.id);
+    await ok("inte ifrågasatt: Låt stå ger inget att besluta", async () => (await MP.latStaProvision(sb, mLat.id, A6.id)) === 0);
+    await MP.ifragasattProvision(sb, mLat.id, B6.id);
+    await ok("ifrågasatt: Låt stå sätter beslutet på raden, beloppet och versionen oförändrade", async () => {
+      const fore = (await rader6(mLat.id))[0];
+      const n = await MP.latStaProvision(sb, mLat.id, A6.id);
+      const efter = (await rader6(mLat.id))[0];
+      return n === 1 && efter.beslut_nar !== null && efter.beslut_av === A6.id && efter.belopp === fore.belopp && efter.version === fore.version;
+    });
+    await ok("en gång till: redan beslutat (409)", async () => (await MP.latStaProvision(sb, mLat.id, A6.id)) === 0);
+
+    sektion("Uppgift 8: reparationens möten");
+    // Gamla oreparerade möten ska inte stå i vägen: räknas bara de vi själva lägger in (mote_tid långt fram i tiden är fel, så nu() - 2 h).
+    const galler8 = new Date(Date.now() - 864e5).toISOString();
+    const utf8 = async (utfall, minSedan) => {
+      const m = await nyttMote6({ utfall: null });
+      await db.query(`update mote set utfall = $2::text, utfall_nar = now() - ($3::int * interval '1 minute'), utfall_av = $4 where id = $1`, [m.id, utfall, minSedan, H6.id]);
+      return m;
+    };
+    const rH = await utf8("hallet", 60), rU = await utf8("uteblev", 30), rA = await utf8("avbokat", 90), rNy = await utf8("avbokat", 1);
+    await ok("kandidaterna är de olåsta, inte hållna, äldst utfall först, och inte de allra nyaste", async () => {
+      const k = (await MP.reparationsKandidater(sb, galler8, new Date(), 1000)).map((x) => x.id).filter((id) => [rH.id, rU.id, rA.id, rNy.id].includes(id));
+      return JSON.stringify(k) === JSON.stringify([rA.id, rU.id]);
+    });
+    await ok("ett hållet möte utan lås kommer aldrig med, hur högt limit står", async () => {
+      const k = await MP.reparationsKandidater(sb, galler8, new Date(), 1000);
+      return !k.some((x) => x.id === rH.id) && k.every((x) => x.utfall !== "hallet");
+    });
+    await ok("limit tar de äldsta först (inget hållet möte fyller listan)", async () => {
+      const k = await MP.reparationsKandidater(sb, galler8, new Date(), 1);
+      return k.length === 1 && k[0].utfall !== "hallet";
+    });
     }
 
     // ---- B lagger till sina sektioner har ----
@@ -1088,6 +1422,86 @@ async function main() {
 
   console.log(`\n${antal - fel}/${antal} kontroller grona${fel ? `, \x1b[31m${fel} fel\x1b[0m` : ""} (rullat tillbaka)`);
   process.exit(fel ? 1 : 0);
+}
+
+/**
+ * Uppgift 6: en supabase-js-klient över provets pg-anslutning, med just de anrop motesprovision-server.ts gör
+ * (`from().select/insert/update().eq/is/in/limit/maybeSingle()`, `rpc()`). Svaren har PostgREST:s form:
+ * numeric som tal, date som "YYYY-MM-DD", timestamptz som ISO-sträng, jsonb tolkat, fel som { code, message }.
+ * Varje anrop går i en egen SAVEPOINT, så att ett väntat fel inte avbryter provets transaktion.
+ */
+function pgSupabase(klient) {
+  const typer = {
+    getTypeParser(oid, format) {
+      if (oid === 1700) return (s) => Number(s);
+      if (oid === 1082) return (s) => s;
+      if (oid === 1184 || oid === 1114) return (s) => s.replace(" ", "T").replace(/([+-]\d\d)$/, "$1:00");
+      return pg.types.getTypeParser(oid, format);
+    },
+  };
+  const kor = async (text, values) => {
+    const namn = `sb${++sp}`;
+    await klient.query(`savepoint ${namn}`);
+    try {
+      const r = await klient.query({ text, values, types: typer });
+      await klient.query(`release savepoint ${namn}`);
+      return { rows: r.rows, error: null };
+    } catch (e) {
+      await klient.query(`rollback to savepoint ${namn}`);
+      return { rows: null, error: { code: e.code, message: e.message } };
+    }
+  };
+  const json = (v) => (v !== null && typeof v === "object" ? JSON.stringify(v) : v);
+  const fraga = (tabell) => {
+    const st = { typ: "select", cols: "*", retur: null, filter: [], limit: null, en: false, rader: null, lapp: null };
+    const b = {
+      select(cols = "*") { if (st.typ === "select") st.cols = cols; else st.retur = cols; return b; },
+      insert(r) { st.typ = "insert"; st.rader = Array.isArray(r) ? r : [r]; return b; },
+      update(l) { st.typ = "update"; st.lapp = l; return b; },
+      eq(c, v) { st.filter.push({ c, op: "=", v }); return b; },
+      neq(c, v) { st.filter.push({ c, op: "<>", v }); return b; },
+      in(c, v) { st.filter.push({ c, op: "in", v }); return b; },
+      is(c, v) { st.filter.push({ c, op: "is", v }); return b; },
+      gte(c, v) { st.filter.push({ c, op: ">=", v }); return b; },
+      lte(c, v) { st.filter.push({ c, op: "<=", v }); return b; },
+      order(c, o = {}) { st.sortering = `${c} ${o.ascending === false ? "desc" : "asc"}`; return b; },
+      not(c, op, v) { st.filter.push({ c, op: op === "is" ? "is not" : "<>", v }); return b; },
+      limit(n) { st.limit = n; return b; },
+      maybeSingle() { st.en = true; return b; },
+      then(ja, nej) { return utfor().then(ja, nej); },
+    };
+    const utfor = async () => {
+      const varden = [];
+      const p = (v) => { varden.push(v); return `$${varden.length}`; };
+      let sql;
+      if (st.typ === "insert") {
+        const kol = Object.keys(st.rader[0]);
+        sql = `insert into public.${tabell} (${kol.join(", ")}) values ${st.rader.map((r) => `(${kol.map((k) => p(json(r[k] ?? null))).join(", ")})`).join(", ")}`;
+      } else if (st.typ === "update") {
+        sql = `update public.${tabell} set ${Object.entries(st.lapp).map(([k, v]) => `${k} = ${p(json(v))}`).join(", ")}`;
+      } else {
+        sql = `select ${st.cols} from public.${tabell}`;
+      }
+      const villkor = st.filter.map((f) => (f.op === "is" || f.op === "is not" ? `${f.c} ${f.op} ${f.v === null ? "null" : f.v}` : f.op === "in" ? `${f.c} = any(${p(f.v)})` : `${f.c} ${f.op} ${p(f.v)}`));
+      if (villkor.length && st.typ !== "insert") sql += ` where ${villkor.join(" and ")}`;
+      if (st.typ !== "select" && st.retur) sql += ` returning ${st.retur}`;
+      if (st.typ === "select" && st.sortering) sql += ` order by ${st.sortering}`;
+      if (st.typ === "select" && st.limit) sql += ` limit ${Number(st.limit)}`;
+      const r = await kor(sql, varden);
+      if (r.error) return { data: null, error: r.error };
+      if (st.typ !== "select" && !st.retur) return { data: null, error: null };
+      return { data: st.en ? (r.rows[0] ?? null) : r.rows, error: null };
+    };
+    return b;
+  };
+  return {
+    from: fraga,
+    async rpc(namn, args = {}) {
+      const nycklar = Object.keys(args);
+      const r = await kor(`select public.${namn}(${nycklar.map((k, i) => `${k} => $${i + 1}`).join(", ")}) as r`, nycklar.map((k) => json(args[k])));
+      return r.error ? { data: null, error: r.error } : { data: r.rows[0]?.r ?? null, error: null };
+    },
+  };
 }
 
 /* ------------------------------------------------------------------------ */

@@ -312,6 +312,192 @@ export function ursprungligBokare(
   return null;
 }
 
+/* ------------------------------------------------------------------------ */
+/* Låsningen av mötesprovisionen (uppgift 6)                                 */
+/* ------------------------------------------------------------------------ */
+
+/** Ett svar som det sparas på mötet: med frågans text som den löd när svaret gavs. */
+export type NivaSvar = { id: string; text: string; ja: boolean };
+/** Det som låses: en nivå (hållet möte) eller ett tappat möte. */
+export type Lage = { niva: "kvalificerat" | "hallet"; svar: NivaSvar[] } | { tappat: "uteblev" | "avbokat" };
+/** Vilken andel en rad är. Vid delning får den ursprungliga bokaren första halvan (nedrundad), den som bokade om resten. */
+export type Del = "hel" | "forsta_halvan" | "andra_halvan";
+/** En rad i `mote_provision`, som `mote_las_provision` tar den (`p_rader`). */
+export type ProvisionsRad = {
+  employee_id: string;
+  niva: "kvalificerat" | "hallet" | null;
+  belopp: number;
+  mojligt: number;
+  skal: string | null;
+  satser: Satser;
+  delat_med: string | null;
+  del: Del;
+  manad: string;
+};
+
+/**
+ * Omfattas mötet av mötesprovisionen? Bara möten från `moten.galler-fran` och framåt låses. Utan
+ * inställningen omfattas inget, samma regel som "väntar på bedömning" i moten.ts.
+ */
+export function omfattas(moteTid: string, gallerFran: string | null): boolean {
+  if (!gallerFran) return false;
+  const t = Date.parse(moteTid);
+  const g = Date.parse(gallerFran);
+  return Number.isFinite(t) && Number.isFinite(g) && t >= g;
+}
+
+/** Svaren på de aktiva frågorna, i frågornas ordning och med deras text just nu. Svar på andra frågor följer inte med. */
+export function nivaSvar(fragor: Fraga[], svar: { id: string; ja: boolean }[]): NivaSvar[] {
+  const per = new Map(svar.map((s) => [s.id, s.ja]));
+  const ut: NivaSvar[] = [];
+  for (const f of fragor) {
+    const ja = per.get(f.id);
+    if (f.aktiv && typeof ja === "boolean") ut.push({ id: f.id, text: f.text, ja });
+  }
+  return ut;
+}
+
+/** Andelen av ett belopp: hela, den nedrundade halvan, eller resten. Samma räkning som `fordela`. */
+export function andel(belopp: number, del: Del): number {
+  const oren = Math.round(belopp * 100);
+  const forsta = Math.floor(oren / 2);
+  if (del === "forsta_halvan") return forsta / 100;
+  if (del === "andra_halvan") return (oren - forsta) / 100;
+  return oren / 100;
+}
+
+/**
+ * Raderna som låses för ett möte. `fordela` med inställningen som gäller just nu avgör vem som får och hur det
+ * delas; beloppet är satsen för nivån (0 för ett tappat möte), det möjliga är kvalificerat-satsen delad på samma
+ * sätt, och satserna sparas i raden så att en senare ändring räknas ur dem. Ingen ursprunglig bokare (ett
+ * uppföljningsmöte, också ombokat) ger inga rader.
+ */
+export function raknaRader(i: {
+  ursprunglig: string | null;
+  bokatAv: string;
+  hallsAv: string;
+  mottagare: readonly string[];
+  regel: "ny" | "dela";
+  satser: Satser;
+  lage: Lage;
+  bekraftat: boolean;
+  manad: string;
+}): ProvisionsRad[] {
+  if (!i.ursprunglig) return [];
+  const ursprunglig = i.ursprunglig;
+  const andelar = fordela({ ursprunglig, bokatAv: i.bokatAv, hallsAv: i.hallsAv, mottagare: i.mottagare, regel: i.regel, belopp: 0 });
+  const del = (a: Andel): Del => (a.delatMed === null ? "hel" : a.employeeId === ursprunglig ? "forsta_halvan" : "andra_halvan");
+  return andelar.map((a) => {
+    const d = del(a);
+    const r = omraknadRad({ satser: i.satser, del: d }, i.lage, i.bekraftat);
+    return { employee_id: a.employeeId, niva: r.niva, belopp: r.belopp, mojligt: r.mojligt, skal: r.skal, satser: { ...i.satser }, delat_med: a.delatMed, del: d, manad: i.manad };
+  });
+}
+
+/**
+ * Beloppen för en rad ur radens egna satser och andel. Används vid låsningen och vid varje ändring efteråt:
+ * en ändring räknas aldrig ur dagens inställning och fördelas aldrig om.
+ */
+export function omraknadRad(rad: { satser: Satser; del: Del }, lage: Lage, bekraftat: boolean): { niva: "kvalificerat" | "hallet" | null; belopp: number; mojligt: number; skal: string | null } {
+  const mojligt = andel(rad.satser.kvalificerat, rad.del);
+  if ("niva" in lage) return { niva: lage.niva, belopp: andel(rad.satser[lage.niva], rad.del), mojligt, skal: null };
+  return { niva: null, belopp: 0, mojligt, skal: taptSkal(lage.tappat, bekraftat) };
+}
+
+/**
+ * Rättelsens text i huvudboken. Posten hamnar i en annan månad än mötet, så texten säger vilket möte det gäller.
+ * Själva rättelsen (fastställd månad, skillnad, en gång per version) bokförs i databasen, i samma transaktion
+ * som raderna: `mote_bokfor_rattelse` (0288).
+ */
+export function rattelseNot(bolag: string, dag: string): string {
+  return `Rättelse möte ${bolag} ${dag}`;
+}
+
+/** Har mötet låst mötesprovision som raderingen skulle ta bort? Ett belopp över noll på någon rad. */
+export function harLastBelopp(rader: readonly { belopp: number | string }[]): boolean {
+  return rader.some((r) => Math.round(Number(r.belopp) * 100) > 0);
+}
+
+/**
+ * Har de låsta raderna redan det läget? Används när ett rättat utfall körs om: står mötet redan på utfallet och
+ * ger omräkningen samma nivå, belopp och skäl för varje rad finns inget att göra.
+ */
+export function radernaStammer(
+  rader: readonly { niva: string | null; belopp: number; skal: string | null; satser: Satser; del: Del }[],
+  lage: Lage,
+  bekraftat: boolean,
+): boolean {
+  return rader.every((r) => {
+    const ny = omraknadRad(r, lage, bekraftat);
+    return ny.niva === r.niva && Math.round(ny.belopp * 100) === Math.round(Number(r.belopp) * 100) && ny.skal === r.skal;
+  });
+}
+
+/** Klockslaget ("HH:MM") för en tidpunkt i tidszonen. */
+export function lokalKlockan(tid: string | Date, tz: string): string {
+  const d = typeof tid === "string" ? new Date(tid) : tid;
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(d);
+}
+
+export type PaminnelseMote = { id: string; slut: string; utfall: string | null; niva: string | null; utfallNar: string | null; hallsAv: string };
+export type Paminnelse = { kalla: "mote-utfall-saknas" | "mote-bedomning-saknas"; till: string; moteId: string };
+
+/**
+ * Vem ska påminnas just nu. Ren: jobbet läser mötena och skriver notiserna, regeln ligger här.
+ *
+ *   - Utfall saknas: sluttiden har passerat och klockan i tidszonen är minst påminnelsetiden, samma kalenderdag
+ *     som mötet slutade: hållaren. Två kalenderdagar efter (från påminnelsetiden): alla admins.
+ *   - Hållet utan nivå: samma tid, räknat från dagen utfallet sattes: hållaren, och två dagar efter admins.
+ *   - Möten som slutade före `galler-fran` påminns aldrig.
+ *
+ * En dag är en kalenderdag i `tidszon`. Samma anrop två gånger samma dag ger samma lista; att samma notis inte
+ * skrivs två gånger sköter jobbet med nyckeln (källa, möte, dag).
+ */
+export function vemPaminns(moten: readonly PaminnelseMote[], admins: readonly string[], nu: Date, inst: MotenInst): Paminnelse[] {
+  const idag = lokalDag(nu, inst.tidszon);
+  if (lokalKlockan(nu, inst.tidszon) < inst.utfallPaminnelse) return [];
+  const ut: Paminnelse[] = [];
+  const lagg = (kalla: Paminnelse["kalla"], fran: string, m: PaminnelseMote) => {
+    const dag = lokalDag(fran, inst.tidszon);
+    if (idag === dag) ut.push({ kalla, till: m.hallsAv, moteId: m.id });
+    else if (idag === plusDagar(dag, 2)) for (const a of admins) ut.push({ kalla, till: a, moteId: m.id });
+  };
+  for (const m of moten) {
+    if (!omfattas(m.slut, inst.gallerFran)) continue;
+    if (Date.parse(m.slut) > nu.getTime()) continue;
+    if (m.utfall === null) lagg("mote-utfall-saknas", m.slut, m);
+    else if (m.utfall === "hallet" && m.niva === null && m.utfallNar) lagg("mote-bedomning-saknas", m.utfallNar, m);
+  }
+  const sett = new Set<string>();
+  return ut.filter((p) => {
+    const nyckel = `${p.kalla}|${p.till}|${p.moteId}`;
+    if (sett.has(nyckel)) return false;
+    sett.add(nyckel);
+    return true;
+  });
+}
+
+/**
+ * Påminnelserna som ännu inte skickats i dag. `gamla` är svaret på läsningen av redan skickade notiser. Misslyckades
+ * läsningen (`error`) vet vi inte vad som skickats, och då skickas ingenting den här körningen: det är null, aldrig
+ * "allt är nytt". `nyckel` är `notisId` (källa, möte, kalenderdag); den tas som parameter så att modulen förblir ren.
+ */
+export function utanRedanSkickade(
+  att: readonly Paminnelse[],
+  gamla: { data: unknown; error: unknown },
+  idag: string,
+  tz: string,
+  nyckel: (kalla: Paminnelse["kalla"], moteId: string, dag: string) => string,
+): Paminnelse[] | null {
+  if (gamla.error || !Array.isArray(gamla.data)) return null;
+  const skickat = new Set(
+    (gamla.data as { employee_id: string; kalla: Paminnelse["kalla"]; object_id: string; created_at: string }[]).map(
+      (r) => `${nyckel(r.kalla, r.object_id, lokalDag(r.created_at, tz))}:${r.employee_id}`,
+    ),
+  );
+  return att.filter((p) => !skickat.has(`${nyckel(p.kalla, p.moteId, idag)}:${p.till}`));
+}
+
 /** Ordningen på tavlan: kolumnvis, inom kolumnen efter tid, stigande (Avgjort fallande). */
 export function sorteraFas(a: { fas: PipeKolumn; tid: string }, b: { fas: PipeKolumn; tid: string }): number {
   const k = PIPE_KOLUMNER.indexOf(a.fas) - PIPE_KOLUMNER.indexOf(b.fas);

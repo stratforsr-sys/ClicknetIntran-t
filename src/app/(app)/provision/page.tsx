@@ -24,6 +24,7 @@ import {
   hamtaSatser,
   type Orderrad,
 } from "@/lib/order-server";
+import { hamtaMotesposter } from "@/lib/motesposter-server";
 import { hamtaNivaer, hamtaPerioder } from "@/lib/bonus-server";
 import { hamtaKvPerManad } from "@/lib/kv-server";
 import { hamtaMal } from "@/lib/saljmal-server";
@@ -36,6 +37,7 @@ import {
   type Bonusniva,
   type Chefspost,
   type KvIndata,
+  type Motespost,
   type Underlag,
 } from "@/lib/provision-motor";
 import {
@@ -214,6 +216,7 @@ export default async function Provisionssida({
     kvPerManad,
     mal,
     chefsposter,
+    motesposter,
   ] = await Promise.all([
     hamtaProvision(user.employee.id, posterFran),
     provisionschef ? hamtaAllProvision(posterFran) : Promise.resolve([] as Post[]),
@@ -250,6 +253,10 @@ export default async function Provisionssida({
     // `hamtaOrder` tappade fore 2026-09-08: overtacket pa en gammal order som
     // makuleras i perioden.
     hamtaChefsposter(franOchMed),
+    // MOTESPROVISIONEN (Moten, uppgift 7). Samma fonster som ovan och samma krets
+    // som overtacket: RLS pa `mote_provision` ger var och en sina egna rader och
+    // ekonomi och VD allas. Motorn raknar varje post bara i sin egen manad.
+    hamtaMotesposter(franOchMed),
   ]);
 
   const material = provisionschef ? allaOrder : minaOrder;
@@ -289,6 +296,12 @@ export default async function Provisionssida({
     ? chefsposter
     : chefsposter.filter((p) => p.manager_id === visadId);
 
+  // MOTESPOSTERNA FOLJER OMFATTNINGEN PA SAMMA SATT, men pa `employee_id`: de
+  // hor till den som FICK provisionen.
+  const tavlansMotesposter = foretagsvy
+    ? motesposter
+    : motesposter.filter((p) => p.employee_id === visadId);
+
   // ===========================================================================
   // EN RAD PER MANAD I PERIODEN. Hela tavlan byggs ur den har listan.
   //
@@ -307,6 +320,7 @@ export default async function Provisionssida({
     volymbonus: number;
     kv: number;
     chefsprovision: number;
+    motesprovision: number;
     ordervarde: number;
     utanVarde: number;
     utkop: number;
@@ -318,7 +332,7 @@ export default async function Provisionssida({
     const stangdM = perioder.some((p) => p.period_month === m);
 
     const lag = foretagsvy
-      ? underlagForAlla(material, m, nivaer, kvM, lagenM, chefsposter)
+      ? underlagForAlla(material, m, nivaer, kvM, lagenM, chefsposter, motesposter)
       : [];
     const u = foretagsvy
       ? null
@@ -330,6 +344,7 @@ export default async function Provisionssida({
           kvM.get(visadId) ?? null,
           lagenM.get(visadId) ?? null,
           tavlansChefsposter,
+          tavlansMotesposter,
         );
 
     const kallor = foretagsvy ? lag : [u!];
@@ -350,6 +365,7 @@ export default async function Provisionssida({
       volymbonus: kallor.reduce((s, x) => s + (x.volymbonus?.belopp ?? 0), 0),
       kv: kallor.reduce((s, x) => s + (x.kv?.belopp ?? 0), 0),
       chefsprovision: kallor.reduce((s, x) => s + (x.chefsprovision?.belopp ?? 0), 0),
+      motesprovision: kallor.reduce((s, x) => s + (x.motesprovision?.belopp ?? 0), 0),
       // ORDERVARDET SUMMERAS OVER `kallor` PRECIS SOM ALLT ANNAT — men det gar
       // ALDRIG in i `summa` ovan. Det ar bolagets omsattning, inte pengar till
       // nagon, och en manad dar de tva laggs ihop visar en lonekostnad atta
@@ -809,6 +825,7 @@ export default async function Provisionssida({
             // laget oavsett vems siffror panelen star pa — den som tittar pa
             // Vlado ska se samma tavla som den som tittar pa sig sjalv.
             chefsposter,
+            motesposter,
           })}
           farSattaMal={malchef}
         />
@@ -834,6 +851,10 @@ export default async function Provisionssida({
                   nivaer,
                   kvPerManad.get(m),
                   lagenPerPerson(godkanda, m),
+                  // SAMMA ANROP SOM `faststallPeriod`: overtacket och motesposterna maste
+                  // med, annars visar kortet ett annat tal an attesten sedan bokfor.
+                  chefsposter,
+                  motesposter,
                 );
                 return {
                   manad: m,
@@ -1019,6 +1040,7 @@ function delarFor(
     volymbonus: number;
     kv: number;
     chefsprovision: number;
+    motesprovision: number;
     handbokfort: number;
   }[],
   poster: Post[],
@@ -1045,6 +1067,9 @@ function delarFor(
       // posten, och den som ser en total utan att veta att halva kom fran andras
       // affarer laser fel pa sin egen manad. Nollraden faller bort som alla andra.
       lagg("Övertäck", r.chefsprovision);
+      // MOTESPROVISIONEN STAR SOM EGEN DEL av samma skal: bokarens pengar syns
+      // inte i nagon order, och en total utan den laser fel pa sin egen manad.
+      lagg("Mötesprovision", r.motesprovision);
       lagg("Bokfört för hand", r.handbokfort);
     }
   }
@@ -1123,6 +1148,8 @@ function lagrader(arg: {
   satser: Sats[];
   /** Overtacken. Bar in mottagaren i listan aven nar hen inte salt nagot. */
   chefsposter: Chefspost[];
+  /** Motesposterna. Bar in bokaren i listan aven nar hen inte salt nagot. */
+  motesposter: Motespost[];
 }): Lagrad[] {
   const iPerioden = new Set(arg.manader);
 
@@ -1150,7 +1177,13 @@ function lagrader(arg: {
       .map((p) => p.manager_id),
   );
 
-  const ids = new Set<string>([...arg.saljarIds, ...medRorelse, ...medOvertack]);
+  // OCH BOKAREN: en markerad bokare som inte salt en enda order men haft moten i
+  // perioden finns annars inte i tavlan, trots att hens pengar ar enbart moten.
+  const medMoten = new Set(
+    arg.motesposter.filter((p) => iPerioden.has(p.manad.slice(0, 10))).map((p) => p.employee_id),
+  );
+
+  const ids = new Set<string>([...arg.saljarIds, ...medRorelse, ...medOvertack, ...medMoten]);
   const stangdaManader = new Set(arg.perioder.map((p) => p.period_month));
 
   // Konsekvenslagena slas upp EN gang per manad och ateranvands for alla
@@ -1181,6 +1214,7 @@ function lagrader(arg: {
           arg.kvPerManad.get(m)?.get(p.id) ?? null,
           lagenPerManad.get(m)?.get(p.id) ?? null,
           arg.chefsposter,
+          arg.motesposter,
         );
 
         const bokfort = summera(

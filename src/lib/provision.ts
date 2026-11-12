@@ -241,6 +241,9 @@ export const SLAGSETIKETT: Record<string, string> = {
   // Sedan 0051. En rattelse av en order som hor till en FASTSTALLD manad: den
   // manaden star orord, och skillnaden bokfors i innevarande. Se `rattelse.ts`.
   rattelse: "Rättelser",
+  // Mötesprovisionen (0287/0288). En ändring i efterhand av ett möte i en
+  // fastställd månad är en `rattelse`, inte en andra mötespost.
+  motesprovision: "Mötesprovision",
 };
 
 /**
@@ -259,6 +262,7 @@ export const SLAGSORDNING = [
   "Volymbonus",
   "K&V-bonus",
   "Övertäck",
+  "Mötesprovision",
   "Övrig bonus",
   "Rättelser",
   "Avdrag",
