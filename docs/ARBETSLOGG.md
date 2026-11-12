@@ -204,7 +204,7 @@ det: egna beslut.
 
 ## 2026-11-04 · Säljtavlan: ORSAKEN. Tavlan underkände varje bild från servern och laddade om sig själv (direkt på `main`, ingen migration)
 
-**Mätningen.** Efter `2bb3b4f` startade båda skärmarna (samma tv, Google-appens webbläsare, 1132×637 @1,33) med
+**Mätningen.** Efter `2bb3b4f` startade båda skärmarna (två tv av samma modell, Google-appens webbläsare, 1132×637 @1,33) med
 rätt bygge, ~40 bildrutor/s, synliga, utan minskad rörelse och med ljudet igång utan klick. Lugn rörelse var alltså
 aldrig orsaken (`6caa0d8` får stå kvar: en parad tv följer inställningen). Men de startade om 17:04:13, 17:04:37 och
 17:06:40 svensk tid, och sa aldrig att de sett testhändelse 9.
@@ -225,8 +225,9 @@ underkänd bild (`salesboard-bild-underkand`, med bildens nycklar) och en mottag
 båda sidorna 16:15:19 och spelades hela vägen: 350–380 bildrutor på 6,9 s, ruta 410–411 av 414, full rörelse,
 firandeytan 1132×637 med opacitet 1 överst. Ingen omstart efteråt. Därefter togs mätningarna bort i `f22a001`
 (`salesboard-start-`, `-sag-`, `-spelar-`, `-diagnos-`), och deras rader ur `error_report`. Kvar i /fel: skyddets
-fel, fönstrets fel, `salesboard-hanger`, `-bild-underkand` och `-mottagning`. Två sidor med tavlan står öppna på
-samma tv ("Skärm 1" och "Skärm 2"), så varje firande spelas och låter två gånger.
+fel, fönstrets fel, `salesboard-hanger`, `-bild-underkand` och `-mottagning`. Rättat 2026-11-12: "Skärm 1" och
+"Skärm 2" är två tv-apparater av samma modell, inte två sidor på en tv, och båda ska vara kvar. Parningen är en kaka
+(`SKARMKAKA`) per webbläsare; två sidor i samma tv hade burit samma skärmnamn.
 
 ---
 

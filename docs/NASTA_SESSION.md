@@ -124,9 +124,9 @@ säger det. Detaljerna i ARBETSLOGG.
 Orsaken: `lasBild` krävde `manad.bidrag`, som servern aldrig skickar, så varje hämtning underkändes och tavlan laddade
 om sig själv var fjärde gång utan att fira. Kravet är borttaget, och ett kontraktsprov skickar serverns bild genom
 `lasBild`. Provat på tv:n 16:15 UTC: testfirandet spelades hela vägen, ingen omstart. Mätningarna togs bort i
-`f22a001`; felrapporterna (skyddet, fönstret, `-hanger`, `-bild-underkand`, `-mottagning`) står kvar i /fel. Kvar:
-tv:n har två sidor med tavlan öppna ("Skärm 1" och "Skärm 2"), så varje firande låter dubbelt; stäng den ena och
-koppla bort den skärmen under Inställningar → Säljtavlan.
+`f22a001`; felrapporterna (skyddet, fönstret, `-hanger`, `-bild-underkand`, `-mottagning`) står kvar i /fel.
+"Skärm 1" och "Skärm 2" är två tv-apparater av samma modell, inte två sidor på en tv (beställaren 2026-11-12):
+parningen är en kaka per webbläsare, så två sidor i samma tv hade burit samma namn. Båda ska vara kvar.
 
 ---
 
