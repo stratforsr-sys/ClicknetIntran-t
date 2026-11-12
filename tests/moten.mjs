@@ -125,6 +125,14 @@ const NU = "2026-10-29T10:00:00.000Z";
   ok("offert med eget datum", b.kedja?.uppfoljning_datum === "2026-11-10");
 
   ok("uppföljning utan datum kastar", kastar(() => M.efterUtfall({ utfall: "hallet", resultat: "uppfoljning" }, IDAG, false)) === "Välj ett datum för uppföljningen.");
+  {
+    const f = M.efterUtfall({ utfall: "hallet", resultat: "uppfoljning", datum: "2026-11-03", nyTid: { dag: "2026-11-04", start: "10:15" } }, IDAG, false, NU);
+    ok("uppföljning med tid bokar ett möte i kedjan (art uppfoljning)", f.nyttMote?.art === "uppfoljning" && f.nyttMote.dag === "2026-11-04" && f.nyttMote.start === "10:15");
+    ok("uppföljning med tid: kedjans uppföljningsdatum är mötesdagen", f.kedja?.uppfoljning_datum === "2026-11-04" && f.mote.resultat === "uppfoljning");
+    const g = M.efterUtfall({ utfall: "hallet", resultat: "uppfoljning", nyTid: { dag: "2026-11-05", start: "09:00" } }, IDAG, false, NU);
+    ok("uppföljning med tid behöver inget eget datum", g.nyttMote?.dag === "2026-11-05" && g.kedja?.uppfoljning_datum === "2026-11-05");
+    ok("uppföljning utan tid: inget nytt möte, som förut", M.efterUtfall({ utfall: "hallet", resultat: "uppfoljning", datum: "2026-11-03" }, IDAG, false, NU).nyttMote === null);
+  }
   ok("uppföljning med tomt datum kastar", kastar(() => M.efterUtfall({ utfall: "hallet", resultat: "uppfoljning", datum: "" }, IDAG, false)) === "Välj ett datum för uppföljningen.");
   const c = M.efterUtfall({ utfall: "hallet", resultat: "uppfoljning", datum: "2026-11-05", text: "Ring om budgeten" }, IDAG, false, NU);
   ok("uppföljning: datum, text och nollad räknare", c.kedja?.uppfoljning_datum === "2026-11-05" && c.kedja.uppfoljning_text === "Ring om budgeten" && c.kedja.inget_svar_i_rad === 0);
@@ -384,7 +392,8 @@ rubrik("A7: andringForKund, farAndraKedja och indata för mötets knappar");
   ok("utfallIndata: Hållet + Offert + datum + text", (() => { const r = u({ utfall: "hallet", resultat: "offert", datum: "2026-11-03", text: " Ring tisdag " }); return r.ok && r.varden.mote === ID && r.varden.inn.utfall === "hallet" && r.varden.inn.resultat === "offert" && r.varden.inn.datum === "2026-11-03" && r.varden.inn.text === "Ring tisdag"; })());
   ok("utfallIndata: Uteblev + ny tid", (() => { const r = u({ utfall: "uteblev", nyTid: { dag: "2026-11-02", start: "09:00" } }); return r.ok && r.varden.inn.nyTid.dag === "2026-11-02" && r.varden.inn.nyTid.start === "09:00"; })());
   ok("utfallIndata: okänt utfall och mote som inte är ett id", !u({ utfall: "kanske" }).ok && !M.utfallIndata({ mote: "x", utfall: "hallet" }).ok);
-  ok("utfallIndata: ny tid bara med Uteblev, och bara en riktig tid", !u({ utfall: "hallet", resultat: "offert", nyTid: { dag: "2026-11-02", start: "09:00" } }).ok && !u({ utfall: "uteblev", nyTid: { dag: "2026-11-02", start: "9" } }).ok);
+  ok("utfallIndata: ny tid bara med Uteblev eller Uppföljning, och bara en riktig tid", !u({ utfall: "hallet", resultat: "offert", nyTid: { dag: "2026-11-02", start: "09:00" } }).ok && !u({ utfall: "uteblev", nyTid: { dag: "2026-11-02", start: "9" } }).ok);
+  ok("utfallIndata: Hållet + Uppföljning + ny tid", (() => { const r = u({ utfall: "hallet", resultat: "uppfoljning", nyTid: { dag: "2026-11-04", start: "10:15" } }); return r.ok && r.varden.inn.nyTid.start === "10:15"; })());
   ok("utfallIndata: okänt resultat avvisas, Nej kräver skäl ur listan", !u({ utfall: "hallet", resultat: "kanske" }).ok && u({ utfall: "hallet", resultat: "nej", skal: "För dyrt" }).ok && u({ utfall: "hallet", resultat: "nej", skal: "För dyrt" }).varden.inn.skal === "För dyrt");
   ok("utfallIndata: för lång text avvisas", !u({ utfall: "hallet", resultat: "uppfoljning", datum: "2026-11-03", text: "x".repeat(1001) }).ok);
 

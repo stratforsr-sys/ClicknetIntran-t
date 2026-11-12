@@ -5,7 +5,7 @@ import { fullName, hasRole, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { dagarBakat, svenskDygnsslut, svenskTidpunkt, svensktDatum } from "@/lib/klocka";
 import {
-  bakom, dagarTillMote, inomKrets, kretsFor, offerter, perKalla, vecka, veckotal,
+  bakom, bekraftelsePerBokare, dagarTillMote, inomKrets, kretsFor, offerter, perKalla, vecka, veckotal,
   type Period, type StatKedja, type StatMote, type Veckotal,
 } from "./motesstatforma";
 
@@ -58,6 +58,8 @@ export type NdMotesstat = {
     offerter: ReturnType<typeof offerter>;
     dagar: ReturnType<typeof dagarTillMote>;
     kallor: ReturnType<typeof perKalla>;
+    /** Per bokare: bekräftade före mötet och hur ofta bekräftade och obekräftade möten hölls (U9). */
+    bekraftelser: ReturnType<typeof bekraftelsePerBokare>;
     utanUtfall: { id: string; namn: string; antal: number }[];
   };
   /** De två veckorna talen gäller (måndag-söndag, YYYY-MM-DD), så att klienten inte räknar om dem. */
@@ -82,6 +84,7 @@ type BakomTal = Partial<Record<keyof Veckotal, string[]>>;
 type MoteRad = {
   id: string; kedja_id: string; bokat_av: string; halls_av: string; bokat_nar: string | Date; mote_tid: string | Date;
   art: StatMote["art"]; utfall: StatMote["utfall"]; resultat: string | null; kalla: string;
+  bekraftat_nar: string | Date | null;
 };
 type KedjaRad = {
   kedja_id: string; bolag_id: string; forsta_bokat_av: string | null; forsta_bokat_nar: string | Date | null; forsta_mote_tid: string | Date | null;
@@ -91,7 +94,7 @@ type KedjaRad = {
 type SamtalRad = { employee_id: string; vecka: string | Date; antal: number };
 type Svar<T> = { data: T[] | null; error: { message?: string } | null };
 
-const MOTE_KOLUMNER = "id, kedja_id, bokat_av, halls_av, bokat_nar, mote_tid, art, utfall, resultat, kalla";
+const MOTE_KOLUMNER = "id, kedja_id, bokat_av, halls_av, bokat_nar, mote_tid, art, utfall, resultat, kalla, bekraftat_nar";
 const KEDJA_KOLUMNER =
   "kedja_id, bolag_id, forsta_bokat_av, forsta_bokat_nar, forsta_mote_tid, forsta_hallna_halls_av, avslut, avslut_nar, affar_forsta_mote, offert_nar, kolumn, kalla";
 
@@ -228,6 +231,7 @@ async function bygg(supabase: SupabaseClient, user: CurrentUser): Promise<NdMote
     id: m.id, kedja: m.kedja_id, bokatAv: m.bokat_av, hallsAv: m.halls_av,
     bokatNar: iso(m.bokat_nar), moteTid: iso(m.mote_tid),
     art: m.art, utfall: m.utfall, resultat: m.resultat, kalla: m.kalla,
+    bekraftatNar: isoEllerNull(m.bekraftat_nar),
   }));
   const allaKedjor: StatKedja[] = kedjaRader.map((k) => ({
     id: k.kedja_id,
@@ -367,6 +371,7 @@ async function bygg(supabase: SupabaseClient, user: CurrentUser): Promise<NdMote
       offerter: offerter(kedjor, denna, krets),
       dagar: dagarTillMote(moten, denna, krets),
       kallor: perKalla(moten, kedjor, denna, krets),
+      bekraftelser: bekraftelsePerBokare(moten, denna, krets),
       utanUtfall,
     },
   };

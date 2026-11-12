@@ -374,5 +374,30 @@ ok("SAMTAL_MIN_SEK är 300 (beställaren 2026-11-01)", forma.SAMTAL_MIN_SEK === 
   ok("rutten: samtalslistan filtrerar på SAMTAL_MIN_SEK", /\.gte\("duration_seconds", SAMTAL_MIN_SEK\)/.test(samtal));
 }
 
+
+console.log("\n\x1b[1mbekraftelsePerBokare\x1b[0m");
+{
+  const b = (id, o) => ({ id, kedja: "kb", bokatAv: "b1", hallsAv: S2, art: "ny", resultat: null, kalla: "dialer",
+    bokatNar: "2026-10-26T10:00:00Z", moteTid: "2026-10-29T10:00:00Z", ...o });
+  const rader = [
+    b("b1", { bekraftatNar: "2026-10-28T09:00:00Z", utfall: "hallet" }),
+    b("b2", { bekraftatNar: "2026-10-28T09:00:00Z", utfall: "uteblev" }),
+    b("b3", { bekraftatNar: null, utfall: "uteblev" }),
+    // bekräftat EFTER mötestiden räknas inte som bekräftat före
+    b("b4", { bokatAv: "b2", bekraftatNar: "2026-10-29T11:00:00Z", utfall: "hallet" }),
+    // avbokat och utanför perioden räknas inte
+    b("b5", { bekraftatNar: null, utfall: "avbokat" }),
+    b("b6", { bekraftatNar: null, utfall: "hallet", moteTid: "2026-11-05T10:00:00Z" }),
+  ];
+  const t = forma.bekraftelsePerBokare(rader, V);
+  lika("b1: bokade", t.b1?.bokade, 3);
+  lika("b1: bekräftade före 2/3", t.b1?.bekraftadeFore, { andel: 2 / 3, n: 2, av: 3 });
+  lika("b1: hållna av bekräftade 1/2", t.b1?.hallnaBekraftade, { andel: 0.5, n: 1, av: 2 });
+  lika("b1: hållna av obekräftade 0/1", t.b1?.hallnaObekraftade, { andel: 0, n: 0, av: 1 });
+  lika("b2: bekräftat efter mötet räknas som obekräftat", t.b2?.bekraftadeFore, { andel: 0, n: 0, av: 1 });
+  lika("krets utan b1 ger ingen rad för b1", forma.bekraftelsePerBokare(rader, V, ["b2"]).b1, undefined);
+  lika("utan bekraftatNar-fält räknas mötet som obekräftat", forma.bekraftelsePerBokare([b("x", { utfall: "hallet" })], V).b1?.hallnaObekraftade, { andel: 1, n: 1, av: 1 });
+}
+
 console.log("");
 process.exit(fel ? 1 : 0);

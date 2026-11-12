@@ -678,7 +678,7 @@ export async function POST(request: Request) {
       : gastOk ? `${gastOk === 1 ? v.gaster.find((g) => !gastFel.includes(g)) : `${gastOk} hos kunden`} får en inbjudan med mejl.` : "";
     const missade = [...(v.epost && !bjuden ? [kontakt] : []), ...gastFel];
     const inbjudan = [
-      v.med.length ? `${lista(await fornamnFor(v.med))} får en inbjudan i Nav.` : "",
+      v.med.some((x) => x !== mig) ? `${lista(await fornamnFor(v.med.filter((x) => x !== mig)))} får en inbjudan i Nav.` : "",
       kunden,
       missade.length ? `Inbjudan till ${lista(missade)} kunde inte skickas. Bjud in från kalendern.` : "",
     ].filter(Boolean).join(" ");
@@ -965,7 +965,13 @@ export async function POST(request: Request) {
       if (((data ?? []) as unknown[]).length === 0) return svar({ fel: "Mötet har redan fått ett utfall." }, 409);
     }
 
-    // 2. Kedjan.
+    // 2. Kedjan. Bokas en uppföljning som ett möte sparas kedjans uppföljning först, så att den kan läggas
+    //    tillbaka om bokningen fallerar (byggsteg 4).
+    let kedjaFore: Record<string, unknown> | null = null;
+    if (a.kedja && a.nyttMote) {
+      const { data } = await db.from("mote_kedja").select("uppfoljning_datum, uppfoljning_text, inget_svar_i_rad, uppfoljning_andrad").eq("id", m.kedja_id).maybeSingle();
+      kedjaFore = (data as Record<string, unknown> | null) ?? null;
+    }
     if (a.kedja) {
       const lapp: Record<string, unknown> = { ...a.kedja };
       if ("avslut" in lapp) {
@@ -1019,6 +1025,10 @@ export async function POST(request: Request) {
         }
         const tillbaka = await angraUtfall(m.id, nuIso);
         if (!tillbaka) return svar({ fel: HALVSKRIVET }, 500);
+        if (kedjaFore) {
+          const { data: ater } = await db.from("mote_kedja").update(kedjaFore).eq("id", m.kedja_id).eq("uppfoljning_andrad", nuIso).select("id");
+          if (((ater ?? []) as unknown[]).length === 0) return svar({ fel: HALVSKRIVET }, 500);
+        }
         return lagt ? lagt.res : svar({ fel: "Bolaget finns inte." }, 404);
       }
       nyttMoteId = lagt.kvar;

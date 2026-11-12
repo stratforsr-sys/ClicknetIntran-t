@@ -14,6 +14,19 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten-tidsval-uppfoljningsmote",
+    rubrik: "Välj tid som i Kalendern, och boka uppföljningen som ett möte",
+    ingress: "När du bokar ett möte väljer du datum och tid och ser dagen för alla som är med. Hållet → Uppföljning kan bokas som ett riktigt möte.",
+    text: `I **Möten** ser bokningen ut som i Kalendern: datum, starttid och dagen för den som håller mötet och för
+kollegorna, med det upptagna i grått. **Nästa lediga tid** väljer första tiden då alla är lediga. Har du bokat
+mötet åt någon annan kan du trycka **Jag är med**. Vid **Hållet → Uppföljning** kan du välja **Boka ett möte**,
+så får kunden en inbjudan som vid en bokning. Kundmöten syns i **Kalendern** med bolagets namn först, och chefen
+ser under **Statistik** hur ofta varje bokare bekräftar sina möten och hur ofta de bekräftade hålls.`,
+    datum: "2026-11-12",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "provision-overtack-preliminart",
     rubrik: "Övertäcket syns redan före stängningen",
     ingress: "De preliminära provisionstalen för en månad som inte är stängd räknar nu med säljchefens övertäck, som attesten redan gjorde.",

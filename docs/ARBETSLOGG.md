@@ -5,7 +5,33 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-12 · Möten: utfall, kvalificering och mötesprovision, byggsteg 3 av 4 (lokalt, 0289 ej körd)
+## 2026-11-12 · Möten: tidsvalet, uppföljningsmötet, kundmötena i Kalendern och bokaren med, byggsteg 4 av 4 (ingen migration)
+
+**Varför.** Det sista av beställningen 2026-11-11: tidsknapparna i bokningen ersätts av Kalenderns sätt att välja tid,
+Hållet → Uppföljning ska kunna bli ett riktigt möte, kundmötena ska gå att känna igen i Kalendern, bokaren ska kunna
+vara med, och chefen ska se hur bokarna bekräftar.
+
+**Besluten.** Tidsvalet är datum + starttid i kvartar 06–20 (en tid i hela femminuter som redan valts står kvar) och en
+förhandsvy 07–18 med en kolumn per person ur `lediga`-svarets `upptaget`; "Nästa lediga tid" tar första luckan då alla
+är lediga, så luckberäkningen i rutten används fortfarande. Uppföljningen med tid går genom `efterUtfall`
+(`nyttMote.art = "uppfoljning"`) och samma `laggMote` som ombokningen; kedjans uppföljningsdatum blir mötesdagen.
+Fallerar bokningen återställs mötets utfall men inte kedjans nya datum (ofarligt: datumet är det man ville ha).
+Kundmöten märks på servern (`kund` på posten, ur `mote.event_id` → kedja → bolag) och bolaget skickas bara när
+rubriken syns. "Jag är med" lägger bokaren i samma `med`-lista som kollegorna (0286), ingen ny behörighet.
+Bekräftelser per bokare räknar möten med mötestid i veckan som inte avbokats; "bekräftat före" = `bekraftat_nar` före
+mötestiden, hållet räknas bland mötena med utfall. Etiketten "Fler från Clicknet" blev "Fler kollegor" (plattformen
+ska säljas, inget företagsnamn i koden).
+
+**Micks 15 %.** Beställaren 2026-11-12: 15 % på ordervärdet efter finans och utköp, och den ersätter paketprovisionen.
+Inget bygge: orderformulärets procentsats gör redan exakt det (`procentProvision` på nettot, `commission_source =
+'manual'`), och beställaren valde att Mick lägger in den själv på ordern ("så det inte blir för mycket ändring nu").
+En sats per person som sätts en gång (som chefens `manager_commission_rate`, som bara tillåter en öppen rad) är kvar
+att bygga om det behövs.
+
+**Prov.** `motesstat.mjs` (bekraftelsePerBokare) och `moten.mjs` (uppföljning med tid, utfallIndata) gröna; hela
+`npm test`-kedjan körd. Inte klickat inloggat.
+
+## 2026-11-12 · Möten: utfall, kvalificering och mötesprovision, byggsteg 3 av 4 (på `main` 8ef2e9e, 0288 och 0289 KÖRDA)
 
 **Varför.** Mötet ska ge bokaren provision i två nivåer, och nivån ska komma ur säljarens svar på kvalificeringsfrågorna,
 inte ur en uppskattning. Allt ställs in per installation (steg 2), så koden har bara förval.

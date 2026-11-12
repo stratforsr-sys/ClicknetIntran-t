@@ -331,7 +331,9 @@ export type UtfallIn = {
  * `avslut_nar` och `avslut_av`. Varje väg som sätter `uppfoljning_datum`
  * nollställer `inget_svar_i_rad`.
  *
- * `nyttMote` är ett möte som ska bokas i samma kedja (`art: "ombokning"`).
+ * `nyttMote` är ett möte som ska bokas i samma kedja: `ombokning` efter Uteblev,
+ * `uppfoljning` efter Hållet → Uppföljning med en tid (byggsteg 4). Utan tid blir
+ * uppföljningen bara ett datum, som förut.
  *
  * `nu` är ögonblicket för `offert_nar` (ISO). Det är en parameter för att
  * provet ska kunna vara exakt; utan den tas klockan.
@@ -339,7 +341,7 @@ export type UtfallIn = {
 export type Utfallsandring = {
   mote: Record<string, unknown>;
   kedja: Record<string, unknown> | null;
-  nyttMote: { art: "ombokning"; dag: string; start: string } | null;
+  nyttMote: { art: "ombokning" | "uppfoljning"; dag: string; start: string } | null;
 };
 
 /** "2026-10-29" och bara datum som finns: "2026-02-30" och "2026-13-45" är inga. */
@@ -371,11 +373,13 @@ export function efterUtfall(
     }
 
     if (inn.resultat === "uppfoljning") {
-      if (!arDatum(inn.datum)) throw new Error("Välj ett datum för uppföljningen.");
+      // Med en tid bokas uppföljningen som ett riktigt möte, och kedjans datum blir mötesdagen.
+      const dag = inn.nyTid ? inn.nyTid.dag : inn.datum;
+      if (!arDatum(dag)) throw new Error("Välj ett datum för uppföljningen.");
       return {
         mote: { utfall: "hallet", resultat: "uppfoljning" },
-        kedja: { uppfoljning_datum: inn.datum, uppfoljning_text: text, inget_svar_i_rad: 0 },
-        nyttMote: null,
+        kedja: { uppfoljning_datum: dag, uppfoljning_text: text, inget_svar_i_rad: 0 },
+        nyttMote: inn.nyTid ? { art: "uppfoljning", dag: inn.nyTid.dag, start: inn.nyTid.start } : null,
       };
     }
 
@@ -896,7 +900,7 @@ export function utfallIndata(body: unknown): Resultat<{ mote: string; inn: Utfal
     inn.skal = b.skal;
   }
   if (!tom(b.nyTid)) {
-    if (b.utfall !== "uteblev") return nej("En ny tid går bara att boka efter Uteblev.");
+    if (b.utfall !== "uteblev" && !(b.utfall === "hallet" && b.resultat === "uppfoljning")) return nej("En ny tid går bara att boka efter Uteblev eller som en uppföljning.");
     const n = (b.nyTid ?? {}) as Record<string, unknown>;
     const tid = dagOchStart(n.dag, n.start);
     if (!tid.ok) return tid;

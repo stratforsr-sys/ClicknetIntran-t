@@ -14,6 +14,8 @@ export type StatMote = {
   id: string; kedja: string; bokatAv: string; hallsAv: string; bokatNar: string; moteTid: string;
   art: "ny" | "ombokning" | "uppfoljning"; utfall: "hallet" | "uteblev" | "avbokat" | null;
   resultat: string | null; kalla: string;
+  /** När bokaren bekräftade mötet med kunden (0260). Saknas fältet räknas mötet som obekräftat. */
+  bekraftatNar?: string | null;
 };
 export type StatKedja = {
   id: string; forstaBokatAv: string; forstaBokatNar: string; forstaMoteTid: string | null;
@@ -166,6 +168,40 @@ export function dagarTillMote(moten: StatMote[], v: Period, krets: readonly stri
   }
   const tal = (h: Hink) => kvot(rader[h].filter((m) => m.utfall === "hallet").length, rader[h].length);
   return { "0–1": tal("0–1"), "2–3": tal("2–3"), "4–7": tal("4–7"), "8+": tal("8+") };
+}
+
+// Bekräftelserna per bokare (byggsteg 4, U9): bekräftar bokaren sina möten före
+// mötestiden, och håller de bekräftade oftare än de obekräftade? Underlaget är
+// mötena med mötestid i perioden som inte avbokats, ägda av den som bokade.
+// "Bekräftat före" = bekraftat_nar före mötestiden; en bekräftelse efteråt är
+// ingen bekräftelse. Hållet räknas bland mötena som fått utfall (hållet eller
+// uteblev), så att ett möte som väntar på utfall inte drar ner andelen.
+export function bekraftelsePerBokare(
+  moten: StatMote[], v: Period, krets: readonly string[] | null = null,
+): Record<string, { bokade: number; bekraftadeFore: Kvot; hallnaBekraftade: Kvot; hallnaObekraftade: Kvot }> {
+  const agd = iKrets(krets);
+  const per = new Map<string, StatMote[]>();
+  for (const m of moten) {
+    if (m.utfall === "avbokat" || !iVeckan(m.moteTid, v) || !agd(m.bokatAv)) continue;
+    if (!per.has(m.bokatAv)) per.set(m.bokatAv, []);
+    per.get(m.bokatAv)!.push(m);
+  }
+  const fore = (m: StatMote) => !!m.bekraftatNar && Date.parse(m.bekraftatNar) < Date.parse(m.moteTid);
+  const hallKvot = (rader: StatMote[]) => {
+    const avgjorda = rader.filter((m) => m.utfall === "hallet" || m.utfall === "uteblev");
+    return kvot(avgjorda.filter((m) => m.utfall === "hallet").length, avgjorda.length);
+  };
+  const ut: Record<string, { bokade: number; bekraftadeFore: Kvot; hallnaBekraftade: Kvot; hallnaObekraftade: Kvot }> = {};
+  for (const [id, rader] of per) {
+    const bekr = rader.filter(fore);
+    ut[id] = {
+      bokade: rader.length,
+      bekraftadeFore: kvot(bekr.length, rader.length),
+      hallnaBekraftade: hallKvot(bekr),
+      hallnaObekraftade: hallKvot(rader.filter((m) => !fore(m))),
+    };
+  }
+  return ut;
 }
 
 // Varifrån kommer bokningarna, möten och affärerna? En rad per källa som

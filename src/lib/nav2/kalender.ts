@@ -25,7 +25,7 @@ import { SKRIVLAGE } from "./skrivlage";
  * En post med 0090:s flagga (privat möte), "Visa som" när den inte är upptagen, och mötets länk till den som
  * är med (organiserar, deltar eller äger kalendern), så att Anslut syns på posten, i Min dag och i påminnelsen.
  */
-export type NdPost = Omit<Post, "paminnelse"> & { /** Minuter före, eller null = Ingen påminnelse (granskningen E4, 0212). */ paminnelse: number | null; privat?: boolean; visaSom?: string; online?: string; /** Heldag över flera dagar (0204): första och sista dagen. */ heldag?: { fran: string; till: string } };
+export type NdPost = Omit<Post, "paminnelse"> & { /** Minuter före, eller null = Ingen påminnelse (granskningen E4, 0212). */ paminnelse: number | null; privat?: boolean; visaSom?: string; online?: string; /** Heldag över flera dagar (0204): första och sista dagen. */ heldag?: { fran: string; till: string }; /** Kundmöte från Möten (mote.event_id), byggsteg 4: bolaget när rubriken syns, annars null. */ kund?: { bolag: string | null } };
 export type NdKalposter = { fran: string; till: string; poster: NdPost[] };
 
 export type NdKalender = NdKalposter & {
@@ -84,7 +84,7 @@ async function privata(mig: string, poster: NdPost[]): Promise<NdPost[]> {
   return markeraPrivata(mig, poster, await privataIds(poster));
 }
 
-type Extra = Map<string, { privat: boolean; visa: string; online: string | null; ingen: boolean; engang: boolean }>;
+type Extra = Map<string, { privat: boolean; visa: string; online: string | null; ingen: boolean; engang: boolean; kund?: string | null }>;
 
 /**
  * Posternas möten: privat (0090), "Visa som", länken och om serien bara har en gång. Bara de möten som redan står i
@@ -95,12 +95,34 @@ async function privataIds(poster: NdPost[]): Promise<Extra> {
   const ids = [...new Set(poster.filter((p) => ["mote", "enskilt", "leverans"].includes(p.slag)).map((p) => p.ref).filter((r): r is string => Boolean(r)))];
   if (!ids.length) return new Map();
   const serier = [...new Set(poster.map((p) => p.serieId).filter((s): s is string => Boolean(s)))];
-  const [{ data }, { data: serierader }] = await Promise.all([
+  const [{ data }, { data: serierader }, kund] = await Promise.all([
     supabaseAdmin().from("calendar_event").select("id, is_private, show_as, online_url, reminder_off, series_id").in("id", ids),
     serier.length ? supabaseAdmin().from("calendar_series").select("id, starts_on, ends_on").in("id", serier).not("ends_on", "is", null) : Promise.resolve({ data: [] }),
+    kundmoten(ids),
   ]);
   const engang = new Set(((serierader ?? []) as { id: string; starts_on: string; ends_on: string }[]).filter((s) => s.ends_on === s.starts_on).map((s) => s.id));
-  return new Map((data ?? []).map((r) => [r.id as string, { privat: Boolean(r.is_private), visa: String(r.show_as ?? "upptagen"), online: (r.online_url as string | null) ?? null, ingen: Boolean(r.reminder_off), engang: engang.has(r.series_id as string) }]));
+  return new Map((data ?? []).map((r) => [r.id as string, { privat: Boolean(r.is_private), visa: String(r.show_as ?? "upptagen"), online: (r.online_url as string | null) ?? null, ingen: Boolean(r.reminder_off), engang: engang.has(r.series_id as string), kund: kund.has(r.id as string) ? (kund.get(r.id as string) ?? null) : undefined }]));
+}
+
+/**
+ * Kundmötena (byggsteg 4): händelser som är ett möte i Möten (`mote.event_id`), med bolagets namn. Kalendern ritar
+ * dem diskret med bolaget först. Ett fel här gör bara att markeringen uteblir; Kalendern läses ändå.
+ */
+async function kundmoten(ids: string[]): Promise<Map<string, string | null>> {
+  const ut = new Map<string, string | null>();
+  try {
+    const { data: moten } = await supabaseAdmin().from("mote").select("event_id, kedja_id").in("event_id", ids);
+    const rader = (moten ?? []) as { event_id: string; kedja_id: string }[];
+    if (!rader.length) return ut;
+    const { data: kedjor } = await supabaseAdmin().from("mote_kedja").select("id, bolag_id").in("id", [...new Set(rader.map((m) => m.kedja_id))]);
+    const bolagFor = new Map(((kedjor ?? []) as { id: string; bolag_id: string }[]).map((k) => [k.id, k.bolag_id]));
+    const { data: bolag } = await supabaseAdmin().from("mote_bolag").select("id, namn").in("id", [...new Set(bolagFor.values())]);
+    const namn = new Map(((bolag ?? []) as { id: string; namn: string }[]).map((b) => [b.id, b.namn]));
+    for (const m of rader) ut.set(m.event_id, namn.get(bolagFor.get(m.kedja_id) ?? "") ?? null);
+  } catch {
+    // markeringen är en bekvämlighet; Kalendern ska aldrig falla på den
+  }
+  return ut;
 }
 
 function markeraPrivata(mig: string, poster: NdPost[], extra: Extra): NdPost[] {
@@ -114,6 +136,8 @@ function markeraPrivata(mig: string, poster: NdPost[], extra: Extra): NdPost[] {
     if (x.visa !== "upptagen") ut.visaSom = x.visa;
     if (x.engang) ut.serie = false;
     if (x.online && insyn) ut.online = x.online;
+    // Bolaget bara när rubriken syns: inte på en privat post man inte är med på, och inte när bara tiden visas.
+    if (x.kund !== undefined) ut.kund = { bolag: p.rubrik !== null && !(x.privat && !insyn) ? x.kund : null };
     if (!x.privat) return ut;
     return insyn ? { ...ut, privat: true } : { ...ut, privat: true, rubrik: p.rubrik === null ? null : "Privat", href: null };
   });
