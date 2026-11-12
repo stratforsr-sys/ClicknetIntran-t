@@ -32,6 +32,7 @@ import {
   farSe,
   flyttaIndata,
   kedjaFore,
+  uppfoljningAndring,
   kollegorIndata,
   kundIndata,
   MAX_GASTER,
@@ -394,6 +395,9 @@ export async function POST(request: Request) {
 
     case "prova_igen":
       return await uppfoljning("prova_igen");
+
+    case "uppfoljning_andra":
+      return await uppfoljning("andra");
 
     case "samtal": {
       // B4/varv 2: samtalen bakom statistikens tal Samtal, bara de på minst SAMTAL_MIN_SEK (varv 3, 0267). Samma krets som mote_samtal_vecka (0264): mote_statkrets()
@@ -1762,7 +1766,7 @@ export async function POST(request: Request) {
    * `kolumn + 1`; villkoret gör att det inte behövs.) Samma uppdatering som SQL: `SQL_INGET_SVAR` i
    * motenforma.ts, som `moten-db.mjs --inget-svar-prov` kör.
    */
-  async function uppfoljning(vilken: "inget_svar" | "prova_igen"): Promise<Response> {
+  async function uppfoljning(vilken: "inget_svar" | "prova_igen" | "andra"): Promise<Response> {
     const r = kedjaFore(b);
     if (!r.ok) return svar({ fel: r.fel }, 400);
     const h = await kedjaForAndra(r.varden.kedja);
@@ -1774,8 +1778,20 @@ export async function POST(request: Request) {
 
     const nu = new Date();
     const idag = svensktDatum(nu);
-    const lapp =
-      vilken === "inget_svar"
+    // Ändra uppföljningen (`uppfoljning_andra`): dagen och raden på kortet. Dagen som står nu läses i en egen fråga,
+    // eftersom en passerad dag får stå kvar när bara raden ändras. Samma villkor på `fore` som de andra två.
+    let andring: { uppfoljning_datum: string; uppfoljning_text: string | null } | null = null;
+    if (vilken === "andra") {
+      const { data: nuRad, error: lasfel } = await db.from("mote_kedja").select("uppfoljning_datum").eq("id", k.id).maybeSingle();
+      if (lasfel) return svar({ fel: "Uppföljningen gick inte att läsa. Försök igen." }, 500);
+      const star = (nuRad as { uppfoljning_datum: string | null } | null)?.uppfoljning_datum ?? null;
+      const a = uppfoljningAndring(b, { idag, datum: star ? String(star).slice(0, 10) : null });
+      if (!a.ok) return svar({ fel: a.fel }, 400);
+      andring = a.varden.lapp;
+    }
+    const lapp = andring
+      ? { ...andring, uppfoljning_andrad: nu.toISOString() }
+      : vilken === "inget_svar"
         ? { ...efterIngetSvar(idag), inget_svar_i_rad: k.inget_svar_i_rad + 1, uppfoljning_andrad: nu.toISOString() }
         : { uppfoljning_datum: idag, inget_svar_i_rad: 0, uppfoljning_andrad: nu.toISOString() };
     const upd = db.from("mote_kedja").update(lapp).eq("id", k.id).is("avslut", null);
@@ -1785,14 +1801,14 @@ export async function POST(request: Request) {
     if (!rad) return svar({ fel: AENDRAT }, 409);
     await skrivHandelse({
       actorId: mig,
-      action: vilken === "inget_svar" ? "mote.no_answer" : "mote.retry",
+      action: andring ? "mote.followup_changed" : vilken === "inget_svar" ? "mote.no_answer" : "mote.retry",
       objectType: "mote_kedja",
       objectId: k.id,
-      meta: { uppfoljning_datum: rad.uppfoljning_datum, inget_svar_i_rad: rad.inget_svar_i_rad },
+      meta: { uppfoljning_datum: rad.uppfoljning_datum, inget_svar_i_rad: rad.inget_svar_i_rad, ...(andring ? { uppfoljning_text: andring.uppfoljning_text } : {}) },
     });
     const tyst = rad.inget_svar_i_rad >= TYST_EFTER_INGET_SVAR;
     return svar({
-      ok: vilken === "prova_igen" ? "Kortet ligger i Följ upp igen. Ring i dag." : tyst ? "Inget svar tre gånger. Kortet ligger i Tyst." : `Inget svar. Ring igen ${rad.uppfoljning_datum}.`,
+      ok: andring ? "Uppföljningen är sparad." : vilken === "prova_igen" ? "Kortet ligger i Följ upp igen. Ring i dag." : tyst ? "Inget svar tre gånger. Kortet ligger i Tyst." : `Inget svar. Ring igen ${rad.uppfoljning_datum}.`,
       kedja: k.id,
       uppfoljning_datum: rad.uppfoljning_datum,
       inget_svar_i_rad: rad.inget_svar_i_rad,

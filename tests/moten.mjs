@@ -404,6 +404,18 @@ rubrik("A7: andringForKund, farAndraKedja och indata för mötets knappar");
   ok("flyttaIndata: mote, dag och start (också 'YYYY-MM-DD HH:MM')", (() => { const r = M.flyttaIndata({ mote: ID, dag: "2026-11-02", start: "10:30" }); const s = M.flyttaIndata({ mote: ID, start: "2026-11-02 10:30" }); return r.ok && r.varden.dag === "2026-11-02" && r.varden.start === "10:30" && s.ok && s.varden.dag === "2026-11-02" && !M.flyttaIndata({ mote: ID, dag: "2026-11-02", start: "10:33" }).ok && !M.flyttaIndata({ mote: "x", dag: "2026-11-02", start: "10:30" }).ok; })());
   ok("moteId: bara ett riktigt id", M.moteIndata({ mote: ID }).ok && !M.moteIndata({ mote: "x" }).ok && !M.moteIndata({}).ok);
   ok("kedjaFore: kedja och fore", (() => { const r = M.kedjaFore({ kedja: ID, fore: "2026-10-29T10:00:00.5+00:00" }); const n = M.kedjaFore({ kedja: ID, fore: null }); return r.ok && r.varden.fore === "2026-10-29T10:00:00.5+00:00" && n.ok && n.varden.fore === null && !M.kedjaFore({ kedja: "x", fore: null }).ok && !M.kedjaFore({ kedja: ID, fore: "igår" }).ok; })());
+  // Ändra uppföljningen (F8.3): dagen och raden på kortet.
+  const NU = { idag: "2026-11-12", datum: "2026-11-10" };
+  const ua = (o, nu = NU) => M.uppfoljningAndring({ kedja: ID, fore: null, datum: "2026-11-20", text: "Ring om offerten", ...o }, nu);
+  ok("uppfoljningAndring: kedjan, fore, dagen och raden (trimmad)", (() => { const r = ua({ fore: "2026-10-29T10:00:00.5+00:00", text: "  Ring om offerten  " }); return r.ok && r.varden.kedja === ID && r.varden.fore === "2026-10-29T10:00:00.5+00:00" && r.varden.lapp.uppfoljning_datum === "2026-11-20" && r.varden.lapp.uppfoljning_text === "Ring om offerten"; })());
+  ok("uppfoljningAndring: i dag går, i går går inte", ua({ datum: "2026-11-12" }).ok && !ua({ datum: "2026-11-11" }).ok);
+  ok("uppfoljningAndring: en passerad dag får stå kvar när bara raden ändras, en annan passerad dag går inte", ua({ datum: "2026-11-10", text: "Ny rad" }).ok && !ua({ datum: "2026-11-09" }).ok && !ua({ datum: "2026-11-10" }, { idag: "2026-11-12", datum: null }).ok);
+  ok("uppfoljningAndring: tom rad och bara mellanslag blir null", ua({ text: "" }).varden.lapp.uppfoljning_text === null && ua({ text: "   " }).varden.lapp.uppfoljning_text === null && ua({ text: undefined }).varden.lapp.uppfoljning_text === null);
+  ok("uppfoljningAndring: åäö, citattecken och emoji går igenom orörda", ua({ text: "Vill ha \"offerten\" på mejl åäö 🙂" }).varden.lapp.uppfoljning_text === "Vill ha \"offerten\" på mejl åäö 🙂");
+  ok("uppfoljningAndring: tusen tecken går, tusen och ett går inte", ua({ text: "a".repeat(1000) }).ok && !ua({ text: "a".repeat(1001) }).ok);
+  ok("uppfoljningAndring: en dag som inte finns, fel form och ingen dag nekas", !ua({ datum: "2026-02-30" }).ok && !ua({ datum: "20/11" }).ok && !ua({ datum: null }).ok && !ua({ datum: 20261120 }).ok);
+  ok("uppfoljningAndring: fel kedja och fel fore nekas", !ua({ kedja: "x" }).ok && !ua({ fore: "igår" }).ok);
+  ok("uppfoljningAndring: lappen rör bara dagen och raden, inte räknaren", Object.keys(ua({}).varden.lapp).sort().join() === "uppfoljning_datum,uppfoljning_text");
 }
 
 rubrik("Fixrunda 1: läsläge, bokning i befintlig kedja, flytt nollställer Bekräftat");

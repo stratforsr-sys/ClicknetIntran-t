@@ -107,6 +107,10 @@ export type NdAvgjort = {
   /** Betraktarens låsta mötesprovision för mötet, null utan rad. */
   belopp: number | null;
   skal: string | null;
+  /** Mötet ledde till en affär: utfallet rättas inte från tavlan (F8.1). Saknas när den egna läsningen inte gjordes eller inte gick. */
+  affar?: boolean;
+  /** Ett senare möte är ombokat från det här: det rättas inte till Hållet. Saknas som `affar`. */
+  ombokat?: boolean;
 };
 
 /** Ett ifrågasatt möte som väntar på en admin (Ändra svaren eller Låt stå), i inställningsrutan. */
@@ -434,6 +438,19 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
     const { data: bd } = await supabase.from("mote_bolag").select("id, namn").in("id", [...new Set([...kedjor.values()].map((k) => k.bolag_id))]).limit(MAX_KORT);
     const bolagNamnA = new Map(((bd ?? []) as { id: string; namn: string }[]).map((b) => [b.id, b.namn]));
     const prov = new Map(((pv ?? []) as { mote_id: string; belopp: number | string; skal: string | null }[]).map((p) => [p.mote_id, p]));
+    // Rätta utfall (F8.1): det servern inte tar (affär, ombokat) läses i två egna frågor som får misslyckas. Då saknas
+    // bara fälten, knappen visas och servern säger nej. Bara för den som kan rätta (chef).
+    let affarer: Set<string> | null = null;
+    let ombokade: Set<string> | null = null;
+    if (chef) {
+      const ids = avgjortRader.map((m) => m.id);
+      const [res, omb] = await Promise.all([
+        supabase.from("mote").select("id, resultat").in("id", ids).limit(MAX_MOTEN),
+        supabase.from("mote").select("foregaende_id").in("foregaende_id", ids).limit(MAX_MOTEN),
+      ]);
+      if (!res.error) affarer = new Set(((res.data ?? []) as { id: string; resultat: string | null }[]).filter((r) => r.resultat === "affar").map((r) => r.id));
+      if (!omb.error) ombokade = new Set(((omb.data ?? []) as { foregaende_id: string | null }[]).map((r) => r.foregaende_id).filter((x): x is string => !!x));
+    }
     for (const m of avgjortRader) {
       const k = kedjor.get(m.kedja_id);
       const p = prov.get(m.id);
@@ -453,6 +470,8 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
         deltagare: k?.deltagare ?? [m.bokat_av, m.halls_av],
         belopp: p ? Number(p.belopp) : null,
         skal: p?.skal ?? null,
+        ...(affarer ? { affar: affarer.has(m.id) } : {}),
+        ...(ombokade ? { ombokat: ombokade.has(m.id) } : {}),
       });
     }
     avgjorda.sort(sorteraAvgjorda);

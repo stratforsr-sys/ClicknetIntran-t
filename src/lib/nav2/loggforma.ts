@@ -256,6 +256,7 @@ const RUBRIK: Record<string, string> = {
   "mote.ifragasatt": "Mötets nivå ifrågasatt",
   "mote.ifragasatt_beslut": "Ifrågasatt nivå får stå kvar",
   "mote.utfall_rattat": "Mötets utfall rättat",
+  "mote.followup_changed": "Möte: uppföljningen ändrad",
   "news.archived": "Nyhet arkiverad",
   "news.drafted": "Nyhet sparad som utkast",
   "news.published": "Nyhet publicerad",

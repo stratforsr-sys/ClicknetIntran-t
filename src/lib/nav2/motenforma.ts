@@ -987,6 +987,25 @@ export function kedjaFore(body: unknown): Resultat<{ kedja: string; fore: string
   return f.ok ? { ok: true, varden: { kedja: b.kedja, fore: f.varden } } : f;
 }
 
+/**
+ * Ändra uppföljningen: dagen kunden ska ringas och raden som står på kortet. Dagen är i dag eller senare. En dag som
+ * redan passerat får stå kvar om den inte ändras (då är det bara raden som rättas). Lappen rör bara dagen och raden:
+ * räknaren för inget svar står kvar.
+ */
+export function uppfoljningAndring(
+  body: unknown,
+  nu: { idag: string; datum: string | null },
+): Resultat<{ kedja: string; fore: string | null; lapp: { uppfoljning_datum: string; uppfoljning_text: string | null } }> {
+  const r = kedjaFore(body);
+  if (!r.ok) return r;
+  const b = (body ?? {}) as Record<string, unknown>;
+  if (!arDatum(b.datum)) return nej("Välj en dag för uppföljningen.");
+  if (b.datum < nu.idag && b.datum !== nu.datum) return nej("Välj i dag eller en senare dag.");
+  const t = text(b.text);
+  if ((t?.length ?? 0) > 1000) return nej("Texten är för lång.");
+  return { ok: true, varden: { ...r.varden, lapp: { uppfoljning_datum: b.datum, uppfoljning_text: t } } };
+}
+
 /* ------------------------------------------------------------------------ */
 /* Uppslaget (mote_uppslag, 0262)                                            */
 /* ------------------------------------------------------------------------ */
