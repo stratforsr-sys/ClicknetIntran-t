@@ -73,7 +73,12 @@ export type NdMoteKort = {
     /** När mötet bekräftades, svensk lokal "YYYY-MM-DD HH:MM". */
     bekraftatNar: string | null;
     flyttningar: number;
+    /** Säljarens egen anteckning, från möten bokade före agendan (2026-11-13). Går aldrig till kunden. */
     mal: string | null;
+    /** Agendan: kunden får den i inbjudan (0290). */
+    agenda: string | null;
+    /** Fler hos kunden med namn och telefon (0290). Adresserna bland dem står också i `gaster`, med svaret. */
+    personer: { namn: string | null; telefon: string | null; epost: string | null }[];
     nulage: string | null;
     /** Kollegorna i kalendern utöver hållaren, och gästerna hos kunden (också kontakten när hen är bjuden). `svar` som i Kalendern. */
     med: { id: string; namn: string; svar: string }[];
@@ -195,7 +200,7 @@ type KortRad = {
   idag: boolean | null;
 };
 type MoteRad = { id: string; kedja_id: string; mote_tid: string; utfall: string | null; resultat: string | null };
-type FlodeRad = { id: string; event_id: string | null; kalla: string | null; bokat_nar: string; bekraftat_nar: string | null; flyttad_nar: string | null; forsok: number | null; senast_forsok: string | null };
+type FlodeRad = { id: string; event_id: string | null; kalla: string | null; agenda: string | null; personer: { namn: string | null; telefon: string | null; epost: string | null }[] | null; bokat_nar: string; bekraftat_nar: string | null; flyttad_nar: string | null; forsok: number | null; senast_forsok: string | null };
 type AvgjortRad = { id: string; kedja_id: string; mote_tid: string; utfall: string; niva: string | null; bokat_av: string; halls_av: string; bekraftat_nar: string | null };
 type PersonRad = { id: string; first_name: string; last_name: string; employee_role: { role: string }[] | null };
 
@@ -344,7 +349,7 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
   const moteIds = rader.map((r) => r.mote_id).filter((x): x is string => !!x);
   if (moteIds.length) {
     // Bokningstiden, bekräftelsen, flyttiden och försöken (0287) står på mötesraden.
-    const { data: ev } = await supabaseAdmin().from("mote").select("id, event_id, kalla, bokat_nar, bekraftat_nar, flyttad_nar, forsok, senast_forsok").in("id", moteIds).limit(MAX_KORT);
+    const { data: ev } = await supabaseAdmin().from("mote").select("id, event_id, kalla, agenda, personer, bokat_nar, bekraftat_nar, flyttad_nar, forsok, senast_forsok").in("id", moteIds).limit(MAX_KORT);
     for (const x of (ev ?? []) as unknown as FlodeRad[]) {
       flode.set(x.id, x);
       if (x.kalla) kallor.set(x.id, x.kalla);
@@ -421,6 +426,8 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
             bekraftatNar: f?.bekraftat_nar ? lokal(f.bekraftat_nar) : null,
             flyttningar: r.antal_flyttningar ?? 0,
             mal: r.mal,
+            agenda: f?.agenda ?? null,
+            personer: Array.isArray(f?.personer) ? f.personer : [],
             nulage: r.nulage,
             med: (narvaro.get(r.mote_id)?.med ?? []).filter((p) => p.id !== r.halls_av),
             gaster: narvaro.get(r.mote_id)?.gaster ?? [],

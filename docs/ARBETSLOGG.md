@@ -5,6 +5,25 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-13 · Möten: bokningsbladet (kunden på ett ställe, personer, källans lista, agendan; 0290)
+
+**Vad:** beställaren ville kunna lägga till fler hos kunden där kontakten står, med telefon; en riktig dropdown för
+källan; inget hopfällt "Mer om …"; och "Agenda" i stället för "Mål" om kunden ser det. Se NASTA_SESSION.
+
+**Beslut som inte går att läsa ur koden:**
+
+- **Agendan är en egen kolumn, inte målet omdöpt.** 24 av 26 möten hade ett mål skrivet som säljarens anteckning
+  ("Vill ha fler förfrågningar … och veta vad det kostar"). Hade målet blivit agendan hade varje ny tid på ett gammalt
+  möte skickat anteckningen till kunden. Därför läser utkorgen bara `mote.agenda`, och kalenderns `agenda_md` (där
+  målet står på äldre möten) läses aldrig för kunden.
+- **Personerna står på mötet, inte på bolaget.** De är de som är med på just det mötet, som gästerna; ombokningen och
+  uppföljningsmötet tar med dem (`laggMote` med `m.personer`). Inbjudningarna går som förut genom `gaster`, så att
+  avbokningen av en borttagen gäst och svaren i kalendern fungerar orört.
+- **"Använd ”X”" bara när inget matchar.** Källan är fri text på servern, men en ny rad bredvid varje träff gav
+  "Rek", "Rekom" och "Rekommendation" som tre källor i statistiken.
+- **E-postfälten är `type=text`.** `selectionStart` är `null` i `type=email`, så domänförslaget kunde inte veta var
+  markören stod. `inputmode=email` ger samma tangentbord i telefonen.
+
 ## 2026-11-13 · Möten: skarpa provet i produktionen, och kortets klippta knappar
 
 Provat inloggat i produktionen (Zen, admin, Chrome 1440 px) på två provmöten med bolagsnamn som börjar med PROV, utan

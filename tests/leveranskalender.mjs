@@ -307,6 +307,11 @@ console.log("\n\x1b[1mPass 4: .ics och kundens brev\x1b[0m");
   const bort = kundbrev({ ...a, metod: "CANCEL", sekvens: 1, slag: "bort" });
   ok("en borttagen gäst: mötet står kvar, hen är inte med", bort.amne.startsWith("Ändrad inbjudan:") && bort.text.includes("Du är inte längre med på kickoff med Clicknet") && !/ställt in/.test(bort.text));
   lika("utan slag: som förut", kundbrev({ ...a, metod: "REQUEST", sekvens: 2 }).amne.slice(0, 7), "Ny tid:");
+  // Möten (2026-11-13): agendan står under platsen i inbjudan, ny tid och ändrat, aldrig i en avbokning.
+  const ag = kundbrev({ ...a, metod: "REQUEST", plats: "Telefon", agenda: " 1. Hur ni syns i dag\n2. Vad som krävs " });
+  ok("agendan följer med under platsen", ag.text.includes("Plats: Telefon\n\nAgenda:\n1. Hur ni syns i dag\n2. Vad som krävs\n"), ag.text);
+  ok("agendan följer med en ny tid", kundbrev({ ...a, metod: "REQUEST", sekvens: 1, agenda: "X" }).text.includes("Agenda:\nX"));
+  ok("ingen agenda i en avbokning, och ingen rubrik utan agenda", !kundbrev({ ...a, metod: "CANCEL", sekvens: 1, agenda: "X" }).text.includes("Agenda") && !kundbrev({ ...a, metod: "REQUEST", agenda: "  " }).text.includes("Agenda"));
 }
 
 console.log("\n\x1b[1mAvatarerna\x1b[0m");

@@ -673,22 +673,53 @@ async function ics(rad: Utkorgsrad): Promise<boolean> {
   const nar = e.tid
     ? `${liten(datumLang(e.dag))} kl ${hm(start)}–${hm(start + (e.minuter ?? 30))}`
     : `${liten(datumLang(e.dag))}${e.slutdag ? ` till ${liten(datumLang(e.slutdag))}` : ""}, hela dagen`;
-  const kontakt = (o?.contact_name as string | null | undefined)?.split(" ")[0] ?? null;
+  // Ett kundmöte i Möten (2026-11-13): agendan och gästens namn ur mötet. Bara `mote.agenda` går till kunden;
+  // målet (`mote.mal`, och kalenderns agenda på möten bokade före agendan) är säljarens egen anteckning.
+  const kund = e.order_id ? null : await kundmote(e.id, epost);
+  const namn = ((o?.contact_name as string | null | undefined) ?? kund?.namn ?? null) || null;
+  const kontakt = namn?.split(" ")[0] ?? null;
+  const agenda = metod === "REQUEST" ? kund?.agenda ?? null : null;
 
   const ics = inbjudan(
-    somMote(e, rubrik, null),
+    somMote(e, rubrik, agenda),
     metod,
     { namn: `${orgNamn}, Clicknet`, epost: org.email as string },
-    { namn: (o?.contact_name as string | null | undefined) ?? null, epost, svara: true },
+    { namn, epost, svara: true },
   );
 
   const slag = borttagen ? "bort" : metod === "REQUEST" ? await brevslag(e.id, epost, sekvens, nar) : undefined;
-  const { amne, text } = kundbrev({ metod, sekvens, slag, rubrik, nar, kontakt, plats: e.plats, url: e.online_url, avsandare: org.first_name as string });
+  const { amne, text } = kundbrev({ metod, sekvens, slag, rubrik, nar, kontakt, plats: e.plats, url: e.online_url, avsandare: org.first_name as string, agenda });
   const u = await skickaEpost({ till: epost, amne, text, svaraTill: org.email as string, bilagor: [icsBilaga(ics, metod)], logg: { sort: "utkorg-inbjudan" } });
   // `epost` och `nar` (2026-11-03): nästa brev till samma adress vet då vad gästen redan fått (`brevslag`).
   await logga("ut", { handling: "ics", event: e.id, metod, sekvens, ok: u.skickat, id: u.skickat ? u.id : null, epost, nar });
   if (!u.skickat) throw new Error(u.orsak);
   return true;
+}
+
+/**
+ * Mötet i Möten bakom en kalenderhändelse (2026-11-13): agendan, och namnet på gästen med adressen `epost`
+ * (kontakten på bolaget, eller en av personerna hos kunden). Null när händelsen inte är ett kundmöte. Ett fel
+ * här får aldrig stoppa inbjudan: den går då ut som förut, utan namn och agenda.
+ */
+async function kundmote(eventId: string, epost: string): Promise<{ agenda: string | null; namn: string | null } | null> {
+  try {
+    const db = supabaseAdmin();
+    // `event_id` är inte unikt i databasen: det senast bokade mötet på händelsen gäller.
+    const { data: m } = await db.from("mote").select("kedja_id, agenda, personer").eq("event_id", eventId).order("bokat_nar", { ascending: false }).limit(1);
+    const mo = ((m ?? []) as { kedja_id: string; agenda: string | null; personer: { namn: string | null; epost: string | null }[] | null }[])[0] ?? null;
+    if (!mo) return null;
+    let namn = (mo.personer ?? []).find((p) => (p.epost ?? "").toLowerCase() === epost)?.namn ?? null;
+    if (!namn) {
+      const { data: k } = await db.from("mote_kedja").select("bolag_id").eq("id", mo.kedja_id).maybeSingle();
+      const bolagId = (k as { bolag_id: string } | null)?.bolag_id;
+      const { data: b } = bolagId ? await db.from("mote_bolag").select("kontakt, epost").eq("id", bolagId).maybeSingle() : { data: null };
+      const bo = b as { kontakt: string | null; epost: string | null } | null;
+      if (bo && (bo.epost ?? "").toLowerCase() === epost) namn = bo.kontakt;
+    }
+    return { agenda: mo.agenda?.trim() || null, namn: namn?.trim() || null };
+  } catch {
+    return null;
+  }
 }
 
 /**

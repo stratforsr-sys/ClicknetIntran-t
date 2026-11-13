@@ -7990,6 +7990,7 @@ body.nd-riktig :is(.pv-lagrad,.arow[data-agenda],.pv-tab tbody tr[data-pvupers],
 .mo-rf:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 .mo-pt{margin:0 0 4px}
 .rxsek .ldfakta .mo-bred{grid-column:1 / -1}
+.rxsek .ldfakta .mo-agd{white-space:pre-line}
 
 /* Mellanbredd: tavlan blir en rad som rullar sidledes i stället för att pressa ihop knapparna */
 @media (max-width:1180px){
@@ -8030,7 +8031,10 @@ body.nd-riktig :is(.pv-lagrad,.arow[data-agenda],.pv-tab tbody tr[data-pvupers],
 .mo-fl{display:flex;flex-direction:column;gap:5px;min-width:0}
 .mo-fl.bred{grid-column:1 / -1}
 .mo-ob{color:var(--ink-3);font-weight:400}
-.mo-fl.mo-merom{flex-direction:row;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+/* Bladets två delar (2026-11-13): Kunden och Mötet, var sin rubrik med en hårlinje. */
+.mo-sek{grid-column:1 / -1;display:flex;align-items:center;gap:10px;margin:8px 0 -4px;font:650 11px var(--f-body);letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3)}
+.mo-sek::after{content:'';flex:1;height:1px;background:var(--line)}
+.mo-fg>.mo-sek:first-child,.mo-fg>.mo-fl:first-child+.mo-sek{margin-top:0}
 .mo-fl>label,.mo-lbl{font-size:12px;font-weight:550;color:var(--ink-2)}
 .mo-fl .uin{padding:8px 11px;font-size:14px}
 .mo-fl textarea.uin{min-height:70px}
@@ -8112,6 +8116,46 @@ body.nd-riktig :is(.pv-lagrad,.arow[data-agenda],.pv-tab tbody tr[data-pvupers],
 .mo-plist li[aria-selected="true"]{background:var(--brand-soft);color:var(--brand-ink)}
 .mo-plist li.tom{cursor:default;color:var(--ink-3);background:none}
 .mo-ph{margin:0;font-size:12px;line-height:1.4;color:var(--ink-3)}
+/* Fler hos kunden (2026-11-13): en rad per person under kontakten, med samma två kolumner som kontaktens fält.
+   Huvudet bär initialerna, namnet och följden (inbjudan eller inte) medan man skriver. */
+.mo-pers{display:flex;flex-direction:column;gap:12px}
+.mo-prad{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 12px;padding-top:11px;border-top:1px solid var(--line);animation:moBricka .16s ease-out}
+.mo-prad .mo-bred,.mo-prad .mo-err{grid-column:1 / -1}
+.mo-phd{grid-column:1 / -1;display:flex;align-items:center;gap:8px;min-width:0;font-size:12.5px;line-height:1.3}
+.mo-pav{display:grid;place-items:center;flex:none;width:22px;height:22px;border-radius:50%;border:1px solid var(--line-2,var(--line));background:var(--surface-2);color:var(--ink-2);font:650 9.5px var(--f-body);letter-spacing:.02em;transition:border-color .2s,color .2s,background .2s}
+.mo-pav.inb{border-color:var(--brand);background:var(--brand-soft);color:var(--brand-ink)}
+.mo-pav.liv{animation:moPav .22s ease-out}
+@keyframes moPav{from{transform:scale(.78)}to{transform:none}}
+.mo-pn{flex:0 1 auto;min-width:0;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mo-pst{flex:0 1 auto;min-width:0;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mo-pst:empty{display:none}
+.mo-px{margin-left:auto;flex:none;padding:2px 4px;border-radius:6px;font-size:12.5px;color:var(--ink-3)}
+.mo-px:hover{color:var(--danger-ink)}
+.mo-px:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.mo-plagg{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+/* E-postens förslag: bolagets domän i grått efter det skrivna. Typsnitt och marginal tas från fältet (moSpokRita). */
+.mo-spw{position:relative;display:block;min-width:0}
+.mo-spok{position:absolute;inset:0;display:flex;align-items:center;overflow:hidden;white-space:pre;pointer-events:none;color:transparent}
+.mo-spok[hidden]{display:none}
+.mo-spok b{font-weight:inherit;color:var(--ink-3)}
+/* Ett fält som fyllts i åt en (signaturen, uppslaget) blinkar till en gång. */
+@keyframes moFylld{from{background:color-mix(in srgb,var(--brand) 20%,var(--surface))}to{background:var(--surface)}}
+.uin.mo-fylld{animation:moFylld 1.2s ease-out}
+/* Källan (2026-11-13): en sökbar lista med pil, bock för valet och siffran för korten på tavlan. */
+.mo-kv .uin{padding-right:36px}
+.mo-kpil{position:absolute;right:5px;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:28px;height:28px;border-radius:7px;color:var(--ink-3)}
+.mo-kpil:hover{background:var(--surface-2);color:var(--ink)}
+.mo-kpil svg{width:15px;height:15px;transition:transform .16s ease-out}
+.mo-kv[data-oppen] .mo-kpil svg{transform:rotate(180deg)}
+.mo-plist .mo-bock{display:grid;place-items:center;flex:none;width:16px;color:var(--brand-ink);visibility:hidden}
+.mo-plist .mo-bock svg{width:14px;height:14px}
+.mo-plist li[data-vald] .mo-bock{visibility:visible}
+.mo-plist li[data-vald]>span:not(.mo-bock){font-weight:600}
+.mo-plist li mark{background:none;color:inherit;font-weight:650;text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:3px}
+.mo-plist li.ny{color:var(--brand-ink);font-weight:550}
+.mo-plist li.ny svg{width:14px;height:14px;flex:none}
+.mo-plist li small.num{font-variant-numeric:tabular-nums}
+.mo-ph.mo-malg{padding-left:9px;border-left:2px solid var(--line)}
 .mo-med{margin:4px 0 0;font-size:13px;line-height:1.5}
 .mo-plats{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:2px 0 6px;font-size:13px;line-height:1.5}
 .mo-plats svg{width:15px;height:15px;color:var(--ink-3);flex:none}
@@ -8124,8 +8168,8 @@ body.nd-riktig :is(.pv-lagrad,.arow[data-agenda],.pv-tab tbody tr[data-pvupers],
 .mo-med .muted{margin-right:4px}
 .mo-lagg:focus-visible,.mo-bricka button:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 @keyframes moBricka{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:none}}
-@media (prefers-reduced-motion:reduce){.mo-bricka{animation:none}}
-@media (max-width:640px){.mo-brf input{font-size:16px}}
+@media (prefers-reduced-motion:reduce){.mo-bricka,.mo-prad,.mo-pav.liv,.uin.mo-fylld{animation:none}.mo-kpil svg,.mo-pav{transition:none}}
+@media (max-width:640px){.mo-brf input{font-size:16px}.mo-prad{grid-template-columns:minmax(0,1fr)}.mo-plist li{min-height:40px}}
 .mo-dag:focus-visible,.mo-t:focus-visible,.mo-val:focus-visible,.mo-chips .chip:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 
 /* Hållet: fyra val som rader, inte en rullgardin. */
@@ -37043,23 +37087,23 @@ function ndMoDialog(typ, kort, forval, fokus){
   const franPanel = !!k && S.moOpen === k.kedja;
   S.moOpen = null;
   const D = S.moDlg = {typ, k, kedja:k ? k.kedja : null, f:{}, fel:{}, fe:'', sparar:false, rort:false, tider:null, tok:0, dag:null, tid:null, ingenNy:false, upp:null};
-  if (typ === 'boka'){ D.f = {hallsAv:sal.some(x => x.id === jag) ? jag : (sal[0] ? sal[0].id : ''), namn:k ? k.namn : '', kontakt:k && k.kontakt || '', telefon:k && k.telefon || '', epost:k && k.epost || '', doman:k && k.doman || '', kalla:'', mal:'', nulage:'', med:[], gaster:[], platsTyp:MOPLATSSENAST, adress:'', lank:'', langd:MOLANGD};
+  if (typ === 'boka'){ D.f = {hallsAv:sal.some(x => x.id === jag) ? jag : (sal[0] ? sal[0].id : ''), namn:k ? k.namn : '', kontakt:k && k.kontakt || '', telefon:k && k.telefon || '', epost:k && k.epost || '', doman:k && k.doman || '', kalla:'', mal:'', agenda:'', nulage:'', med:[], personer:[], platsTyp:MOPLATSSENAST, adress:'', lank:'', langd:MOLANGD};
     if (forval) Object.assign(D.f, forval);
     // Utkastet (F10.1): bara den tomma bokningen tar upp det. Hållaren och kollegorna prövas mot dem som finns nu, och
     // en tid som hunnit passera följer inte med.
     D.utkast = !k && !forval;
     if (D.utkast && MOUTKAST){
       const u = MOUTKAST, hall = sal.some(x => x.id === u.f.hallsAv) ? u.f.hallsAv : D.f.hallsAv;
-      Object.assign(D.f, u.f, {hallsAv:hall, med:u.f.med.filter(id => id !== hall && moKollegor().some(x => x.id === id)), gaster:[...u.f.gaster]});
+      Object.assign(D.f, u.f, {hallsAv:hall, med:u.f.med.filter(id => id !== hall && moKollegor().some(x => x.id === id)), personer:u.f.personer.map(x => ({...x}))});
       Object.assign(D, {franUtkast:true, rort:true, egen:u.egen ? {...u.egen} : null, tid:!u.egen && u.tid && moMin(u.tid) > moNuMin() ? u.tid : null});
     }
-    Object.assign(D, {medQ:'', medOppen:false, medLista:false, medAkt:0, gastQ:'', merOppen:false}); }
+    Object.assign(D, {medQ:'', medOppen:false, medLista:false, medAkt:0}, MOKALLA0); }
   // Ändra (2026-11-03): samma blad som Boka, ifyllt med mötet. `orig` är det som stod, så att bara ändringarna skickas.
   if (typ === 'andra'){
     const m = k.mote, pl = m.plats || {typ:'telefon', text:'Telefon', lank:null}, kontaktEpost = String(k.epost || '').toLowerCase();
-    D.f = {hallsAv:m.hallsAv, namn:k.namn || '', kontakt:k.kontakt || '', telefon:k.telefon || '', epost:k.epost || '', doman:k.doman || '', kalla:m.kalla || '', mal:m.mal || '', nulage:m.nulage || '', med:(m.med || []).map(p => p.id), gaster:(m.gaster || []).map(x => x.epost).filter(x => x !== kontaktEpost), platsTyp:pl.typ, adress:pl.typ === 'plats' ? pl.text : '', lank:pl.lank || ''};
+    D.f = {hallsAv:m.hallsAv, namn:k.namn || '', kontakt:k.kontakt || '', telefon:k.telefon || '', epost:k.epost || '', doman:k.doman || '', kalla:m.kalla || '', mal:m.mal || '', agenda:m.agenda || '', nulage:m.nulage || '', med:(m.med || []).map(p => p.id), personer:moPersFranMote(m, kontaktEpost), platsTyp:pl.typ, adress:pl.typ === 'plats' ? pl.text : '', lank:pl.lank || ''};
     D.orig = JSON.parse(JSON.stringify(D.f));
-    Object.assign(D, {tid:m.tid, dag:m.tid.slice(0, 10), tidOppen:false, medQ:'', medOppen:false, medLista:false, medAkt:0, gastQ:'', merOppen:false});
+    Object.assign(D, {tid:m.tid, dag:m.tid.slice(0, 10), tidOppen:false, medQ:'', medOppen:false, medLista:false, medAkt:0}, MOKALLA0, {kallaRord:true});
   }
   // Flyttat och Uteblev: tiderna letas för hållaren och kollegorna på mötet (de som inte tackat nej).
   if (typ === 'flyttat' || typ === 'utfall') D.f = {hallsAv:k.mote.hallsAv, med:(k.mote.med || []).filter(p => p.svar !== 'nej').map(p => p.id)};
@@ -37345,43 +37389,276 @@ function moMedTa(D, id){
   moHamtaTider();
 }
 
-// Fler hos kunden: det man skriver blir brickor. Flera adresser på en gång går (komma, semikolon, mellanslag eller
-// Enter), och det som inte är en adress står kvar i fältet med ett fel, som i Kalenderns Bjud in med e-post.
-function moGastVy(D){
-  return `<div class="mo-fl bred" id="moGast"><label class="mo-lbl" for="mod-gaster">Fler hos kunden</label>
-    <div class="mo-brf ${D.fel.gaster ? 'fel' : ''}" data-mopers="mod-gaster">${D.f.gaster.map(a => `<span class="mo-bricka e"><span>${esc(a)}</span><button type="button" data-mogastx="${esc(a)}" aria-label="Ta bort ${esc(a)}">×</button></span>`).join('')}<input id="mod-gaster" data-mogastq value="${esc(D.gastQ || '')}" inputmode="email" placeholder="${D.f.gaster.length ? 'Fler …' : 'namn@bolaget.se'}" autocomplete="off" spellcheck="false" ${D.f.gaster.length && !D.fel.gaster ? '' : `aria-describedby="${[D.f.gaster.length ? '' : 'mo-gh', D.fel.gaster ? 'moe-gaster' : ''].filter(Boolean).join(' ')}"`} ${D.fel.gaster ? 'aria-invalid="true"' : ''}></div>
-    ${D.f.gaster.length ? '' : '<p class="mo-ph" id="mo-gh">Var och en får en kalenderinbjudan med mejl. Komma eller Enter lägger till.</p>'}
-    <p class="mo-err" id="moe-gaster" ${D.fel.gaster ? '' : 'hidden'}>${D.fel.gaster ? esc(D.fel.gaster) : ''}</p></div>`;
+/* ---------- Fler hos kunden (2026-11-13): personer med namn, telefon och e-post ----------
+   Som kollegorna: "Lägg till person" under kontaktens fält ger en rad, i samma två kolumner som kontakten. Den som har
+   e-post får en kalenderinbjudan med mejl; den som bara har namn eller telefon sparas på mötet (`mote.personer`) och
+   bjuds inte in. Radens huvud följer det man skriver: initialerna, namnet och följden. En mejlsignatur eller en lista
+   "Namn <adress>" som klistras in i ett namn- eller e-postfält fyller i fälten (moPersTolka). Rutten tar `personer`
+   och gör gästerna av adresserna (motenforma.ts, personerIndata). */
+const moPersTom = () => ({namn:'', telefon:'', epost:''});
+const moPersHar = p => !!p && ['namn', 'telefon', 'epost'].some(f => String(p[f] || '').trim());
+const moPersAdrL = l => [...new Set((l || []).map(p => String(p.epost || '').trim().toLowerCase()).filter(a => MOEPOST.test(a)))];
+const moPersAdr = D => moPersAdrL(D.f.personer);
+// Det som skickas: raderna med något i, trimmade. Rutten normaliserar numret och adressen.
+const moPersData = l => (l || []).filter(moPersHar).map(p => ({namn:String(p.namn || '').trim(), telefon:String(p.telefon || '').trim(), epost:String(p.epost || '').trim().toLowerCase()}));
+// Ändra: personerna på mötet, och de gamla gästerna (bara en adress) som inte är kontakten.
+function moPersFranMote(m, kontaktEpost){
+  const l = (m.personer || []).map(p => ({namn:p.namn || '', telefon:p.telefon || '', epost:p.epost || ''}));
+  (m.gaster || []).forEach(g => { if (g.epost !== kontaktEpost && !l.some(p => p.epost.toLowerCase() === g.epost)) l.push({namn:'', telefon:'', epost:g.epost}); });
+  return l;
 }
-// Det skrivna eller klistrade som adresser (F12.1): komma, semikolon, radbrytning eller mellanslag skiljer dem åt, och
-// "Namn <adress>" (som mejlprogrammen kopierar, också med namnet inom citattecken) ger adressen.
-const moGastDelar = t => String(t || '').replace(/"[^"]*"(?=\s*<)/g, '').split(/[,;\r\n]+/).flatMap(d => { const v = [...d.matchAll(/<([^<>\s]+)>/g)].map(m => m[1]); return v.length ? [...v, ...d.replace(/<[^<>]*>/g, ' ').split(/\s+/).filter(x => x.includes('@'))] : d.split(/\s+/); }).map(x => x.replace(/^mailto:/i, '')).filter(Boolean);
-function moGastLas(D){
-  const delar = moGastDelar(D.gastQ), kvar = [], kontakt = String(D.f.epost || '').trim().toLowerCase();
-  let fel = '';
-  for (const ra of delar){
-    const a = ra.toLowerCase();
-    if (!MOEPOST.test(a)){ kvar.push(ra); fel = fel || `${ra} ser inte ut som en e-postadress.`; continue; }
-    if (a === kontakt || D.f.gaster.includes(a)) continue;   // kontakten bjuds redan in, och en adress räcker en gång
-    if (D.f.gaster.length >= MOMAX){ kvar.push(ra); fel = fel || `Högst ${MOMAX} till hos kunden.`; continue; }
-    D.f.gaster = [...D.f.gaster, a];
+// Kundens folk på ett kort: personerna och de gamla gästerna, utan kontakten. Svaret ur kalendern när det finns.
+function moKundFolk(k){
+  const m = k.mote; if (!m) return [];
+  const kontakt = String(k.epost || '').toLowerCase(), g = (m.gaster || []).filter(x => x.epost !== kontakt);
+  const l = (m.personer || []).map(p => ({...p, svar:(g.find(x => x.epost === p.epost) || {}).svar || null}));
+  g.forEach(x => { if (!l.some(p => p.epost === x.epost)) l.push({namn:null, telefon:null, epost:x.epost, svar:x.svar}); });
+  return l;
+}
+const MOSVAR = {ja:'kommer', nej:'tackade nej', kanske:'kanske'};
+// Ändra: svaret ur kalendern. En adress som stod på mötet men inte är gäst (borttagen i Kalendern) bjuds inte in igen
+// av en sparning (rutten slår ihop mot det formuläret visade), och det står.
+function moPersSvar(D, epost){
+  const a = String(epost || '').trim().toLowerCase(); if (D.typ !== 'andra' || !D.k || !D.k.mote) return '';
+  const g = (D.k.mote.gaster || []).find(x => x.epost === a); if (g) return MOSVAR[g.svar] || 'inbjuden';
+  return moPersAdrL(D.orig && D.orig.personer).includes(a) ? 'inte inbjuden' : '';
+}
+const moPNamn = (p, i) => String(p.namn || '').trim() || `Person ${i + 2}`;
+const moPersIni = (p, i) => String(p.namn || '').trim() ? moIni(p.namn) : String(i + 2);
+const moPersInb = p => MOEPOST.test(String(p.epost || '').trim().toLowerCase());
+const moPersFarInb = (D, p) => moPersInb(p) && moPersSvar(D, p.epost) !== 'inte inbjuden';
+// = telefonE164(normaliseraTelefon(…)) på servern (motenforma.ts, leads.ts): numret i E.164, eller null.
+function moTelE164(ra){
+  const r = String(ra || '').replace(/\(0\)/g, ''), plus = r.trim().startsWith('+'); let n = r.replace(/\D/g, ''); if (!n) return null;
+  if (plus && n.startsWith('46')) n = '0' + n.slice(2); else if (n.startsWith('0046')) n = '0' + n.slice(4); else if (plus) n = '+' + n;
+  if (n.replace(/^\+/, '').length < 6) return null; n = n.slice(0, 20);
+  const e = n.startsWith('+') ? n : n.startsWith('0') ? '+46' + n.slice(1) : /^46\d{9}$/.test(n) ? '+' + n : null;
+  return e && !e.startsWith('+460') && /^\+\d{8,15}$/.test(e) ? e : null;
+}
+// Följden i radens huvud, medan man skriver: inbjudan med mejl, eller ingen utan e-post.
+function moPersStatus(D, p){
+  const e = String(p.epost || '').trim();
+  if (!e) return moPersHar(p) ? 'ingen inbjudan utan e-post' : '';
+  if (!moPersInb(p)) return '';
+  return moPersSvar(D, e) || 'får en inbjudan med mejl';
+}
+function moPersRad(D, p, i){
+  const id = `mod-p${i}`, fk = ['namn', 'telefon', 'epost'].find(f => D.fel[`p${i}-${f}`]), fel = fk ? D.fel[`p${i}-${fk}`] : '';
+  const inp = (f, ph, extra) => `<input class="uin" id="${id}-${f}" data-mopf="${f}" data-mopi="${i}" value="${esc(p[f] || '')}" placeholder="${ph}" autocomplete="off" ${extra} ${fk === f ? `aria-invalid="true" aria-describedby="moe-p${i}"` : ''}>`;
+  const st = moPersStatus(D, p);
+  return `<div class="mo-prad" data-mopi="${i}" role="group" aria-labelledby="mo-pn${i}">
+    <div class="mo-phd"><span class="mo-pav ${moPersFarInb(D, p) ? 'inb' : ''}" aria-hidden="true">${esc(moPersIni(p, i))}</span><span class="mo-pn" id="mo-pn${i}">${esc(moPNamn(p, i))}</span><span class="mo-pst">${st ? '· ' + esc(st) : ''}</span><button type="button" class="mo-px" data-mopx="${i}" aria-label="Ta bort ${esc(moPNamn(p, i))}">Ta bort</button></div>
+    <label class="mo-dold" for="${id}-namn">Namn</label>${inp('namn', 'Namn', 'maxlength="200"')}
+    <label class="mo-dold" for="${id}-telefon">Telefon</label>${inp('telefon', 'Telefon', 'type="tel" inputmode="tel" maxlength="40"')}
+    <span class="mo-spw mo-bred"><label class="mo-dold" for="${id}-epost">E-post</label>${inp('epost', 'E-post för inbjudan', 'inputmode="email" spellcheck="false" autocapitalize="off" maxlength="254"')}<span class="mo-spok" aria-hidden="true" hidden></span></span>
+    <p class="mo-err" id="moe-p${i}" ${fel ? '' : 'hidden'}>${esc(fel || '')}</p></div>`;
+}
+function moPersVy(D){
+  const l = D.f.personer || [], kan = l.length < MOMAX;
+  return `<div class="mo-fl bred mo-pers" id="moPers">${l.map((p, i) => moPersRad(D, p, i)).join('')}
+    ${kan ? `<div class="mo-plagg"><button type="button" class="mo-lagg" data-mopin>${I('plus')}Lägg till person</button>${l.length ? '' : '<span class="mo-ph">Fler hos kunden. En inklistrad mejlsignatur fyller i namn, telefon och e-post.</span>'}</div>` : `<p class="mo-ph">Högst ${MOMAX} till hos kunden.</p>`}
+    <p class="mo-err" id="moe-personer" ${D.fel.personer ? '' : 'hidden'}>${esc(D.fel.personer || '')}</p></div>`;
+}
+// Huvudet följer med medan man skriver, utan att raden ritas om: initialerna (de hoppar till när de byts), namnet,
+// ringen när personen får en inbjudan, och följden.
+function moPersLiv(D, i){
+  const p = D.f.personer[i], rad = document.querySelector(`.mo-dlg .mo-prad[data-mopi="${i}"]`); if (!p || !rad) return;
+  const av = rad.querySelector('.mo-pav'), ini = moPersIni(p, i);
+  if (av){ av.classList.toggle('inb', moPersFarInb(D, p)); if (av.textContent !== ini){ av.textContent = ini; av.classList.remove('liv'); void av.offsetWidth; av.classList.add('liv'); } }
+  const pn = rad.querySelector('.mo-pn'), n = moPNamn(p, i); if (pn && pn.textContent !== n) pn.textContent = n;
+  const st = rad.querySelector('.mo-pst'), t = moPersStatus(D, p), tt = t ? '· ' + t : ''; if (st && st.textContent !== tt) st.textContent = tt;
+  rad.querySelector('.mo-px')?.setAttribute('aria-label', 'Ta bort ' + n);
+}
+function moPersLagg(D){
+  if (D.f.personer.length >= MOMAX) return;
+  D.f.personer = [...D.f.personer, moPersTom()]; D.rort = true; delete D.fel.personer;
+  const i = D.f.personer.length - 1; moDlgRita(); moFokus(`mod-p${i}-namn`);
+  moSag(`Person ${i + 2} hos kunden. Namn, telefon och e-post.`);
+}
+function moPersTa(D, i){
+  const p = D.f.personer[i]; if (!p) return;
+  const vem = String(p.namn || '').trim() || String(p.epost || '').trim() || `Person ${i + 2}`;
+  D.f.personer = D.f.personer.filter((_, j) => j !== i); D.rort = true;
+  Object.keys(D.fel).filter(k => /^p\d+-/.test(k)).forEach(k => delete D.fel[k]); delete D.fel.personer;
+  moDlgRita();
+  const n = D.f.personer.length;
+  if (n) moFokus(`mod-p${Math.min(i, n - 1)}-namn`); else document.querySelector('.mo-dlg [data-mopin]')?.focus({preventScroll:true});
+  moSag(`${vem} är borttagen.`);
+}
+const moBlink = el => { if (!el) return; el.classList.remove('mo-fylld'); void el.offsetWidth; el.classList.add('mo-fylld'); };
+
+// Det inklistrade som personer (2026-11-13). Flera adresser ("Anna Berg <anna@x.se>, bo@x.se") ger en person per
+// adress; annars läses texten som en mejlsignatur: adressen, numret (en rad som börjar med 0, + eller 00) och namnet
+// (raden före adressen i "Namn <adress>", annars första raden som ser ut som ett namn). Det som inte går att läsa ut
+// lämnas tomt, och ingenting skrivs över utom fältet man klistrade i.
+const MOPADR = /[^\s<>,;:"'()[\]]+@[^\s<>,;:"'()[\]]+\.[a-z]{2,}/gi;
+const MOPTEL = /(?<![\d-])(?:\+\d{1,3}|00\d{1,3}|0)[\d\s\-–().\/]{5,}\d/;
+const MOPHALS = /^(med vänlig|vänliga|vänlig hälsning|mvh|hälsningar|bästa hälsningar|best regards|regards|kind regards|tack|hej|från|from|till|to|skickat|sent|ämne|subject)\b/i;
+function moPersTolka(text){
+  const t = String(text || '').replace(/\r/g, '').trim(); if (!t) return [];
+  const adr = [...new Set((t.match(MOPADR) || []).map(a => a.replace(/^mailto:/i, '').toLowerCase()))];
+  const telIn = x => { const m = String(x).replace(MOPADR, ' ').match(MOPTEL); return m && m[0].replace(/\D/g, '').length >= 7 ? m[0].trim().replace(/^00/, '+') : ''; };
+  const namnIn = (x, ett) => { const n = String(x).replace(MOPADR, ' ').replace(/mailto:/gi, ' ').replace(/[<>"'()[\]]/g, ' ').replace(/\s+/g, ' ').trim(), w = n.split(' ').length;
+    return /^\p{Lu}[\p{L}.'-]*(\s\p{L}[\p{L}.'-]*){0,4}$/u.test(n) && (ett || w >= 2) && w <= 5 && n.length <= 60 && !MOPHALS.test(n) ? n : ''; };
+  if (adr.length > 1){
+    const ut = [];
+    t.split(/[,;\n]+/).forEach(d => { const a = (d.match(MOPADR) || [])[0]; if (a && !ut.some(p => p.epost === a.toLowerCase())) ut.push({namn:namnIn(d.split('<')[0], true), telefon:telIn(d), epost:a.toLowerCase()}); });
+    return ut;
   }
-  D.gastQ = kvar.join(' ');
-  if (fel) D.fel.gaster = fel; else delete D.fel.gaster;
-  return !fel;
+  const rader = t.split('\n').map(x => x.trim()).filter(Boolean);
+  const pa = rader.find(r => /<[^>]*@/.test(r));
+  const namn = (pa && namnIn(pa.split('<')[0], true)) || rader.map(r => namnIn(r)).find(Boolean) || '';
+  const etikett = rader.find(r => /\b(tel|telefon|mobil|mob|phone|direkt|växel)\b/i.test(r) && telIn(r));
+  const tel = (etikett && telIn(etikett)) || rader.map(telIn).find(Boolean) || '';
+  return namn || tel || adr[0] ? [{namn, telefon:tel, epost:adr[0] || ''}] : [];
 }
-function moGastLagg(D){
-  const fore = D.f.gaster.length; moGastLas(D); D.rort = true; moDlgRita(); moFokus('mod-gaster');
-  const n = D.f.gaster.length - fore; if (n > 0) moSag(n === 1 ? `${D.f.gaster[D.f.gaster.length - 1]} får en inbjudan.` : `${n} adresser till.`);
+// Ska det inklistrade tolkas? Flera rader, flera adresser, eller en adress med något mer än adressen.
+const moPersTolkas = t => { const x = String(t || '').trim(), a = x.match(MOPADR) || []; return /\n/.test(x) || a.length > 1 || (a.length === 1 && x.replace(MOPADR, '').replace(/mailto:|[\s<>"',;]/gi, '').length > 0); };
+// mal: {i} för en personrad, annars kontakten. falt: fältet man klistrade i (det får skrivas över).
+function moPersKlistra(D, folk, mal, falt){
+  const fylld = [], f = D.f, t = v => String(v || '').trim();
+  const finns = new Set([t(f.epost).toLowerCase(), ...moPersAdr(D)]);
+  const satt = (o, n, v, id) => { if (v && (!t(o[n]) || n === falt)){ o[n] = v; fylld.push(id); } };
+  const [forst, ...rest] = folk;
+  if (mal.i !== undefined){
+    const p = f.personer[mal.i];
+    if (forst.epost && forst.epost !== t(p.epost).toLowerCase() && finns.has(forst.epost)) forst.epost = '';
+    // En annan adress än radens är en annan person: hela raden byts, så att namn och nummer inte blandas.
+    if (forst.epost && t(p.epost) && forst.epost !== t(p.epost).toLowerCase()){ ['namn', 'telefon', 'epost'].forEach(n => { p[n] = forst[n] || ''; fylld.push(`mod-p${mal.i}-${n}`); }); }
+    else { satt(p, 'namn', forst.namn, `mod-p${mal.i}-namn`); satt(p, 'telefon', forst.telefon, `mod-p${mal.i}-telefon`); satt(p, 'epost', forst.epost, `mod-p${mal.i}-epost`); }
+  } else {
+    const k = {namn:f.kontakt, telefon:f.telefon, epost:f.epost}, falt2 = falt === 'kontakt' ? 'namn' : falt;
+    if (forst.epost && forst.epost !== t(k.epost).toLowerCase() && moPersAdr(D).includes(forst.epost)) forst.epost = '';
+    // En annan adress än kontaktens är en annan kontakt: namnet och adressen byts båda. Numret är bolagets och står kvar.
+    const byt = !!forst.epost && !!t(k.epost) && forst.epost !== t(k.epost).toLowerCase();
+    if (byt || (forst.namn && (!t(k.namn) || falt2 === 'namn'))){ f.kontakt = forst.namn || ''; fylld.push('mod-kontakt'); }
+    if (forst.epost && (byt || !t(k.epost) || falt2 === 'epost')){ f.epost = forst.epost; fylld.push('mod-epost'); }
+    if (forst.telefon && !t(k.telefon)){ f.telefon = forst.telefon; fylld.push('mod-telefon'); }
+  }
+  let nya = 0;
+  rest.forEach(x => { if (f.personer.length >= MOMAX || (x.epost && [t(f.epost).toLowerCase(), ...moPersAdr(D)].includes(x.epost))) return; f.personer = [...f.personer, {namn:x.namn || '', telefon:x.telefon || '', epost:x.epost || ''}]; nya++; const i = f.personer.length - 1; ['namn', 'telefon', 'epost'].forEach(n => { if (x[n]) fylld.push(`mod-p${i}-${n}`); }); });
+  if (!fylld.length) return false;
+  D.rort = true; Object.keys(D.fel).filter(k => /^p\d+-|^kontakt$|^epost$|^telefon$/.test(k)).forEach(k => delete D.fel[k]);
+  moDlgRita();
+  fylld.forEach(id => moBlink(document.getElementById(id)));
+  const vad = [forst.namn && 'namn', forst.telefon && 'telefon', forst.epost && 'e-post'].filter(Boolean);
+  moSag(`Ifyllt ur det inklistrade: ${moLista(vad)}.${nya ? ` ${nya === 1 ? 'En person' : nya + ' personer'} till hos kunden.` : ''}`);
+  if (fylld.includes('mod-telefon')) moDlgUppslag();
+  return true;
+}
+
+// E-postens förslag (2026-11-13): bolagets domän i grått efter det man skrivit. Tab eller pil höger i slutet tar det.
+// Domänen är kontaktens e-post (aldrig en frimejlsdomän), annars webbadressen; kontaktens eget fält har bara
+// webbadressen att gå på. Förslaget syns bara när markören står sist och texten ryms i fältet. Fälten är type=text
+// med inputmode=email: type=email har ingen markör att läsa (selectionStart är null), och adressen prövas här ändå.
+const MOFRIMEJL = ['gmail.com', 'googlemail.com', 'hotmail.com', 'hotmail.se', 'outlook.com', 'outlook.se', 'live.com', 'live.se', 'msn.com', 'icloud.com', 'me.com', 'yahoo.com', 'yahoo.se', 'telia.com', 'comhem.se', 'bredband.net', 'spray.se', 'passagen.se', 'tele2.se', 'bahnhof.se', 'protonmail.com', 'proton.me', 'aol.com', 'gmx.com', 'gmx.net'];   // = FRIMEJL_DOMANER (motenforma.ts)
+function moDomanFor(D, kontaktFalt){
+  const e = String(D.f.epost || '').trim().toLowerCase(), d = MOEPOST.test(e) ? e.split('@')[1] : '';
+  if (!kontaktFalt && d && !MOFRIMEJL.includes(d)) return d;
+  const w = moDoman(D.f.doman); return /^[a-z0-9.-]+\.[a-z]{2,}$/.test(w) && !MOFRIMEJL.includes(w) ? w : '';
+}
+function moSpokForslag(D, inp){
+  const v = inp.value, dom = moDomanFor(D, inp.id === 'mod-epost');
+  if (!dom || !v || /\s/.test(v) || inp.selectionStart !== v.length || inp.selectionEnd !== v.length) return '';
+  const at = v.indexOf('@'); if (at === 0) return '';
+  if (at < 0) return '@' + dom;
+  const efter = v.slice(at + 1).toLowerCase();
+  return efter !== dom && dom.startsWith(efter) && !efter.includes('@') ? dom.slice(efter.length) : '';
+}
+function moSpokRita(inp){
+  const D = S.moDlg, sp = inp && inp.parentElement && inp.parentElement.querySelector('.mo-spok'); if (!sp) return;
+  const f = D && document.activeElement === inp ? moSpokForslag(D, inp) : '';
+  if (!f || inp.scrollWidth > inp.clientWidth + 1){ if (!sp.hidden){ sp.hidden = true; sp.textContent = ''; } return; }
+  const cs = getComputedStyle(inp);
+  Object.assign(sp.style, {fontFamily:cs.fontFamily, fontSize:cs.fontSize, fontWeight:cs.fontWeight, letterSpacing:cs.letterSpacing, paddingLeft:(parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth)) + 'px', paddingRight:(parseFloat(cs.paddingRight) + parseFloat(cs.borderRightWidth)) + 'px'});
+  sp.innerHTML = `<span>${esc(inp.value)}</span><b>${esc(f)}</b>`; sp.hidden = false;
+}
+function moSpokTa(inp){
+  const D = S.moDlg, f = D && moSpokForslag(D, inp); if (!f) return false;
+  inp.value += f; inp.setSelectionRange(inp.value.length, inp.value.length);
+  inp.dispatchEvent(new Event('input', {bubbles:true})); moSpokRita(inp);
+  moSag(`${inp.value}.`);
+  return true;
+}
+
+/* ---------- Källan (2026-11-13): en sökbar lista ----------
+   Som kollegornas: fältet är en combobox (aria-activedescendant) och fokus står kvar i det. Listan öppnas med ett
+   klick, pil ned eller när man skriver, och filtrerar på det skrivna med träffen markerad. Enter väljer, Esc stänger,
+   Tab lämnar det skrivna. När inget matchar blir det skrivna en egen rad ("Använd ”Mässa”"): källan är fri text på
+   servern, men en del av en källa som finns ger den källan, så att listan inte växer med stavningar. Bocken visar valet och bakgrunden raden tangenterna står på; siffran är korten på tavlan med källan.
+   Ur uppslaget fylls ett tomt fält i (moKallaUr): Kallsamtal när numret ringts upp, Tidigare kund när bolaget är kund,
+   med skälet under fältet. Namnen ska stå i företagets lista (moVal().kallor), annars föreslås inget. */
+const MOKALLA0 = {kallaLista:false, kallaAkt:0, kallaQ:'', kallaRord:false, kallaUr:null, kallaAuto:false};
+const MOKALLAUR = {kund:'Tidigare kund', samtal:'Kallsamtal'};
+function moKallaAntal(){ const n = {}; ndMo().kort.forEach(k => { const x = k.mote ? k.mote.kalla : k.kalla; if (x) n[x] = (n[x] || 0) + 1; }); return n; }
+function moKallaForslag(D){
+  const q = moNorm(D.kallaQ).trim(), alla = moKallor(), n = moKallaAntal(), val = moVal().kallor;
+  const rang = x => { const i = val.indexOf(x); return i < 0 ? val.length : i; }, borjar = x => moNorm(x).startsWith(q) ? 0 : 1;
+  const l = alla.filter(x => !q || moNorm(x).includes(q)).sort((a, b) => (q ? borjar(a) - borjar(b) : 0) || (n[b] || 0) - (n[a] || 0) || rang(a) - rang(b)).map(v => ({v, n:n[v] || 0}));
+  const skrivet = String(D.kallaQ || '').trim().slice(0, 80);
+  // En ny källa bara när inget i listan matchar: "Rek" ska bli Rekommendation, inte en källa till.
+  if (skrivet && !l.length) l.push({v:skrivet, ny:true});
+  return l;
+}
+const moTraff = (t, q) => { const i = q ? moNorm(t).indexOf(moNorm(q)) : -1; return i < 0 ? esc(t) : `${esc(t.slice(0, i))}<mark>${esc(t.slice(i, i + q.length))}</mark>${esc(t.slice(i + q.length))}`; };
+function moKallaListaHtml(D, l, akt){
+  if (!l.length) return '<li class="tom" role="option" aria-disabled="true" aria-selected="false">Inga källor än. Skriv en.</li>';
+  const vald = moNorm(String(D.f.kalla || '').trim()), q = String(D.kallaQ || '').trim();
+  return l.map((r, i) => r.ny
+    ? `<li role="option" id="moKallaO${i}" class="ny" data-mokallav="${esc(r.v)}" aria-selected="${i === akt}">${I('plus')}<span>Använd ”${esc(r.v)}”</span></li>`
+    : `<li role="option" id="moKallaO${i}" data-mokallav="${esc(r.v)}" aria-selected="${i === akt}" ${moNorm(r.v) === vald ? 'data-vald' : ''}><span class="mo-bock">${I('check')}</span><span>${moTraff(r.v, q)}</span>${r.n ? `<small class="num">${r.n} kort</small>` : ''}</li>`).join('');
+}
+function moKallaVy(D){
+  const l = D.kallaLista ? moKallaForslag(D) : [], akt = Math.min(D.kallaAkt ?? 0, l.length - 1), e = D.fel.kalla;
+  return `<div class="mo-fl bred" id="moKalla"><label for="mod-kalla">Källa${MOOB}</label>
+    <div class="mo-pwrap mo-kv" ${D.kallaLista ? 'data-oppen' : ''}><input class="uin" id="mod-kalla" name="kalla" data-mokallaq value="${esc(D.f.kalla || '')}" role="combobox" aria-autocomplete="list" aria-expanded="${!!D.kallaLista}" aria-controls="moKallaL" ${D.kallaLista && akt >= 0 ? `aria-activedescendant="moKallaO${akt}"` : ''} maxlength="80" required placeholder="Välj eller skriv" autocomplete="off" spellcheck="false" aria-describedby="mo-kh moe-kalla" ${e ? 'aria-invalid="true"' : ''}><button type="button" class="mo-kpil" data-mokallapil tabindex="-1" aria-label="${D.kallaLista ? 'Stäng listan' : 'Visa källorna'}">${I('chev')}</button>
+      <ul id="moKallaL" class="mo-plist" role="listbox" aria-label="Källor" ${D.kallaLista ? '' : 'hidden'}>${D.kallaLista ? moKallaListaHtml(D, l, akt) : ''}</ul></div>
+    <p class="mo-ph" id="mo-kh" ${D.kallaUr ? '' : 'hidden'}>${esc(D.kallaUr || '')}</p>
+    <p class="mo-err" id="moe-kalla" ${e ? '' : 'hidden'}>${esc(e || '')}</p></div>`;
+}
+function moKallaRita(){   // listan, comboboxens attribut och raden under: fältet ritas inte om medan man skriver
+  const D = S.moDlg, ul = document.getElementById('moKallaL'), inp = document.getElementById('mod-kalla'); if (!D || !ul || !inp) return;
+  const l = D.kallaLista ? moKallaForslag(D) : []; D.kallaAkt = Math.min(D.kallaAkt ?? 0, l.length - 1);
+  ul.innerHTML = D.kallaLista ? moKallaListaHtml(D, l, D.kallaAkt) : ''; ul.hidden = !D.kallaLista;
+  inp.setAttribute('aria-expanded', String(!!D.kallaLista)); inp.closest('.mo-kv')?.toggleAttribute('data-oppen', !!D.kallaLista);
+  document.querySelector('.mo-dlg [data-mokallapil]')?.setAttribute('aria-label', D.kallaLista ? 'Stäng listan' : 'Visa källorna');
+  if (D.kallaLista && D.kallaAkt >= 0){ inp.setAttribute('aria-activedescendant', 'moKallaO' + D.kallaAkt); document.getElementById('moKallaO' + D.kallaAkt)?.scrollIntoView({block:'nearest'}); }
+  else inp.removeAttribute('aria-activedescendant');
+  const h = document.getElementById('mo-kh'); if (h){ h.hidden = !D.kallaUr; h.textContent = D.kallaUr || ''; }
+}
+// Listan öppnas med alla källor och markören på den valda. Ett eget värde som inte står i listan får ingen markör, så
+// att Enter stänger listan i stället för att byta det mot den översta källan.
+function moKallaOppna(D){
+  D.kallaLista = true; D.kallaQ = '';
+  const v = String(D.f.kalla || '').trim(), i = moKallaForslag(D).findIndex(r => !r.ny && moNorm(r.v) === moNorm(v));
+  D.kallaAkt = i >= 0 ? i : v ? -1 : 0; moKallaRita();
+}
+function moKallaValj(D, v){
+  Object.assign(D, {kallaQ:'', kallaLista:false, kallaAkt:0, kallaRord:true, kallaUr:null, kallaAuto:false, rort:true}); D.f.kalla = v; delete D.fel.kalla;
+  const inp = document.getElementById('mod-kalla'); if (inp){ inp.value = v; inp.removeAttribute('aria-invalid'); }
+  const m = document.getElementById('moe-kalla'); if (m){ m.hidden = true; m.textContent = ''; }
+  moKallaRita(); moSumRita(); moSag(`Källa: ${v}.`);
+}
+// Ur uppslaget: bara i Boka, bara i ett fält som är tomt eller fyllt av uppslaget, och aldrig efter att man rört det.
+function moKallaUr(D){
+  if (D.typ !== 'boka' || D.kallaRord || (String(D.f.kalla || '').trim() && !D.kallaAuto)) return;
+  const s = D.upp && D.upp.svar, l = moVal().kallor; let v = '', varfor = '';
+  if (s && s.kund && l.includes(MOKALLAUR.kund)){ v = MOKALLAUR.kund; varfor = 'bolaget är redan kund'; }
+  else { const c = s && (s.samtal || []).find(x => !/in/i.test(x.riktning || '')), lt = c && c.nar ? moLokal(c.nar) : null;
+    if (c && l.includes(MOKALLAUR.samtal)){ v = MOKALLAUR.samtal; varfor = `${moFor(c.vem) || 'någon'} ringde numret${lt ? ' ' + moDag(lt.slice(0, 10), true) : ''}`; } }
+  if (!v && !D.kallaAuto) return;
+  const fore = D.f.kalla; D.f.kalla = v; D.kallaAuto = !!v; D.kallaUr = v ? `Ur uppslaget: ${varfor}.` : null;
+  const inp = document.getElementById('mod-kalla'); if (inp){ inp.value = v; if (v && v !== fore) moBlink(inp); }
+  moKallaRita(); moSumRita();
 }
 // Kortets rad om vilka som är med, utom hållaren och kontakten (de står redan i panelen). Svaren som i Kalendern.
 function moMedRad(k){
-  const m = k.mote, med = m.med || [], g = (m.gaster || []).filter(x => x.epost !== String(k.epost || '').toLowerCase());
+  const m = k.mote, med = m.med || [], g = moKundFolk(k);
   if (!med.length && !g.length) return '';
   const svar = x => ({ja:' (kommer)', nej:' (tackade nej)', kanske:' (kanske)'}[x.svar] || '');
-  return `<p class="mo-med"><span class="muted">Med</span> ${[...med.map(p => esc(p.namn) + svar(p)), ...g.map(x => esc(x.epost) + svar(x))].join(', ')}</p>`;
+  return `<p class="mo-med"><span class="muted">Med</span> ${[...med.map(p => esc(p.namn) + svar(p)), ...g.map(x => esc(x.namn || x.epost || x.telefon || '') + svar(x))].join(', ')}</p>`;
 }
-const moFler = k => k.mote ? (k.mote.med || []).length + (k.mote.gaster || []).filter(x => x.epost !== String(k.epost || '').toLowerCase()).length : 0;
+const moFler = k => k.mote ? (k.mote.med || []).length + moKundFolk(k).length : 0;
 
 /* ---------- Platsen (2026-11-03): som i Outlook, över telefon, i Teams eller på en plats ----------
    Kalenderns `plats` och `online_url` (rutten: platsIndata), och kundens inbjudan visar båda. Nav skapar inga
@@ -37415,10 +37692,14 @@ function moLankIn(D, lank){
   moDlgRita(); moFokus('mod-lank'); moSag('Möteslänken är inlagd, och platsen är Video.');
 }
 document.addEventListener('paste', e => {
-  const D = S.moDlg; if (!D || (D.typ !== 'boka' && D.typ !== 'andra') || !ndMo() || S.view !== 'moten' || !e.target.closest || !e.target.closest('.mo-dlg') || e.target.id !== 'mod-adress') return;
-  const text = String((e.clipboardData && e.clipboardData.getData('text')) || '').trim();
-  if (!MOMOTESLANK.test(text)) return;
-  e.preventDefault(); moLankIn(D, text);
+  const D = S.moDlg; if (!D || (D.typ !== 'boka' && D.typ !== 'andra') || !ndMo() || S.view !== 'moten' || !e.target.closest || !e.target.closest('.mo-dlg')) return;
+  const t = e.target, text = String((e.clipboardData && e.clipboardData.getData('text')) || '').trim();
+  if (t.id === 'mod-adress'){ if (MOMOTESLANK.test(text)){ e.preventDefault(); moLankIn(D, text); } return; }
+  // Kundens namn- och e-postfält (2026-11-13): en signatur eller en lista adresser fyller i fälten.
+  const pf = t.dataset && t.dataset.mopf, kontakt = t.id === 'mod-kontakt' || t.id === 'mod-epost';
+  if ((pf !== 'namn' && pf !== 'epost' && !kontakt) || !moPersTolkas(text)) return;
+  const folk = moPersTolka(text); if (!folk.length) return;
+  if (moPersKlistra(D, folk, pf ? {i:+t.dataset.mopi} : {}, pf || t.name)) e.preventDefault();
 }, true);
 // Raden under länkfältet säger följden före Spara: utan länk får kunden ingen att gå in på.
 const moLankHjalp = v => String(v || '').trim() ? 'Kunden får länken i inbjudan.' : 'Utan länk får kunden ingen möteslänk i inbjudan.';
@@ -37453,7 +37734,7 @@ const moMedSvar = (D, id) => { const p = D.typ === 'andra' && D.k && D.k.mote &&
    (aldrig localStorage: det är kunduppgifter), läst en gång och prövat fält för fält. Ett utkast utan innehåll är
    inget utkast. Det släpps när mötet är bokat eller när man väljer Börja om. Utkastet bär den som skrev det
    (`jag`, G8): står en annan inloggad i samma flik, eller saknas ägaren, slängs det vid läsningen. */
-const MOUTKASTNYCKEL = 'nav2-moutkast', MOUTKASTFALT = ['namn', 'kontakt', 'telefon', 'epost', 'doman', 'kalla', 'mal', 'adress', 'lank'];
+const MOUTKASTNYCKEL = 'nav2-moutkast', MOUTKASTFALT = ['namn', 'kontakt', 'telefon', 'epost', 'doman', 'kalla', 'agenda', 'adress', 'lank'];
 function moUtkastProva(u){
   if (!u || typeof u !== 'object' || !u.f || typeof u.f !== 'object') return null;
   const f = {};
@@ -37463,17 +37744,19 @@ function moUtkastProva(u){
   f.platsTyp = MOPLATS.some(x => x[0] === u.f.platsTyp) ? u.f.platsTyp : 'telefon';
   f.langd = MOLANGDER.includes(+u.f.langd) ? +u.f.langd : MOLANGD;
   f.med = Array.isArray(u.f.med) ? u.f.med.filter(x => typeof x === 'string').slice(0, MOMAX) : [];
-  f.gaster = Array.isArray(u.f.gaster) ? u.f.gaster.filter(x => typeof x === 'string' && MOEPOST.test(x)).slice(0, MOMAX) : [];
+  // Personerna (2026-11-13); ett utkast från före dem har gästerna som adresser, och de blir personer.
+  const sv = x => typeof x === 'string' ? x : '';
+  f.personer = [...(Array.isArray(u.f.personer) ? u.f.personer : []).filter(x => x && typeof x === 'object').map(x => ({namn:sv(x.namn).slice(0, 200), telefon:sv(x.telefon).slice(0, 40), epost:sv(x.epost).slice(0, 254)})),
+    ...(Array.isArray(u.f.gaster) ? u.f.gaster : []).filter(x => typeof x === 'string' && MOEPOST.test(x)).map(epost => ({namn:'', telefon:'', epost}))].filter(moPersHar).slice(0, MOMAX);
   const tid = typeof u.tid === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(u.tid) ? u.tid : null;
   const egen = u.egen && typeof u.egen === 'object' && /^\d{4}-\d{2}-\d{2}$/.test(u.egen.dag || '') && /^\d{2}:\d{2}$/.test(u.egen.tid || '') ? {dag:u.egen.dag, tid:u.egen.tid} : null;
-  return MOUTKASTFALT.some(n => f[n].trim()) || f.med.length || f.gaster.length || f.nulage || tid || egen ? {f, tid, egen} : null;
+  return MOUTKASTFALT.some(n => f[n].trim()) || f.med.length || f.personer.length || f.nulage || tid || egen ? {f, tid, egen} : null;
 }
 const moUtkastJag = () => (ND && ND.jag && ND.jag.id) || null;
 let MOUTKAST = (() => { let u = null; try { u = JSON.parse(sessionStorage.getItem(MOUTKASTNYCKEL) || 'null');
   if (u && (!moUtkastJag() || u.jag !== moUtkastJag())){ u = null; sessionStorage.removeItem(MOUTKASTNYCKEL); } } catch(_){ u = null; } return moUtkastProva(u); })();
 const moUtkastSkriv = u => { MOUTKAST = u; try { if (u) sessionStorage.setItem(MOUTKASTNYCKEL, JSON.stringify({...u, jag:moUtkastJag()})); else sessionStorage.removeItem(MOUTKASTNYCKEL); } catch(_){} };
 function moUtkastSpara(D){
-  if (String(D.gastQ || '').trim()) moGastLas(D);   // adresserna som står kvar i fältet blir brickor, som vid Spara
   moUtkastSkriv(moUtkastProva({f:D.f, tid:D.tid, egen:D.egen}));
 }
 // Fortsätt i toasten: öppnar utkastet, men aldrig över ett annat blad som hunnit öppnas.
@@ -37489,7 +37772,7 @@ function moDlgUppslag(){
   D.upp = {q, laddar:true}; moUppRita();
   ndMoPost('uppslag', {telefon:q}, {ladda:false, tyst:true}).then(s => {
     if (S.moDlg !== D || (D.f.telefon || '').trim() !== q || s.pagar) return;
-    D.upp = s.fel ? {q, fel:s.fel} : {q, svar:s}; moUppRita();
+    D.upp = s.fel ? {q, fel:s.fel} : {q, svar:s}; moUppRita(); moKallaUr(D);
   });
 }
 function moUppRita(){ const el = document.getElementById('moDlgUpp'); if (el && S.moDlg) el.innerHTML = moUppHtml(S.moDlg); }
@@ -37627,7 +37910,7 @@ function moBedomNasta(D){
   ndMoBedom({id:a.mote, namn:a.namn, tid:a.tid, hallsAv:a.hallsAv, hallsAvNamn:a.hallsAvNamn, bokatAv:a.bokatAv, bokatAvNamn:a.bokatAvNamn}, false, false, {klara, kvar:kvar.length - 1});
 }
 // Följden sägs före Spara (F12.2): utan adress till kontakten, och utan fler hos kunden, går ingen inbjudan ut.
-const moEpostTom = D => !String(D.f.epost || '').trim() && !(D.f.gaster || []).length;
+const moEpostTom = D => !String(D.f.epost || '').trim() && !moPersAdr(D).length;
 function moDlgVy(D){
   const k = D.k, f = D.f, e = D.fel;
   const titel = {boka:k ? 'Boka nytt möte' : 'Boka möte', flyttat:'Flytta mötet', nej:'Nej', andra:'Ändra mötet', utfall:'Sätt utfall', uppf:'Ändra uppföljningen', ratta:'Rätta utfall', bedom:D.ifr ? 'Ändra svaren' : 'Bedöm mötet'}[D.typ];
@@ -37640,18 +37923,24 @@ function moDlgVy(D){
     const vem = D.typ === 'andra'
       ? `<div class="mo-fl bred"><span class="mo-lbl">Vem håller</span><p class="mo-fast">${avatar(hn, 22)}<span>${esc(hn)}${f.hallsAv === ND.jag.id ? ' (jag)' : ''}</span></p>${moMedKnapp(D)}</div>`
       : moFalt(D, 'hallsAv', 'Vem håller', `<select class="uin" id="mod-hallsAv" name="hallsAv">${sal.map(x => `<option value="${x.id}" ${f.hallsAv === x.id ? 'selected' : ''}>${esc(x.namn)}${x.id === ND.jag.id ? ' (jag)' : ''}</option>`).join('')}</select>${moMedKnapp(D)}`, {bred:true});
-    // Ordningen (F10.2): bolaget och kontakten först, sedan vem och när, var, källan, och sist det som sällan fylls i.
-    kropp = `${D.franUtkast ? '<div class="mo-fl bred"><p class="mo-ph">Du fortsätter på utkastet du lämnade. <button type="button" class="tlink inl" data-moborjaom>Börja om</button></p></div>' : ''}${moFalt(D, 'namn', 'Bolag', moInp(D, 'namn', {extra:'maxlength="150" required'}), {bred:true, ob:true})}
+    // Ordningen (2026-11-13): allt om kunden på ett ställe (bolaget, kontakten, fler hos kunden, källan och nuläget),
+    // sedan mötet (vem, när, var och agendan). Inget ligger hopfällt: det som ligger dolt blir inte ifyllt.
+    kropp = `${D.franUtkast ? '<div class="mo-fl bred"><p class="mo-ph">Du fortsätter på utkastet du lämnade. <button type="button" class="tlink inl" data-moborjaom>Börja om</button></p></div>' : ''}<h3 class="mo-sek">Kunden</h3>
+      ${moFalt(D, 'namn', 'Bolag', moInp(D, 'namn', {extra:'maxlength="150" required'}), {ob:true})}
+      ${moFalt(D, 'doman', 'Webbadress', moInp(D, 'doman', {ph:'bolaget.se', extra:'inputmode="url" spellcheck="false" maxlength="200"'}))}
+      ${moFalt(D, 'kontakt', 'Kontakt', moInp(D, 'kontakt', {ph:'Namn', extra:'maxlength="200"'}))}
       ${moFalt(D, 'telefon', 'Telefon', moInp(D, 'telefon', {typ:'tel', extra:'inputmode="tel" required'}), {ob:true})}
-      ${moFalt(D, 'kontakt', 'Kontakt', moInp(D, 'kontakt', {extra:'maxlength="200"'}))}
       <div id="moDlgUpp" class="mo-fl bred mo-uppl">${moUppHtml(D)}</div>
-      ${moFalt(D, 'epost', 'E-post', moInp(D, 'epost', {typ:'email', extra:'inputmode="email"'}) + `<p class="mo-ph" id="mo-eh" ${moEpostTom(D) ? '' : 'hidden'}>Utan e-post får kunden ingen inbjudan.</p>`, {bred:true})}
+      ${moFalt(D, 'epost', 'E-post', `<span class="mo-spw">${moInp(D, 'epost', {extra:'inputmode="email" spellcheck="false" autocapitalize="off"'})}<span class="mo-spok" aria-hidden="true" hidden></span></span>` + `<p class="mo-ph" id="mo-eh" ${moEpostTom(D) ? '' : 'hidden'}>Utan e-post får kunden ingen inbjudan.</p>`, {bred:true})}
+      ${moPersVy(D)}
+      ${moKallaVy(D)}
+      <div class="mo-fl bred"><span class="mo-lbl" id="mo-nul">Nuläge</span><div class="mo-chips" role="group" aria-labelledby="mo-nul">${Object.entries(moVal().nulage).map(([n, t]) => `<button type="button" class="chip" data-monul="${esc(n)}" aria-pressed="${f.nulage === n}">${esc(t)}</button>`).join('')}</div></div>
+      <h3 class="mo-sek">Mötet</h3>
       ${vem}
       ${moMedVy(D)}
       ${moTidFalt(D)}
       ${moPlatsVy(D)}
-      ${moFalt(D, 'kalla', 'Källa', moInp(D, 'kalla', {extra:'maxlength="80" list="moKallor" required'}) + `<datalist id="moKallor">${moKallor().map(x => `<option value="${esc(x)}">`).join('')}</datalist>`, {bred:true, ob:true})}
-      ${moMerVy(D)}`;
+      ${moFalt(D, 'agenda', 'Agenda', `<textarea class="uin" id="mod-agenda" name="agenda" rows="3" maxlength="2000" placeholder="Det ni ska gå igenom på mötet" aria-describedby="mo-agh">${esc(f.agenda || '')}</textarea><p class="mo-ph" id="mo-agh">${D.typ === 'andra' ? 'Kunden ser agendan i inbjudan. En ändring skickas inte för sig, den följer med nästa inbjudan.' : 'Kunden ser agendan i inbjudan.'}</p>${D.typ === 'andra' && String(f.mal || '').trim() ? `<p class="mo-ph mo-malg">Målet från bokningen, bara för er: ${esc(f.mal)}</p>` : ''}`, {bred:true})}`;
   } else if (T === 'flyttat' || T === 'uteblev'){
     kropp += moTidFalt(D, 'Ny tid');
   } else if (T === 'avbokat'){
@@ -37683,20 +37972,6 @@ function moDlgVy(D){
     <form class="mo-dform" data-modlg novalidate><div class="rxpb"><div class="mo-fg">${kropp}</div></div>
       <footer class="mo-df"><p class="mo-fe ${D.laslage ? 'las' : ''}" id="moDlgFe" role="alert" ${D.fe ? '' : 'hidden'}>${D.fe ? esc(D.fe) : ''}</p><p class="mo-sum" id="moDlgSum" aria-live="polite" ${sum ? '' : 'hidden'}>${sum}</p><div class="mo-dk"><button type="button" class="btn btn-s" data-modlgx>Avbryt</button><button type="submit" class="btn btn-p" ${D.sparar ? 'disabled aria-busy="true"' : ''}>${etikett}</button></div></footer></form></aside>`;
 }
-// Mer om mötet (F10.2): det som sällan fylls i ligger hopfällt, och öppnar sig själv när ett fält där har ett värde
-// eller ett fel (serverns fel hamnar aldrig i ett hopfällt fält). Med ett värde går delen inte att fälla ihop.
-const moMerHar = D => { const f = D.f, t = v => String(v || '').trim(); return !!(t(f.doman) || f.gaster.length || t(D.gastQ) || t(f.mal) || f.nulage || D.fel.doman || D.fel.gaster || D.fel.mal); };
-function moMerVy(D){
-  const f = D.f, har = moMerHar(D), oppen = har || D.merOppen;
-  const huvud = har ? '<span class="mo-lbl">Mer om mötet</span>'
-    : `<button type="button" class="mo-lagg" data-momer aria-expanded="${!!oppen}">${oppen ? '' : I('plus')}Mer om mötet</button>${oppen ? '' : '<span class="mo-ph">Webbadress, fler hos kunden, mål och nuläge</span>'}`;
-  if (!oppen) return `<div class="mo-fl bred mo-merom">${huvud}</div>`;
-  return `<div class="mo-fl bred mo-merom">${huvud}</div>
-      ${moFalt(D, 'doman', 'Webbadress', moInp(D, 'doman', {ph:'bolaget.se'}), {bred:true})}
-      ${moGastVy(D)}
-      ${moFalt(D, 'mal', 'Mål', `<textarea class="uin" id="mod-mal" name="mal" rows="3" maxlength="2000" placeholder="Vad vill kunden få ut av mötet?">${esc(f.mal)}</textarea>`, {bred:true})}
-      <div class="mo-fl bred"><span class="mo-lbl">Nuläge</span><div class="mo-chips" role="group" aria-label="Nuläge">${Object.entries(moVal().nulage).map(([n, t]) => `<button type="button" class="chip" data-monul="${esc(n)}" aria-pressed="${f.nulage === n}">${esc(t)}</button>`).join('')}</div></div>`;
-}
 function moSkalFalt(D){
   return `<div class="mo-fl bred"><span class="mo-lbl" id="mo-sl">Skäl</span><div class="mo-chips" role="group" aria-labelledby="mo-sl">${moVal().nejSkal.map((t, i) => `<button type="button" class="chip" data-moskal="${i}" aria-pressed="${D.f.skal === t}">${esc(t)}</button>`).join('')}</div><p class="mo-err" id="moe-skal" ${D.fel.skal ? '' : 'hidden'}>${D.fel.skal ? esc(D.fel.skal) : ''}</p></div>`;
 }
@@ -37723,21 +37998,27 @@ function moDlgBygg(D){
     if (!t(f.namn)) e.namn = 'Skriv bolagets namn.';
     if (t(f.telefon).replace(/\D/g, '').length < 6) e.telefon = 'Skriv ett telefonnummer.';
     if (t(f.epost) && !/^\S+@\S+\.\S+$/.test(t(f.epost))) e.epost = 'E-postadressen ser inte rätt ut.';
+    // Fler hos kunden: varje rad med något i prövas som rutten prövar den (personerIndata).
+    const kontaktE = t(f.epost).toLowerCase();
+    (f.personer || []).forEach((p, i) => { if (!moPersHar(p)) return;
+      const a = t(p.epost).toLowerCase();
+      if (t(p.telefon) && !moTelE164(p.telefon)) e[`p${i}-telefon`] = 'Numret går inte att tolka. Skriv till exempel 070-123 45 67.';
+      else if (a && !MOEPOST.test(a)) e[`p${i}-epost`] = 'E-postadressen ser inte rätt ut.';
+      else if (a && a === kontaktE) e[`p${i}-epost`] = 'Det är kontaktens adress. Kontakten får redan en inbjudan.';
+      else if (a && f.personer.slice(0, i).some(q => t(q.epost).toLowerCase() === a)) e[`p${i}-epost`] = 'Adressen står redan på en annan person.'; });
+    if (!t(f.kalla)) e.kalla = 'Välj eller skriv varifrån bolaget kommer.';
     if (!f.hallsAv) e.hallsAv = 'Välj vem som håller mötet.';
     if (!tid) e.tid = moEgenFel(D) || 'Välj en tid.';
     if (f.platsTyp === 'plats' && !t(f.adress)) e.adress = 'Skriv var mötet hålls.';
     if (f.platsTyp === 'teams' && t(f.lank) && !/^https:\/\/\S+$/i.test(t(f.lank))) e.lank = 'Länken ska börja med https://.';
-    if (!t(f.kalla)) e.kalla = 'Skriv varifrån bolaget kommer.';
-    if (t(D.gastQ)) moGastLas(D);   // det som står kvar i fältet räknas, som i Kalendern
-    if (D.fel.gaster) e.gaster = D.fel.gaster;
     if (Object.keys(e).length) return {e};
     if (D.typ === 'andra') return moAndraBygg(D, tid);
     const data = {namn:t(f.namn), telefon:t(f.telefon), kalla:t(f.kalla), hallsAv:f.hallsAv, dag:tid.dag, start:tid.start};
     if (moLangd(D) !== MOLANGD) data.langd = moLangd(D);
     if (f.platsTyp === 'teams' || f.platsTyp === 'plats'){ data.platsTyp = f.platsTyp; if (f.platsTyp === 'plats') data.adress = t(f.adress); else if (t(f.lank)) data.lank = t(f.lank); }
-    ['kontakt', 'epost', 'doman', 'mal', 'nulage'].forEach(n => { if (t(f[n])) data[n] = t(f[n]); });
+    ['kontakt', 'epost', 'doman', 'agenda', 'nulage'].forEach(n => { if (t(f[n])) data[n] = t(f[n]); });
     if (f.med.length) data.med = f.med;
-    if (f.gaster.length) data.gaster = f.gaster;
+    const ps = moPersData(f.personer); if (ps.length) data.personer = ps;
     if (D.kedja) data.kedja = D.kedja;
     return {handling:'boka', data};
   }
@@ -37782,20 +38063,20 @@ function moDlgBygg(D){
 // någon hunnit flytta det), och kollegorna och gästerna skickas som hela listan när någon lagts till eller tagits bort.
 function moAndraBygg(D, tid){
   const f = D.f, o = D.orig, m = D.k.mote, t = v => String(v || '').trim(), data = {mote:m.id, fore:m.tid};
-  ['namn', 'kontakt', 'telefon', 'epost', 'doman', 'kalla', 'mal', 'nulage'].forEach(n => { if (t(f[n]) !== t(o[n])) data[n] = t(f[n]); });
+  ['namn', 'kontakt', 'telefon', 'epost', 'doman', 'kalla', 'agenda', 'nulage'].forEach(n => { if (t(f[n]) !== t(o[n])) data[n] = t(f[n]); });
   if (D.tid !== m.tid){ data.dag = tid.dag; data.start = tid.start; }
   const plats = x => x.platsTyp === 'plats' ? 'plats|' + t(x.adress) : x.platsTyp === 'teams' ? 'teams|' + t(x.lank) : 'telefon';
   if (plats(f) !== plats(o)){ data.platsTyp = f.platsTyp; if (f.platsTyp === 'plats') data.adress = t(f.adress); if (f.platsTyp === 'teams') data.lank = t(f.lank); }
   const lika = (a, b) => a.length === b.length && a.every(x => b.includes(x));
   if (!lika(f.med, o.med)) data.med = f.med;
-  if (!lika(f.gaster, o.gaster)) data.gaster = f.gaster;
+  if (JSON.stringify(moPersData(f.personer)) !== JSON.stringify(moPersData(o.personer))){ data.personer = moPersData(f.personer); data.gasterFore = moPersAdrL(o.personer); }
   return Object.keys(data).length > 2 ? {handling:'andra', data} : {inget:true};
 }
 // Ändra (F14.1): hur mycket som skiljer sig från det som stod, räknat ur samma skillnad som skickas. Tiden och
 // platsen är en ändring var, kollegorna och gästerna likaså.
 function moAndraDelar(D){
   const d = moAndraBygg(D, D.tid ? {dag:D.tid.slice(0, 10), start:D.tid.slice(11, 16)} : {dag:'', start:''}).data || {};
-  const falt = ['namn', 'kontakt', 'telefon', 'epost', 'doman', 'kalla', 'mal', 'nulage', 'med', 'gaster'].filter(n => n in d).length;
+  const falt = ['namn', 'kontakt', 'telefon', 'epost', 'doman', 'kalla', 'agenda', 'nulage', 'med', 'personer'].filter(n => n in d).length;
   return {antal:falt + ('dag' in d ? 1 : 0) + ('platsTyp' in d ? 1 : 0), tid:'dag' in d && !!D.tid, plats:'platsTyp' in d};
 }
 // Raden ovanför Spara: vad som händer med tiden, och om kunden får besked. Kundraden är bara sann när kunden har en
@@ -37808,7 +38089,7 @@ function moDlgSum(D){
   if (moTyp(D) === 'flyttat') return D.tid && D.tid !== m.tid ? `<b class="num">${esc(moKortTid(m.tid))} → ${esc(moKortTid(D.tid))}</b> · ${moKundRad(!!String(D.k.epost || '').trim() || (m.gaster || []).length > 0)}` : '';
   if (D.typ === 'andra'){
     const a = moAndraDelar(D); if (!a.tid && !a.plats) return '';
-    return `${a.tid ? `<b class="num">${esc(moKortTid(m.tid))} → ${esc(moKortTid(D.tid))}</b> · ` : ''}${moKundRad(!!String(D.f.epost || '').trim() || D.f.gaster.length > 0)}`;
+    return `${a.tid ? `<b class="num">${esc(moKortTid(m.tid))} → ${esc(moKortTid(D.tid))}</b> · ` : ''}${moKundRad(!!String(D.f.epost || '').trim() || moPersAdr(D).length > 0)}`;
   }
   return '';
 }
@@ -37822,7 +38103,7 @@ function moSumRita(){
   const b = document.querySelector('.mo-dlg .mo-dk [type=submit]'); if (b && !D.sparar) b.textContent = moDlgEtikett(D);
 }
 // Serverns fel hör till ett fält när texten säger det; annars står det längst ned.
-const MOFELFALT = [[/kolleg/i, 'med'], [/hos kunden|E-postadressen \S+ går/i, 'gaster'], [/telefon/i, 'telefon'], [/e-post/i, 'epost'], [/källa|varifrån/i, 'kalla'], [/bolagets namn|namnet/i, 'namn'], [/starttid|ny tid|datum|vardag|passerat/i, 'tid'], [/länk/i, 'lank'], [/var mötet hålls|platsen/i, 'adress']];
+const MOFELFALT = [[/kolleg/i, 'med'], [/hos kunden|E-postadressen \S+ går/i, 'personer'], [/agendan/i, 'agenda'], [/telefon/i, 'telefon'], [/e-post/i, 'epost'], [/källa|varifrån/i, 'kalla'], [/bolagets namn|namnet/i, 'namn'], [/starttid|ny tid|datum|vardag|passerat/i, 'tid'], [/länk/i, 'lank'], [/var mötet hålls|platsen/i, 'adress']];
 async function moDlgSkicka(){
   const D = S.moDlg; if (!D || D.sparar) return;
   const b = moDlgBygg(D);
@@ -37863,9 +38144,11 @@ async function moDlgSkicka(){
   else if (s.utloggad) D.fe = s.fel;
   else {
     const fel = s.fel || 'Det gick inte att spara.', hit = MOFELFALT.find(([re]) => re.test(fel));
-    if (hit) D.fel[hit[1]] = fel; else D.fe = fel;
+    if (hit){ D.fel[hit[1]] = fel; D.felFram = hit[1]; } else D.fe = fel;
   }
   moDlgRita();
+  // Felet står vid sitt fält, som kan ligga långt ovanför knappen: rulla fram det (granskningen 2026-11-13).
+  if (D.felFram){ document.getElementById('moe-' + D.felFram)?.scrollIntoView({block:'center'}); D.felFram = null; }
 }
 
 // Affär: Orders formulär, förifyllt, och när ordern är lagd stängs kortet (kund). Som Leads, men Order laddar inte om
@@ -38484,7 +38767,8 @@ function moPanel(k){
           : `<p class="mo-pt"><b>${!u.datum ? 'Ingen dag satt' : moDag(u.datum) === 'i dag' ? 'Ring i dag' : 'Ring ' + moDag(u.datum)}</b>${u.offert ? ' · <span class="pill t-signal">Offert ute</span>' : ''}</p>${u.text ? `<p>${esc(u.text)}</p>` : ''}<p class="muted">${u.ingetSvar ? `Inget svar ${u.ingetSvar} ${u.ingetSvar === 1 ? 'gång' : 'gånger'} i rad.` : 'Inget försök utan svar än.'}</p>`}
         <div class="mo-kn pan">${moKnappar(k, true)}</div></section>
       <section class="rxsek"><h3>Bolaget</h3><dl class="ldfakta">${fakta.map(([a, b]) => `<div><dt>${a}</dt><dd>${b}</dd></div>`).join('')}</dl></section>
-      ${m && (m.mal || m.nulage) ? `<section class="rxsek"><h3>Inför mötet</h3><dl class="ldfakta">${m.mal ? `<div class="mo-bred"><dt>Mål</dt><dd>${esc(m.mal)}</dd></div>` : ''}${m.nulage ? `<div><dt>Nuläge</dt><dd>${esc(moVal().nulage[m.nulage] || m.nulage)}</dd></div>` : ''}</dl></section>` : ''}
+      ${moKundFolk(k).length ? `<section class="rxsek"><h3>Fler hos kunden</h3><dl class="ldfakta">${moKundFolk(k).map(p => { const t2 = p.telefon ? p.telefon.replace(/[^\d+]/g, '') : ''; return `<div><dt>${esc(p.namn || 'Hos kunden')}${p.svar && MOSVAR[p.svar] ? ` · ${MOSVAR[p.svar]}` : ''}</dt><dd>${[t2 ? `<a class="num" href="tel:${t2}" data-motel="${esc(p.telefon)}" title="Kopiera numret">${esc(p.telefon)}</a>` : '', p.epost ? `<a href="mailto:${esc(p.epost)}" data-mokop="${esc(p.epost)}" data-mokopok="Mejladressen är kopierad." title="Kopiera mejladressen">${esc(p.epost)}</a>` : ''].filter(Boolean).join('<br>') || '–'}</dd></div>`; }).join('')}</dl></section>` : ''}
+      ${m && (m.agenda || m.mal || m.nulage) ? `<section class="rxsek"><h3>Inför mötet</h3><dl class="ldfakta">${m.agenda ? `<div class="mo-bred"><dt>Agenda</dt><dd class="mo-agd">${esc(m.agenda)}</dd></div>` : ''}${m.mal ? `<div class="mo-bred"><dt>Mål, bara för er</dt><dd>${esc(m.mal)}</dd></div>` : ''}${m.nulage ? `<div><dt>Nuläge</dt><dd>${esc(moVal().nulage[m.nulage] || m.nulage)}</dd></div>` : ''}</dl></section>` : ''}
       <section class="rxsek"><h3>Historik</h3>${k.historik.length ? `<ol class="rxlog">${k.historik.slice().reverse().map(h => `<li${moAdmin() && h.id ? ' class="mo-hr"' : ''}><span class="num">${+h.tid.slice(8, 10)} ${FRMK[+h.tid.slice(5, 7)]}</span>${esc(h.text.replace(/^\d+ \p{L}+ · /u, ''))}${moAdmin() && h.id ? moHistRadera(h, k) : ''}</li>`).join('')}</ol>` : '<p class="muted">Ingen historik än. Första mötet är på gång.</p>'}</section>
       <div class="mo-pslut"><button class="tlink mo-plank" data-molank="${m ? m.id : k.kedja}">${m ? 'Kopiera länk till mötet' : 'Kopiera länk till kortet'}</button>${m && moFarRadera(m) ? moRadera(k) : ''}</div>
     </div></aside>`;
@@ -38664,8 +38948,9 @@ document.addEventListener('click', e => {
       stopp(); moUtkastSpara(D); const u = MOUTKAST; moUtkastSkriv(null); S.moDlg = null; ndMoDialog('boka');
       toast('Utkastet är tömt.', () => { moUtkastSkriv(u); S.moDlg = null; ndMoDialog('boka'); }); return;
     }
-    if (ds.momer !== undefined){ stopp(); D.merOppen = !D.merOppen; moDlgRita(); if (D.merOppen) moFokus('mod-doman'); return; }
-    if (ds.mogastx){ stopp(); D.f.gaster = D.f.gaster.filter(a => a !== ds.mogastx); delete D.fel.gaster; D.rort = true; moDlgRita(); moFokus('mod-gaster'); moSag(`${ds.mogastx} är borttagen.`); return; }
+    if (ds.mopin !== undefined){ stopp(); moPersLagg(D); return; }
+    if (ds.mopx !== undefined){ stopp(); moPersTa(D, +ds.mopx); return; }
+    if (ds.mokallapil !== undefined){ stopp(); if (D.kallaLista){ D.kallaLista = false; moKallaRita(); } else moKallaOppna(D); document.getElementById('mod-kalla')?.focus({preventScroll:true}); return; }
     if (ds.mou){ stopp(); D.u = ds.mou; D.fel = {}; D.fe = ''; D.rort = true; if ((ds.mou === 'flyttat' || ds.mou === 'uteblev') && !D.tider) moHamtaTider(); moDlgRita(); moVidare(D, 'u'); return; }
     if (ds.moru){ stopp(); D.u = ds.moru; D.fel = {}; D.fe = ''; D.rort = true; moDlgRita(); moVidare(D, 'u'); return; }
     if (ds.mosv){ stopp(); const [qid, v] = ds.mosv.split('|'); D.svar[qid] = v === '1'; delete D.fel.svar; D.rort = true; moDlgRita(); const r = document.getElementById('moRes'); if (r && /^Räknas/.test(r.textContent)) moSag(r.textContent); moVidare(D, 'svar'); return; }
@@ -38740,17 +39025,24 @@ document.addEventListener('input', e => {   // Formuläret behåller det som skr
     if (e.target.dataset.molangd !== undefined){ D.f.langd = +e.target.value; D.rort = true; moLuckorRita(); moHamtaTider(true); return; }
     if (e.target.dataset.moegen !== undefined){ moEgenIn(D); return; }
     if (e.target.dataset.momedq !== undefined){ D.medQ = e.target.value; D.medLista = true; D.medAkt = 0; moMedRita(); return; }
-    if (e.target.dataset.mogastq !== undefined){
-      D.gastQ = e.target.value; D.rort = true;
-      if (/[\s,;]/.test(D.gastQ) && D.gastQ.trim()) moGastLagg(D);   // klistrat in flera, eller ett mellanslag efter adressen
-      else if (D.fel.gaster){ delete D.fel.gaster; e.target.removeAttribute('aria-invalid'); e.target.closest('.mo-brf')?.classList.remove('fel'); const m = document.getElementById('moe-gaster'); if (m){ m.hidden = true; m.textContent = ''; } }
+    if (e.target.dataset.mopf){   // en person hos kunden: huvudet följer med, och felet på raden försvinner
+      const i = +e.target.dataset.mopi, f = e.target.dataset.mopf, p = D.f.personer[i]; if (!p) return;
+      p[f] = e.target.value; D.rort = true;
+      if (D.fel[`p${i}-${f}`] || D.fel.personer){ delete D.fel[`p${i}-${f}`]; delete D.fel.personer; e.target.removeAttribute('aria-invalid'); ['moe-p' + i, 'moe-personer'].forEach(id => { const m = document.getElementById(id); if (m){ m.hidden = true; m.textContent = ''; } }); }
+      moPersLiv(D, i); if (f === 'epost') moSpokRita(e.target);
+      const h = document.getElementById('mo-eh'); if (h) h.hidden = !moEpostTom(D);
       return;
+    }
+    if (e.target.dataset.mokallaq !== undefined){   // källan: det skrivna filtrerar listan
+      D.f.kalla = e.target.value; D.kallaQ = e.target.value; D.kallaLista = true; D.kallaAkt = 0; D.kallaRord = true; D.kallaUr = null; D.kallaAuto = false; D.rort = true;
+      if (D.fel.kalla){ delete D.fel.kalla; e.target.removeAttribute('aria-invalid'); const m = document.getElementById('moe-kalla'); if (m){ m.hidden = true; m.textContent = ''; } }
+      moKallaRita(); return;
     }
     if (!n) return;
     if (n === 'adress' && /^https:\/\/\S+$/i.test(e.target.value.trim())){ D.f.adress = ''; moLankIn(D, e.target.value.trim()); return; }
     D.f[n] = e.target.value; D.rort = true;
     if (n === 'lank'){ const h = document.getElementById('mo-lh'); if (h) h.textContent = moLankHjalp(D.f.lank); }
-    if (n === 'epost'){ const h = document.getElementById('mo-eh'); if (h) h.hidden = !moEpostTom(D); }
+    if (n === 'epost'){ const h = document.getElementById('mo-eh'); if (h) h.hidden = !moEpostTom(D); moSpokRita(e.target); for (let i = 0; i < D.f.personer.length; i++) moPersLiv(D, i); }
     if (D.fel[n]){ delete D.fel[n]; e.target.removeAttribute('aria-invalid'); const m = document.getElementById('moe-' + n); if (m){ m.hidden = true; m.textContent = ''; } }
     if (n === 'telefon'){ clearTimeout(moDlgUppslag.t); moDlgUppslag.t = setTimeout(moDlgUppslag, 700); }
     return;
@@ -38768,18 +39060,30 @@ function moFaltTangent(e){   // kollegornas combobox och gästernas fält (anrop
     if (e.key === 'Tab' && D.medLista){ D.medLista = false; moMedRita(); }
     return;
   }
-  if (t.dataset.mogastq !== undefined){
-    if ((e.key === 'Enter' || e.key === ',' || e.key === ';') && t.value.trim()){ e.preventDefault(); D.gastQ = t.value; moGastLagg(D); return; }
-    if (e.key === 'Backspace' && !t.value && D.f.gaster.length){ e.preventDefault(); const a = D.f.gaster[D.f.gaster.length - 1]; D.f.gaster = D.f.gaster.slice(0, -1); delete D.fel.gaster; D.rort = true; moDlgRita(); moFokus('mod-gaster'); moSag(`${a} är borttagen.`); }
+  if (t.dataset.mokallaq !== undefined){   // källan (2026-11-13): som kollegornas lista
+    const l = D.kallaLista ? moKallaForslag(D) : [];
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp'){ e.preventDefault(); if (!D.kallaLista) moKallaOppna(D); else if (l.length){ D.kallaAkt = D.kallaAkt < 0 ? (e.key === 'ArrowDown' ? 0 : l.length - 1) : (D.kallaAkt + (e.key === 'ArrowDown' ? 1 : -1) + l.length) % l.length; moKallaRita(); } return; }
+    if ((e.key === 'Home' || e.key === 'End') && D.kallaLista && l.length){ e.preventDefault(); D.kallaAkt = e.key === 'Home' ? 0 : l.length - 1; moKallaRita(); return; }
+    if (e.key === 'Enter' && D.kallaLista){ e.preventDefault(); if (l[D.kallaAkt]) moKallaValj(D, l[D.kallaAkt].v); else { D.kallaLista = false; moKallaRita(); } return; }
+    if (e.key === 'Tab' && D.kallaLista){ D.kallaLista = false; moKallaRita(); }
+    return;
+  }
+  if (t.closest && t.closest('.mo-spw')){   // e-postens förslag: pil höger i slutet tar det; markören flyttad döljer det
+    if (e.key === 'ArrowRight' && !e.shiftKey && moSpokTa(t)){ e.preventDefault(); return; }
+    setTimeout(() => moSpokRita(t), 0);
   }
 }
 // Listan tar inte fokus från fältet; ett klick på ett namn lägger till. Ett klick i rutan runt brickorna går till fältet.
-document.addEventListener('mousedown', e => { if (S.moDlg && e.target.closest && e.target.closest('#moMedL')) e.preventDefault(); }, true);
+document.addEventListener('mousedown', e => { if (S.moDlg && e.target.closest && e.target.closest('#moMedL, #moKallaL, [data-mokallapil]')) e.preventDefault(); }, true);
 document.addEventListener('click', e => {
   const D = S.moDlg; if (!D || !ndMo() || S.view !== 'moten' || !e.target.closest) return;
   const o = e.target.closest('[data-momedv]');
   if (o){ e.preventDefault(); e.stopImmediatePropagation(); moMedLagg(D, o.dataset.momedv); return; }
   if (e.target.closest('#moMedL')){ e.preventDefault(); e.stopImmediatePropagation(); return; }
+  const kv = e.target.closest('[data-mokallav]');
+  if (kv){ e.preventDefault(); e.stopImmediatePropagation(); moKallaValj(D, kv.dataset.mokallav); document.getElementById('mod-kalla')?.focus({preventScroll:true}); return; }
+  if (e.target.closest('#moKallaL')){ e.preventDefault(); e.stopImmediatePropagation(); return; }
+  if (e.target.dataset && e.target.dataset.mokallaq !== undefined){ if (!D.kallaLista) moKallaOppna(D); return; }
   const r = e.target.closest('[data-mopers]');
   if (r && !e.target.closest('button')){ const inp = document.getElementById(r.dataset.mopers); if (inp && document.activeElement !== inp) inp.focus(); if (r.dataset.mopers === 'mod-med' && !D.medLista){ D.medLista = true; D.medAkt = 0; moMedRita(); } }
 }, true);
@@ -38787,10 +39091,8 @@ document.addEventListener('focusout', e => {   // listan stängs när fokus läm
   const D = S.moDlg, t = e.target; if (!D || !t.dataset) return;
   const r = e.relatedTarget;
   if (t.dataset.momedq !== undefined && D.medLista && !(r && r.closest && r.closest('#moMed'))){ D.medLista = false; moMedRita(); if (!D.f.med.length && !t.value.trim()) D.medOppen = false; }
-  if (t.dataset.mogastq !== undefined && t.value.trim() && !(r && r.closest && r.closest('#moGast'))){
-    const fel = moGastDelar(t.value).find(a => !MOEPOST.test(a.toLowerCase()));
-    if (fel){ D.fel.gaster = `${fel} ser inte ut som en e-postadress.`; t.setAttribute('aria-invalid', 'true'); t.closest('.mo-brf')?.classList.add('fel'); const m = document.getElementById('moe-gaster'); if (m){ m.hidden = false; m.textContent = D.fel.gaster; } }
-  }
+  if (t.dataset.mokallaq !== undefined && D.kallaLista && !(r && r.closest && r.closest('#moKalla'))){ D.kallaLista = false; moKallaRita(); }
+  if (t.closest && t.closest('.mo-spw')) moSpokRita(t);   // förslaget syns bara i fältet som har fokus
 });
 document.addEventListener('focusout', e => {   // felet för den egna tiden när man lämnar båda fälten, inte mellan dem
   const D = S.moDlg; if (!D || !e.target.dataset || e.target.dataset.moegen === undefined) return;
@@ -38865,13 +39167,15 @@ function moSammanhang(e){
   return n ? [['kort', n], vy] : [vy];
 }
 function moTangent(e){
+  // E-postens förslag (2026-11-13): Tab tar domänen och står kvar i fältet; nästa Tab går vidare.
+  if (e.key === 'Tab' && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey && S.moDlg && e.target && e.target.closest && e.target.closest('.mo-dlg .mo-spw') && moSpokTa(e.target)){ e.preventDefault(); e.stopImmediatePropagation(); return; }
   if (e.key === 'Tab') moFalla(e);
   const moten = S.view === 'moten' && !!ndMo();
   if (e.key === 'Escape'){
     if (moten && S.keysOverlay) return;   // ?-rutan ligger överst: Navs egen Esc stänger den
     if (document.getElementById('pal')) return;   // paletten ligger överst (G10): Navs egen Esc stänger den, Möten rör inget
     if (S.moInst && S.view === 'moten'){ e.preventDefault(); e.stopImmediatePropagation(); S.moInst = null; render(); document.querySelector('[data-moinst]')?.focus({preventScroll:true}); return; }
-    if (moten && S.moDlg){ e.preventDefault(); e.stopImmediatePropagation(); if (S.moDlg.medLista){ S.moDlg.medLista = false; moMedRita(); return; } if (!S.moDlg.sparar) moDlgStang(); return; }
+    if (moten && S.moDlg){ e.preventDefault(); e.stopImmediatePropagation(); if (S.moDlg.medLista){ S.moDlg.medLista = false; moMedRita(); return; } if (S.moDlg.kallaLista){ S.moDlg.kallaLista = false; moKallaRita(); return; } if (!S.moDlg.sparar) moDlgStang(); return; }
     if (moten && S.moOpen){ e.preventDefault(); e.stopImmediatePropagation(); moStang(); return; }
     // Uppslaget (F4.2): Esc stänger först påminnelseformuläret, sedan rutan. Texten i sökfältet står kvar.
     if (moten && S.moPam && document.querySelector('.mo-pam')){ e.preventDefault(); e.stopImmediatePropagation(); S.moPam = null; render(); document.querySelector('[data-mopamin]')?.focus({preventScroll:true}); return; }

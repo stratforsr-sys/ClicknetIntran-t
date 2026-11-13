@@ -586,7 +586,10 @@ export type BokaVarden = {
   dag: string;
   start: string;
   langd: number;
+  /** Säljarens egen anteckning från före 2026-11-13. Formuläret skriver agendan i stället; en äldre flik kan skicka målet. */
   mal: string | null;
+  /** Agendan (2026-11-13): kunden får den i inbjudan. */
+  agenda: string | null;
   nulage: keyof typeof NULAGE | null;
   kedja: string | null;
   foregaende: string | null;
@@ -594,6 +597,8 @@ export type BokaVarden = {
   med: string[];
   /** Fler hos kunden: e-postadresser som får kalenderinbjudan. Aldrig kontaktens `epost`, inga dubbletter. */
   gaster: string[];
+  /** Fler hos kunden med namn och telefon (2026-11-13). Adresserna bland dem står också i `gaster`. */
+  personer: Person[];
   /** Kalenderns `plats` och `online_url` (`platsIndata`). */
   plats: string;
   lank: string | null;
@@ -624,6 +629,60 @@ export function gasterIndata(v: unknown, epost: string | null): Resultat<string[
   }
   if (ut.length > MAX_GASTER) return nej(`Högst ${MAX_GASTER} till hos kunden.`);
   return { ok: true, varden: ut };
+}
+
+/** En person hos kunden utöver kontakten (`mote.personer`). Minst ett av fälten har ett värde. */
+export type Person = { namn: string | null; telefon: string | null; epost: string | null };
+export const MAX_PERSONER = MAX_GASTER;
+
+/**
+ * Fler hos kunden (2026-11-13): namn, telefon och e-post per person. En rad utan något av dem räknas inte.
+ * Telefonen blir E.164 och e-posten normaliseras. En person med kontaktens egen adress är kontakten och
+ * räknas inte, och en adress räcker en gång. Felen säger "hos kunden", så att klienten sätter dem vid personerna.
+ */
+export function personerIndata(v: unknown, epost: string | null): Resultat<Person[]> {
+  if (tom(v)) return { ok: true, varden: [] };
+  if (!Array.isArray(v)) return nej("Personerna hos kunden stämmer inte.");
+  const ut: Person[] = [];
+  for (const x of v) {
+    if (!x || typeof x !== "object" || Array.isArray(x)) return nej("Personerna hos kunden stämmer inte.");
+    const p = x as Record<string, unknown>;
+    const namn = text(p.namn);
+    if ((namn?.length ?? 0) > 200) return nej("Ett namn hos kunden är för långt.");
+    const vem = namn ? `till ${namn.slice(0, 60)} ` : "";
+    let telefon: string | null = null;
+    if (!tom(p.telefon)) {
+      telefon = telefonE164(typeof p.telefon === "string" ? p.telefon : null);
+      if (!telefon) return nej(`Telefonnumret ${vem}hos kunden går inte att tolka.`);
+    }
+    let e: string | null = null;
+    if (!tom(p.epost)) {
+      e = normaliseraEpost(typeof p.epost === "string" ? p.epost : null);
+      if (!e) return nej(`E-postadressen ${vem}hos kunden går inte att tolka.`);
+    }
+    if (!namn && !telefon && !e) continue;
+    if (e && (e === epost || ut.some((y) => y.epost === e))) continue;
+    if (ut.length >= MAX_PERSONER) return nej(`Högst ${MAX_PERSONER} till hos kunden.`);
+    ut.push({ namn, telefon, epost: e });
+  }
+  return { ok: true, varden: ut };
+}
+
+/**
+ * Gästerna ur personerna och ur `gaster` (som en flik från före 2026-11-13 skickar): personernas adresser först,
+ * utan kontaktens och utan dubbletter.
+ */
+export function gasterMedPersoner(personer: Person[], gaster: string[], epost: string | null): Resultat<string[]> {
+  const ut = [...new Set([...personer.map((p) => p.epost).filter((x): x is string => !!x), ...gaster])].filter((x) => x !== epost);
+  if (ut.length > MAX_GASTER) return nej(`Högst ${MAX_GASTER} till hos kunden.`);
+  return { ok: true, varden: ut };
+}
+
+/** Agendan: det kunden får i inbjudan. Tomt är ingen agenda. */
+export function agendaIndata(v: unknown): Resultat<string | null> {
+  const a = text(v);
+  if ((a?.length ?? 0) > 2000) return nej("Agendan är för lång.");
+  return { ok: true, varden: a };
 }
 
 /** Det `boka` tar emot, prövat och normaliserat. Felen är texter till säljaren. */
@@ -676,9 +735,16 @@ export function bokaIndata(body: unknown): Resultat<BokaVarden> {
   if ((kontakt?.length ?? 0) > 200) return nej("Kontaktpersonens namn är för långt.");
   if ((mal?.length ?? 0) > 2000) return nej("Målet är för långt.");
 
+  const agenda = agendaIndata(b.agenda);
+  if (!agenda.ok) return agenda;
+
   const med = kollegorIndata(b.med, b.hallsAv);
   if (!med.ok) return med;
-  const gaster = gasterIndata(b.gaster, epost);
+  const personer = personerIndata(b.personer, epost);
+  if (!personer.ok) return personer;
+  const gasterRa = gasterIndata(b.gaster, epost);
+  if (!gasterRa.ok) return gasterRa;
+  const gaster = gasterMedPersoner(personer.varden, gasterRa.varden, epost);
   if (!gaster.ok) return gaster;
   const plats = platsIndata(b.platsTyp, b.adress, b.lank);
   if (!plats.ok) return plats;
@@ -697,11 +763,13 @@ export function bokaIndata(body: unknown): Resultat<BokaVarden> {
       start: tidpunkt.varden.start,
       langd,
       mal,
+      agenda: agenda.varden,
       nulage,
       kedja,
       foregaende,
       med: med.varden,
       gaster: gaster.varden,
+      personer: personer.varden,
       plats: plats.varden.plats,
       lank: plats.varden.lank,
     },
@@ -814,8 +882,8 @@ export function flyttaIndata(body: unknown): Resultat<{ mote: string; dag: strin
 /**
  * Ändra mötet (2026-11-03): bara de fält som står i anropet ändras, så att två som ändrar olika saker
  * samtidigt inte skriver över varandra. Ett tomt valfritt fält (kontakt, e-post, webbadress, mål,
- * nuläge) tömmer det; namn, telefon och källa måste ha ett värde. `med` och `gaster` är hela listan
- * som den ska bli. `fore` är mötets tid som klienten såg ("YYYY-MM-DD HH:MM"); har mötet flyttats
+ * agenda, nuläge) tömmer det; namn, telefon och källa måste ha ett värde. `med`, `gaster` och `personer`
+ * är hela listan som den ska bli; med `personer` blir gästerna personernas adresser. `fore` är mötets tid som klienten såg ("YYYY-MM-DD HH:MM"); har mötet flyttats
  * sedan dess svarar rutten 409. Felen är samma texter som i `boka`.
  */
 export type AndraVarden = {
@@ -824,11 +892,15 @@ export type AndraVarden = {
   bolag: Partial<Pick<BokaVarden, "namn" | "kontakt" | "telefon" | "epost" | "doman">>;
   kalla?: string;
   mal?: string | null;
+  agenda?: string | null;
   nulage?: BokaVarden["nulage"];
   tid?: { dag: string; start: string };
   plats?: { plats: string; lank: string | null };
   med?: string[];
   gaster?: string[];
+  personer?: Person[];
+  /** Adresserna bland personerna som formuläret visade när Ändra öppnades: rutten slår ihop mot dem (trevägs). */
+  gasterFore?: string[];
 };
 
 export function andraIndata(body: unknown): Resultat<AndraVarden> {
@@ -875,6 +947,11 @@ export function andraIndata(body: unknown): Resultat<AndraVarden> {
     if ((mal?.length ?? 0) > 2000) return nej("Målet är för långt.");
     v.mal = mal;
   }
+  if (har("agenda")) {
+    const agenda = agendaIndata(b.agenda);
+    if (!agenda.ok) return agenda;
+    v.agenda = agenda.varden;
+  }
   if (har("nulage")) {
     if (tom(b.nulage)) v.nulage = null;
     else if (typeof b.nulage !== "string" || !Object.prototype.hasOwnProperty.call(NULAGE, b.nulage)) return nej("Välj nuläge.");
@@ -900,6 +977,19 @@ export function andraIndata(body: unknown): Resultat<AndraVarden> {
     const gaster = gasterIndata(b.gaster === null ? [] : b.gaster, v.bolag.epost ?? null);
     if (!gaster.ok) return gaster;
     v.gaster = gaster.varden;
+  }
+  if (har("personer")) {
+    const personer = personerIndata(b.personer === null ? [] : b.personer, v.bolag.epost ?? null);
+    if (!personer.ok) return personer;
+    v.personer = personer.varden;
+    const gaster = gasterMedPersoner(personer.varden, [], v.bolag.epost ?? null);
+    if (!gaster.ok) return gaster;
+    v.gaster = gaster.varden;
+    if (har("gasterFore")) {
+      const fore = gasterIndata(b.gasterFore === null ? [] : b.gasterFore, null);
+      if (!fore.ok) return fore;
+      v.gasterFore = fore.varden;
+    }
   }
   return { ok: true, varden: v };
 }

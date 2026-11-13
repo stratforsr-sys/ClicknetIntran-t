@@ -66,6 +66,7 @@ import {
   UTFALL_ROLLER,
   moteRubrik,
   type Aktor,
+  type Person,
   type UtfallIn,
   type Uppslag,
 } from "@/lib/nav2/motenforma";
@@ -125,7 +126,7 @@ export const dynamic = "force-dynamic";
  * ===========================================================================
  */
 
-type LaggVarden = Pick<BokaVarden, "namn" | "kontakt" | "epost" | "kalla" | "hallsAv" | "dag" | "start" | "langd" | "mal" | "nulage" | "foregaende" | "med" | "gaster" | "plats" | "lank">;
+type LaggVarden = Pick<BokaVarden, "namn" | "kontakt" | "epost" | "kalla" | "hallsAv" | "dag" | "start" | "langd" | "mal" | "agenda" | "nulage" | "foregaende" | "med" | "gaster" | "personer" | "plats" | "lank">;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const FRAMAT_DAGAR = 14;
@@ -192,7 +193,7 @@ export async function POST(request: Request) {
 
   // Gemensamt för mötets knappar och uppföljningen (A7, A8). Före `switch`: `const` hissas inte.
   const aktorn: Aktor = { id: mig, roller: user.roles as string[] };
-  const MOTE_FALT = "id, kedja_id, event_id, bokat_av, halls_av, mote_tid, langd_min, kalla, mal, nulage, bekraftat_nar, bekraftat_av, utfall, resultat, antal_flyttningar, forsok, senast_forsok, flyttad_nar, niva, provision_last_nar";
+  const MOTE_FALT = "id, kedja_id, event_id, bokat_av, halls_av, mote_tid, langd_min, kalla, mal, agenda, personer, nulage, bekraftat_nar, bekraftat_av, utfall, resultat, antal_flyttningar, forsok, senast_forsok, flyttad_nar, niva, provision_last_nar";
   type MoteRad = {
     id: string;
     kedja_id: string;
@@ -203,6 +204,9 @@ export async function POST(request: Request) {
     langd_min: number;
     kalla: string;
     mal: string | null;
+    /** Agendan som kunden får i inbjudan, och personerna hos kunden med namn och telefon (0290). */
+    agenda: string | null;
+    personer: Person[] | null;
     nulage: string | null;
     bekraftat_nar: string | null;
     bekraftat_av: string | null;
@@ -590,6 +594,8 @@ export async function POST(request: Request) {
         art,
         foregaende_id: v.foregaende,
         mal: v.mal,
+        agenda: v.agenda,
+        personer: v.personer,
         nulage: v.nulage,
       })
       .select("id")
@@ -610,10 +616,12 @@ export async function POST(request: Request) {
     // går till hållaren och kollegorna på mötet (steg 9), och `hallsAv` är redan prövad som en aktiv
     // säljare, så ingen annans kalender kan fyllas med möten.
     const rubrik = moteRubrik(v.namn, (await lasInst()).rubrikPrefix);
+    // Kalenderns agenda är agendan; en flik från före 2026-11-13 skickar målet, som då står där som förut.
+    const kalAgenda = v.agenda ?? v.mal;
     const m: { fel?: string; eventId?: string } =
       v.hallsAv === mig
-        ? await skapaMote({ organisator: v.hallsAv, rubrik, dag: v.dag, start: minuterAv(v.start), minuter: v.langd, deltagare: [v.hallsAv, ...v.med], plats: v.plats, agenda: v.mal })
-        : await bokaAtKollega({ hallsAv: v.hallsAv, med: v.med, rubrik, dag: v.dag, start: v.start, minuter: v.langd, agenda: v.mal, plats: v.plats, lank: v.lank });
+        ? await skapaMote({ organisator: v.hallsAv, rubrik, dag: v.dag, start: minuterAv(v.start), minuter: v.langd, deltagare: [v.hallsAv, ...v.med], plats: v.plats, agenda: kalAgenda })
+        : await bokaAtKollega({ hallsAv: v.hallsAv, med: v.med, rubrik, dag: v.dag, start: v.start, minuter: v.langd, agenda: kalAgenda, plats: v.plats, lank: v.lank });
     if (m.fel || !m.eventId) {
       await db.from("mote").delete().eq("id", moteId);
       await stada();
@@ -691,9 +699,11 @@ export async function POST(request: Request) {
 
     const kontakt = forFor(v.kontakt ?? "") || "Kunden";
     const gastOk = v.gaster.length - gastFel.length;
+    // Gästen med sitt förnamn när personen har ett (2026-11-13), annars adressen.
+    const gastNamn = (g: string) => forFor(v.personer.find((p) => p.epost === g)?.namn ?? "") || g;
     const kunden = v.epost && bjuden
       ? `${gastOk ? `${forFor(v.kontakt ?? "") || v.epost} och ${gastOk} till hos kunden` : kontakt} får en inbjudan med mejl.`
-      : gastOk ? `${gastOk === 1 ? v.gaster.find((g) => !gastFel.includes(g)) : `${gastOk} hos kunden`} får en inbjudan med mejl.` : "";
+      : gastOk ? `${gastOk === 1 ? gastNamn(v.gaster.find((g) => !gastFel.includes(g)) ?? "") : `${gastOk} hos kunden`} får en inbjudan med mejl.` : "";
     const missade = [...(v.epost && !bjuden ? [kontakt] : []), ...gastFel];
     const inbjudan = [
       v.med.some((x) => x !== mig) ? `${lista(await fornamnFor(v.med.filter((x) => x !== mig)))} får en inbjudan i Nav.` : "",
@@ -1077,7 +1087,7 @@ export async function POST(request: Request) {
         lagt = await laggMote({
           kedja: m.kedja_id,
           bolag: bo.id,
-          v: { namn: bo.namn, kontakt: bo.kontakt, epost: bo.epost, kalla: m.kalla, hallsAv: m.halls_av, dag: a.nyttMote.dag, start: a.nyttMote.start, langd: m.langd_min, mal: m.mal, nulage: m.nulage as LaggVarden["nulage"], foregaende: m.id, med, gaster, plats: ev?.plats || MOTE_PLATS, lank: ev?.online_url ?? null },
+          v: { namn: bo.namn, kontakt: bo.kontakt, epost: bo.epost, kalla: m.kalla, hallsAv: m.halls_av, dag: a.nyttMote.dag, start: a.nyttMote.start, langd: m.langd_min, mal: m.mal, agenda: m.agenda, nulage: m.nulage as LaggVarden["nulage"], foregaende: m.id, med, gaster, personer: m.personer ?? [], plats: ev?.plats || MOTE_PLATS, lank: ev?.online_url ?? null },
           motetid: nyTid,
           varningar: [],
           skapadBolag: false,
@@ -1489,6 +1499,14 @@ export async function POST(request: Request) {
     const moteLapp: Record<string, unknown> = {};
     if (v.kalla !== undefined && v.kalla !== m.kalla) moteLapp.kalla = v.kalla;
     if (v.mal !== undefined && (v.mal ?? null) !== (m.mal ?? null)) moteLapp.mal = v.mal;
+    if (v.agenda !== undefined && (v.agenda ?? null) !== (m.agenda ?? null)) moteLapp.agenda = v.agenda;
+    // Fält för fält: jsonb lämnar tillbaka nycklarna i sin egen ordning, så JSON-texten är aldrig lika.
+    const personNyckel = (l: Person[] | null | undefined) => JSON.stringify((l ?? []).map((p) => [p.namn ?? null, p.telefon ?? null, p.epost ?? null]));
+    if (v.personer !== undefined && personNyckel(v.personer) !== personNyckel(m.personer)) moteLapp.personer = v.personer;
+    // En flik från före personerna skickar bara adresserna: en person vars adress tagits bort ur listan går med den.
+    if (v.gaster && v.personer === undefined && (m.personer ?? []).some((p) => p.epost && !v.gaster!.includes(p.epost))) {
+      moteLapp.personer = (m.personer ?? []).filter((p) => !p.epost || v.gaster!.includes(p.epost));
+    }
     if (v.nulage !== undefined && (v.nulage ?? null) !== (m.nulage ?? null)) moteLapp.nulage = v.nulage;
     let nyTid: Date | null = null;
     if (v.tid) {
@@ -1512,7 +1530,19 @@ export async function POST(request: Request) {
     const gastFore = [...new Set(narvaro.map((x) => (x.external_email ?? "").toLowerCase()).filter(Boolean))];
     let gastIn: string[] = [];
     let gastUt: string[] = [];
-    if ("epost" in bolagLapp || v.gaster) {
+    if (v.personer !== undefined && v.gasterFore) {
+      // Personerna (2026-11-13): trevägs mot det formuläret visade (`gasterFore`). Bara en adress som lagts till bjuds
+      // in, och bara en som formuläret visade och som tagits bort får en avbokning. En gäst som en kollega lagt till
+      // efter att tavlan lästes rörs inte, och en adress som tagits bort i Kalendern bjuds inte in igen för att ett
+      // nummer på en annan rad rättats. Kontakten följer sin egen adress, som förut.
+      const sag = new Set(v.gasterFore), ville = new Set(v.gaster ?? []);
+      gastIn = [...ville].filter((x) => !sag.has(x) && !gastFore.includes(x) && x !== epostNu);
+      gastUt = gastFore.filter((x) => sag.has(x) && !ville.has(x) && x !== epostNu);
+      if ("epost" in bolagLapp) {
+        if (epostFore && gastFore.includes(epostFore) && !ville.has(epostFore) && !gastUt.includes(epostFore)) gastUt.push(epostFore);
+        if (epostNu && !gastFore.includes(epostNu)) gastIn.push(epostNu);
+      }
+    } else if ("epost" in bolagLapp || v.gaster) {
       const fler = v.gaster ?? gastFore.filter((x) => x !== epostFore);
       const gastNu = [...new Set([...(epostNu ? [epostNu] : []), ...fler])];
       gastIn = gastNu.filter((x) => !gastFore.includes(x));
@@ -1527,7 +1557,11 @@ export async function POST(request: Request) {
     const prefix = (await lasInst()).rubrikPrefix;
     const egenRubrik = moteRubrik(bo.namn, prefix);
     const titel = kal && bolagLapp.namn && arEgenRubrik(kal.title, bo.namn) ? moteRubrik(bolagLapp.namn, prefix) : kal?.title ?? egenRubrik;
-    const agenda = kal && "mal" in moteLapp && (kal.agenda_md ?? "") === (m.mal ?? "") ? String(moteLapp.mal ?? "") : kal?.agenda_md ?? "";
+    // Agendan (2026-11-13) tar över kalenderns agenda när den står som mötets agenda, eller (på ett äldre möte) som målet.
+    const agendaFore = kal?.agenda_md ?? "";
+    const agenda = kal && "agenda" in moteLapp && (agendaFore === (m.agenda ?? "") || (!m.agenda && agendaFore === (m.mal ?? "")))
+      ? String(moteLapp.agenda ?? "")
+      : kal && "mal" in moteLapp && !m.agenda && agendaFore === (m.mal ?? "") ? String(moteLapp.mal ?? "") : agendaFore;
     const kalAndras = !!kal && (!!nyTid || platsAndras || titel !== kal.title || agenda !== (kal.agenda_md ?? "") || medIn.length > 0 || medUt.length > 0);
     const gastAndras = gastIn.length > 0 || gastUt.length > 0;
 
@@ -1635,7 +1669,7 @@ export async function POST(request: Request) {
       });
     }
     if (m.halls_av !== mig) {
-      const vad = [nyTid ? "ny tid" : "", platsAndras ? "ny plats" : "", medIn.length || medUt.length ? "kollegor" : "", gastAndras ? "gäster" : "", Object.keys(bolagLapp).length ? "kunduppgifter" : "", "mal" in moteLapp || "nulage" in moteLapp || "kalla" in moteLapp ? "inför mötet" : ""].filter(Boolean);
+      const vad = [nyTid ? "ny tid" : "", platsAndras ? "ny plats" : "", medIn.length || medUt.length ? "kollegor" : "", gastAndras ? "gäster" : "", Object.keys(bolagLapp).length || ("personer" in moteLapp && !gastAndras) ? "kunduppgifter" : "", "agenda" in moteLapp ? "agendan" : "", "mal" in moteLapp || "nulage" in moteLapp || "kalla" in moteLapp ? "inför mötet" : ""].filter(Boolean);
       await notifiera({
         till: m.halls_av,
         av: mig,

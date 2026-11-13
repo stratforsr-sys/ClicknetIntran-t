@@ -14,6 +14,20 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten-kunden-pa-ett-stalle",
+    rubrik: "Boka möte: allt om kunden på ett ställe, fler hos kunden och en agenda",
+    ingress: "Lägg till fler personer hos kunden med namn, telefon och e-post direkt under kontakten. Källan är en lista du söker i, och agendan följer med kundens inbjudan.",
+    text: `När du bokar ett möte i **Möten** står allt om kunden överst och inget ligger hopfällt. **Lägg till person**
+under kontakten ger en rad med namn, telefon och e-post. Den som har e-post får en inbjudan, och radens huvud säger
+det medan du skriver. Klistra in en mejlsignatur i ett namnfält, så fylls namn, telefon och e-post i. Börjar du
+skriva en adress föreslås bolagets domän, och **Tab** tar den. **Källa** är en lista du söker i, och har numret
+ringts förut står Kallsamtal redan ifyllt med skälet under. **Agenda** ersätter Mål: kunden ser agendan i
+inbjudan. I kortets panel står de andra hos kunden med nummer att ringa.`,
+    datum: "2026-11-13",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "moten-snabbare-tavla",
     rubrik: "Möten går fortare: sök, tangenter, ångra och utkast",
     ingress: "Sök direkt på tavlan, boka med N, ångra en bekräftelse och fortsätt på en bokning du stängde. Panelen bläddrar mellan korten och uppföljningen går att ändra.",

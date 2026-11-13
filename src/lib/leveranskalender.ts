@@ -824,9 +824,12 @@ export function kundbrev(a: {
   plats: string | null;
   url: string | null;
   avsandare: string;
+  /** Mötets agenda (Möten, 2026-11-13): under platsen i inbjudan, ny tid och ändrat. Aldrig i en avbokning. */
+  agenda?: string | null;
 }): { amne: string; text: string } {
   const halsning = a.kontakt ? `Hej ${a.kontakt},` : "Hej,";
-  const var_ = [a.plats?.trim() ? `Plats: ${a.plats.trim()}` : "", a.url?.trim() ? `Länk: ${a.url.trim()}` : ""].filter(Boolean);
+  const agenda = a.agenda?.trim() ? ["", "Agenda:", a.agenda.trim()] : [];
+  const var_ = [...[a.plats?.trim() ? `Plats: ${a.plats.trim()}` : "", a.url?.trim() ? `Länk: ${a.url.trim()}` : ""].filter(Boolean), ...agenda];
   const slut = ["", "Hälsningar,", `${a.avsandare}, Clicknet`];
 
   const slag = a.slag ?? (a.metod === "CANCEL" ? undefined : a.sekvens > 0 ? "tid" : "ny");

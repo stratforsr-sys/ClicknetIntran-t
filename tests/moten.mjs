@@ -503,7 +503,34 @@ rubrik("2026-11-03: Ändra mötet (andraIndata)");
   ok("gästerna normaliseras och kontaktens nya adress räknas inte två gånger", JSON.stringify(M.andraIndata({ ...bas, epost: "a@b.se", gaster: ["A@b.se", "c@d.se", "c@d.se"] }).varden.gaster) === JSON.stringify(["c@d.se"]));
   ok("en gäst som inte är en adress nekas med adressen", /^E-postadressen x går inte att tolka/.test(M.andraIndata({ ...bas, gaster: ["x"] }).fel));
   ok("arSkrivning('andra'): spärras i läsläge", M.arSkrivning("andra") === true);
+  // 2026-11-13: personerna hos kunden ersätter gästerna i Ändra; agendan tömmer och sätts som de andra fälten.
+  const p = M.andraIndata({ ...bas, personer: [{ namn: "Anna Berg", telefon: "070-111 22 33", epost: "Anna@Bolaget.SE" }, { namn: "Bo Ek", telefon: null, epost: null }] }).varden;
+  ok("personerna i Ändra: gästerna blir personernas adresser", JSON.stringify(p.gaster) === JSON.stringify(["anna@bolaget.se"]) && p.personer.length === 2 && p.personer[0].telefon === "+46701112233");
+  ok("personerna i Ändra: en tom lista tar bort alla gäster", JSON.stringify(M.andraIndata({ ...bas, personer: [] }).varden.gaster) === "[]" && JSON.stringify(M.andraIndata({ ...bas, personer: null }).varden.personer) === "[]");
+  ok("agendan i Ändra: tom tömmer, för lång nekas", M.andraIndata({ ...bas, agenda: "" }).varden.agenda === null && M.andraIndata({ ...bas, agenda: " Genomgång " }).varden.agenda === "Genomgång" && M.andraIndata({ ...bas, agenda: "x".repeat(2001) }).fel === "Agendan är för lång.");
+  ok("utan agenda och personer i anropet: inget av dem ändras", !("agenda" in r.varden) && !("personer" in r.varden));
+  const gf = M.andraIndata({ ...bas, personer: [{ namn: "A", epost: "a@x.se" }], gasterFore: ["A@x.se", "b@x.se"] }).varden;
+  ok("adresserna formuläret visade följer med personerna, normaliserade", JSON.stringify(gf.gasterFore) === JSON.stringify(["a@x.se", "b@x.se"]) && !("gasterFore" in M.andraIndata({ ...bas, gasterFore: ["a@x.se"] }).varden));
 }
+}
+
+rubrik("2026-11-13: Fler hos kunden med namn och telefon (personerIndata), agendan");
+{
+  const HALLS = "11111111-1111-4111-8111-111111111111";
+  const bas = { namn: "Exempel AB", telefon: "070-123 45 67", kalla: "Kallsamtal", hallsAv: HALLS, dag: "2026-11-02", start: "10:00", epost: "per@exempel.se" };
+  const P = (personer, gaster) => M.bokaIndata({ ...bas, personer, ...(gaster ? { gaster } : {}) });
+  const r = P([{ namn: " Anna Berg ", telefon: "070-111 22 33", epost: " Anna@Exempel.SE " }, { namn: "Bo Ek", telefon: "+46 8 123 456 78", epost: "" }, { namn: "", telefon: "", epost: "" }]);
+  ok("namn trimmas, telefonen blir E.164, e-posten normaliseras", r.ok && JSON.stringify(r.varden.personer[0]) === JSON.stringify({ namn: "Anna Berg", telefon: "+46701112233", epost: "anna@exempel.se" }), JSON.stringify(r));
+  ok("en person utan e-post sparas, men bjuds inte in", r.varden.personer[1].namn === "Bo Ek" && r.varden.personer[1].epost === null && JSON.stringify(r.varden.gaster) === JSON.stringify(["anna@exempel.se"]));
+  ok("en tom rad räknas inte", r.varden.personer.length === 2);
+  ok("kontaktens egen adress är kontakten och räknas inte", P([{ namn: "Per", epost: "PER@exempel.se" }]).varden.personer.length === 0);
+  ok("en adress räcker en gång", P([{ namn: "A", epost: "a@x.se" }, { namn: "B", epost: "A@x.se" }]).varden.personer.length === 1);
+  ok("gästerna från en äldre flik läggs till personernas", JSON.stringify(P([{ namn: "A", epost: "a@x.se" }], ["b@x.se", "a@x.se"]).varden.gaster) === JSON.stringify(["a@x.se", "b@x.se"]));
+  ok("felen säger hos kunden och vem", P([{ namn: "Anna", telefon: "abc" }]).fel === "Telefonnumret till Anna hos kunden går inte att tolka." && P([{ epost: "x" }]).fel === "E-postadressen hos kunden går inte att tolka.");
+  ok("högst tio", P(Array.from({ length: 11 }, (_, i) => ({ namn: "P" + i }))).fel === "Högst 10 till hos kunden.");
+  ok("personerna ska vara en lista av rader", P("Anna").fel === "Personerna hos kunden stämmer inte." && P(["Anna"]).fel === "Personerna hos kunden stämmer inte.");
+  ok("utan personer: tom lista, gästerna som förut", JSON.stringify(M.bokaIndata(bas).varden.personer) === "[]" && JSON.stringify(M.bokaIndata({ ...bas, gaster: ["c@x.se"] }).varden.gaster) === JSON.stringify(["c@x.se"]));
+  ok("agendan trimmas, tom är null, för lång nekas", M.bokaIndata({ ...bas, agenda: "  Genomgång  " }).varden.agenda === "Genomgång" && M.bokaIndata(bas).varden.agenda === null && M.bokaIndata({ ...bas, agenda: "x".repeat(2001) }).fel === "Agendan är för lång.");
 }
 
 rubrik("2026-11-11: Rubriken i kalendern (moteRubrik, arEgenRubrik)");
