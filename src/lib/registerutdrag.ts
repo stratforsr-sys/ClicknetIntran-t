@@ -49,10 +49,10 @@ export const KALLOR: Kalla[] = [
   { tabell: "document", kolumn: "owner_id", andamal: "Rutiner du äger" },
   { tabell: "course", kolumn: "owner_id", andamal: "Kurser du äger" },
   { tabell: "news_post", kolumn: "author_id", andamal: "Nyhetsinlägg du skrivit" },
-  { tabell: "notification_seen", kolumn: "employee_id", andamal: "När du senast öppnade notisklockan" },
+  { tabell: "notification_seen", kolumn: "employee_id", andamal: "När du senast rensade notisklockan" },
   // 0038. En rad per notis du klickat bort. Den säger inget om vad du gjorde
   // efteråt — bara att posten inte ska visas igen — men den handlar om dig.
-  { tabell: "notification_dismissed", kolumn: "employee_id", andamal: "Notiser du klickat bort" },
+  { tabell: "notification_dismissed", kolumn: "employee_id", andamal: "Notiser du öppnat eller rensat" },
 
   // 0037 E13 steg 6. En registrerad ogiltig frånvaro och vad den ledde till.
   //
