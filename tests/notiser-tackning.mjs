@@ -226,6 +226,7 @@ const TACKNING = {
   "order::skickaInOrder": "notifierar",
   "order::godkannOrder": "notifierar",
   "order::redigeraOrder": "notifierar",
+  "order::sattTjansteprovision": "notifierar via redigeraOrder: en godkand order rattas dar och saljaren far notisen; en ogodkand bar inga pengar an (0293).",
   "order::returneraOrder": "notifierar",
   "order::makuleraOrder": "notifierar",
   "order::markeraBetald": "notifierar",

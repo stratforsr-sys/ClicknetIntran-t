@@ -11,6 +11,7 @@ import { LOPTIDER, giltigBindningstid, giltigTelefon, giltigtSigneringsdatum, no
 import { tolkaBelopp } from "@/lib/provision";
 import { angivenProvision, bevakaIgen, provisionSenare, rabattAnteckning, rabattUrFormular, tjansterUrFormular } from "@/lib/orderregler";
 import { medNyckel } from "@/lib/nav2/nyckel";
+import { tjanstRad } from "@/lib/tjansteprovision";
 import {
   aterupptaBevakning,
   avslutaAvtal,
@@ -29,6 +30,7 @@ import {
   rattaFranAvtal,
   redigeraOgodkand,
   redigeraOrder,
+  sattTjansteprovision,
   registreraInspelning,
   registreraOrderbilaga,
   returneraOrder,
@@ -209,6 +211,9 @@ export async function POST(request: Request) {
           ? fran(await redigeraOrder({}, form({ ...falt, id }, ["id", ...FALT.rattaGodkand])), "Ordern är rättad.")
           : fran(await redigeraOgodkand({}, form({ ...falt, id }, ["id", ...FALT.rattaOgodkand])), "Ordern är rättad.");
       }
+      case "tjanst-provision":
+        // 0293: provisionen på tjänsterna, från kortets ruta. Godkänd order: via Rätta (övertäck, rättelseposter, notis).
+        return fran(await sattTjansteprovision({}, form({ id, tjanster: b.tjanster ?? "" })), "Provisionen på tjänsterna är sparad.");
       case "ratta-fran-avtal":
         return fran(await rattaFranAvtal({}, form({ ...falt, id }, ["id", ...FALT.rattaFranAvtal])), "Ordern är rättad efter avtalet.");
       case "koppla":
@@ -475,7 +480,8 @@ async function sparaUtkast(falt: Record<string, unknown>, mig: string, hanterare
   const senare = provisionSenare(f);
   const angiven = fri && !senare ? angivenProvision(f) : null;
   if (angiven && "fel" in angiven) return svar({ fel: angiven.fel }, 400);
-  const tjansteval = tjansterUrFormular(f);
+  // 0293: tjänsternas provision bara från säljchef, VD och ekonomi, som i skapaOrder.
+  const tjansteval = tjansterUrFormular(f, { provision: hanterare });
   if ("fel" in tjansteval) return svar({ fel: tjansteval.fel }, 400);
   // K5 (B2): ett rabatterat paketpris sparas som i skapaOrder.
   let rabatt: number | null = null;
@@ -526,9 +532,7 @@ async function sparaUtkast(falt: Record<string, unknown>, mig: string, hanterare
   // Tjänsterna med sin egen bindningstid, tolkade som i skapaOrder (`tjansterUrFormular`).
   const rader = tjansteval.tjanster;
   if (rader.length) {
-    await db.from("sales_order_service").insert(
-      rader.map((t, i) => ({ order_id: rad.id, name: t.name, billing: t.billing, amount: t.amount, follows_order: t.follows_order, term_months: t.term_months, starts_on: t.starts_on, sort: i })),
-    );
+    await db.from("sales_order_service").insert(rader.map((t, i) => tjanstRad(rad.id, t, i)));
   }
   await db.from("audit_log").insert({ actor_id: mig, action: "sales_order.draft_created", object_type: "sales_order", object_id: rad.id, meta: { via: "nav2" } });
   revalidatePath("/order");

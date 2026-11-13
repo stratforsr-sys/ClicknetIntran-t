@@ -9,6 +9,7 @@
  */
 import { kronor, tolkaBelopp } from "./provision.ts";
 import { giltigBindningstid, type Tjanst } from "./order.ts";
+import { provisionUrRad } from "./tjansteprovision.ts";
 
 /**
  * Tillaggstjansterna, ur formularet.
@@ -27,7 +28,16 @@ import { giltigBindningstid, type Tjanst } from "./order.ts";
  * anvandaren i stallet for en rad i databasen.
  * ===========================================================================
  */
-export function tjansterUrFormular(form: FormData): { tjanster: Tjanst[] } | { fel: string } {
+export function tjansterUrFormular(
+  form: FormData,
+  /**
+   * `provision`: läs tjänsternas provision (0293). Bara säljchef, VD och ekonomi
+   * sätter den (beställaren 2026-11-13), så anroparen skickar `farHantera(user)`.
+   * För alla andra kastas valen här, en gång — en säljare kan inte sätta sin
+   * egen provision genom att skicka fälten själv.
+   */
+  { provision = false }: { provision?: boolean } = {},
+): { tjanster: Tjanst[] } | { fel: string } {
   const text = String(form.get("tjanster") ?? "").trim();
   if (!text) return { tjanster: [] };
 
@@ -82,6 +92,9 @@ export function tjansterUrFormular(form: FormData): { tjanster: Tjanst[] } | { f
       }
     }
 
+    const val = provision ? provisionUrRad(rad, namn) : null;
+    if (val && "fel" in val) return { fel: val.fel };
+
     tjanster.push({
       name: namn,
       billing: fakturering,
@@ -89,6 +102,7 @@ export function tjansterUrFormular(form: FormData): { tjanster: Tjanst[] } | { f
       follows_order: fakturering === "manad" && !egenBindning,
       term_months: manader,
       starts_on: start,
+      provision: val,
     });
   }
 

@@ -5,6 +5,31 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-13 · Order: provision på tjänsterna (0293) och finans = 12 % av det som blir kvar
+
+**Vad:** en tjänst på en paketorder gav ingen provision alls (Jämtlandsstäd #40: matrisens 3 500 kr för paketet,
+ingenting för hemsidan och SEO:n, medan övertäcket räknades på hela 55 875 kr), och en finansorder gav matrisens fasta
+belopp. Se NASTA_SESSION.
+
+**Beslut som inte går att läsa ur koden:**
+
+- **Finansbeslutet 2026-10-09 är ersatt.** Då: "matrisens fasta belopp oförändrat" på en finansorder. Nu: 12 % av det
+  som blir kvar, som utköpet. Satsen är utköpets (`buyout_commission_rate`), eftersom beställaren sa "samma sak".
+  Ska de skiljas åt senare behövs en egen tabell och en egen källa; i dag betyder `buyout` "nettosatsen".
+- **Tjänsterna får provision bara ovanpå matrisen.** 12 %, chefens 40 % och en handsatt provision räknar redan på ett
+  värde där tjänsterna ingår; en tjänsteprovision ovanpå hade betalat samma krona två gånger. Mitt val, inte
+  beställarens.
+- **Null är "inget val", 0 är ett val.** Spärren i godkännandet frågar efter val, inte efter belopp. Den gäller även en
+  rättelse av en godkänd order som saknar val (Jämtlandsstäd), så den ordern får sin provision innan den rättas.
+- **Säljaren ser hela kalkylen** (beställarens svar på "de ska endast se det som provision"): inget döljs.
+- **Regeln står på ett ställe.** `saljarensProvision` ersätter två kopior av samma if-kedja på servern. Klientens
+  `ndSim` kan inte importera TypeScript, så paritetsprovet kör den mot servern i stället.
+- **`redigeraOgodkand` läste aldrig `tjanster`.** En tjänst som lades till eller togs bort i Rätta på en inskickad
+  order försvann tyst. Nu skrivs de, men en oförändrad lista skrivs inte om (en tjänst med egen bindningstid, som Nav
+  2.0 inte kan rita, behåller sin), och säljarens rättelse behåller chefens val (`behallProvision`).
+- **0293, inte 0291/0292:** 0291 är körd av Möten (bekräftelsen), grenen uppgift-kollega har en egen ej körd 0291
+  och säljtavlans gren en ej körd 0292.
+
 ## 2026-11-13 · Möten: bekräftelsen blir en uppgift (på `main`, 0291 körd; arbetsdagar, klockslag, notis i telefonen)
 
 **Vad:** beställaren: den som bokat ett möte ska bekräfta det två dagar före, klockslaget ska gå att välja, och det

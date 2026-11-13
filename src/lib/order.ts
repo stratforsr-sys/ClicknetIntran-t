@@ -18,6 +18,7 @@
  */
 
 import { svensktDatum } from "./klocka.ts";
+import type { Tjanstprovision } from "./tjansteprovision.ts";
 
 // -----------------------------------------------------------------------------
 // Formen pa det databasen bar. Speglar 0034 utan att veta om databasen.
@@ -690,6 +691,15 @@ export type Tjanst = {
   follows_order: boolean;
   term_months: number | null;
   starts_on: string | null;
+  /** Radens id när tjänsten redan står på en order. Saknas i ett formulär. */
+  id?: string;
+  /**
+   * Provisionen hanteraren valt för tjänsten (0293), eller null när ingen valt.
+   * Se `tjansteprovision.ts`: null är "inget val", aldrig "noll kronor".
+   */
+  provision?: Tjanstprovision | null;
+  /** Kronorna valet gav, FRYSTA vid godkännandet. Null före det, och när matrisen inte är grunden. */
+  provision_kr?: number | null;
 };
 
 /**
