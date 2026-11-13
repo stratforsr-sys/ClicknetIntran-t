@@ -16,7 +16,7 @@
  *
  *   node --experimental-strip-types tests/rattelse.mjs
  */
-import { rattelseposter, rorPengar } from "../src/lib/rattelse.ts";
+import { rattelseposter, rattelsensSkal, rorPengar } from "../src/lib/rattelse.ts";
 
 let fel = 0;
 const ok = (namn, villkor, extra = "") => {
@@ -213,6 +213,19 @@ console.log("\nSumman gar ihop over slumpade rattelser");
 
   ok("hundra slumpade rattelser landar ratt, per person", brister === 0, `${brister} brister`);
 }
+
+// ---------------------------------------------------------------------------
+// Skalet (bestallaren 2026-11-13): saljaren skriver det, admin och superadmin
+// behover inget.
+// ---------------------------------------------------------------------------
+console.log("\nSkalet till rattelsen");
+ok("saljaren utan skal nekas", rattelsensSkal("", "salesperson", "Fredrik") === null);
+ok("saljaren med bara mellanslag nekas", rattelsensSkal("   ", "salesperson", "Fredrik") === null);
+ok("saljarens skal star kvar, trimmat", rattelsensSkal("  Fel telefonnummer ", "salesperson", "Fredrik") === "Fel telefonnummer");
+ok("admin utan skal far vem som rattade", rattelsensSkal("", "admin", "Johanna") === "Rättad av Johanna.");
+ok("superadmin utan skal far vem som rattade", rattelsensSkal("", "superadmin", "Zen") === "Rättad av Zen.");
+ok("superadmin utan fornamn far en text anda", rattelsensSkal("", "superadmin", " ") === "Rättad av admin.");
+ok("adminens eget skal gar fore", rattelsensSkal("Rättad i Nav 2.0: 12 → 24 mån.", "admin", "Johanna") === "Rättad i Nav 2.0: 12 → 24 mån.");
 
 console.log(
   fel === 0

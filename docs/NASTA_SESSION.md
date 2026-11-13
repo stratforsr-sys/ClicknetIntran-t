@@ -7,6 +7,18 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 
 ---
 
+## ORDER: SKÄLET TILL EN RÄTTELSE (2026-11-13): grenen `rattelse-skal`, EJ MERGAD, ingen migration
+
+Beställaren fick "En rättelse kräver ett skäl" på #41 Toro Relining utan något fält att skriva i. Orsaken: klienten
+avgjorde "godkänd" ur sin egen orderlista, så en order som godkänts sedan listan lästes fick inget skäl med sig.
+Nu: admin och superadmin behöver inget skäl (Nav skriver vad som ändrades, servern "Rättad av <förnamn>."), och säljaren
+får fältet "Varför rättas ordern?" ovanför Spara rättelsen, även när servern svarar `kravSkal`. Se ARBETSLOGG.
+
+- **Prov:** `tests/rattelse.mjs` (skälsregeln), `tests/nav2-orderfalt.mjs`, `tests/nav2-order.mjs`,
+  `tests/nav2-omladdning.mjs`, `tests/order.mjs` gröna; `~/nav2-utkast/delar/rattelse-skal/rattelse-skal-prov.mjs`
+  26/26 mot grenen och rött mot main.
+- **Kvar:** previewen, mergen efter beställarens ja, och #41 rättad i produktionen.
+
 ## MÖTEN: BOKNINGSBLADET (2026-11-13): på `main`, 0290 KÖRD
 
 Beställaren 2026-11-13: fler hos kunden ska läggas till där kontakten står (som "Lägg till kollega"), med telefon;

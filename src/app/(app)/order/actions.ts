@@ -15,7 +15,8 @@ import {
 import { arSuperadmin, getCurrentUser, hasRole, type CurrentUser } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
 import { kronor, manadsnamn, manadsnyckel, tolkaBelopp } from "@/lib/provision";
-import { rattelseposter, rorPengar } from "@/lib/rattelse";
+import { rattelseposter, rattelsensSkal, rorPengar } from "@/lib/rattelse";
+import { nivaFor } from "@/lib/nav2/forma";
 import {
   angivenProvision,
   bilagaBortNej,
@@ -144,7 +145,9 @@ function utkopUrFormular(form: FormData): { utkop: number | null } | { fel: stri
  * bade den signerade adressen och registreringen haenger pa orderns id (0039),
  * sa uppladdningsrutan kan inte ritas forran id:t finns. Se `Nyorder.tsx`.
  */
-export type Orderstate = { fel?: string; ok?: string; orderId?: string };
+// `kravSkal`: en godkand order rattades utan skal. Nav 2.0 ritar da skalfaltet,
+// aven nar ordern hann godkannas efter att formularet oppnades.
+export type Orderstate = { fel?: string; ok?: string; orderId?: string; kravSkal?: boolean };
 
 
 /**
@@ -2012,8 +2015,12 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
     }
     const mejl = mejlText || null;
 
-    const skal = String(form.get("reason") ?? "").trim();
-    if (!skal) return { fel: "En rättelse kräver ett skäl. Det är det första någon frågar efter." };
+    // SKALET: saljaren skriver det, admin och superadmin behover inget
+    // (bestallaren 2026-11-13, se `rattelsensSkal`).
+    const skal = rattelsensSkal(String(form.get("reason") ?? ""), nivaFor(user.roles), user.employee!.first_name);
+    if (!skal) {
+      return { fel: "Ordern är godkänd, så rättelsen behöver ett skäl. Skriv varför den rättas.", kravSkal: true };
+    }
 
     let note = String(form.get("note") ?? "").trim() || (rad.note as string | null);
 

@@ -5,6 +5,34 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-13 · Order: skälet till en rättelse (säljaren skriver det, admin och superadmin behöver inget)
+
+**Vad:** beställaren rättade #41 Toro Relining (godkänd 16:38, Inkio-fel 16:43) och fick "En rättelse kräver ett
+skäl", utan något fält att skriva skälet i. Beställaren: "för säljare lägg till ett ställe att skriva det på men för
+admin och superadmin behövs ingen".
+
+**Orsaken:** klienten avgjorde om ordern var godkänd ur sin egen `ORDER`, och skickade `reason` bara då. Hade ordern
+godkänts sedan listan lästes (i en annan flik, i telefonen, eller av någon annan) trodde formuläret att den var
+inskickad och skickade inget skäl, medan rutten läste statusen i databasen och gick till `redigeraOrder`, som nekade.
+Provet `delar/rattelse-skal/rattelse-skal-prov.mjs` (i `~/nav2-utkast`) återskapar det mot den gamla sidan.
+
+**Lagningen:**
+
+- **Servern:** `rattelsensSkal()` i `src/lib/rattelse.ts` (ren logik, prov i `tests/rattelse.mjs`). Nivån ur `nivaFor`:
+  säljaren måste skriva skälet, admin och superadmin får "Rättad av <förnamn>." när inget skrivits. Saknas det
+  svarar `redigeraOrder` `kravSkal: true`, och `/nav2/order` skickar det vidare.
+- **Klienten:** admin och superadmin skickar Navs skäl ("Rättad i Nav 2.0: …") på varje rättelse, oavsett vad listan
+  tror; rutten släpper bara fram det till `redigeraOrder`. Säljaren får fältet "Varför rättas ordern?" ovanför Spara
+  rättelsen när ordern är godkänd, eller när servern svarar `kravSkal` (ordern godkändes under tiden).
+
+**Beslut som inte går att läsa ur koden:**
+
+- **"Admin och superadmin" är nivån, inte rollen `admin`.** Nav 2.0:s nivåer (`nivaFor`): superadmin = ceo och admin,
+  admin = säljchef, teamledare, ekonomi, projektledare och leverans. Teamledare, projektledare och leverans rättar
+  fortfarande bara kunduppgifterna på sina egna order (`farHantera` är orörd), men utan skäl.
+- **Säljaren får ingen ny Rätta-knapp på godkända order.** Kortet visar Rätta för säljaren bara på inskickade order
+  och utkast, som förut. Fältet behövs när ordern godkänts medan säljaren rättade den.
+
 ## 2026-11-13 · Möten: bokningsbladet (kunden på ett ställe, personer, källans lista, agendan; 0290)
 
 **Vad:** beställaren ville kunna lägga till fler hos kunden där kontakten står, med telefon; en riktig dropdown för
