@@ -53,13 +53,13 @@ function falskKontext({ starta = "running", resume = true } = {}) {
 console.log("\nFilerna");
 {
   const filer = readdirSync(new URL("../public/salesboard/ljud/", import.meta.url)).filter((f) => f.endsWith(".m4a")).map((f) => f.slice(0, -4)).sort();
-  ok("de tio ljuden finns som filer, och inga andra", JSON.stringify(filer) === JSON.stringify([...LJUD].sort()), filer.join(" "));
+  ok("ljuden finns som filer, och inga andra", JSON.stringify(filer) === JSON.stringify([...LJUD].sort()), filer.join(" "));
   ok("adressen ligger under /salesboard, som en parad TV når utan inloggning", ljudAdress("kassa") === "/salesboard/ljud/kassa.m4a");
   ok("licensen nämner Mixkit och Wikimedia Commons", /Mixkit Sound Effects Free License/.test(LJUD_LICENS) && /Wikimedia Commons/.test(LJUD_LICENS) && /public domain/.test(LJUD_LICENS));
   const kod = readFileSync(new URL("../src/app/salesboard/ljud.ts", import.meta.url), "utf8");
   ok("licensen står också i koden", /LICENS: ljuden kommer från Mixkit/.test(kod));
   const spar = [...orderLjud("vanlig", 18900), ...orderLjud("stor", 52800), ...orderLjud("forsta", 9800), ...serieLjud(3), ...maletLjud()];
-  ok("varje ljud i spåren är en av de tio filerna", spar.every((p) => LJUD.includes(p.ljud)), spar.map((p) => p.ljud).join(","));
+  ok("varje ljud i spåren är en av filerna", spar.every((p) => LJUD.includes(p.ljud)), spar.map((p) => p.ljud).join(","));
 }
 
 console.log("\nNormaliseringen och förstärkningen");
@@ -80,9 +80,9 @@ await (async () => {
   const motor = new Ljudmotor(() => ctx, async (id) => (hamtade.push(id), new ArrayBuffer(8)));
   ok("utan kontext finns inget ljud", motor.tillstand === "saknas");
   ok("upplåsningen går", (await motor.lasUpp()) === true && motor.tillstand === "igang");
-  ok("och läser in alla tio", motor.inlasta === 10 && hamtade.length === 10);
+  ok("och läser in alla", motor.inlasta === LJUD.length && hamtade.length === LJUD.length);
   await motor.lasUpp();
-  ok("en andra upplåsning läser inte in dem igen", hamtade.length === 10);
+  ok("en andra upplåsning läser inte in dem igen", hamtade.length === LJUD.length);
 
   motor.satt({ volym: 70, tyst: false });
   motor.spela("kassa", 10.5, { styrka: 0.5 });
@@ -126,10 +126,10 @@ await (async () => {
   const tyst = console.warn;
   console.warn = () => {};
   await motor.lasUpp();
-  ok("en fil som inte går att läsa hoppas över", motor.inlasta === 9);
+  ok("en fil som inte går att läsa hoppas över", motor.inlasta === LJUD.length - 1);
   await motor.lasUpp();
   console.warn = tyst;
-  ok("och läses vid nästa upplåsning", motor.inlasta === 10 && forsok === 11, String(forsok));
+  ok("och läses vid nästa upplåsning", motor.inlasta === LJUD.length && forsok === LJUD.length + 1, String(forsok));
 })();
 
 console.log(fel ? `\n\x1b[31m${fel} fel\x1b[0m` : "\n\x1b[32mallt gick igenom\x1b[0m");

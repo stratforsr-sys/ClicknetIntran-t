@@ -10,7 +10,7 @@
  * styr checklistor och utskick. Behorigheten i utkastet raknas fram ur den:
  *   superadmin — ceo, admin
  *   admin      — sales_manager, team_lead, finance, project_manager, delivery
- *   saljare    — salesperson
+ *   saljare    — salesperson, meeting_booker (mötesbokaren, 2026-11-13)
  * Leverans ar admin tills vidare (beslut 2026-10-14). Den hogsta vinner.
  * ===========================================================================
  */
@@ -26,6 +26,7 @@ const NIVA_FRAN: Record<string, Niva> = {
   project_manager: "admin",
   delivery: "admin",
   salesperson: "salesperson",
+  meeting_booker: "salesperson",
 };
 const ORDNING: Niva[] = ["salesperson", "admin", "superadmin"];
 

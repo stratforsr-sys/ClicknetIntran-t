@@ -22,18 +22,42 @@
  *
  * LICENS: ljuden kommer från Mixkit (Mixkit Sound Effects Free License,
  * https://mixkit.co/license/#sfxFree), utom kassaapparaten, som är en inspelning
- * från Wikimedia Commons i public domain. Licensen står också på
- * inställningssidan (`LJUD_LICENS`).
+ * från Wikimedia Commons i public domain. Mötenas två små ljud (pling, ton) är
+ * syntetiserade för tavlan, och de tre stora (valkommen, ackord, klang) är genererade
+ * med ElevenLabs Music via Higgsfield, i C-dur så att de stämmer med tonstegen före.
+ * Licensen står också på inställningssidan (`LJUD_LICENS`).
  */
 
-/** De tio ljuden, i den ordning de läses in. Filerna ligger i public/salesboard/ljud. */
-export const LJUD = ["kassa", "svisch", "horn", "trumvirvel", "small", "trumpeter", "publik", "pengar", "fanfar", "arena"] as const;
+/**
+ * Ljuden, i den ordning de läses in. Filerna ligger i public/salesboard/ljud. De tio
+ * första är inspelningar; de fem sista är mötenas: anslag, klockor och ackord i C-dur
+ * som inte låter som något orderljud, så att rummet hör skillnad på ett möte och en
+ * order utan att titta. Pling och ton är syntetiserade; valkommen, ackord och klang är
+ * genererade med ElevenLabs Music via Higgsfield.
+ */
+export const LJUD = [
+  "kassa",
+  "svisch",
+  "horn",
+  "trumvirvel",
+  "small",
+  "trumpeter",
+  "publik",
+  "pengar",
+  "fanfar",
+  "arena",
+  "pling",
+  "ton",
+  "valkommen",
+  "ackord",
+  "klang",
+] as const;
 
 export type LjudId = (typeof LJUD)[number];
 
 /** Licensen, som den står på inställningssidan. */
 export const LJUD_LICENS =
-  "Ljuden kommer från Mixkit (Mixkit Sound Effects Free License), utom kassaapparaten, som är en inspelning från Wikimedia Commons i public domain.";
+  "Ljuden kommer från Mixkit (Mixkit Sound Effects Free License), utom kassaapparaten, som är en inspelning från Wikimedia Commons i public domain, och mötenas ljud: tonerna är syntetiserade för tavlan, och de tre stora (första mötet, fem och tio) är genererade med ElevenLabs Music via Higgsfield.";
 
 /** Adressen till ett ljud. Under /salesboard, så att en parad TV utan inloggning når det. */
 export const ljudAdress = (id: LjudId): string => `/salesboard/ljud/${id}.m4a`;
@@ -51,6 +75,8 @@ export const ljudAdress = (id: LjudId): string => `/salesboard/ljud/${id}.m4a`;
  */
 export type Ljudparametrar = {
   styrka?: number;
+  /** Uppspelningstakten, 1 som standard: 2 är en oktav upp. Mötenas skala stämmer en ton (`ton`) med den. */
+  takt?: number;
   fran?: number;
   kurva?: readonly (readonly [number, number])[];
   tona?: readonly [number, number];
@@ -222,6 +248,8 @@ export class Ljudmotor {
     try {
       kalla = ctx.createBufferSource();
       kalla.buffer = ljud.buffer;
+      const takt = klamp(andligt(p.takt, 1), 0.25, 4);
+      if (takt !== 1) kalla.playbackRate.value = takt;
       gain = ctx.createGain();
       for (const s of gainplan(t, ljud.norm * klamp(andligt(p.styrka, 1), 0, 1.5), p)) {
         if (s.typ === "satt") gain.gain.setValueAtTime(s.v, s.t);

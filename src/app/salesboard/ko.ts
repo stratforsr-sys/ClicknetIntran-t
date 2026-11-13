@@ -20,15 +20,18 @@
  * ===========================================================================
  */
 
-import { arDoldPa, samla, variantFor, type Firande, type Tagg } from "../../lib/salesboard/regler.ts";
+import { arDoldPa, samla, variantFor, type Firande, type Motesniva, type Tagg } from "../../lib/salesboard/regler.ts";
 import { iOrder, lopp, ordOrder, snittorder, type Lopp } from "../../lib/salesboard/tavling.ts";
-import type { Ogonblick, Ordning, TavleOrder, TavlePerson, TavleTavling, TavleVinnare } from "../../lib/salesboard/typer.ts";
+import type { Ogonblick, Ordning, TavleMoten, TavleOrder, TavlePerson, TavleTavling, TavleVinnare } from "../../lib/salesboard/typer.ts";
 import { ip, SVEP } from "./motion/kurvor.ts";
 import {
   HALVVAGS,
   SERIE_MAX,
   knuffLjud,
   knuffTider,
+  moteLandar,
+  moteLjud,
+  moteTider,
   tavlingTider,
   vinnareLjud,
   vinnareTider,
@@ -86,6 +89,11 @@ export function nycklarFor(f: Firande): string[] {
   return [];
 }
 
+/** Mötesnycklarna ett firande landar med: det spelade mötet och de som kom samtidigt från samma bokare. */
+export function motesnycklarFor(f: Firande): string[] {
+  return f.typ === "mote" ? f.nycklar : [];
+}
+
 /**
  * Samlar om kön som helhet med `samla`, så att tre order som väntar blir en serie
  * och ingen står i kö längre än en serie tar. Varje firande behåller sin bild; en
@@ -136,6 +144,8 @@ export function aktuell(post: Kopost, senaste: Ogonblick): Kopost | null {
     }
     return { firande: { typ: "serie", order: kvar }, efter: post.efter };
   }
+  // Ett möte som raderats medan det väntade firas inte.
+  if (f.typ === "mote") return (senaste.moten?.lista ?? []).some((m) => m.nyckel === f.mote.nyckel) ? post : null;
   if (f.typ === "malet") return vidMal(senaste, 1) ? post : null;
   if (f.typ === "halvvags") return vidMal(senaste, 0.5) ? post : null;
   // Tävlingen: brytaren av tar bort allt som väntar, och en knuff eller gräns som inte längre
@@ -223,6 +233,14 @@ const platsI = (tal: Siffror, person: string, ordning: Ordning): number | null =
 // -----------------------------------------------------------------------------
 // Förloppet: vad ett firande spelar
 // -----------------------------------------------------------------------------
+
+/** Testerna för mötena: nivån och bokarens antal i dag. */
+const TESTMOTEN: Partial<Record<string, [Motesniva, number]>> = {
+  mote: ["vanlig", 3],
+  moteForsta: ["forsta", 1],
+  moteFem: ["fem", 5],
+  moteTio: ["tio", 10],
+};
 
 /** Påhittade säljare för testhändelser: de räknas aldrig och märks TEST. */
 export const TESTPERSONER: readonly TavlePerson[] = [
@@ -327,7 +345,21 @@ export type Forloppsdata =
       plats: number;
       tid: string;
     }
-  | { typ: "vinnare"; vinnare: TavleVinnare; namn: string[] };
+  | { typ: "vinnare"; vinnare: TavleVinnare; namn: string[] }
+  | {
+      typ: "mote";
+      niva: Motesniva;
+      person: TavlePerson;
+      /** När det senaste mötet bokades, ISO. */
+      tid: string;
+      /** Bokarens möten i dag efter firandet (0 för en dold säljare), och hur många som kom nu. */
+      antal: number;
+      nya: number;
+      /** Lagets möten i dag och i månaden, efter firandet. */
+      lag: { idag: number; manad: number };
+      /** "november". */
+      manad: string;
+    };
 
 export type Forlopp = {
   data: Forloppsdata;
@@ -339,6 +371,8 @@ export type Forlopp = {
   efter: Ogonblick;
   /** Order som landar i förloppet. */
   nycklar: string[];
+  /** Möten som landar i förloppet, i mötesbokarnas lista. */
+  moten?: string[];
 };
 
 const lagUr = (t: Siffror) => ({ varde: t.lag.varde, antal: t.lag.antal });
@@ -370,13 +404,55 @@ export function forlopp(
     f.typ === "test"
       ? f.testtyp === "serie" || f.testtyp === "malet" || f.testtyp === "tavling" || f.testtyp === "knuff" || f.testtyp === "grans"
         ? f.testtyp
-        : "order"
+        : TESTMOTEN[f.testtyp]
+          ? "mote"
+          : "order"
       : f.typ;
   const bas = { test, fore, efter };
   const steg = (till: Lagsteg["till"]): Lagsteg => ({ fran: lagUr(foreTal), till, mal });
 
   if (typ === "halvvags") {
     return { ...bas, data: { typ: "halvvags" }, tider: { byt: 0, slut: HALVVAGS }, varaktighet: HALVVAGS, spar: [], nycklar: [] };
+  }
+
+  // --- Mötena -----------------------------------------------------------------------
+  // Talen är de som syns i mötesbokarnas lista när firandet landat: den senaste bildens,
+  // utan de möten som väntar efter det här. Testen spelar en påhittad bokare.
+  if (typ === "mote") {
+    const vantarMoten = new Set(o.vantande.flatMap((p) => motesnycklarFor(p.firande)));
+    let data: Extract<Forloppsdata, { typ: "mote" }>;
+    let moten: string[] = [];
+    if (f.typ === "mote") {
+      const tal = motestal(efter.moten ?? null, vantarMoten);
+      const person = efter.personer[f.mote.person] ?? DOLD;
+      const dold = person.dold !== false || f.niva === "lag";
+      data = {
+        typ: "mote",
+        niva: dold ? "lag" : f.niva,
+        person,
+        tid: f.mote.tid,
+        antal: dold ? 0 : f.antal,
+        nya: f.nya,
+        lag: { idag: tal?.idag ?? 0, manad: tal?.manad ?? 0 },
+        manad,
+      };
+      moten = f.nycklar;
+    } else {
+      const [niva, antal] = TESTMOTEN[f.typ === "test" ? f.testtyp : "mote"] ?? ["vanlig", 3];
+      const tal = motestal(fore.moten ?? null, vantarMoten);
+      data = {
+        typ: "mote",
+        niva,
+        person: TESTPERSONER[0],
+        tid: o.nuIso,
+        antal,
+        nya: 1,
+        lag: { idag: (tal?.idag ?? 0) + 1, manad: (tal?.manad ?? 0) + 1 },
+        manad,
+      };
+    }
+    const tider = moteTider(data.niva);
+    return { ...bas, data, tider, varaktighet: tider.slut, spar: moteLjud(data.niva, data.antal), nycklar: [], moten };
   }
 
   // --- Tävlingen ----------------------------------------------------------------
@@ -569,6 +645,8 @@ export type Visning = {
   dolda: ReadonlySet<string>;
   /** Halvvägs i målkortet: bildrutan i dess förlopp, eller null. */
   halvvags: number | null;
+  /** Mötesbokarnas lista: den senaste bildens möten utan de som väntar på sitt firande, eller null utan möten. */
+  moten: Motestal | null;
 };
 
 const TOM: ReadonlySet<string> = new Set();
@@ -577,21 +655,27 @@ const TOM: ReadonlySet<string> = new Set();
  * Vad tavlan visar vid bildrutan `r` i förloppet `spel` (null i vila). `vantande` är
  * kön och det som samlas.
  */
-export function visning(o: { visad: Ogonblick; vantande: readonly Kopost[]; spel: Forlopp | null; r: number }): Visning {
+export function visning(o: { visad: Ogonblick; vantande: readonly Kopost[]; spel: Forlopp | null; r: number; senaste?: Ogonblick }): Visning {
   const utesluten = new Set(o.vantande.flatMap((p) => nycklarFor(p.firande)));
   const spel = o.spel;
-  if (!spel || spel.test || spel.data.typ === "malet" || spel.data.typ === "halvvags" || arTavlingsscen(spel.data.typ)) {
+  // Mötena följer den senaste bilden, utan dem som väntar och utan det som spelas tills dess block landat.
+  const motenUte = new Set(o.vantande.flatMap((p) => motesnycklarFor(p.firande)));
+  if (spel && !spel.test && spel.data.typ === "mote" && o.r < moteLandar(spel.data.niva)) for (const k of spel.moten ?? []) motenUte.add(k);
+  const motesbild = o.senaste ?? o.visad;
+  const moten = motestal(motesbild.moten ?? null, motenUte, motesbild.personer);
+  if (!spel || spel.test || spel.data.typ === "malet" || spel.data.typ === "halvvags" || spel.data.typ === "mote" || arTavlingsscen(spel.data.typ)) {
     return {
       bild: o.visad,
       tal: siffror(o.visad, utesluten),
       utesluten,
       dolda: TOM,
       halvvags: spel?.data.typ === "halvvags" ? o.r : null,
+      moten,
     };
   }
   const egna = new Set(spel.nycklar);
   if (o.r < spel.tider.byt) {
-    return { bild: spel.fore, tal: siffror(spel.fore, new Set([...utesluten, ...egna])), utesluten: new Set([...utesluten, ...egna]), dolda: TOM, halvvags: null };
+    return { bild: spel.fore, tal: siffror(spel.fore, new Set([...utesluten, ...egna])), utesluten: new Set([...utesluten, ...egna]), dolda: TOM, halvvags: null, moten };
   }
   const storsta = siffror(spel.fore, new Set([...utesluten, ...egna])).lag.storsta;
   return {
@@ -600,7 +684,35 @@ export function visning(o: { visad: Ogonblick; vantande: readonly Kopost[]; spel
     utesluten,
     dolda: o.r < spel.varaktighet ? egna : TOM,
     halvvags: null,
+    moten,
   };
+}
+
+/** Mötesbokarnas lista som tavlan visar den: lagets tal och en rad per bokare, med personen ur samma bild. */
+export type Motestal = { idag: number; manad: number; rader: { person: string; vem: TavlePerson; idag: number; manad: number }[] };
+
+/**
+ * Talen i mötesbokarnas lista utan de möten som väntar (`ute`): ett möte syns inte
+ * förrän dess firande landat, som orderna. Dagens möten hör alla till månaden.
+ * Raderna i ordning: flest i dag, sedan flest i månaden, sedan nyckeln.
+ */
+export function motestal(m: TavleMoten | null, ute: ReadonlySet<string>, personer: Record<string, TavlePerson> = {}): Motestal | null {
+  if (!m) return null;
+  const rader = m.bokare.map((b) => ({ person: b.person, vem: personer[b.person] ?? DOLD, idag: b.idag, manad: b.manad }));
+  let idag = m.idag;
+  let manad = m.manad;
+  for (const x of m.lista) {
+    if (!ute.has(x.nyckel)) continue;
+    idag = Math.max(0, idag - 1);
+    manad = Math.max(0, manad - 1);
+    const rad = rader.find((r) => r.person === x.person);
+    if (rad) {
+      rad.idag = Math.max(0, rad.idag - 1);
+      rad.manad = Math.max(0, rad.manad - 1);
+    }
+  }
+  rader.sort((a, b) => b.idag - a.idag || b.manad - a.manad || (a.person < b.person ? -1 : a.person > b.person ? 1 : 0));
+  return { idag, manad, rader };
 }
 
 /**

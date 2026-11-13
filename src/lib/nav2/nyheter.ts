@@ -46,6 +46,7 @@ const ROLLNAMN: Record<string, string> = {
   ceo: "VD",
   team_lead: "Teamledare",
   salesperson: "Säljare",
+  meeting_booker: "Mötesbokare",
   finance: "Ekonomi",
   project_manager: "Projektledare",
   delivery: "Leverans",

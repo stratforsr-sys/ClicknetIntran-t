@@ -14,6 +14,7 @@ import {
   type RaTavleVal,
   type Tavlestatistik,
 } from "@/lib/salesboard/forma";
+import { forstaKandidater, motesfonsterFran, type RaMote } from "@/lib/salesboard/moten";
 import { nyckelFor } from "@/lib/salesboard/nyckel";
 import { ANSTALLDKOLUMNER } from "@/lib/salesboard/skrivning";
 import { lasningen, personvalen, saknasAn, varnaEnGang } from "@/lib/salesboard/saknas";
@@ -64,12 +65,66 @@ const ORDERKOLUMNER =
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * Kolumnerna tavlan läser ur `mote`, med kedjans bolag. Bolagets namn, telefon och
+ * domän läses bara för att känna igen samma bolag (`moten.ts`) och lämnar aldrig
+ * servern: bilden bär nycklar, bokaren och tiden.
+ */
+const MOTESKOLUMNER = "id, bokat_av, bokat_nar, art, kedja:mote_kedja!inner(bolag_id, bolag:mote_bolag(namn, telefon, doman))";
+
+/** PostgREST svarar med högst så många rader per fråga. */
+const SIDA = 1_000;
+
 /** Bygget som svarar. Ett nytt värde får tavlan att ladda om (spec §8). */
 const BYGGE = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? "lokal";
 
 /** En läsning som tavlan inte klarar sig utan gick fel. */
 function las(vad: string, fel: { code?: string; message?: string } | null | undefined): never {
   throw new Error(`Säljtavlan: ${vad} gick inte att läsa: ${fel?.code ?? ""} ${fel?.message ?? "okänt fel"}`);
+}
+
+/**
+ * De bokade mötena från `fran`, sida för sida, och vilka av dagens nya bokare som
+ * bokat något före dem (för "första mötet någonsin").
+ *
+ * ===========================================================================
+ * MÖTENA FÄLLER ALDRIG TAVLAN.
+ *
+ * Ett fel här ger null: tavlan visar då inga möten men order, mål och tävling
+ * som vanligt. Orderna är tavlans kärna och ska inte gå ner för en tabell som
+ * hör till en annan modul. Felet sägs en gång i loggen.
+ * ===========================================================================
+ */
+async function lasMoten(db: ReturnType<typeof supabaseAdmin>, fran: string, idag: string): Promise<{ rader: RaMote[]; tidigare: string[] } | null> {
+  try {
+    const rader: RaMote[] = [];
+    for (let sida = 0; sida < 20; sida++) {
+      const { data, error } = await db
+        .from("mote")
+        .select(MOTESKOLUMNER)
+        .gte("bokat_nar", fran)
+        .order("bokat_nar", { ascending: true })
+        .order("id", { ascending: true })
+        .range(sida * SIDA, sida * SIDA + SIDA - 1);
+      if (error) throw new Error(`${error.code ?? ""} ${error.message ?? ""}`);
+      const del = (data ?? []) as unknown as RaMote[];
+      rader.push(...del);
+      if (del.length < SIDA) break;
+    }
+    const nya = forstaKandidater(rader, idag);
+    const tidigare = new Set<string>();
+    await Promise.all(
+      nya.map(async (id) => {
+        const { data, error } = await db.from("mote").select("id").eq("bokat_av", id).lt("bokat_nar", fran).limit(1);
+        if (error) throw new Error(`${error.code ?? ""} ${error.message ?? ""}`);
+        if ((data ?? []).length > 0) tidigare.add(id);
+      }),
+    );
+    return { rader, tidigare: [...tidigare] };
+  } catch (e) {
+    varnaEnGang("moten", `Säljtavlan: mötena gick inte att läsa, tavlan visar dem inte: ${e instanceof Error ? e.message : String(e)}`);
+    return null;
+  }
 }
 
 /**
@@ -103,7 +158,7 @@ async function bygg(nu: Date): Promise<Ogonblick> {
   // de tusen rader som API:t kapar vid.
   // Förra månadens order läses bara första arbetsdagen efter en tävling, för vinnaren.
   const forraManad = vinnarensManad(installningar, nu);
-  const [lagSvar, forstaPersonSvar, valSvar, paketSvar, manadSvar, senasteSvar, forstaStatistikSvar, handelseSvar, forraSvar] =
+  const [lagSvar, forstaPersonSvar, valSvar, paketSvar, manadSvar, senasteSvar, forstaStatistikSvar, handelseSvar, forraSvar, moten] =
     await Promise.all([
       lagId ? db.from("team").select("id, name").eq("id", lagId).maybeSingle() : null,
       anstallda(lagId),
@@ -126,6 +181,7 @@ async function bygg(nu: Date): Promise<Ogonblick> {
       forraManad
         ? db.from("sales_order").select(ORDERKOLUMNER).or(`period_month.eq.${forraManad},cancel_period_month.eq.${forraManad}`)
         : null,
+      lasMoten(db, motesfonsterFran(fonster.manad), fonster.idag),
     ]);
 
   if (lagSvar?.error) las("laget", lagSvar.error);
@@ -181,6 +237,7 @@ async function bygg(nu: Date): Promise<Ogonblick> {
       statistik: tal,
       handelser: (handelseLas === "svar" ? (handelseSvar.data ?? []) : []) as unknown as RaTavleHandelse[],
       forraManadens: (forraSvar?.data ?? []) as unknown as RaTavleOrder[],
+      moten,
       nyckel: nyckelFor,
     },
     installningar,

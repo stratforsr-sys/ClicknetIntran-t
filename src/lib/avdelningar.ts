@@ -53,6 +53,7 @@ const ROLLENS_AVDELNING: Record<Role, AvdelningId | null> = {
   ceo: null,
   team_lead: "forsaljning",
   salesperson: "forsaljning",
+  meeting_booker: "forsaljning",
   finance: "ekonomi",
   project_manager: "leverans",
   delivery: "leverans",

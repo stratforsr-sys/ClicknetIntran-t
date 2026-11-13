@@ -7767,6 +7767,7 @@ body.nd-riktig :is(.pv-lagrad,.arow[data-agenda],.pv-tab tbody tr[data-pvupers],
 .sb-farg{width:8px;height:8px;border-radius:50%;flex:none}
 .sb-mint{background:var(--brand)}
 .sb-barnsten{background:var(--warn)}
+.sb-ljung{background:#C4A3E8;border-radius:2px}
 .prf-summa+.sb-rad{border-top:0}
 @media (max-width:640px){.sb-para>.prf-f:first-child,.sb-para>.prf-f:nth-child(2){max-width:none}
   /* Texten får hela raden; valen, knapparna och brytaren lägger sig under den. */
@@ -18626,7 +18627,7 @@ FEAT.push(
    och regler som mejlar den som ska sätta upp ett konto, med påminnelse och
    eskalering till chefen när något glöms.
    ===================================================================== */
-const AEROLL = {salesperson:'Säljare', team_lead:'Teamledare', sales_manager:'Säljchef', ceo:'VD', finance:'Ekonomi', project_manager:'Projektledare', delivery:'Leverans', admin:'Administratör'};
+const AEROLL = {salesperson:'Säljare', meeting_booker:'Mötesbokare', team_lead:'Teamledare', sales_manager:'Säljchef', ceo:'VD', finance:'Ekonomi', project_manager:'Projektledare', delivery:'Leverans', admin:'Administratör'};
 const AEMFA = ['sales_manager', 'ceo', 'finance', 'admin'];  // MFA_REQUIRED_ROLES i roles.ts
 const AEFORM = {probation:'Tillsvidare med provanställning', permanent:'Tillsvidare', consultant:'Konsult', intern:'Praktikant'};
 const AESTATUS = {onboarding:['Onboarding', 't-warn'], active:['Aktiv', 't-ok'], offboarded:['Avslutad', 't-neutral']};
@@ -25133,9 +25134,9 @@ const BRHNIVA = {
   superadmin:{l:'Superadmin', k:'Äger pengarna, behörigheterna och det som inte går att ångra.'}
 };
 const BRHORDNING = ['salesperson', 'admin', 'superadmin'];
-// Befattningen i repot (åtta roller) ger behörigheten tills någon ändrar den.
+// Befattningen i repot (nio roller) ger behörigheten tills någon ändrar den.
 // Leverans är admin tills vidare (beställaren 2026-10-14).
-const BRHFRAN = {ceo:'superadmin', admin:'superadmin', sales_manager:'admin', team_lead:'admin', finance:'admin', project_manager:'admin', delivery:'admin', salesperson:'salesperson'};
+const BRHFRAN = {ceo:'superadmin', admin:'superadmin', sales_manager:'admin', team_lead:'admin', finance:'admin', project_manager:'admin', delivery:'admin', salesperson:'salesperson', meeting_booker:'salesperson'};
 // Vad varje behörighet får göra. `inf` = infört i utkastet, annars ett förslag.
 const BRHMATRIS = [
   ['Sitt eget arbete', 'Stämpla, uppgifter, order, provision, frånvaro, ärenden, utbildning', [1, 1, 1], true],
@@ -25613,7 +25614,7 @@ function brhKort(){
       ${BRHMATRIS.map(([t, h, v, inf]) => `<div role="row" class="brh-tr"><span role="rowheader"><b>${esc(t)}</b><small>${esc(h)}${inf ? '' : ' · <em>förslag</em>'}</small></span>${v.map((x, i) => `<span role="cell" class="brh-c">${x ? `${I('check')}<span class="prf-sr">Ja</span>` : `<i aria-hidden="true"></i><span class="prf-sr">Nej</span>`}</span>`).join('')}</div>`).join('')}
     </div>
     <p class="prf-hj">Admin driver verksamheten. Superadmin äger pengarna, behörigheterna och det som inte går att ångra. Nav prövar varje rad på servern.</p>
-    <details class="brh-fran"><summary>Så blir repots åtta roller tre</summary><ul>${Object.entries(BRHFRAN).map(([r, n]) => `<li><span>${esc(AEROLL[r] || r)}</span>${I('arrow')}<b>${BRHNIVA[n].l}</b></li>`).join('')}</ul><p class="prf-hj">Leverans är admin tills vidare. Ändras per person i Anställda.</p></details>
+    <details class="brh-fran"><summary>Så blir repots nio roller tre</summary><ul>${Object.entries(BRHFRAN).map(([r, n]) => `<li><span>${esc(AEROLL[r] || r)}</span>${I('arrow')}<b>${BRHNIVA[n].l}</b></li>`).join('')}</ul><p class="prf-hj">Leverans är admin tills vidare. Ändras per person i Anställda.</p></details>
   </div>`);
 }
 function satsAdmRad(){
@@ -33955,7 +33956,8 @@ function sbSaljarKort(i){
 
 /* ---------- Testa tavlan ---------- */
 const SBTEST = [['order', 'Ny order', 'mint'], ['stor', 'Stor affär', 'barnsten'], ['forsta', 'Första ordern', 'mint'], ['serie', 'Tre order', 'mint'], ['malet', 'Målet nått', 'mint'],
-  ['tavling', 'Tävlingen', 'barnsten'], ['knuff', 'Knuffen', 'mint'], ['grans', 'Gränsen', 'barnsten']];
+  ['tavling', 'Tävlingen', 'barnsten'], ['knuff', 'Knuffen', 'mint'], ['grans', 'Gränsen', 'barnsten'],
+  ['mote', 'Nytt möte', 'ljung'], ['moteForsta', 'Första mötet', 'ljung'], ['moteFem', 'Fem möten', 'ljung'], ['moteTio', 'Tio möten', 'ljung']];
 function sbTestKort(nu){
   const d = sbOk(), s = sbSt(), anslutna = sbSkarmar().filter(x => sbAnsluten(x, nu)).length;
   const besk = 'Ett påhittat ögonblick på alla skärmar, märkt TEST. Det räknas aldrig.', oppna = `<a class="btn btn-s btn-sm" href="/salesboard" target="_blank" rel="noopener">Öppna tavlan ${I('arrow')}</a>`;

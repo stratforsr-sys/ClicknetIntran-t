@@ -14,6 +14,20 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "saljtavlan-firar-moten",
+    rubrik: "Säljtavlan firar bokade möten",
+    ingress: "Ett bokat möte syns på kontorets tv med namnet och dagens rad, och det första, det femte och det tionde på en dag firas större.",
+    text: `När ett möte bokas i **Möten** syns det på säljtavlan, i en egen färg och med egna ljud, så att ingen
+blandar ihop det med en order. Ett möte till glider in i en remsa i nederkanten med bokarens namn och **dagens
+rad**: tio platser, ett block per möte. Dagens första möte, och ditt första möte någonsin, tar hela skärmen. Vid
+fem möten på en dag sluts raden till en balk, och vid det tionde fyller färgen hela tv:n. Ett möte med en kund
+som redan haft ett möte de senaste 90 dagarna räknas inte, så en ombokning firas aldrig två gånger. Under
+topplistan står **Möten** med varje mötesbokares rad för dagen och månadens antal.`,
+    datum: "2026-11-13",
+    roller: [],
+    href: "/salesboard",
+  },
+  {
     slug: "att-gora-knappen-minns-ringen",
     rubrik: "Att göra-knappen står kvar som du lämnade den",
     ingress: "Trycker du ner knappen till en ring är den en ring nästa gång också, även efter att du loggat ut och in. Öppnar du den igen står den kvar öppen.",
