@@ -14,6 +14,17 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "rattelse-skal-bara-for-saljare",
+    rubrik: "Rätta en godkänd order: skälet skrivs där du sparar",
+    ingress: "Säljare skriver varför ordern rättas i ett fält ovanför Spara rättelsen. Admin och superadmin behöver inget skäl.",
+    text: `När en säljare rättar en godkänd order står fältet **Varför rättas ordern?** ovanför **Spara rättelsen**, och
+skälet hamnar i orderns historik. Godkändes ordern medan formuläret var öppet kommer fältet fram när du sparar, så
+du kan skriva skälet och spara igen. Admin och superadmin får inget fält. Nav skriver själv vad som ändrades.`,
+    datum: "2026-11-13",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "klockan-bara-det-du-inte-sett",
     rubrik: "Klockan visar bara det du inte sett",
     ingress: "Det du öppnar försvinner ur klockan, och Rensa alla tömmer den. Allt går att ångra, och det du rensar står kvar i vyerna.",

@@ -28845,6 +28845,7 @@ async function ndOrdSkicka(utkast){
   const n = S.ordNy; if (!n) return;
   const godkandRatta = !!(n.ratta && ORDER.some(x => x.nr === n.ratta && ['signerad', 'betald'].includes(x.st)));
   if (!utkast){ const fel = onFel(n); if (godkandRatta){ delete fel['avtal']; delete fel['samtal']; } if (Object.keys(fel).filter(k => k !== 'mejl').length){ Object.keys(fel).forEach(k => S.ordRor.add(k)); ordUppdatera(); document.querySelector(`[data-onga="${Object.keys(fel)[0]}"]`)?.click(); toast(`${Object.keys(fel).length} saker saknas. De står i rött.`); return; } }
+  if (ndRattSkalVisa(n) && !(n.skal || '').trim()){ ndRattSkalFram(n, 'Skriv varför ordern rättas.'); return; }
   const falt = ndOrdFalt(n), ratta = n.ratta ? ORDER.find(x => x.nr === n.ratta) : null;
   if (S.role === 'chef' && !utkast && !ratta) falt.godkann = 'on';
   // Avtalet laddas upp först. En ny order kräver det; en rättad får det som bilaga. En ny order har oftast
@@ -28859,8 +28860,10 @@ async function ndOrdSkicka(utkast){
     if (ratta){ const r = await ndOrdPost('bilaga-registrera', {id:ratta.id, fil:p.fileId, filnamn:ndOrdAvtalFil.name, store:p.store}, {ladda:false, tyst:true}); if (!r.ok){ ndSkrivFel(r, 'Avtalet gick inte att spara.'); return; } }
     else { falt.avtal_fil_id = p.fileId; falt.avtal_store = p.store; falt.avtal_filnamn = ndOrdAvtalFil.name; }
   }
-  // En godkänd order (D10): redigeraOrder kräver ett skäl. Formuläret har inget skälfält, så ändringarna är skälet.
-  if (ratta && ['signerad', 'betald'].includes(ratta.st)){ const ch = o7Diff(ratta, n); falt.reason = `Rättad i Nav 2.0${ch.length ? ': ' + ch.join(', ') : ''}.`; }
+  // Skälet till en rättelse (beställaren 2026-11-13). Säljaren skriver det i fältet ovanför Spara rättelsen; admin och
+  // superadmin skriver inget, och då är ändringarna skälet. Det följer med varje rättelse, för ordern kan ha godkänts
+  // sedan listan lästes. Rutten släpper bara fram det till redigeraOrder (FALT.rattaGodkand).
+  if (ratta){ const egen = (n.skal || '').trim(); if (egen) falt.reason = egen; else if (!ndRattSalj()){ const ch = o7Diff(ratta, n); falt.reason = `Rättad i Nav 2.0${ch.length ? ': ' + ch.join(', ') : ''}.`; } }
   // Säljsamtalet kopplas INNAN ordern skickas in, för spärren prövar det där (2026-10-31). Förut kopplades det
   // efteråt, och då nekade spärren först: valet hjälpte bara när numret redan stämde. En ny order tar samtalet
   // med sig (samtal_id), och servern prövar det innan något sparas, så ett nej lämnar inget utkast efter sig.
@@ -28871,6 +28874,7 @@ async function ndOrdSkicka(utkast){
   let s;
   if (ratta){
     s = await ndOrdPost('ratta', {id:ratta.id, falt}, {ladda:false, tyst:true});
+    if (!s.ok && s.kravSkal){ n.skalKrav = true; ndRattSkalFram(n, 'Ordern har godkänts sedan du öppnade den. Skriv varför den rättas.'); return; }
     if (s.ok && !(await koppla(ratta.id))) return;
     if (s.ok && !(await utanPa(ratta.id))) return;
     if (s.ok && ratta.st === 'utkast' && !utkast) s = await ndOrdPost('skicka-in', {id:ratta.id}, {ladda:false, tyst:true});
@@ -28884,6 +28888,26 @@ async function ndOrdSkicka(utkast){
   try { localStorage.removeItem('nav2-ordutkast'); } catch(_){}
   toast(s.ok); S.ordNy = null; ndOrdAvtalFil = null; S.ndForlang = null; ndOmlas('ord');
 }
+/* ---------- Skälet till en rättelse (beställaren 2026-11-13) ----------
+   ”För säljare lägg till ett ställe att skriva det på, men för admin och superadmin behövs ingen.” En godkänd order
+   rättas med ett skäl (redigeraOrder, rattelsensSkal). Säljaren får fältet ovanför Spara rättelsen när ordern är
+   godkänd, eller när servern svarar kravSkal: ordern godkändes efter att listan lästes, och förut kom då bara
+   beskedet om skälet, utan någonstans att skriva det. Admin och superadmin får inget fält. Ber servern om ett skäl
+   ritas fältet ändå, vem som än sparar: ett besked om skälet utan fältet var just felet. */
+const ndRattSalj = () => !!(ND && ND.jag && ND.jag.niva === 'salesperson');
+const ndRattSkalVisa = n => !!(ndO() && n && n.ratta && (n.skalKrav || (ndRattSalj() && ORDER.some(x => x.nr === n.ratta && ['signerad', 'betald'].includes(x.st)))));
+function ndRattSkalFram(n, text){
+  S.ordRor.add('skal'); ordUppdatera(); toast(text);
+  setTimeout(() => { const f = document.getElementById('on-skal'); if (f){ f.scrollIntoView({block:'center'}); f.focus({preventScroll:true}); } }, 30);
+}
+const _ndSkalOrdFormular = ordFormular;
+ordFormular = function(){
+  const h = _ndSkalOrdFormular(), n = S.ordNy;
+  if (!ndRattSkalVisa(n)) return h;
+  const fel = S.ordRor.has('skal') && !(n.skal || '').trim();
+  const f = `<div class="onf ${fel ? 'err' : ''}" data-onf="skal"><label for="on-skal">Varför rättas ordern?</label><textarea id="on-skal" class="uin" data-on="skal" rows="2" maxlength="500" placeholder="Till exempel: kundens telefonnummer var fel." ${fel ? 'aria-invalid="true" aria-describedby="onf-skal"' : ''}>${esc(n.skal || '')}</textarea><small class="muted onhj">Ordern är godkänd, så du rättar kunduppgifterna. Skälet står i orderns historik.</small>${fel ? `<p class="onfel" id="onf-skal" role="alert">${I('fel')}Skriv varför ordern rättas.</p>` : ''}</div>`;
+  return h.replace('<div class="onknapp">', `${f}<div class="onknapp">`);
+};
 // D10 (granskningen S08): Rätta på en godkänd order, för säljchef, VD och ekonomi, på samma plats och i samma stil
 // som på en inskickad. Beställarens ja 2026-10-23 (B12). Det frysta priset och en handsatt provision står kvar (S10b).
 const NDORD_RATTA_GODKAND = true;

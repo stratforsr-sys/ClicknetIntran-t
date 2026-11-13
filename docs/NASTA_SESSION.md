@@ -7,6 +7,18 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 
 ---
 
+## ORDER: SKÄLET TILL EN RÄTTELSE (2026-11-13): grenen `rattelse-skal`, EJ MERGAD, ingen migration
+
+Beställaren fick "En rättelse kräver ett skäl" på #41 Toro Relining utan något fält att skriva i. Orsaken: klienten
+avgjorde "godkänd" ur sin egen orderlista, så en order som godkänts sedan listan lästes fick inget skäl med sig.
+Nu: admin och superadmin behöver inget skäl (Nav skriver vad som ändrades, servern "Rättad av <förnamn>."), och säljaren
+får fältet "Varför rättas ordern?" ovanför Spara rättelsen, även när servern svarar `kravSkal`. Se ARBETSLOGG.
+
+- **Prov:** `tests/rattelse.mjs` (skälsregeln) och repots övriga prov gröna (utom `rls.mjs`, som rör produktionen).
+  Hårdprovet: `~/nav2-utkast/delar/rattelse-skal/server/prov.mjs` (riktiga rutten + `redigeraOrder`, 29/29) och
+  `rattelse-skal-prov.mjs` (webbläsaren, 81/81, tre varv), båda röda mot main. Se ARBETSLOGG.
+- **Kvar:** previewen, mergen efter beställarens ja, och #41 rättad i produktionen.
+
 ## KLOCKAN VISAR BARA DET DU INTE SETT (2026-11-13): på `main` (`b9dff2a`), ingen migration
 
 Trycket på en notis tar bort den (klocka, push och mejl), Rensa alla tömmer klockan (även det under de 25) med Ångra,

@@ -86,7 +86,7 @@ const FALT = {
 
 type Svar = { ok?: string; fel?: string; [k: string]: unknown };
 const svar = (data: Svar, status = 200) => NextResponse.json(data, { status, headers: { "Cache-Control": "private, no-store, max-age=0" } });
-const fran = (s: Orderstate, okText?: string) => (s.fel ? svar({ fel: s.fel }, 400) : svar({ ok: s.ok ?? okText ?? "Klart.", id: s.orderId ?? null }));
+const fran = (s: Orderstate, okText?: string) => (s.fel ? svar({ fel: s.fel, ...(s.kravSkal ? { kravSkal: true } : {}) }, 400) : svar({ ok: s.ok ?? okText ?? "Klart.", id: s.orderId ?? null }));
 
 function form(falt: Record<string, unknown>, tillatna?: readonly string[]): FormData {
   const f = new FormData();

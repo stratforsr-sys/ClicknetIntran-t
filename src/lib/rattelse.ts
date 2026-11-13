@@ -127,3 +127,24 @@ export function rattelseposter(fore: Utfall, efter: Utfall, orderstext: string):
 export function rorPengar(fore: Utfall, efter: Utfall): boolean {
   return rattelseposter(fore, efter, "").length > 0;
 }
+
+/**
+ * Skalet till en rattelse av en GODKAND order. Bestallaren 2026-11-13:
+ * *"for saljare lagg till ett stalle att skriva det pa, men for admin och
+ * superadmin behovs ingen"*.
+ *
+ * Saljaren skriver det sjalv, for det ar det forsta nagon fragar efter nar en
+ * godkand order andrats. Admin och superadmin (nivan i `nivaFor`) behover
+ * inget: skriver de inget star det vem som rattade, och loggen bar fore- och
+ * eftervardena anda. `null` betyder att skalet saknas och maste skrivas.
+ */
+export function rattelsensSkal(
+  angivet: string,
+  niva: "salesperson" | "admin" | "superadmin",
+  fornamn: string,
+): string | null {
+  const text = angivet.trim();
+  if (text) return text;
+  if (niva === "salesperson") return null;
+  return fornamn.trim() ? `Rättad av ${fornamn.trim()}.` : "Rättad av admin.";
+}
