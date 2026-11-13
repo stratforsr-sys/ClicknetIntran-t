@@ -32,7 +32,7 @@ Alla tre var fel i proven, inte i Nav; kontrollerat mot databasen innan något �
 
 ---
 
-## 2026-11-13 · Möten: bekräftelsen blir en uppgift (på `main`, 0291 körd; arbetsdagar, klockslag, notis i telefonen)
+## 2026-11-13 · Möten: bekräftelsen blir en uppgift (på `main` som `4aee24a`, 0291 körd; arbetsdagar, klockslag, notis i telefonen)
 
 **Vad:** beställaren: den som bokat ett möte ska bekräfta det två dagar före, klockslaget ska gå att välja, och det
 ska bli en automatisk uppgift med notis i klockan och telefonen, "för det är viktigt att man inte tappar det".
@@ -59,7 +59,8 @@ fall), `moten.mjs`, `notiser*.mjs`, `utskick.mjs`, `kalender-push.mjs`, `navnyhe
 tid) och `rattigheter-db.mjs` med 0291 grön; klicktest 22/22 och 660-stegsprovet; provkedjan utan rls/db har samma
 11 röda som main (alla kräver DATABASE_URL). Granskat av Fable, fynden i NASTA_SESSION.
 
-**Läge:** på `main` på beställarens ja ("Merga till main och gör klart allting"), 0291 körd före pushen.
+**Läge:** på `main` som `4aee24a` på beställarens ja ("Merga till main och gör klart allting"), 0291 körd före pushen,
+produktionsbygget grönt. Första körningen 20:15 UTC: 9 uppgifter, 9 notiser, pusharna levererade, inga fel.
 
 ## 2026-11-13 · Order: skälet till en rättelse (säljaren skriver det, admin och superadmin behöver inget; på `main` som `be8d894`)
 
