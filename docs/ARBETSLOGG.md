@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-13 · Order: skälet till en rättelse (säljaren skriver det, admin och superadmin behöver inget)
+## 2026-11-13 · Order: skälet till en rättelse (säljaren skriver det, admin och superadmin behöver inget; på `main` som `be8d894`)
 
 **Vad:** beställaren rättade #41 Toro Relining (godkänd 16:38, Inkio-fel 16:43) och fick "En rättelse kräver ett
 skäl", utan något fält att skriva skälet i. Beställaren: "för säljare lägg till ett ställe att skriva det på men för
