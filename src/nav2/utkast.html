@@ -7950,6 +7950,7 @@ body.nd-riktig :is(.pv-lagrad,.arow[data-agenda],.pv-tab tbody tr[data-pvupers],
 .mo-ir>label{font-size:13px;color:var(--ink-2)}
 .mo-ir .uin{padding:7px 10px;font-size:13.5px}
 .mo-ir .uin[type=number]{width:76px;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.mo-ir .uin[type=time]{width:112px;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 .mo-ir .mo-kr{position:relative;display:inline-flex;align-items:center}
 .mo-ir .mo-kr .uin{width:120px;padding-right:30px;text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 .mo-ir .mo-kr::after{content:"kr";position:absolute;right:10px;font:12px var(--f-mono);color:var(--ink-3);pointer-events:none}
@@ -23272,6 +23273,8 @@ function upgLankMal(t, k, v){
   if (k === 'Anställda'){ return () => t.ae ? (aeSt(), aeGaSrc('/personal/' + t.ae.replace('|', '/'))) : aeGa(null); }
   if (k === 'Nyheter'){ return () => nhGa(t.nh || null); }
   if (k === 'K&V'){ return () => S.role === 'chef' ? kvGaSrc('/kv/bedom') : kvGa(); }
+  // Bekräftelseuppgiften (0291): kopplingen bär mötets adress (/moten/<id>), som notisen.
+  if (k === 'Möte'){ const l = (t.ndLinks || []).find(x => x[0] === k && x[1] === v); return () => { S.panel = null; S.todoOpen = false; ndGa((l && l[2]) || '/moten'); }; }
   return null;
 }
 // Coachning, Anställda och Rekrytering har sina egna handlare och attribut sedan tidigare; de står kvar.
@@ -27424,7 +27427,10 @@ async function ndUpgPost(handling, data = {}, {ladda = true, tyst = false} = {})
   if (v && k) NDUPGKLICK = k;
   try {
     const r = await (v ? ndUpgITur(v.id, () => ndSkriv('/nav2/uppgifter', {handling, ...data}, {knapp:null})) : ndSkriv('/nav2/uppgifter', {handling, ...data})), s = ndSvar(r);
-    if (s.ok){ ndUpgSvarat(v, true); if (!tyst) toast(s.ok); if (ladda) ndOmlas('upg'); return s; }
+    if (s.ok){ ndUpgSvarat(v, true); if (!tyst) toast(s.ok); if (ladda) ndOmlas('upg');
+      // En uppgift kopplad till ett möte (0291): att bocka av den bekräftar mötet, så tavlan hämtas om i samma hämtning.
+      if ((handling === 'bocka' || handling === 'ateroppna' || handling === 'godkann') && NDOMLAS['mo-latt'] && TASKS.some(x => x.id === data.id && (x.ndLinks || []).some(l => l[0] === 'Möte'))) ndOmlas('mo-latt');
+      return s; }
     ndUpgSvarat(v, false); if (!tyst) ndSkrivFel(s);
     // Inget svar på 20 s: det kan ha sparats, så datan hämtas om och raden visar det som gäller. Ett nätfel hämtar
     // inte, eftersom omhämtningens reserv då laddar om sidan utan nät.
@@ -37055,6 +37061,10 @@ function moInit(){
 /* ---------- Skrivningar: /nav2/moten ---------- */
 // Läsningarna går samma väg, men skrivvägens standardtexter talar om att spara. Utan ett eget besked från servern gäller lästexten.
 const MOLASFEL = {uppslag:'Uppslaget gick inte.', lediga:'Kalendern gick inte att hämta.'};
+// Bekräftelseuppgiften (0291): databasen bockar av, öppnar eller tar bort mötets uppgift när mötet ändras. Har mötet
+// en uppgift i listan hämtas Uppgifter (och Hem) om i samma hämtning som tavlan, så att den inte står kvar.
+const MOUPGHANDL = new Set(['bekrafta', 'angra', 'flytta', 'andra', 'avboka', 'utfall', 'radera']);
+const moHarUppgift = id => typeof TASKS !== 'undefined' && Array.isArray(TASKS) && TASKS.some(t => (t.ndLinks || []).some(l => l[0] === 'Möte' && l[2] === '/moten/' + id));
 async function ndMoPost(handling, data = {}, {ladda = true, tyst = false, kedja = null, visaFel = !tyst, tyst409 = false} = {}){
   try {
     const r = await ndSkriv('/nav2/moten', {handling, ...data}), s = ndSvar(r);
@@ -37062,6 +37072,7 @@ async function ndMoPost(handling, data = {}, {ladda = true, tyst = false, kedja 
     if (r.serverfel) s.fel = r.serverfel;   // 5xx med text: Möten visar serverns besked (det säger vad som blev halvgjort)
     else if (MOLASFEL[handling] && (r.hangde || r.status >= 500)) s.fel = MOLASFEL[handling];
     if (s.ok && !s.fel){
+      if (MOUPGHANDL.has(handling) && data.mote && NDOMLAS.upg && moHarUppgift(data.mote)) ndOmlas('upg');
       // Kvittot bär också rättelsens not när servern bokfört en (rattelse från ratta_utfall, F8.1).
       if (ladda){ if (s.kedja_borta) S.moOpen = null;   // kortet finns inte mer: panelen öppnas inte igen efter omladdningen
         ndOmlas('mo', {kedja, msg:!tyst ? s.ok + (s.rattelse ? ` Bokfört: ${s.rattelse}.` : '') : null, varning:s.varning || null}); }
@@ -38544,7 +38555,7 @@ function ndMoVy(){
     // Medan ett kort dras (S.moDrar, F7.1): kolumnen som tar emot har sin ram och säger vad släppet gör, de andra är nedtonade.
     const dk = S.moDrar ? (moTar(k, S.moDrar) ? 'kan' : 'ej') : '';
     // Regeln för bekräftelsen står där den gäller (F2.3): i huvudet på kolumnen korten kommer till, inte på en egen rad.
-    const regel = k === 'att_bekrafta' && n !== null ? `<span class="mo-regel" title="Kortet kommer hit ${n === 0 ? 'samma dag som mötet' : n === 1 ? '1 dag före mötet' : n + ' dagar före mötet'}">${n === 0 ? 'samma dag' : n === 1 ? '1 dag före' : n + ' dagar före'}</span>` : '';
+    const regel = k === 'att_bekrafta' && n !== null ? `<span class="mo-regel" title="Kortet kommer hit ${n === 0 ? 'samma dag som mötet' : n === 1 ? '1 arbetsdag före mötet' : n + ' arbetsdagar före mötet'}. Helger och röda dagar räknas inte.">${n === 0 ? 'samma dag' : n === 1 ? '1 arbetsdag' : n + ' arbetsdagar'}</span>` : '';
     const huvud = `<header><h2>${esc(moKolNamn(k))}</h2>${regel}${MOSLAPPTEXT[k] ? `<span class="mo-slapp" aria-hidden="true">${MOSLAPPTEXT[k]}</span>` : ''}<span class="num">${antal}</span>${pv ? `<span class="mo-pv" title="Din del av mötesprovisionen">${moKr(pv[k])}</span>` : ''}</header>`;
     let inne;
     if (k === 'avgjort'){
@@ -38583,7 +38594,7 @@ function ndMoVy(){
    kolumnnamnen, tidszonen, påminnelsetiden och rubrikens prefix. Lägena och reglerna är fasta. Varje fält sparas för
    sig (POST installningar {nyckel, varde}) och det sparade läggs in i ND.moten direkt, så att tavlan bakom bladet
    visar det nya utan omladdning. Beloppen och mottagarna ändras bara av den som hanterar provision (farPengar). */
-const MOINST = {bekraftaDagar:'moten.bekrafta-dagar', fragor:'moten.fragor', satser:'moten.provision', kolumnnamn:'moten.kolumnnamn', mottagare:'moten.mottagare',
+const MOINST = {bekraftaDagar:'moten.bekrafta-dagar', bekraftaTid:'moten.bekrafta-tid', bekraftaPaminn:'moten.bekrafta-paminn', fragor:'moten.fragor', satser:'moten.provision', kolumnnamn:'moten.kolumnnamn', mottagare:'moten.mottagare',
   ombokning:'moten.ombokning-provision', tidszon:'moten.tidszon', utfallPaminnelse:'moten.utfall-paminnelse', rubrikPrefix:'moten.rubrik-prefix'};
 // Tidszonen som Mötens klockslag visas och räknas i (tavlan, bokningen, statistiken). I dag en konstant: inställningen
 // moten.tidszon styr dagarna (bekräftelsen, provisionens månad, påminnelsen), inte klockslagen (S6). Den dag
@@ -38615,8 +38626,12 @@ function moInstVy(){
     <div class="rxpb">
       ${moIfrSek(v, T)}
       <section class="rxsek"><h3>Bekräftelsen</h3>
-        <div class="mo-ir"><label for="moi-dagar">Bekräfta</label><input class="uin" id="moi-dagar" type="number" min="0" max="14" step="1" data-moi="bekraftaDagar" value="${v.bekraftaDagar}"><label for="moi-dagar">dagar före mötet</label>${moInstStatus('bekraftaDagar')}</div>
-        <p class="muted">Kortet hamnar i ${esc(moKolNamn('att_bekrafta'))} så många dagar före mötesdagen. Senast dagen före ska mötet vara bekräftat, eller samma dag om det bokades så sent.</p>
+        <div class="mo-ir"><label for="moi-dagar">Bekräfta</label><input class="uin" id="moi-dagar" type="number" min="0" max="14" step="1" data-moi="bekraftaDagar" value="${v.bekraftaDagar}"><label for="moi-dagar">arbetsdagar före mötet</label>${moInstStatus('bekraftaDagar')}</div>
+        <p class="muted">Kortet hamnar i ${esc(moKolNamn('att_bekrafta'))} så många arbetsdagar före mötesdagen. Senast arbetsdagen före ska mötet vara bekräftat, eller samma dag om det bokades så sent. Helger och röda dagar räknas inte.</p>
+        <div class="mo-ir"><label><input type="checkbox" data-moi="bekraftaPaminn" ${v.bekraftaPaminn !== false ? 'checked' : ''}> Lägg upp en uppgift och påminn kl.</label><input class="uin" id="moi-btid" type="time" data-moi="bekraftaTid" value="${esc(v.bekraftaTid || '09:00')}" aria-label="Klockslaget för uppgiften och påminnelsen" aria-describedby="moi-btid-h"${v.bekraftaPaminn === false ? ' disabled' : ''}>${moInstStatus('bekraftaPaminn')}${moInstStatus('bekraftaTid')}</div>
+        <p class="muted" id="moi-btid-h">${v.bekraftaPaminn === false
+          ? 'Av: mötet syns bara i kolumnen. Ingen uppgift och ingen notis.'
+          : `Kl. ${esc(v.bekraftaTid || '09:00')} den första dagen får den som bokade mötet uppgiften Bekräfta mötet, och en notis i klockan och telefonen. Notisen kommer igen varje arbetsdag tills mötet är bekräftat. Bockas uppgiften av blir mötet bekräftat, och tvärtom.`}</p>
       </section>
       <section class="rxsek"><h3>Frågorna efter mötet</h3>
         <p class="muted">Säljaren svarar ja eller nej på de frågor som är ikryssade. Högst fem.</p>
@@ -38757,6 +38772,7 @@ document.addEventListener('change', e => {
   e.stopImmediatePropagation();
   const ds = t.dataset, v = ndMo().installningar;
   if (ds.moi === 'bekraftaDagar') return moInstSpara('bekraftaDagar', t.value === '' ? NaN : Number(t.value));
+  if (ds.moi === 'bekraftaPaminn') return moInstSpara('bekraftaPaminn', t.checked);
   if (ds.moi) return moInstSpara(ds.moi, t.value);
   if (ds.moibelopp){ const n = Number(String(t.value).replace(',', '.')), s = {...v.satser}; if (ds.moibelopp === 'bada'){ s.kvalificerat = n; s.hallet = n; } else s[ds.moibelopp] = n; return moInstSpara('satser', s); }
   if (ds.moimott){ const m = new Set(v.mottagare); if (t.checked) m.add(ds.moimott); else m.delete(ds.moimott); return moInstSpara('mottagare', [...m]); }

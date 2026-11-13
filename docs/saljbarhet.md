@@ -39,9 +39,9 @@ Uppdaterad 2026-11-13 (bokningsbladet). Raderna S1–S30 gäller Möten; andra v
 | S23 | Belopp, mottagare, ombokningsregeln, bekräftelsedagarna, rubrikens prefix | `motesflode.ts` | löst | Inställningar, inga företagsvärden i koden. |
 | S24 | Tavlan läste högst 1000 kort utan ordning | `moten.ts` | löst | Läsningen är sorterad, och `ND.moten.kapad` säger när taket nåtts. Paginering i databasen återstår om en kund når taket. |
 | S25 | Serverns fel placeras vid fält genom att leta svenska ord i texten | `utkast.html` | öppen | Rutten skickar `falt` med felet. |
-| S26 | Notisernas texter är hela svenska meningar i jobbet | `moten-jobb.ts` | öppen | Hör till S7. |
+| S26 | Notisernas texter är hela svenska meningar i jobbet, också bekräftelsens notis och uppgift ("Bekräfta mötet med …", 2026-11-13) | `moten-jobb.ts` | öppen | Hör till S7. |
 | S27 | Företagsnamn i produktkoden | bara i kommentarer | löst | Prefixet är en inställning med tomt förval. |
-| S28 | Svenska helgdagar 2026–2027 som konstant i klienten; servern har sin egen arbetsdagsräkning | `FRROD` i `utkast.html`, `arArbetsdag` i `src/lib/saljtakt.ts` | öppen | En källa på servern, per land. Skiljer de sig i dag svarar rutten med sitt fel vid tidsfältet. |
+| S28 | Svenska helgdagar 2026–2027 som konstant i klienten; servern har sin egen arbetsdagsräkning, som sedan 2026-11-13 också styr Mötens bekräftelse (arbetsdagar före mötet) | `FRROD` i `utkast.html`, `arArbetsdag` i `src/lib/saljtakt.ts` (via `bekraftelseFonster` i `motesflode.ts`) | öppen | En källa på servern, per land. Skiljer de sig i dag svarar rutten med sitt fel vid tidsfältet. |
 | S29 | Källan föreslås ur uppslaget med två fasta namn: Kallsamtal (numret har ringts upp) och Tidigare kund (bolaget är kund). Finns namnen inte i företagets källor föreslås inget | `MOKALLAUR` i `utkast.html` | en plats | Två nycklar i `moten.kallor` (vilken källa som betyder uppringd och vilken som betyder kund), eller en inställning per signal. |
 | S30 | Frimejlsdomänerna (gmail.com, telia.com …) står två gånger: på servern och i klienten för e-postens domänförslag | `FRIMEJL_DOMANER` i `motenforma.ts`, `MOFRIMEJL` i `utkast.html` | öppen | Listan med i `ND.moten.inst`, en källa. Listan är svensk och internationell; ett annat land behöver sina egna. |
 

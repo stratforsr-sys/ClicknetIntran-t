@@ -9,6 +9,7 @@ import {
   INST_FORVAL, PIPE_KOLUMNER, lasInstallningar, lokalDag, bekraftelseFonster, pipelineKolumn,
   bradska, niva, fordela, taptSkal, manadFor, kortFas, ursprungligBokare, sorteraFas, provaInstallning, INST_NYCKLAR,
   sparadeSvar, motesTz, giltigTidszon, MOTES_NULAGE, MOTES_NEJ_SKAL, MOTES_KALLOR, motesVal, omfattas, nivaSvar, raknaRader, andel, omraknadRad, rattelseNot, radernaStammer, harLastBelopp, vemPaminns, utanRedanSkickade, provaAngra,
+  vemBekraftar, foregaendeArbetsdag, nastaArbetsdag,
 } from "../src/lib/nav2/motesflode.ts";
 
 let fel = 0;
@@ -76,6 +77,12 @@ lika("okänd regel ger ny", lasInstallningar([{ key: "moten.ombokning-provision"
 lika("prefix gäller", lasInstallningar([{ key: "moten.rubrik-prefix", value: "Clicknet" }]).rubrikPrefix, "Clicknet");
 lika("felaktig påminnelsetid ger förvalet", lasInstallningar([{ key: "moten.utfall-paminnelse", value: "25:00" }]).utfallPaminnelse, "18:00");
 lika("mottagare gäller", lasInstallningar([{ key: "moten.mottagare", value: ["a", "b"] }]).mottagare, ["a", "b"]);
+lika("bekräftelsens klockslag: förvalet 09:00", INST_FORVAL.bekraftaTid, "09:00");
+lika("bekräftelsens klockslag gäller", lasInstallningar([{ key: "moten.bekrafta-tid", value: "13:30" }]).bekraftaTid, "13:30");
+lika("bekräftelsens klockslag 9:00 (utan nolla) ger förvalet", lasInstallningar([{ key: "moten.bekrafta-tid", value: "9:00" }]).bekraftaTid, "09:00");
+lika("uppgift och notis: på som förval", INST_FORVAL.bekraftaPaminn, true);
+lika("uppgift och notis: av gäller", lasInstallningar([{ key: "moten.bekrafta-paminn", value: false }]).bekraftaPaminn, false);
+lika("uppgift och notis: \"nej\" ger förvalet", lasInstallningar([{ key: "moten.bekrafta-paminn", value: "nej" }]).bekraftaPaminn, true);
 lika("okänd nyckel välter inget", lasInstallningar([{ key: "moten.okand", value: 1 }, { key: "annat", value: null }]), INST_FORVAL);
 
 console.log("Att spara en inställning (provaInstallning)");
@@ -95,6 +102,10 @@ console.log("Att spara en inställning (provaInstallning)");
   ok("okänd tidszon nekas", !!fel("moten.tidszon", "Mars/Olympus"));
   lika("en riktig tidszon går", provaInstallning("moten.tidszon", "Europe/Oslo"), { ok: true, varde: "Europe/Oslo" });
   ok("25:00 nekas", !!fel("moten.utfall-paminnelse", "25:00"));
+  ok("bekräftelsens klockslag 24:00 nekas med en mening", /TT:MM/.test(fel("moten.bekrafta-tid", "24:00") ?? ""));
+  lika("bekräftelsens klockslag 08:30 går", provaInstallning("moten.bekrafta-tid", "08:30"), { ok: true, varde: "08:30" });
+  lika("uppgift och notis av går", provaInstallning("moten.bekrafta-paminn", false), { ok: true, varde: false });
+  ok("uppgift och notis som text nekas", !!fel("moten.bekrafta-paminn", "av"));
   ok("halva nekas", !!fel("moten.ombokning-provision", "halva"));
   lika("tomt prefix går", provaInstallning("moten.rubrik-prefix", "  "), { ok: true, varde: "" });
   ok("41 tecken prefix nekas", !!fel("moten.rubrik-prefix", "x".repeat(41)));
@@ -105,21 +116,32 @@ console.log("Att spara en inställning (provaInstallning)");
 console.log("Lokal dag och fönster");
 lika("lokal dag efter midnatt", lokalDag("2026-11-15T23:15:00Z", tz), "2026-11-16");
 lika("lokal dag i UTC", lokalDag("2026-11-15T23:15:00Z", "UTC"), "2026-11-15");
-const M = "2026-11-16T08:00:00Z";
-lika("fönster två dagar", bekraftelseFonster({ moteTid: M, senastAndrad: "2026-11-02T09:00:00Z", dagar: 2, tz }), { oppnar: "2026-11-14", senast: "2026-11-15" });
-lika("bokat dagen före", bekraftelseFonster({ moteTid: M, senastAndrad: "2026-11-15T10:00:00Z", dagar: 2, tz }).senast, "2026-11-16");
+const M = "2026-11-16T08:00:00Z"; // måndag 16 nov 09:00 i Stockholm
+lika("arbetsdagen före en måndag är fredagen", foregaendeArbetsdag("2026-11-16"), "2026-11-13");
+lika("arbetsdagen efter en fredag är måndagen", nastaArbetsdag("2026-11-13"), "2026-11-16");
+lika("arbetsdagen efter lördag är måndag", nastaArbetsdag("2026-11-14"), "2026-11-16");
+lika("arbetsdagen före annandag jul-helgen (mån 28 dec) är onsdag 23 dec", foregaendeArbetsdag("2026-12-28"), "2026-12-23");
+lika("måndagsmöte, två arbetsdagar: torsdag till fredag", bekraftelseFonster({ moteTid: M, senastAndrad: "2026-11-02T09:00:00Z", dagar: 2, tz }), { oppnar: "2026-11-12", senast: "2026-11-13" });
+lika("tisdagsmöte: fredag till måndag", bekraftelseFonster({ moteTid: "2026-11-17T09:00:00Z", senastAndrad: "2026-11-02T09:00:00Z", dagar: 2, tz }), { oppnar: "2026-11-13", senast: "2026-11-16" });
+lika("onsdagsmöte: måndag till tisdag", bekraftelseFonster({ moteTid: "2026-11-18T09:00:00Z", senastAndrad: "2026-11-02T09:00:00Z", dagar: 2, tz }), { oppnar: "2026-11-16", senast: "2026-11-17" });
+lika("en arbetsdag: fredagen före en måndag", bekraftelseFonster({ moteTid: M, senastAndrad: "2026-11-02T09:00:00Z", dagar: 1, tz }), { oppnar: "2026-11-13", senast: "2026-11-13" });
+lika("bokat arbetsdagen före (fredag): senast på mötesdagen", bekraftelseFonster({ moteTid: M, senastAndrad: "2026-11-13T10:00:00Z", dagar: 2, tz }).senast, "2026-11-16");
+lika("bokat på lördagen: senast på mötesdagen", bekraftelseFonster({ moteTid: M, senastAndrad: "2026-11-14T10:00:00Z", dagar: 2, tz }).senast, "2026-11-16");
 lika("bokat samma dag", bekraftelseFonster({ moteTid: M, senastAndrad: "2026-11-16T06:00:00Z", dagar: 2, tz }).senast, "2026-11-16");
-lika("midnatt öppnar lördag", bekraftelseFonster({ moteTid: "2026-11-15T23:15:00Z", senastAndrad: "2026-11-01T09:00:00Z", dagar: 2, tz }).oppnar, "2026-11-14");
-lika("över sommartiden", bekraftelseFonster({ moteTid: "2026-10-26T07:00:00Z", senastAndrad: "2026-10-01T09:00:00Z", dagar: 2, tz }).oppnar, "2026-10-24");
-lika("dagar 0 öppnar på mötesdagen", bekraftelseFonster({ moteTid: M, senastAndrad: "2026-11-02T09:00:00Z", dagar: 0, tz }).oppnar, "2026-11-16");
-lika("över månadsskiftet", bekraftelseFonster({ moteTid: "2026-12-01T09:00:00Z", senastAndrad: "2026-11-02T09:00:00Z", dagar: 2, tz }), { oppnar: "2026-11-29", senast: "2026-11-30" });
+lika("00:15 måndag lokalt räknas från måndagen", bekraftelseFonster({ moteTid: "2026-11-15T23:15:00Z", senastAndrad: "2026-11-01T09:00:00Z", dagar: 2, tz }).oppnar, "2026-11-12");
+lika("över sommartiden (måndag 26 okt)", bekraftelseFonster({ moteTid: "2026-10-26T08:00:00Z", senastAndrad: "2026-10-01T09:00:00Z", dagar: 2, tz }).oppnar, "2026-10-22");
+lika("dagar 0 öppnar på mötesdagen", bekraftelseFonster({ moteTid: M, senastAndrad: "2026-11-02T09:00:00Z", dagar: 0, tz }), { oppnar: "2026-11-16", senast: "2026-11-16" });
+lika("över månadsskiftet (tisdag 1 dec)", bekraftelseFonster({ moteTid: "2026-12-01T09:00:00Z", senastAndrad: "2026-11-02T09:00:00Z", dagar: 2, tz }), { oppnar: "2026-11-27", senast: "2026-11-30" });
+lika("julen räknas inte (måndag 28 dec)", bekraftelseFonster({ moteTid: "2026-12-28T09:00:00Z", senastAndrad: "2026-12-01T09:00:00Z", dagar: 2, tz }), { oppnar: "2026-12-22", senast: "2026-12-23" });
+lika("trettondagen räknas inte (torsdag 7 jan)", bekraftelseFonster({ moteTid: "2027-01-07T09:00:00Z", senastAndrad: "2026-12-01T09:00:00Z", dagar: 2, tz }), { oppnar: "2027-01-04", senast: "2027-01-05" });
+lika("fem arbetsdagar hoppar över en helg", bekraftelseFonster({ moteTid: "2026-11-20T09:00:00Z", senastAndrad: "2026-11-01T09:00:00Z", dagar: 5, tz }), { oppnar: "2026-11-13", senast: "2026-11-19" });
 
 console.log("Pipelinekolumn");
 const mote = { moteTid: M, langd: 30, bekraftat: false, utfall: null };
 const f = bekraftelseFonster({ moteTid: M, senastAndrad: "2026-11-02T09:00:00Z", dagar: 2, tz });
-lika("före fönstret: bokat", pipelineKolumn(mote, f, new Date("2026-11-13T10:00:00Z"), tz), "bokat");
-lika("23:30 fredag UTC = 00:30 lördag lokalt: att bekräfta", pipelineKolumn(mote, f, new Date("2026-11-13T23:30:00Z"), tz), "att_bekrafta");
-lika("01:30 lokalt lördag: att bekräfta", pipelineKolumn(mote, f, new Date("2026-11-14T00:30:00Z"), tz), "att_bekrafta");
+lika("före fönstret: bokat", pipelineKolumn(mote, f, new Date("2026-11-11T10:00:00Z"), tz), "bokat");
+lika("23:30 onsdag UTC = 00:30 torsdag lokalt: att bekräfta", pipelineKolumn(mote, f, new Date("2026-11-11T23:30:00Z"), tz), "att_bekrafta");
+lika("lördag mellan fönstret och mötet: att bekräfta", pipelineKolumn(mote, f, new Date("2026-11-14T00:30:00Z"), tz), "att_bekrafta");
 lika("bekräftat", pipelineKolumn({ ...mote, bekraftat: true }, f, new Date("2026-11-14T00:30:00Z"), tz), "bekraftat");
 lika("bekräftat före fönstret", pipelineKolumn({ ...mote, bekraftat: true }, f, new Date("2026-11-10T00:30:00Z"), tz), "bekraftat");
 lika("under mötet: fortfarande bekräftat", pipelineKolumn({ ...mote, bekraftat: true }, f, new Date("2026-11-16T08:20:00Z"), tz), "bekraftat");
@@ -127,15 +149,17 @@ lika("efter slutet: hos säljaren", pipelineKolumn(mote, f, new Date("2026-11-16
 lika("efter slutet bekräftat: hos säljaren", pipelineKolumn({ ...mote, bekraftat: true }, f, new Date("2026-11-16T08:31:00Z"), tz), "hos_saljaren");
 lika("utfall: avgjort", pipelineKolumn({ ...mote, utfall: "hallet" }, f, new Date("2026-11-13T10:00:00Z"), tz), "avgjort");
 lika("kortFas utan öppet möte", kortFas({ harOppetMote: false, mote: null, fonster: null }, new Date(), tz), "avgjort");
-lika("kortFas med öppet möte", kortFas({ harOppetMote: true, mote, fonster: f }, new Date("2026-11-13T10:00:00Z"), tz), "bokat");
+lika("kortFas med öppet möte", kortFas({ harOppetMote: true, mote, fonster: f }, new Date("2026-11-11T10:00:00Z"), tz), "bokat");
 
-console.log("Brådska");
-lika("i dag", bradska("2026-11-15", "att_bekrafta", new Date("2026-11-15T12:00:00Z"), tz), "idag");
-lika("i morgon", bradska("2026-11-15", "att_bekrafta", new Date("2026-11-14T12:00:00Z"), tz), "imorgon");
-lika("passerad senast", bradska("2026-11-15", "att_bekrafta", new Date("2026-11-16T07:00:00Z"), tz), "idag");
-lika("långt kvar", bradska("2026-11-15", "att_bekrafta", new Date("2026-11-12T12:00:00Z"), tz), null);
-lika("bekräftat har ingen brådska", bradska("2026-11-15", "bekraftat", new Date("2026-11-15T12:00:00Z"), tz), null);
-lika("bokat dagen före senast: i morgon", bradska("2026-11-15", "bokat", new Date("2026-11-14T12:00:00Z"), tz), "imorgon");
+console.log("Brådska (i morgon = nästa arbetsdag)");
+lika("i dag", bradska("2026-11-16", "att_bekrafta", new Date("2026-11-16T12:00:00Z"), tz), "idag");
+lika("fredag före senast måndag: i morgon", bradska("2026-11-16", "att_bekrafta", new Date("2026-11-13T12:00:00Z"), tz), "imorgon");
+lika("lördag före senast måndag: i morgon", bradska("2026-11-16", "att_bekrafta", new Date("2026-11-14T12:00:00Z"), tz), "imorgon");
+lika("måndag före senast tisdag: i morgon", bradska("2026-11-17", "att_bekrafta", new Date("2026-11-16T12:00:00Z"), tz), "imorgon");
+lika("passerad senast", bradska("2026-11-16", "att_bekrafta", new Date("2026-11-17T07:00:00Z"), tz), "idag");
+lika("långt kvar", bradska("2026-11-16", "att_bekrafta", new Date("2026-11-12T12:00:00Z"), tz), null);
+lika("bekräftat har ingen brådska", bradska("2026-11-16", "bekraftat", new Date("2026-11-16T12:00:00Z"), tz), null);
+lika("bokat dagen före senast: i morgon", bradska("2026-11-16", "bokat", new Date("2026-11-13T12:00:00Z"), tz), "imorgon");
 
 console.log("Nivå");
 const F2 = INST_FORVAL.fragor;
@@ -286,6 +310,47 @@ console.log("Påminnelserna: vem ska påminnas");
   lika("två körningar samma dag: samma lista", kor([m({})], "2026-11-10T17:00:00Z"), kor([m({})], "2026-11-10T20:00:00Z"));
   lika("sommartid: 18:00 lokal är 16:00Z", kor([m({ slut: "2026-10-20T12:00:00Z" })], "2026-10-20T16:00:00Z", { ...inst, gallerFran: "2026-10-01T00:00:00Z" }), [{ kalla: "mote-utfall-saknas", till: "h1", moteId: "m1" }]);
   lika("ingen admin: tom lista två dagar efter", vemPaminns([m({})], [], new Date("2026-11-12T17:00:00Z"), inst), []);
+}
+
+console.log("Bekräftelsen: vem ska ringa, och när");
+{
+  const inst = { ...INST_FORVAL, gallerFran: "2026-11-01T00:00:00Z" };
+  const aktiva = new Set(["b1", "h1", "x1"]);
+  // Tisdag 17 nov 10:00 i Stockholm (09:00Z), bokat 6 nov. Fönstret: fredag 13 till måndag 16.
+  const m = (o) => ({ id: "m1", moteTid: "2026-11-17T09:00:00Z", senastAndrad: "2026-11-06T10:00:00Z", bokatAv: "b1", hallsAv: "h1", bekraftat: false, utfall: null, uppgift: null, ...o });
+  const kor = (moten, nuIso, i = inst, a = aktiva) => vemBekraftar(moten, a, new Date(nuIso), i);
+  const svar = (o) => ({ moteId: "m1", till: "b1", slag: "ring", skapaUppgift: true, dag: "2026-11-13", senast: "2026-11-16", ...o });
+  lika("torsdag före fönstret: ingenting", kor([m({})], "2026-11-12T10:00:00Z"), []);
+  lika("fredag 08:59: ingenting än", kor([m({})], "2026-11-13T07:59:00Z"), []);
+  lika("fredag 09:00: bokaren ska ringa, uppgiften läggs upp", kor([m({})], "2026-11-13T08:00:00Z"), [svar({})]);
+  lika("lördag: ingenting (helg)", kor([m({})], "2026-11-14T08:00:00Z"), []);
+  lika("söndag: ingenting (helg)", kor([m({})], "2026-11-15T12:00:00Z"), []);
+  lika("måndag 09:00: sista dagen", kor([m({})], "2026-11-16T08:00:00Z"), [svar({ slag: "sista", dag: "2026-11-16" })]);
+  lika("mötesdagen 09:00 (mötet 10:00): i dag", kor([m({})], "2026-11-17T08:00:00Z"), [svar({ slag: "idag", dag: "2026-11-17" })]);
+  lika("mötesdagen före 09:00: ingenting än", kor([m({})], "2026-11-17T07:30:00Z"), []);
+  lika("mötet 09:00: påminnelsen kommer en timme före (08:00)", kor([m({ moteTid: "2026-11-17T08:00:00Z" })], "2026-11-17T07:00:00Z"), [svar({ slag: "idag", dag: "2026-11-17" })]);
+  lika("mötet har börjat: ingenting", kor([m({})], "2026-11-17T09:00:00Z"), []);
+  lika("bekräftat: ingenting", kor([m({ bekraftat: true })], "2026-11-13T08:00:00Z"), []);
+  lika("utfall satt (avbokat): ingenting", kor([m({ utfall: "avbokat" })], "2026-11-13T08:00:00Z"), []);
+  lika("uppgiften finns: ingen ny, notisen till den som har uppgiften", kor([m({ uppgift: { id: "t1", till: "x1", avbruten: false } })], "2026-11-16T08:00:00Z"), [svar({ till: "x1", slag: "sista", skapaUppgift: false, dag: "2026-11-16" })]);
+  lika("uppgiften utan ansvarig: bokaren", kor([m({ uppgift: { id: "t1", till: null, avbruten: false } })], "2026-11-13T08:00:00Z"), [svar({ skapaUppgift: false })]);
+  lika("den som har uppgiften har slutat: bokaren", kor([m({ uppgift: { id: "t1", till: "borta", avbruten: false } })], "2026-11-13T08:00:00Z"), [svar({ skapaUppgift: false })]);
+  lika("bokaren har slutat: hållaren", kor([m({ bokatAv: "borta" })], "2026-11-13T08:00:00Z"), [svar({ till: "h1" })]);
+  lika("båda har slutat: ingenting", kor([m({ bokatAv: "borta", hallsAv: "borta2" })], "2026-11-13T08:00:00Z"), []);
+  lika("uppgiften struken: inga fler notiser", kor([m({ uppgift: { id: "t1", till: "b1", avbruten: true } })], "2026-11-16T08:00:00Z"), []);
+  lika("påminnelsen avstängd: ingenting", kor([m({})], "2026-11-13T08:00:00Z", { ...inst, bekraftaPaminn: false }), []);
+  lika("galler-fran saknas: ingenting", kor([m({})], "2026-11-13T08:00:00Z", { ...inst, gallerFran: null }), []);
+  lika("klockslaget är inställningen: 13:00", kor([m({})], "2026-11-13T11:59:00Z", { ...inst, bekraftaTid: "13:00" }), []);
+  lika("klockslaget är inställningen: 13:00 går", kor([m({})], "2026-11-13T12:00:00Z", { ...inst, bekraftaTid: "13:00" }), [svar({})]);
+  lika("dagarna är inställningen: tre arbetsdagar öppnar torsdag", kor([m({})], "2026-11-12T08:00:00Z", { ...inst, bekraftaDagar: 3 }), [svar({ dag: "2026-11-12" })]);
+  lika("två körningar samma dag: samma lista", kor([m({})], "2026-11-13T08:00:00Z"), kor([m({})], "2026-11-13T15:00:00Z"));
+  lika("bokat i fönstret (fredag 14:00 för måndag): senast måndag, samma dag efter 09:00",
+    kor([m({ moteTid: "2026-11-16T13:00:00Z", senastAndrad: "2026-11-13T13:00:00Z" })], "2026-11-13T13:15:00Z"), [svar({ slag: "ring", senast: "2026-11-16" })]);
+  // Julen: måndag 28 dec. Fönstret tisdag 22 till onsdag 23; julafton (torsdag) och juldagen (fredag) är inga arbetsdagar.
+  const jul = { moteTid: "2026-12-28T09:00:00Z", senastAndrad: "2026-12-01T10:00:00Z" };
+  lika("julafton: ingenting", kor([m(jul)], "2026-12-24T08:00:00Z"), []);
+  lika("onsdag 23 dec: sista dagen", kor([m(jul)], "2026-12-23T08:00:00Z"), [svar({ slag: "sista", dag: "2026-12-23", senast: "2026-12-23" })]);
+  lika("tisdag 22 dec: ring", kor([m(jul)], "2026-12-22T08:00:00Z"), [svar({ dag: "2026-12-22", senast: "2026-12-23" })]);
 }
 
 console.log("Påminnelserna: redan skickade");

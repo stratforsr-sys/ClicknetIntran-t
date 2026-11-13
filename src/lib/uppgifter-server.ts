@@ -111,6 +111,7 @@ export const KOPPLINGSSLAG = [
   "kandidat",
   "avtal",
   "samtal",
+  "mote",
 ] as const;
 export type Kopplingsslag = (typeof KOPPLINGSSLAG)[number];
 
@@ -124,6 +125,7 @@ export const KOPPLING_ETIKETT: Record<Kopplingsslag, string> = {
   kandidat: "Kandidat",
   avtal: "Avtal",
   samtal: "Samtal",
+  mote: "Möte",
 };
 
 export type Uppgift = Uppgiftsrad & {
@@ -221,10 +223,13 @@ export async function hamtaUppgiftsbild(user: CurrentUser): Promise<Uppgiftsbild
         .from("task_link")
         .select(
           "id, task_id, visible_to_subject, order_id, case_id, employee_id, coaching_task_id," +
-            " course_id, document_id, candidate_id, contract_id, kv_call_id," +
+            " course_id, document_id, candidate_id, contract_id, kv_call_id, mote_id," +
             " sales_order(company_name), hr_case(subject), coaching_task(title)," +
             " course(title, slug), document(title, slug), candidate(first_name, last_name)," +
-            " contract(title), kv_call(customer, call_date)",
+            " contract(title), kv_call(customer, call_date)," +
+            // Mötets bolag (0291). Nycklarna namngivna: `mote` pekar på sig själv (foregaende_id), och en
+            // tvetydig inbäddning (PGRST201) hade tömt hela frågan, alltså alla kopplingar på alla uppgifter.
+            " mote!task_link_mote_id_fkey(mote_kedja!mote_kedja_id_fkey(mote_bolag!mote_kedja_bolag_id_fkey(namn)))",
         ),
     ]);
 
@@ -823,6 +828,7 @@ type Lankrad = {
   candidate_id: string | null;
   contract_id: string | null;
   kv_call_id: string | null;
+  mote_id: string | null;
   sales_order: { company_name: string } | null;
   hr_case: { subject: string } | null;
   coaching_task: { title: string } | null;
@@ -831,6 +837,7 @@ type Lankrad = {
   candidate: { first_name: string; last_name: string } | null;
   contract: { title: string } | null;
   kv_call: { customer: string | null; call_date: string } | null;
+  mote: { mote_kedja: { mote_bolag: { namn: string } | null } | null } | null;
 };
 
 /**
@@ -917,6 +924,16 @@ function tolkaKoppling(rad: Lankrad, namn: Map<string, string>): Koppling | null
       slag: "samtal",
       etikett: rad.kv_call?.customer ?? "Samtal",
       href: `/kv/${rad.kv_call_id}`,
+    };
+  }
+
+  if (rad.mote_id) {
+    // Bekräftelseuppgiften (0291). Bolaget syns för den som är med på mötet (RLS på `mote_kedja`); andra ser slaget.
+    return {
+      ...bas,
+      slag: "mote",
+      etikett: rad.mote?.mote_kedja?.mote_bolag?.namn ?? "Möte",
+      href: `/moten/${rad.mote_id}`,
     };
   }
 

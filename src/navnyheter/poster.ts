@@ -14,6 +14,21 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten-bekrafta-uppgift",
+    rubrik: "Möten: Nav påminner dig om att bekräfta mötet",
+    ingress: "Två arbetsdagar före ett möte du bokat får du uppgiften Bekräfta mötet och en notis i telefonen. Bockar du av uppgiften blir mötet bekräftat.",
+    text: `Ett möte som inte bekräftats före mötesdagen uteblir oftare. Nu får den som bokade mötet en uppgift,
+**Bekräfta mötet med …**, med kundens namn och nummer, och en notis i klockan och telefonen. Det sker kl. 09:00 två
+arbetsdagar före mötet. Helger och röda dagar räknas inte: ett möte på måndag bekräftas torsdag eller fredag. Notisen
+kommer igen varje arbetsdag tills mötet är bekräftat, och uppgiftens deadline är sista dagen att bekräfta. Bockar du av uppgiften blir
+mötet bekräftat i **Möten**, och trycker du **Bekräfta** på mötet bockas uppgiften av. Når du inte kunden trycker du
+**Fick inte tag** på mötet, så ligger uppgiften kvar. Admin ställer in antalet arbetsdagar och klockslaget under
+**Möten → Inställningar**. Slå på notiser i telefonen under **Inställningar → Notiser** om du inte redan gjort det.`,
+    datum: "2026-11-13",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "rattelse-skal-bara-for-saljare",
     rubrik: "Rätta en godkänd order: skälet skrivs där du sparar",
     ingress: "Säljare skriver varför ordern rättas i ett fält ovanför Spara rättelsen. Admin och superadmin behöver inget skäl.",

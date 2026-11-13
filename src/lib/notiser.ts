@@ -599,6 +599,12 @@ export const NOTIS_KALLOR = [
    */
   "mote-utfall-saknas",
   "mote-bedomning-saknas",
+  /**
+   * Nav 2.0, Möten (2026-11-13): ring och bekräfta mötet. Jobbet skickar den när bekräftelsefönstret öppnar
+   * (`moten.bekrafta-tid`) och sedan varje arbetsdag tills mötet är bekräftat, till den som har bekräftelse-
+   * uppgiften. Händelse, en per möte och dag: att mötet fortfarande väntar syns i Möten och i Uppgifter.
+   */
+  "mote-bekrafta",
   /** Nav 2.0, Möten (2026-11-11): bokaren ifrågasätter nivån på ett möte. Går till alla admins, som avgör. */
   "mote-ifragasatt",
 
@@ -809,6 +815,7 @@ export const HANDELSEKALLOR = [
   "mote-andrat",
   "mote-utfall-saknas",
   "mote-bedomning-saknas",
+  "mote-bekrafta",
   "mote-ifragasatt",
   "fel-meddelande",
   "fel-lagad",

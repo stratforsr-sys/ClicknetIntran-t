@@ -14,9 +14,15 @@
  * Dagar är kalenderdagar i installationens tidszon. Dagaritmetiken görs på
  * datumsträngen (mitt på dagen i UTC), aldrig på millisekunder, så att
  * sommartidsskiftet aldrig flyttar en dag.
+ *
+ * BEKRÄFTELSEN RÄKNAS I ARBETSDAGAR (beställaren 2026-11-13: "de ska bara
+ * bekräftas på en arbetsdag"). En arbetsdag är måndag–fredag som inte är röd
+ * (`arArbetsdag` i saljtakt.ts, samma som säljtakten och Mötens lediga tider).
+ * De röda dagarna är svenska; se S28 i docs/saljbarhet.md.
  */
 
 import { SKAL } from "./leadsforma.ts";
+import { arArbetsdag } from "../saljtakt.ts";
 
 export type PipeKolumn = "bokat" | "att_bekrafta" | "bekraftat" | "hos_saljaren" | "avgjort";
 export const PIPE_KOLUMNER: readonly PipeKolumn[] = ["bokat", "att_bekrafta", "bekraftat", "hos_saljaren", "avgjort"];
@@ -24,7 +30,12 @@ export const PIPE_KOLUMNER: readonly PipeKolumn[] = ["bokat", "att_bekrafta", "b
 export type Fraga = { id: string; text: string; aktiv: boolean };
 export type Satser = { kvalificerat: number; hallet: number };
 export type MotenInst = {
+  /** Arbetsdagar före mötesdagen som bekräftelsen öppnar. */
   bekraftaDagar: number;
+  /** Klockslaget ("HH:MM") då uppgiften läggs upp och notisen går, varje arbetsdag tills mötet är bekräftat. */
+  bekraftaTid: string;
+  /** Lägger Nav upp en uppgift och skickar notiser för bekräftelsen? Av = bara kolumnen på tavlan, som före 2026-11-13. */
+  bekraftaPaminn: boolean;
   fragor: Fraga[];
   satser: Satser;
   kolumnnamn: Record<PipeKolumn, string>;
@@ -39,6 +50,8 @@ export type MotenInst = {
 
 export const INST_FORVAL: MotenInst = {
   bekraftaDagar: 2,
+  bekraftaTid: "09:00",
+  bekraftaPaminn: true,
   fragor: [
     { id: "beslutsfattare", text: "Var rätt beslutsfattare med?", aktiv: true },
     { id: "syfte", text: "Visste kunden vad mötet gällde?", aktiv: true },
@@ -56,6 +69,8 @@ export const INST_FORVAL: MotenInst = {
 /** Nyckeln i nav_setting för varje inställning. */
 export const INST_NYCKLAR: Record<keyof MotenInst, string> = {
   bekraftaDagar: "moten.bekrafta-dagar",
+  bekraftaTid: "moten.bekrafta-tid",
+  bekraftaPaminn: "moten.bekrafta-paminn",
   fragor: "moten.fragor",
   satser: "moten.provision",
   kolumnnamn: "moten.kolumnnamn",
@@ -121,6 +136,8 @@ const giltigtNamn = (n: unknown): n is string => typeof n === "string" && !!n.tr
 
 const TOLKA: { [K in Exclude<keyof MotenInst, "kolumnnamn">]: (v: unknown) => MotenInst[K] | undefined } = {
   bekraftaDagar: (v) => (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= GRANSER.dagarMax ? v : undefined),
+  bekraftaTid: (v) => (typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : undefined),
+  bekraftaPaminn: (v) => (typeof v === "boolean" ? v : undefined),
   fragor: (v) => {
     if (!Array.isArray(v) || v.length > GRANSER.fragorMax) return undefined;
     const id = new Set<string>();
@@ -162,7 +179,9 @@ export function lasInstallningar(rader: { key: string; value: unknown }[]): Mote
 }
 
 const SPARFEL: Record<keyof MotenInst, string> = {
-  bekraftaDagar: "Antalet dagar ska vara ett heltal från 0 till 14.",
+  bekraftaDagar: "Antalet arbetsdagar ska vara ett heltal från 0 till 14.",
+  bekraftaTid: "Skriv tiden som TT:MM, till exempel 09:00.",
+  bekraftaPaminn: "Välj på eller av.",
   fragor: "Högst fem frågor, var och en med en text på högst 120 tecken.",
   satser: "Beloppen ska vara mellan 0 och 100 000 kr.",
   kolumnnamn: "Varje kolumnnamn ska ha mellan 1 och 24 tecken.",
@@ -214,15 +233,33 @@ export function plusDagar(dag: string, n: number): string {
   return new Date(Date.UTC(a, m - 1, d + n, 12)).toISOString().slice(0, 10);
 }
 
+/** Närmaste arbetsdag före dagen (helger och röda dagar hoppas över). */
+export function foregaendeArbetsdag(dag: string): string {
+  let d = plusDagar(dag, -1);
+  // Längsta följden lediga dagar i Sverige är fyra (påsken); 14 är marginal mot en trasig dag.
+  for (let i = 0; i < 14 && !arArbetsdag(d); i++) d = plusDagar(d, -1);
+  return d;
+}
+
+/** Närmaste arbetsdag efter dagen. */
+export function nastaArbetsdag(dag: string): string {
+  let d = plusDagar(dag, 1);
+  for (let i = 0; i < 14 && !arArbetsdag(d); i++) d = plusDagar(d, 1);
+  return d;
+}
+
 /**
- * Fönstret öppnar N dagar före mötesdagen. Senast-dagen är dagen före mötet,
- * eller mötesdagen när mötet bokades (eller flyttades) dagen före eller samma
- * dag. Senast är aldrig före öppningen (N = 0 öppnar på mötesdagen).
+ * Fönstret öppnar N ARBETSDAGAR före mötesdagen. Senast-dagen är arbetsdagen
+ * före mötet, eller mötesdagen när mötet bokades (eller flyttades) den
+ * arbetsdagen eller senare. Senast är aldrig före öppningen (N = 0 öppnar på
+ * mötesdagen). Ett måndagsmöte med N = 2 öppnar alltså på torsdagen och ska
+ * vara bekräftat på fredagen, aldrig på en lördag.
  */
 export function bekraftelseFonster(i: { moteTid: string; senastAndrad: string; dagar: number; tz: string }): { oppnar: string; senast: string } {
   const motesdag = lokalDag(i.moteTid, i.tz);
-  const dagenFore = plusDagar(motesdag, -1);
-  const oppnar = plusDagar(motesdag, -Math.max(0, i.dagar));
+  const dagenFore = foregaendeArbetsdag(motesdag);
+  let oppnar = motesdag;
+  for (let n = 0; n < Math.max(0, i.dagar); n++) oppnar = foregaendeArbetsdag(oppnar);
   const bokDag = lokalDag(i.senastAndrad, i.tz);
   let senast = bokDag >= dagenFore ? motesdag : dagenFore;
   if (senast < oppnar) senast = oppnar;
@@ -254,12 +291,15 @@ export function kortFas(
   return pipelineKolumn(k.mote, k.fonster, nu, tz);
 }
 
-/** Brådskan för ett möte som ännu ska bekräftas. Passerad senast-dag är fortfarande "i dag". */
+/**
+ * Brådskan för ett möte som ännu ska bekräftas. Passerad senast-dag är fortfarande "i dag". "I morgon" är nästa
+ * arbetsdag: på fredagen är en senast-dag på måndagen i morgon, för det finns ingen dag emellan att ringa på.
+ */
 export function bradska(senast: string, kolumn: PipeKolumn, nu: Date, tz: string): "idag" | "imorgon" | null {
   if (kolumn !== "bokat" && kolumn !== "att_bekrafta") return null;
   const idag = lokalDag(nu, tz);
   if (idag >= senast) return "idag";
-  if (plusDagar(idag, 1) === senast) return "imorgon";
+  if (nastaArbetsdag(idag) === senast) return "imorgon";
   return null;
 }
 
@@ -488,6 +528,78 @@ export function lokalKlockan(tid: string | Date, tz: string): string {
 export type PaminnelseMote = { id: string; slut: string; utfall: string | null; niva: string | null; utfallNar: string | null; hallsAv: string };
 export type Paminnelse = { kalla: "mote-utfall-saknas" | "mote-bedomning-saknas"; till: string; moteId: string };
 
+/** Ett obekräftat möte som jobbet frågar om. `uppgift` är mötets bekräftelseuppgift (`mote_uppgift`), om Nav lagt upp en. */
+export type BekraftaMote = {
+  id: string;
+  moteTid: string;
+  /** När mötet bokades eller senast flyttades: avgör senast-dagen (`bekraftelseFonster`). */
+  senastAndrad: string;
+  bokatAv: string;
+  hallsAv: string;
+  bekraftat: boolean;
+  utfall: string | null;
+  /** `avbruten`: den som har uppgiften har strukit den. Då kommer inga fler notiser; mötet står kvar på tavlan. */
+  uppgift: { id: string; till: string | null; avbruten: boolean } | null;
+};
+/** Vad som ska hända med mötet just nu: en notis till `till`, och en ny uppgift om `skapaUppgift`. */
+export type Bekraftelse = {
+  moteId: string;
+  till: string;
+  /** "ring" de första dagarna, "sista" på senast-dagen, "idag" på mötesdagen (ett möte bokat sent, eller som glömts). */
+  slag: "ring" | "sista" | "idag";
+  skapaUppgift: boolean;
+  /** Dagen i tidszonen: notisens nyckel. */
+  dag: string;
+  /** Senast-dagen: uppgiftens deadline, och i notisens text. */
+  senast: string;
+};
+
+/**
+ * Bekräftelsen, ren: vem ska ringa vilket möte just nu. Jobbet läser mötena, lägger upp uppgifterna och skriver
+ * notiserna; regeln ligger här.
+ *
+ *   - Fönstret är `bekraftelseFonster` (arbetsdagar). Från öppningsdagen, kl. `bekraftaTid`, varje ARBETSDAG tills
+ *     mötet är bekräftat, får ett utfall eller börjar. På helger och röda dagar händer ingenting.
+ *   - Mötesdagen räknas alltid (ett möte bokat på en lördag till måndag), och påminnelsen kommer då senast en timme
+ *     före mötet, så att ett möte 09:00 inte påminns först 09:00.
+ *   - Mottagaren är den som har uppgiften (den kan ha lämnats över), annars bokaren, annars hållaren; den som
+ *     slutat hoppas över.
+ *   - Möten före `galler-fran`, en avstängd påminnelse och en uppgift som strukits ger ingenting.
+ *
+ * Samma anrop två gånger samma dag ger samma lista; att notisen inte skrivs två gånger sköter jobbet med nyckeln
+ * (källa, möte, dag), och att uppgiften inte läggs upp två gånger sköter databasen (`mote_uppgift_skapa`, 0291).
+ */
+export function vemBekraftar(moten: readonly BekraftaMote[], aktiva: ReadonlySet<string>, nu: Date, inst: MotenInst): Bekraftelse[] {
+  if (!inst.bekraftaPaminn) return [];
+  const tz = inst.tidszon;
+  const idag = lokalDag(nu, tz);
+  const klockan = lokalKlockan(nu, tz);
+  const ut: Bekraftelse[] = [];
+  for (const m of moten) {
+    if (!omfattas(m.moteTid, inst.gallerFran)) continue;
+    if (m.bekraftat || m.utfall || m.uppgift?.avbruten) continue;
+    const start = Date.parse(m.moteTid);
+    if (!Number.isFinite(start) || start <= nu.getTime()) continue;
+    const f = bekraftelseFonster({ moteTid: m.moteTid, senastAndrad: m.senastAndrad, dagar: inst.bekraftaDagar, tz });
+    if (idag < f.oppnar) continue;
+    const motesdag = lokalDag(m.moteTid, tz);
+    if (!arArbetsdag(idag) && idag !== motesdag) continue;
+    let tid = inst.bekraftaTid;
+    if (idag === motesdag) {
+      const timmeFore = new Date(start - 3600_000);
+      const fore = lokalDag(timmeFore, tz) === idag ? lokalKlockan(timmeFore, tz) : "00:00";
+      if (fore < tid) tid = fore;
+    }
+    if (klockan < tid) continue;
+    const harUppgift = m.uppgift?.till && aktiva.has(m.uppgift.till) ? m.uppgift.till : null;
+    const till = harUppgift ?? (aktiva.has(m.bokatAv) ? m.bokatAv : aktiva.has(m.hallsAv) ? m.hallsAv : null);
+    if (!till) continue;
+    const slag: Bekraftelse["slag"] = idag === motesdag ? "idag" : idag >= f.senast ? "sista" : "ring";
+    ut.push({ moteId: m.id, till, slag, skapaUppgift: !m.uppgift, dag: idag, senast: f.senast });
+  }
+  return ut;
+}
+
 /**
  * Vem ska påminnas just nu. Ren: jobbet läser mötena och skriver notiserna, regeln ligger här.
  *
@@ -528,16 +640,16 @@ export function vemPaminns(moten: readonly PaminnelseMote[], admins: readonly st
  * läsningen (`error`) vet vi inte vad som skickats, och då skickas ingenting den här körningen: det är null, aldrig
  * "allt är nytt". `nyckel` är `notisId` (källa, möte, kalenderdag); den tas som parameter så att modulen förblir ren.
  */
-export function utanRedanSkickade(
-  att: readonly Paminnelse[],
+export function utanRedanSkickade<P extends { kalla: string; till: string; moteId: string }>(
+  att: readonly P[],
   gamla: { data: unknown; error: unknown },
   idag: string,
   tz: string,
-  nyckel: (kalla: Paminnelse["kalla"], moteId: string, dag: string) => string,
-): Paminnelse[] | null {
+  nyckel: (kalla: P["kalla"], moteId: string, dag: string) => string,
+): P[] | null {
   if (gamla.error || !Array.isArray(gamla.data)) return null;
   const skickat = new Set(
-    (gamla.data as { employee_id: string; kalla: Paminnelse["kalla"]; object_id: string; created_at: string }[]).map(
+    (gamla.data as { employee_id: string; kalla: P["kalla"]; object_id: string; created_at: string }[]).map(
       (r) => `${nyckel(r.kalla, r.object_id, lokalDag(r.created_at, tz))}:${r.employee_id}`,
     ),
   );

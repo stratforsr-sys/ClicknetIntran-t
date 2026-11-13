@@ -5,6 +5,35 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-13 · Möten: bekräftelsen blir en uppgift (på `main`, 0291 körd; arbetsdagar, klockslag, notis i telefonen)
+
+**Vad:** beställaren: den som bokat ett möte ska bekräfta det två dagar före, klockslaget ska gå att välja, och det
+ska bli en automatisk uppgift med notis i klockan och telefonen, "för det är viktigt att man inte tappar det".
+Bekräftelsen räknas i arbetsdagar ("de ska bara bekräftas på en arbetsdag"). Se NASTA_SESSION för delarna.
+
+**Varför så:**
+- *Mötet är sanningen, uppgiften är påminnelsen.* Två saker som ska vara klara samtidigt hålls i takt av triggrar i
+  databasen, inte av rutterna: sju vägar ändrar ett möte, och varje ny väg hade varit ett ställe att glömma.
+- *Notisen varje arbetsdag, inte en gång.* En bekräftelse är ett tillstånd som ska tjata tills den är gjord
+  (minnesregeln klocka/händelse), men morgonbrevet är avstängt för bolaget och når inte telefonen. Därför en händelse
+  per dag och möte, med nyckeln (källa, möte, dag, mottagare) som utfallspåminnelsen.
+- *Uppgiftens deadline är senast-dagen.* Första versionen gav uppgiften dagens datum och flyttade det fram varje
+  arbetsdag kl. 09:00, så att den alltid stod under i dag. Granskningen visade att den då stod som försenad mellan
+  körningarna (fredag natt, hela helgen) och räknades in i "mina försenade". Nav 2.0 visar ingen startdag, så den
+  ärliga deadlinen vann; notisen säger ändå att man ska ringa redan första dagen.
+- *En egen kopplingstabell.* En kolumn på `mote` hade kört `mote_efter_andring` och flyttat bolagets
+  `senast_handelse` varje gång Nav lade upp en uppgift.
+- *Tas bort, bockas inte av, när uppgiften förlorat sitt syfte* (flytt, utfall, radering, mötet började): en
+  avbockning hade sagt att någon bekräftat, och `task_event` kräver en person som gjorde det.
+
+**Provat:** `tests/motesflode.mjs` (fönstret i arbetsdagar inkl. jul och trettondagen, brådskan, `vemBekraftar` 30
+fall), `moten.mjs`, `notiser*.mjs`, `utskick.mjs`, `kalender-push.mjs`, `navnyheter.mjs`; tsc på de ändrade filerna
+0 fel; 0291 torrkörd mot produktionen i en återställd transaktion (alla fall gröna, också struken/påbörjad/flyttad
+tid) och `rattigheter-db.mjs` med 0291 grön; klicktest 22/22 och 660-stegsprovet; provkedjan utan rls/db har samma
+11 röda som main (alla kräver DATABASE_URL). Granskat av Fable, fynden i NASTA_SESSION.
+
+**Läge:** på `main` på beställarens ja ("Merga till main och gör klart allting"), 0291 körd före pushen.
+
 ## 2026-11-13 · Order: skälet till en rättelse (säljaren skriver det, admin och superadmin behöver inget; på `main` som `be8d894`)
 
 **Vad:** beställaren rättade #41 Toro Relining (godkänd 16:38, Inkio-fel 16:43) och fick "En rättelse kräver ett
