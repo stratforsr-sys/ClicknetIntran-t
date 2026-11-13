@@ -5,6 +5,21 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-13 · Att göra-knappen minns ringen (grenen `uppgiftsring`, beställarens ja till main samma natt)
+
+**Vad:** beställaren: när knappen med nästa att göra trycks ner till en ring ska den stanna så, även efter ut- och
+inloggning, och öppen ska stanna öppen. `S.pillMin` sparas i `localStorage` `nav2-pillmin` vid varje tryck och läses
+när sidan startar.
+
+**Varför så:**
+- *Webbläsaren, inte kontot.* Nav 2.0 sparar alla vyval så (temat, Rutiners och Utbildnings flikar, kalendervyn,
+  orderns kolumner), och utloggningen rensar inte lagringen. Knappen finns bara på datorn, så att valet följer datorn
+  är rimligt; ett val per konto hade krävt en kolumn och en skrivning för ett litet val.
+- *Läses vid starten, inte i `renderPill`.* `S.pillMin` är tillståndet; lagringen läses en gång och skrivs bara när
+  man trycker, så ritningen rör aldrig lagringen.
+
+---
+
 ## 2026-11-13 · Proven gröna: tre prov rättade, rls.mjs säker att köra (bara provfiler)
 
 **Vad:** beställaren efter mergen av rättelsen (`be8d894`): "gör det som krävs och gör allting grönt". Utan `npm ci`

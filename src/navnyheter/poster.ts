@@ -14,6 +14,18 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "att-gora-knappen-minns-ringen",
+    rubrik: "Att göra-knappen står kvar som du lämnade den",
+    ingress: "Trycker du ner knappen till en ring är den en ring nästa gång också, även efter att du loggat ut och in. Öppnar du den igen står den kvar öppen.",
+    text: `Knappen med nästa att göra längst ner till höger på datorn går att trycka ner till en liten ring med
+**–**. Nu minns Nav valet: ringen står kvar när du byter sida, laddar om och loggar ut och in igen. Trycker du på
+ringen öppnas knappen, och då står den kvar öppen tills du trycker ner den igen. Valet sparas i webbläsaren, så det
+gäller på den dator där du gjorde det.`,
+    datum: "2026-11-13",
+    roller: [],
+    href: "/",
+  },
+  {
     slug: "moten-bekrafta-uppgift",
     rubrik: "Möten: Nav påminner dig om att bekräfta mötet",
     ingress: "Två arbetsdagar före ett möte du bokat får du uppgiften Bekräfta mötet och en notis i telefonen. Bockar du av uppgiften blir mötet bekräftat.",

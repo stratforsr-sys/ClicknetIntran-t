@@ -10169,6 +10169,8 @@ Object.assign(S, {
   keysUsed:new Set(), hideKeys:false, keysOverlay:false, projFilter:null, shutdown:false, dayClosed:false, expanded:new Set(),
   editing:null, overFor:null, streakOpen:false, pending:null, capDone:false, suggested:new Set(), drag:null
 });
+// Ringen eller den öppna knappen: valet står kvar efter omladdning och efter ut- och inloggning (utloggningen rör inte localStorage).
+try { S.pillMin = localStorage.getItem('nav2-pillmin') === '1'; } catch(_){}
 const role = () => S.role === 'chef' ? 'chef' : 'saljare';
 const mine = () => TASKS.filter(t => t.who === role());
 const isDone = t => t.lage === 'klar' || (t.inbox && S.done.has(t.inbox));
@@ -10820,7 +10822,7 @@ function taskClick(t, e){
   if (d.todo !== undefined){ S.todoOpen = true; S.pending = null; render(); setTimeout(() => document.getElementById('qinTodo')?.focus(), 50); return true; }
   if (d.todoclose !== undefined){ S.todoOpen = false; render(); return true; }
   if (d.pin !== undefined){ S.pinned = !S.pinned; S.todoOpen = false; render(); toast(S.pinned ? 'Listan är fäst vid sidan och följer med på varje sida.' : 'Listan är lossad.'); return true; }
-  if (d.pillmin !== undefined){ S.pillMin = !S.pillMin; render(); return true; }
+  if (d.pillmin !== undefined){ S.pillMin = !S.pillMin; try { localStorage.setItem('nav2-pillmin', S.pillMin ? '1' : '0'); } catch(_){} render(); return true; }
   if (d.undo){ const x = TASKS.find(y => y.id === d.undo); x.lage = 'oppen'; if (x.wasFocus){ x.focus = 9; x.wasFocus = false; } if (x.inbox) S.done.delete(x.inbox); render(); return true; }
   if (d.startday !== undefined){ S.planned = true; S.streak[role()] += 1; render(); toast(`Dagen är planerad. ${S.streak[role()]} vardagar i rad.`); return true; }
   if (d.suggest !== undefined){ foreslaTre(); return true; }
