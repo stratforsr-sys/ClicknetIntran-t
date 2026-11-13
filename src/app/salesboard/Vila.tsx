@@ -16,7 +16,7 @@
 import { memo, useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement, type RefObject } from "react";
 import type { Ordning, TavlePerson } from "@/lib/salesboard/typer";
 import { arArbetsdag } from "@/lib/saljtakt";
-import { rangordna, type Siffror, type Visning } from "./ko.ts";
+import { rangordna, type Motestal, type Siffror, type Visning } from "./ko.ts";
 import { Postrad } from "./motion/delar";
 import { STD, ip } from "./motion/kurvor.ts";
 import { HALVVAGS } from "./motion/tider.ts";
@@ -56,6 +56,12 @@ export type Landning = {
 };
 
 const TOPPLISTANS_RADER = 9;
+/** Med mötesbokarna under sig får topplistan sju rader: laget har sju säljare (2026-11-13). */
+const TOPPLISTANS_RADER_MED_MOTEN = 7;
+/** Mötesbokarnas kort visar högst så många rader, och "+ N till". */
+const MOTESRADER = 3;
+/** Dagens rad: tio platser, i två grupper om fem. */
+const PLATSER = 10;
 const FLODETS_RADER = 4;
 
 /** 0 → 1 över `langd` bildrutor av landningen, med standardkurvan. */
@@ -178,14 +184,16 @@ function Topplistan({
   landning,
   lr,
   ordning,
+  antalRader,
 }: {
   v: Visning;
   landning: Landning | null;
   lr: number | null;
   ordning: Ordning;
+  antalRader: number;
 }): ReactElement {
   const alla = rangordna(v.tal.rader, ordning);
-  const rader = alla.slice(0, TOPPLISTANS_RADER);
+  const rader = alla.slice(0, antalRader);
   const fler = alla.length - rader.length;
   // Jakten står still i vila; under en landning är det ↑2 som talar.
   const jakt = lr === null ? jakten(rader, ordning, snitt(v.tal.lag.varde, v.tal.lag.antal)) : null;
@@ -219,14 +227,14 @@ function Topplistan({
             <small>Välj lag under Inställningar → Säljtavlan → Visning.</small>
           </p>
         ) : (
-          <div className="tv-rader">
+          <div className="tv-rader" style={{ gridTemplateRows: `repeat(${antalRader}, minmax(0, 1fr))` }}>
             {rader.map((r, i) => {
               const person: TavlePerson = v.bild.personer[r.person] ?? DOLD;
               const fi = fore ? fore.findIndex((x) => x.person === r.person) : -1;
               const f = fore && fi >= 0 ? fore[fi] : null;
               const andrad = lr !== null && (!f || f.antal !== r.antal || f.varde !== r.varde);
               // Raden kommer från sin gamla plats; en ny rad kommer underifrån.
-              const fran = lr === null ? i : fi >= 0 ? fi : TOPPLISTANS_RADER;
+              const fran = lr === null ? i : fi >= 0 ? fi : antalRader;
               const dy = lr === null ? 0 : (fran - i) * (1 - steg(lr, FLIP));
               const upp = lr !== null && andrad && fran > i && lr < UPP + 18 ? fran - i : 0;
               const antal = andrad && f ? Math.round(rull(f.antal, r.antal, lr ?? 0, RULL_ANTAL)) : r.antal;
@@ -264,6 +272,84 @@ function Topplistan({
         )}
         {fler > 0 ? <p className="tv-fler">+ {fler} säljare till</p> : null}
       </div>
+    </section>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Mötesbokarna
+//
+// ===========================================================================
+// MÖTEN OCH ORDER STÅR I VAR SITT KORT, OCH BLANDAS ALDRIG.
+//
+// Topplistan är order och kronor. Mötesbokarna är bokade möten: inget belopp,
+// ingen plats i en tävling, och ljung i stället för mint. Kolumnerna står ändå
+// under topplistans (veckans dagar blir dagens rad, "I dag" står under "I dag"),
+// så att ögat läser de två korten som en tavla. Den som både bokar och säljer
+// står i båda.
+// ===========================================================================
+// -----------------------------------------------------------------------------
+
+/**
+ * Dagens rad: tio platser i två grupper om fem. Ett block som just fyllts faller på
+ * plats (CSS), en gång: listan minns vad den visade per bokare.
+ */
+function Dagensrad({ n, nya }: { n: number; nya: ReadonlySet<number> }): ReactElement {
+  return (
+    <span className="tv-mo-dagrad" aria-label={`${n} möten i dag`}>
+      {Array.from({ length: PLATSER }, (_, i) => (
+        <i key={i} className={`${i < n ? "tv-mo-pa" : ""}${nya.has(i) ? " tv-mo-ny" : ""}`} />
+      ))}
+      {n > PLATSER ? <b>+{n - PLATSER}</b> : null}
+    </span>
+  );
+}
+
+/** Ett nyfyllt block faller så här länge. */
+const FALLER_MS = 1_600;
+
+function Motesbokarna({ m, manad }: { m: Motestal; manad: string }): ReactElement {
+  const rader = m.rader.slice(0, MOTESRADER);
+  const fler = m.rader.length - rader.length;
+  // Vad listan visade senast per bokare, och när ett block senast landade.
+  const sist = useRef(new Map<string, { n: number; fran: number; t: number }>());
+  const nu = typeof performance === "undefined" ? 0 : performance.now();
+  return (
+    <section className="tv-kort tv-mo-kort" aria-label="Mötesbokarna">
+      <div className="tv-kort-rubrik">
+        <h2>Möten</h2>
+        <small>
+          bokade · i dag {heltal(m.idag)} · {manad} {heltal(m.manad)}
+        </small>
+      </div>
+      <div className="tv-rad-huvud tv-mo-huvud">
+        <span />
+        <span>Mötesbokare</span>
+        <span className="tv-mo-huvud-rad">Mot 5 och 10</span>
+        <span className="tv-mo-kol">I dag</span>
+        <span>{manad}</span>
+      </div>
+      {rader.map((r) => {
+        const fore = sist.current.get(r.person);
+        let nya: Set<number> = new Set();
+        if (!fore) sist.current.set(r.person, { n: r.idag, fran: r.idag, t: -Infinity });
+        else if (r.idag !== fore.n) sist.current.set(r.person, { n: r.idag, fran: Math.min(fore.n, r.idag), t: r.idag > fore.n ? nu : -Infinity });
+        const s = sist.current.get(r.person)!;
+        if (nu - s.t < FALLER_MS) nya = new Set(Array.from({ length: Math.max(0, s.n - s.fran) }, (_, k) => s.fran + k));
+        return (
+          <div key={r.person} className="tv-rad tv-mo-rad">
+            <span />
+            <div className="tv-vem">
+              <span className="tv-ini tv-mo-ini">{r.vem.initialer}</span>
+              <span className="tv-rad-namn">{r.vem.namn}</span>
+            </div>
+            <Dagensrad n={r.idag} nya={nya} />
+            <span className={`tv-mo-idag${r.idag ? "" : " tv-noll-tal"}`}>{r.idag || "–"}</span>
+            <span className={`tv-mo-manad${r.manad ? "" : " tv-noll-tal"}`}>{r.manad ? heltal(r.manad) : "–"}</span>
+          </div>
+        );
+      })}
+      {fler > 0 ? <p className="tv-fler">+ {fler} mötesbokare till</p> : null}
     </section>
   );
 }
@@ -571,6 +657,8 @@ export function Vila({
 }): ReactElement {
   const stil: CSSProperties | undefined =
     rorelse.dy !== 0 || rorelse.skala !== 1 ? { translate: `0 ${rorelse.dy * u}px`, scale: String(rorelse.skala) } : undefined;
+  // Mötesbokarnas kort står bara när det finns någon att visa: en tavla utan möten ser ut som förut.
+  const medMoten = (v.moten?.rader.length ?? 0) > 0;
   return (
     <main className={`tv-scen${dampad ? " tv-dampad" : ""}${offline ? " tv-gammal" : ""}`} style={stil}>
       <Huvud
@@ -584,7 +672,10 @@ export function Vila({
         puls={v.bild.order[0]?.nyckel ?? ""}
       />
       <div className="tv-kropp">
-        <Topplistan v={v} landning={landning} lr={lr} ordning={ordning} />
+        <div className={`tv-vanster${medMoten ? " tv-med-moten" : ""}`}>
+          <Topplistan v={v} landning={landning} lr={lr} ordning={ordning} antalRader={medMoten ? TOPPLISTANS_RADER_MED_MOTEN : TOPPLISTANS_RADER} />
+          {medMoten && v.moten ? <Motesbokarna m={v.moten} manad={v.bild.manad.namn.toLowerCase()} /> : null}
+        </div>
         <div className="tv-hoger">
           <Malkortet v={v} landning={landning} lr={lr} kortRef={kortRef} />
           <Grafen v={v} landning={landning} lr={lr} u={u} />

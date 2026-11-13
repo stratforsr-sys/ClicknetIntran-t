@@ -11,7 +11,7 @@ import { svensktDatum, svenskaMinuter } from "../klocka.ts";
 import { dagarTill } from "../order.ts";
 import { arArbetsdag, dagPlus, veckodag } from "../saljtakt.ts";
 import { snittorder } from "./tavling.ts";
-import type { Namnform, Ogonblick, TavleHandelse, TavleOrder, TavleSaljare, TavlansInstallningar, Testtyp, Visning } from "./typer.ts";
+import type { Namnform, Ogonblick, TavleHandelse, TavleMote, TavleOrder, TavleSaljare, TavlansInstallningar, Testtyp, Visning } from "./typer.ts";
 
 // -----------------------------------------------------------------------------
 // Namn och monogram
@@ -123,6 +123,14 @@ export const AKTIVA_STATUSAR = ["active", "onboarding"] as const;
  * sin). Provet läser den filen och håller de två i takt (R30).
  */
 export const SALJANDE_ROLLER: ReadonlySet<string> = new Set(["salesperson", "sales_manager", "ceo"]);
+
+/**
+ * Mötesbokaren (beställaren 2026-11-13). Rollen sätter personen bland mötesbokarna
+ * på tavlan också innan hen bokat något. Den är inte en säljande roll: den som bara
+ * bokar möten står inte i topplistan för order, och den som både bokar och säljer
+ * har båda rollerna och står på båda ställena.
+ */
+export const MOTESBOKARROLL = "meeting_booker";
 
 // -----------------------------------------------------------------------------
 // Stor affär
@@ -334,10 +342,44 @@ export type Tagg =
   | { typ: "personbasta"; antal: number }
   | { typ: "dagensForsta" };
 
+/**
+ * Hur stort ett bokat möte firas (beställaren 2026-11-13: det första, fem på en dag
+ * och tio på en dag ska vara olika, och var och en större än den förra).
+ *
+ * - `tio`: bokaren passerade tio möten i dag.
+ * - `fem`: bokaren passerade fem.
+ * - `forsta`: bokarens första möte någonsin.
+ * - `dagensForsta`: bokarens första möte i dag.
+ * - `vanlig`: ett möte till.
+ * - `lag`: en dold säljares möte. Inget personligt (R23): laget fick ett möte.
+ */
+export type Motesniva = "vanlig" | "dagensForsta" | "forsta" | "fem" | "tio" | "lag";
+
+/** Milstolparna på en dag, i ordning. Firas när bokaren passerar dem, en gång per dag. */
+export const MOTESMILSTOLPAR = { fem: 5, tio: 10 } as const;
+
+/**
+ * Nivån när bokaren gått från `fore` till `efter` möten i dag, där de nya är `forsta`
+ * om något av dem är hens första någonsin. Den högsta som passerats vinner: tre
+ * möten på en gång som tar bokaren från fyra till sju firas som fem.
+ */
+export function motesniva(fore: number, efter: number, forsta: boolean, dold: boolean): Motesniva {
+  if (dold) return "lag";
+  if (fore < MOTESMILSTOLPAR.tio && efter >= MOTESMILSTOLPAR.tio) return "tio";
+  if (fore < MOTESMILSTOLPAR.fem && efter >= MOTESMILSTOLPAR.fem) return "fem";
+  if (forsta) return "forsta";
+  return fore === 0 ? "dagensForsta" : "vanlig";
+}
+
 /** Ett ögonblick som ska spelas. */
 export type Firande =
   | { typ: "order"; order: TavleOrder; variant: "vanlig" | "stor" | "forsta"; taggar: Tagg[] }
   | { typ: "serie"; order: TavleOrder[] }
+  /**
+   * Ett eller flera möten som en bokare just bokat, firade en gång: `mote` är det
+   * senaste, `antal` bokarens möten i dag efter dem och `nya` hur många som kom nu.
+   */
+  | { typ: "mote"; mote: TavleMote; niva: Motesniva; antal: number; nya: number; nycklar: string[] }
   | { typ: "halvvags" }
   | { typ: "malet"; natt: string }
   | { typ: "test"; testtyp: Testtyp; id: number }
@@ -387,6 +429,12 @@ export type Minne = {
   grans: string[];
   /** Tävlingen: förra månadens vinnare är visad på den här skärmen. */
   vinnare: boolean;
+  /**
+   * Nycklarna till möten som setts under dagen `dag`, som `kanda` för orderna: ett
+   * möte firas en gång, också över en omladdning, och ett raderat möte som kommer
+   * tillbaka firas inte igen. Städas när dagen byts.
+   */
+  moten: string[];
 };
 
 /** Klockslaget som millisekunder, eller NaN när det inte går att läsa. */
@@ -432,6 +480,7 @@ const kopiera = (m: Minne): Minne => ({
   knuff: [...m.knuff],
   grans: [...m.grans],
   vinnare: m.vinnare,
+  moten: [...m.moten],
 });
 
 /** Högsta id bland testhändelserna, eller 0. */
@@ -468,6 +517,8 @@ function lasMinne(minne: unknown): Minne | null {
     knuff: lista(m.knuff),
     grans: lista(m.grans),
     vinnare: m.vinnare === true,
+    // Mötena är nya: ett minne utan dem har inte sett några möten.
+    moten: lista(m.moten),
   };
 }
 
@@ -544,7 +595,41 @@ function borja(ny: Ogonblick, fore: Minne | null): Minne {
     // Den som redan är över gränsen vid en start har passerat den: det firas inte i efterhand.
     grans: unika([...(samma?.grans ?? []), ...overGransen(ny)]),
     vinnare: samma?.vinnare ?? false,
+    moten: unika([...(fore !== null && fore.dag === datum ? fore.moten : []), ...motesnycklar(ny)]),
   };
+}
+
+/** Bildens mötesnycklar. En bild utan möten har inga. */
+const motesnycklar = (bild: Ogonblick): string[] => (bild.moten?.lista ?? []).map((m) => m.nyckel);
+
+/**
+ * Mötena som ska firas: dagens som minnet inte känner och som är färska, ett firande
+ * per bokare (det senaste mötet bär det), i den ordning bokarnas senaste möten kom.
+ * En dold säljares möten firas för laget, och var för sig: de kan inte slås ihop
+ * utan att räkna hens dag.
+ */
+function motesfiranden(ny: Ogonblick, kanda: ReadonlySet<string>, nuMs: number): Firande[] {
+  const dag = ny.idag.datum;
+  const farska = (ny.moten?.lista ?? [])
+    .filter((m) => !kanda.has(m.nyckel) && m.dag === dag && nuMs - ms(m.tid) <= FARSK_MS)
+    .sort((a, b) => ms(a.tid) - ms(b.tid));
+  const per = new Map<string, TavleMote[]>();
+  const firanden: Firande[] = [];
+  for (const m of farska) {
+    const person = ny.personer?.[m.person];
+    if (!person || person.dold !== false) {
+      firanden.push({ typ: "mote", mote: m, niva: "lag", antal: 0, nya: 1, nycklar: [m.nyckel] });
+      continue;
+    }
+    per.set(m.person, [...(per.get(m.person) ?? []), m]);
+  }
+  for (const egna of per.values()) {
+    const sista = egna[egna.length - 1];
+    const antal = Math.max(...egna.map((m) => m.bokarensDagsantal));
+    const niva = motesniva(antal - egna.length, antal, egna.some((m) => m.forstaNagonsin), false);
+    firanden.push({ typ: "mote", mote: sista, niva, antal, nya: egna.length, nycklar: egna.map((m) => m.nyckel) });
+  }
+  return firanden.sort((a, b) => (a.typ === "mote" && b.typ === "mote" ? ms(a.mote.tid) - ms(b.mote.tid) : 0));
 }
 
 /** De som är över månadens kvalgräns i bilden. Utan tävling eller utan gräns ingen. */
@@ -633,7 +718,12 @@ function tavlingsogonblick(
  *   korsning: den noteras tyst, så att inget mål spelas i efterhand.
  * - **Test**: id över `minne.handelse` och yngre än `TEST_FARSK_MS`.
  *
- * Ordningen i svaret är order eller serie, sedan halvvägs eller målet, sedan test.
+ * - **Möten** (`motesfiranden`): dagens möten som minnet inte känner och som är högst
+ *   `FARSK_MS` gamla, ett firande per bokare med nivån efter vad hen passerat i dag
+ *   (`motesniva`). Varje mötesnyckel blir känd också när den inte firas.
+ *
+ * Ordningen i svaret är order eller serie, sedan tävlingen, mötena, halvvägs eller
+ * målet, sedan test.
  *
  * En order som försvinner ur bilden (en makulering) firas aldrig och dras av tyst.
  * Dess nyckel står kvar resten av dagen, också över en omladdning, så att den inte
@@ -715,6 +805,11 @@ export function planera(
     : { firanden: [], knuff: sammaDagNu ? fore.knuff : [], grans: unika([...fore.grans, ...overGransen(ny)]) };
   firanden.push(...tavlan.firanden);
 
+  // --- Mötena: efter orderna och tävlingen, före målet --------------------------------
+  // Ett möte är inte en order: det rör varken månadens tal eller målet.
+  const kandaMoten = new Set(fore.dag === datum ? fore.moten : []);
+  firanden.push(...motesfiranden(ny, kandaMoten, nuMs));
+
   // --- Målet och halvvägs ----------------------------------------------------
   let halvvags = fore.halvvags;
   let malet = fore.malet;
@@ -763,6 +858,7 @@ export function planera(
       knuff: tavlan.knuff,
       grans: tavlan.grans,
       vinnare: fore.vinnare,
+      moten: unika([...kandaMoten, ...motesnycklar(ny)]),
     },
   };
 }

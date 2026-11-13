@@ -37,6 +37,7 @@ import { rektUtanTransform, type Rekt } from "./motion/delar";
 import { FPS } from "./motion/matte.ts";
 import { Knuffen, type KnuffenProps } from "./motion/Knuffen";
 import { Malet, type MaletProps } from "./motion/Malet";
+import { Motet, type MotetProps } from "./motion/Motet";
 import { Spelare } from "./motion/motor";
 import { Ordern, type OrderProps } from "./motion/Ordern";
 import { Serie, type SerieProps } from "./motion/Serie";
@@ -84,6 +85,7 @@ type Spelning = Gemensamt &
     | { typ: "vinnare"; props: TavlingenProps }
     | { typ: "knuff"; props: KnuffenProps }
     | { typ: "grans"; props: KnuffenProps }
+    | { typ: "mote"; props: MotetProps }
   );
 
 /** Fönstret: pixlar per u (1 u = 1 px på 1920×1080) och storleken. */
@@ -463,6 +465,8 @@ export default function Tavla({
         }
         case "halvvags":
           return { ...gem, typ: "halvvags", props: null };
+        case "mote":
+          return { ...gem, typ: "mote", props: { data: d, test: f.test, lugn: lugnNu, u, vw, vh } };
         case "order":
           return { ...gem, typ: "order", props: { data: d, test: f.test, lugn: lugnNu, till: flodesRader(1), u, vw, vh } };
         case "serie": {
@@ -789,7 +793,7 @@ export default function Tavla({
 
   // --- Vad som syns (ko.ts) -------------------------------------------------------
   const tt = t.current;
-  const v = visningFor({ visad: tt.visad, vantande: vantande(), spel: spel?.forlopp ?? null, r: ruta });
+  const v = visningFor({ visad: tt.visad, vantande: vantande(), spel: spel?.forlopp ?? null, r: ruta, senaste: tt.senaste });
   const rorelse = lugn ? { dy: 0, skala: 1 } : tavlansRorelse(spel?.forlopp ?? null, ruta);
   const landning = lr !== null ? tt.landning : null;
 
@@ -875,6 +879,8 @@ export default function Tavla({
             <Spelare key={spel.id} komposition={Tavlingen} props={spel.props} varaktighet={spel.forlopp.varaktighet} klocka={spel.klocka} onKlar={() => avsluta(spel.id)} />
           ) : spel.typ === "knuff" || spel.typ === "grans" ? (
             <Spelare key={spel.id} komposition={Knuffen} props={spel.props} varaktighet={spel.forlopp.varaktighet} klocka={spel.klocka} onKlar={() => avsluta(spel.id)} />
+          ) : spel.typ === "mote" ? (
+            <Spelare key={spel.id} komposition={Motet} props={spel.props} varaktighet={spel.forlopp.varaktighet} klocka={spel.klocka} onKlar={() => avsluta(spel.id)} />
           ) : (
             <Spelare key={spel.id} komposition={Malet} props={spel.props} varaktighet={spel.forlopp.varaktighet} klocka={spel.klocka} onKlar={() => avsluta(spel.id)} />
           )}

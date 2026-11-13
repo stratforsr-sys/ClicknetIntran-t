@@ -10,6 +10,7 @@
  * då tavlans tal rullar, raden flyttar och grafen växer.
  */
 
+import type { Motesniva } from "../../../lib/salesboard/regler.ts";
 import type { LjudId, Ljudparametrar } from "../ljud.ts";
 import { FPS } from "./matte.ts";
 
@@ -193,5 +194,87 @@ export function vinnareLjud(medVinnare: boolean): Ljudpunkt[] {
     { f: Math.round(30 - 0.36 * FPS), ljud: "small", p: { styrka: 0.6 } },
     { f: 24, ljud: "fanfar", p: { styrka: 0.75 } },
     { f: 30, ljud: "arena", p: { styrka: 0.6, tona: [4.6, 1.6] } },
+  ];
+}
+
+// -----------------------------------------------------------------------------
+// Mötena
+//
+// ===========================================================================
+// ETT MÖTE SER OCH LÅTER INTE SOM EN ORDER.
+//
+// Orderna sveper upp underifrån i mint och låter som en kassa. Mötena sveper in
+// från sidan i ljung, bär aldrig ett kronbelopp och låter som anslag och klockor
+// (tonerna syntetiserade, de stora ljuden från ElevenLabs Music via Higgsfield; se
+// ljud.ts). Rörelsen är dagens rad: tio platser i två grupper om fem, där
+// bokarens block faller på plats. Fem och tio är rader som
+// fylls, så att rummet ser milstolpen komma.
+// ===========================================================================
+// -----------------------------------------------------------------------------
+
+/** Firandets längd per nivå: ett möte till är en remsa i nederkanten, resten tar skärmen. */
+export const MOTE_LANGD: Record<Motesniva, number> = { vanlig: 252, lag: 252, dagensForsta: 330, forsta: 420, fem: 510, tio: 690 };
+
+/** Bildrutan där bokarens nya block landar. Mötesbokarnas lista räknar det härifrån. */
+export const MOTE_LANDAR: Record<Motesniva, number> = { vanlig: 40, lag: 40, dagensForsta: 72, forsta: 86, fem: 104, tio: 132 };
+
+/** Utgången: så här många bildrutor före slutet sveper scenen ut. */
+export const MOTE_UT = 30;
+
+/** Mötena byter inget på tavlan bakom: `byt` är 0, och listan landar på `MOTE_LANDAR`. */
+export const moteTider = (niva: Motesniva): Ordertider => ({ byt: 0, slut: MOTE_LANGD[niva] });
+
+export const moteLandar = (niva: Motesniva): number => MOTE_LANDAR[niva];
+
+/** Fem: block 1–4 landar med tolv bildrutors mellanrum, sedan en paus, och det femte på `MOTE_LANDAR.fem`. */
+export const femBlock = (i: number): number => (i < 4 ? 40 + i * 12 : MOTE_LANDAR.fem);
+
+/** Tio: block 1–9 landar allt tätare (12 bildrutor ner till 6), sedan en paus, och det tionde på `MOTE_LANDAR.tio`. */
+export function tioBlock(i: number): number {
+  if (i >= 9) return MOTE_LANDAR.tio;
+  let f = 36;
+  for (let k = 0; k < i; k++) f += Math.max(6, 12 - k);
+  return f;
+}
+
+/** Halvtonssteg uppåt för blocken: pentatoniskt i fem, durskalan i tio. */
+const FEM_STEG = [0, 2, 4, 7];
+const TIO_STEG = [0, 2, 4, 5, 7, 9, 11, 12, 14];
+const takt = (halvtoner: number): number => 2 ** (halvtoner / 12);
+
+/**
+ * Mötets ljudspår. Ett möte till: ett lätt svisch och två anslag när blocket landar.
+ * Det första: ett brutet ackord. Fem: en ton per block uppåt och ett ackord på det
+ * femte. Tio: en skala som går allt fortare, och klangen och publiken på det tionde.
+ */
+export function moteLjud(niva: Motesniva, antal: number): Ljudpunkt[] {
+  const land = MOTE_LANDAR[niva];
+  if (niva === "fem") {
+    return [
+      { f: 0, ljud: "svisch", p: { styrka: 0.4, fran: 0.18 } },
+      ...FEM_STEG.map((h, i): Ljudpunkt => ({ f: femBlock(i), ljud: "ton", p: { styrka: 0.5 + i * 0.08, takt: takt(h) } })),
+      { f: land, ljud: "ackord", p: { styrka: 0.9 } },
+      { f: land, ljud: "ton", p: { styrka: 0.6, takt: 2 } },
+    ];
+  }
+  if (niva === "tio") {
+    return [
+      { f: 0, ljud: "svisch", p: { styrka: 0.5, fran: 0.18 } },
+      ...TIO_STEG.map((h, i): Ljudpunkt => ({ f: tioBlock(i), ljud: "ton", p: { styrka: 0.42 + i * 0.05, takt: takt(h) } })),
+      { f: land, ljud: "klang", p: { styrka: 1 } },
+      { f: land + 4, ljud: "publik", p: { styrka: 0.55, tona: [4.2, 1.6] } },
+    ];
+  }
+  if (niva === "forsta") {
+    return [
+      { f: 0, ljud: "svisch", p: { styrka: 0.4, fran: 0.18 } },
+      { f: land - 2, ljud: "valkommen", p: { styrka: 0.85 } },
+    ];
+  }
+  // Ett möte till och dagens första: det andra anslaget i "pling" kommer 0,1 s in, när blocket slår i.
+  const styrka = niva === "dagensForsta" ? 0.75 : antal > 0 ? 0.6 : 0.5;
+  return [
+    { f: 0, ljud: "svisch", p: { styrka: niva === "dagensForsta" ? 0.35 : 0.2, fran: 0.18 } },
+    { f: land - 6, ljud: "pling", p: { styrka } },
   ];
 }

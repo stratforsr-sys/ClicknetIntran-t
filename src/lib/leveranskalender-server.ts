@@ -122,7 +122,7 @@ export type Leveransdata = {
   veckolast: Record<string, number>;
 };
 
-const SALJ: Role[] = ["salesperson", "sales_manager", "team_lead"];
+const SALJ: Role[] = ["salesperson", "meeting_booker", "sales_manager", "team_lead"];
 const LEV: Role[] = ["delivery", "project_manager"];
 
 /** Alla aktiva, med min nivå i var och ens kalender. */
@@ -147,7 +147,7 @@ export async function hamtaPersoner(user: CurrentUser): Promise<Person[]> {
     const r = rollerPer.get(e.id) ?? [];
     const grupp = r.some((x) => SALJ.includes(x)) ? "salj" : r.some((x) => LEV.includes(x)) ? "lev" : "ovr";
     const huvudroll =
-      (["sales_manager", "team_lead", "project_manager", "delivery", "salesperson", "ceo", "finance", "admin"] as Role[]).find(
+      (["sales_manager", "team_lead", "project_manager", "delivery", "salesperson", "meeting_booker", "ceo", "finance", "admin"] as Role[]).find(
         (x) => r.includes(x),
       ) ?? null;
     return {

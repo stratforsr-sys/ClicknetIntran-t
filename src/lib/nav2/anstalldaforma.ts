@@ -59,6 +59,7 @@ export function frist(p: { bas: string | null; skapad: string; off: number | nul
 /* ------------------------------------------------------------------ Mejlens ord */
 export const ROLLNAMN: Record<string, string> = {
   salesperson: "Säljare",
+  meeting_booker: "Mötesbokare",
   team_lead: "Teamledare",
   sales_manager: "Säljchef",
   ceo: "VD",

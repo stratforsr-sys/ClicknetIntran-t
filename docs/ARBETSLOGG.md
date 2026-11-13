@@ -5,6 +5,70 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-13 · Möten på säljtavlan + rollen Mötesbokare (grenen `moten-pa-tavlan`, 0292 EJ KÖRD, EJ MERGAD)
+
+**Beställningen:** bokade möten syns på säljtavlan med en upptrappning: bokarens första möte någonsin, dagens
+första, fem och tio på en dag. "Säkerställ att möten som bokas om inte räknas som ett nytt möte." Möten får aldrig
+förväxlas med order, och mötesbokare ska skiljas från säljare ("lägg till rollen mötesbokare"). Mick bokar högst
+sex om dagen, så tio är sällsynt. Andra passet: "använd dig av higgsfield för att maximera animationerna, gör det
+super coola men proffsiga".
+
+**Beslut fattade utan att fråga (beställaren ska få höra dem):**
+- *90-dagarsregeln.* Ett möte räknas bara om `art = 'ny'` och inget möte med samma bolag, av någon art och
+  bokat av vem som helst, finns de senaste 90 dagarna. Samma bolag är samma bolags-id, telefon, domän (utom
+  gratismejl) eller namn utan bolagsform. Skälet: ORION CAR AB låg två gånger i Möten med olika nummer, och mötet
+  10/11 var en fortsättning på 5/11. Bara `art` hade släppt igenom det.
+- *Firandet sker vid bokningen.* Ett möte som avbokas senare har redan firats; ett raderat möte finns inte och
+  räknas inte. Ett firande tas aldrig tillbaka på tv:n.
+- *Mötesbokare = Säljares behörighet,* men ingen säljande roll: den står bland mötesbokarna, inte i
+  ordertopplistan.
+- *TESTTYPER* rättad i förbifarten: tävlingstesterna saknades.
+- `NH_GRUPPER` är oförändrad.
+
+**Byggt:**
+- `src/lib/salesboard/moten.ts` (räkningen, `DUBBLETT_DAGAR`), `regler.ts` (`Motesniva`: vanlig, lag,
+  dagensForsta, forsta, fem, tio), `tavlan.ts`, `typer.ts`, `forma.ts`, `skrivning.ts`, `ko.ts` (mötena i kön).
+- Rollen `meeting_booker` i `roles.ts`, `avdelningar.ts`, `nav2/forma.ts`, `anstalldaforma.ts`, `loggforma.ts`,
+  `nyheter.ts`, `leveranskalender-server.ts` och utkastet (`AEROLL`, `BRHFRAN`: "nio roller tre", provspelning av
+  mötesfallen i ljung). Migration `0292_roll_motesbokare.sql` vidgar bara CHECK; 0291 är tagen av
+  uppgift-kollega.
+- `motion/Motet.tsx` + `tider.ts` + `tavla.css`: kompositionen Mötet. Bärande form är dagens rad, tio platser i
+  två grupper om fem, så att fem och tio syns i formen innan de nås. Ljung `#C4A3E8` på `#17121E`, svep i sidled
+  (orderna sveper uppåt i mint), etikettens markör ett block (orderns är en prick), aldrig kronor.
+- `Vila.tsx`: panelen Möten under topplistan (mötesbokarna, dagens rad, i dag, månaden).
+
+**Lyftet (andra passet), efter genomgång av alla sex fallen i selen:**
+- Remsan klippte namnet ("Mick Ekströ…"): namnkolumnen fick 288 u bredvid raden. Raden är nu 36 u-block och
+  namnet räknas fram till den plats som blir kvar, så det krymper i stället för att klippas.
+- Första och dagens första: innehållet stod i övre halvan med en tom nedre halva. Huvudgruppen står nu mitt i
+  höjden, och foten är fäst i nederkanten.
+- Fem: det femte blocket föll rakt över etiketten "FEM MÖTEN". Milstolpsblocket faller inte längre utan
+  stämplas mot skärmen (skala 1,5 → 1, accelererande, tryck i nedslaget), så det aldrig korsar etiketten och
+  känns tyngre än de andra. Blockringarna är kortare (24 bildrutor, 1,32×), så att högst två syns samtidigt. Den
+  stora ringen runt raden såg ut som en UI-ram som stod kvar i en halv sekund; den är nu en blixt på 20
+  bildrutor.
+- Tio: hela skärmen tonades från mörkt till ljung och passerade en grumlig gråviolett. Nu väller ljungen ut ur
+  det tionde blocket som en cirkel (28 bildrutor), och varje block och etiketten vänds mörka när cirkeln
+  passerar dem (`ton` per block i `Raden`). De stora ringarna är borta i tio: floden är stöten.
+- **Higgsfield:** gratisplanen, 8,98 krediter. Bild och video hade blivit dekor på tavlan (CLAUDE.md:
+  "aldrig ur dekor"), så Higgsfield gjorde ljudet och rörelsen byggdes i koden. ElevenLabs Music v2.5 (nytt i
+  katalogen sedan 2026-10-30) gav sex stinger-ljud i C-dur: två för tio, två för fem, två för första mötet; ett
+  skickades om efter 429. Valda på mätning, eftersom ingen session kan lyssna: tonart (Krumhansl på chroma),
+  anslag, och att ljudet klingar ut till tystnad. `klang` = klang_b (C-dur r 0,89, Cmaj9-färg), `ackord` =
+  ackord_b (ren C–E, kortare än tio), `valkommen` = valkommen_b (r 0,88). En av fem-varianterna blev e-moll med
+  ett F och en av välkomst-varianterna hade ett C#; båda kasserade. Tystnaden före anslaget är skuren, så att
+  ljudet slår på bildrutan (inom 10 ms efter AAC). Kostnad 3,52 krediter, 5,46 kvar.
+- Fallgrop: `afconvert` skriver en `FLLR`-chunk på 4 KB före ljuddatan i WAV. Ett skript som läser från byte
+  44 tar rubriken som ljud (ett knäpp i början). Läs chunkarna.
+
+**Prov:** tsc grönt (utom macOS-skiftläget `Pling.tsx`/`pling.ts`, som finns på main och bara gäller macOS);
+`salesboard`, `-parning`, `-motor`, `-ljud`, `-server`, `-tavla`, `-ko`, `-installningar`, `-moten`,
+`navnyheter`, `stampelfri` gröna. Bilder av alla fall i `~/sb-sele/bilder`. Realtidsspelningen och ljuden är
+INTE provade i riktiga Chrome (huvudlöst kör inte rAF, och ingen session kan lyssna).
+
+**Kvar:** ja till 0292 (och läs först produktionens CHECK); Mick och Carl som Mötesbokare, och ska de behålla
+Säljare; lyssna; ja till merge; Higgsfields villkor för ljud från gratisplanen.
+
 ## 2026-11-13 · Möten: bekräftelsen blir en uppgift (på `main`, 0291 körd; arbetsdagar, klockslag, notis i telefonen)
 
 **Vad:** beställaren: den som bokat ett möte ska bekräfta det två dagar före, klockslaget ska gå att välja, och det

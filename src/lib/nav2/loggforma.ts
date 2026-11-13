@@ -363,7 +363,7 @@ export function rubrikFor(action: string): string {
 /* ---------- Objektet ---------- */
 
 const ROLL: Record<string, string> = {
-  sales_manager: "Säljchef", ceo: "VD", team_lead: "Teamledare", salesperson: "Säljare",
+  sales_manager: "Säljchef", ceo: "VD", team_lead: "Teamledare", salesperson: "Säljare", meeting_booker: "Mötesbokare",
   finance: "Ekonomi", project_manager: "Projektledare", delivery: "Leverans", admin: "Administratör",
 };
 const BEHORIGHET: Record<string, string> = {
