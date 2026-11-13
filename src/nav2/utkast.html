@@ -2884,6 +2884,41 @@ body.felpekar .felhov{outline:2px solid var(--danger)!important;outline-offset:2
 .belln{font-size:11.5px;color:var(--ink-3)}
 .belln svg{width:13px;height:13px;color:var(--brand)}
 .bellf{margin:0;padding:10px 14px;border-top:1px solid var(--line);font-size:11.5px}
+/* KLOCKAN-RENSA */
+.kl-r{position:relative;flex:none;border-top:1px solid var(--line);overflow:hidden;touch-action:pan-y}
+.kl-r:first-child{border-top:0}
+.kl-r .bellrad{width:100%;border-top:0;background:var(--surface);transition:transform .22s var(--ease),opacity .22s var(--ease)}
+.kl-r .bellrad:hover{background:var(--surface-2)}
+.kl-r .belln{transition:opacity .12s}
+.kl-x{position:absolute;right:8px;top:8px;width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--ink-3);opacity:0;transition:opacity .12s,background .12s,color .12s}
+.kl-x svg{width:14px;height:14px}
+.kl-x:hover{background:var(--line);color:var(--ink)}
+.kl-x:focus-visible{opacity:1}
+@media (hover:hover){.kl-r:hover .kl-x,.kl-r:focus-within .kl-x{opacity:1}.kl-r:hover .belln,.kl-r:focus-within .belln{opacity:0}}
+@media (hover:none){.kl-x{display:none}}
+.kl-r.ut{opacity:0;transform:translateX(32px);transition:opacity .2s var(--ease) var(--kl-d,0ms),transform .24s var(--ease) var(--kl-d,0ms)}
+.kl-r.ihop{transition:height .2s var(--ease),opacity .16s var(--ease);height:0!important;opacity:0;border-top-color:transparent}
+.kl-r.svep{background:var(--surface-2)}
+.kl-r.svep .bellrad{transform:translateX(var(--kl-dx,0px));opacity:var(--kl-o,1);transition:none}
+.kl-r.svep::before{content:"Rensa";position:absolute;inset:0;display:flex;align-items:center;padding:0 18px;font-size:12px;color:var(--ink-3)}
+.kl-r.svep[data-sida="h"]::before{justify-content:flex-end}
+.kl-r.tillbaka .bellrad{transition:transform .2s var(--ease),opacity .2s var(--ease)}
+.kl-in{animation:klin .34s var(--ease) both}
+@keyframes klin{from{opacity:0;transform:translateY(-8px)}}
+.kl-n{font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums;min-width:2ch}
+.kl-n.byt{animation:klbyt .18s var(--ease)}
+@keyframes klbyt{from{transform:translateY(-3px);opacity:.4}}
+.kl-fler{margin:0;padding:9px 14px;border-top:1px solid var(--line);font-size:12px;color:var(--ink-3)}
+.kl-tom{display:flex;flex-direction:column;align-items:center;gap:3px;padding:30px 16px 28px;text-align:center;outline:none}
+.kl-tomi{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand);margin-bottom:8px}
+.kl-tomi svg{width:18px;height:18px;stroke-width:2}
+.kl-tom b{font-size:14px;font-weight:600}
+.kl-tom small{font-size:12px;color:var(--ink-3)}
+.kl-tom.nyss .kl-tomi{animation:kltom .34s var(--ease) both}
+.kl-tom.nyss .kl-tomi svg{stroke-dasharray:24;stroke-dashoffset:24;animation:klbock .46s .14s var(--ease) forwards}
+@keyframes kltom{from{transform:scale(.7);opacity:0}}
+@keyframes klbock{to{stroke-dashoffset:0}}
+@media (prefers-reduced-motion:reduce){.kl-r,.kl-r .bellrad,.kl-in,.kl-n.byt,.kl-tom.nyss .kl-tomi,.kl-tom.nyss .kl-tomi svg{animation:none!important;transition:none!important;stroke-dashoffset:0}}
 .nustart{display:inline-flex;align-items:center;gap:4px;margin-left:6px;color:var(--brand-ink);font-weight:550}
 .nustart svg{width:11px;height:11px}
 .wrpa{display:flex;flex-direction:column;gap:8px}
@@ -14882,7 +14917,7 @@ function bellPoster(){
     {id:'s-n4', i:'utb', t:'GDPR i telefonförsäljning: 21 dagar kvar', s:'12 minuter kvar att göra', nar:'08:00', go:() => { S.view = 'utbildning'; S.uOpen = 'gdpr'; render(); window.scrollTo(0, 0); }},
     ...S.frMina.filter(p => p.st === 'submitted').map(p => ({id:'s-fr' + p.id, i:'franv', t:`${FTYP[p.typ].l} ${frPeriod(p.fran, p.till)} är skickad`, s:'Väntar på Johanna', nar:'nyss', go:() => frGa()}))];
 }
-const bellOlasta = () => { S.bellLast = S.bellLast || new Set(); return bellPoster().filter(x => !x.klar && !S.bellLast.has(x.id)).length; };
+const bellOlasta = () => { S.bellLast = S.bellLast || new Set(); const n = bellPoster().filter(x => !x.klar && !S.bellLast.has(x.id)).length; return ND && ND.klockan ? n + klOver() : n; };
 function bellBtn(){ const n = bellOlasta(); return `<button class="ibtn" aria-label="Notiser, ${n} olästa" aria-expanded="${!!S.bellOpen}" data-bell>${I('bell')}${n ? `<span class="badge">${n}</span>` : ''}</button>`; }
 function renderBell(){
   let el = document.getElementById('bellPop');
@@ -14902,7 +14937,7 @@ document.addEventListener('click', e => {
   const b = e.target.closest('[data-bell]'); if (b){ S.bellOpen = !S.bellOpen; renderBell(); b.setAttribute('aria-expanded', String(!!S.bellOpen)); return; }
   const g = e.target.closest('[data-bellgo]'); if (g){ const x = bellPoster().find(y => y.id === g.dataset.bellgo); S.bellLast.add(x.id); S.bellOpen = false; renderBell(); x.go(); render(); return; }
   if (e.target.closest('[data-bellalla]')){ bellPoster().forEach(x => S.bellLast.add(x.id)); render(); return; }
-  if (S.bellOpen && !e.target.closest('#bellPop')){ S.bellOpen = false; renderBell(); }
+  if (S.bellOpen && !e.target.closest('#bellPop') && !(ND && e.composedPath().some(n => n.id === 'toasts'))){ S.bellOpen = false; renderBell(); }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.bellOpen){ S.bellOpen = false; renderBell(); } });
 
@@ -24919,15 +24954,13 @@ function renderBell(){
   if (!b){ S.bellOpen = false; S.rlsBell = null; if (el) el.remove(); return; }
   if (!el){ el = document.createElement('div'); el.id = 'bellPop'; el.className = 'bellpop'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Notiser'); document.body.appendChild(el); }
   const poster = bellPoster(), las = S.bellLast;
-  el.innerHTML = `<div class="bellh"><b>Notiser</b>${note(236)}${bellOlasta() ? '<button class="tlink" data-bellalla>Markera alla som lästa</button>' : ''}</div>
-    <div class="belll">${poster.map(x => `<button class="bellrad ${x.klar ? 'klar' : las.has(x.id) ? 'last' : 'ny'}" data-bellgo="${x.id}"><span class="belli">${I(x.i)}</span><span class="bellt"><b>${esc(x.t)}</b><small>${esc(x.s)}</small></span><span class="belln num">${x.klar ? `${I('check')}` : esc(x.nar)}</span></button>`).join('')}</div>
-    <p class="bellf muted">Notiser visar aldrig skälet till en ledighet eller något om hälsa, bara vad som hänt och var. <button class="tlink inl" data-go="/installningar/notiser">Välj vad du får notis om</button></p>`;
+  el.innerHTML = bellHtml(poster, las);
   if (b === 'ark'){ el.style.left = '8px'; el.style.right = '8px'; el.style.top = '56px'; }
   else if (fran === 'rail'){
     const r = b.getBoundingClientRect();
     el.style.right = 'auto'; el.style.left = ((rlsLage() === 'utfalld' ? rail.getBoundingClientRect().right : parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--rls-s')) || 64) + 8) + 'px';
     el.style.top = Math.round(Math.max(8, Math.min(r.top, innerHeight - el.offsetHeight - 8))) + 'px';
-  } else { const r = b.getBoundingClientRect(); el.style.left = ''; el.style.top = (r.bottom + 8) + 'px'; el.style.right = Math.max(8, innerWidth - r.right) + 'px'; }
+  } else { const r = b.getBoundingClientRect(); el.style.left = ''; el.style.top = (r.bottom + 8) + 'px'; el.style.right = Math.max(8, Math.min(innerWidth - r.right, innerWidth - el.offsetWidth - 8)) + 'px'; }
 }
 
 /* ---------- Händelselogg och Adoption (bara chefen) ----------
@@ -39485,10 +39518,10 @@ function ndUtbGaNotis(d){
 function ndNotisOppnad(id){
   try { fetch('/nav2/notis', {method:'POST', credentials:'same-origin', keepalive:true, headers:{'Content-Type':'application/json'}, body:JSON.stringify({id})}).catch(() => {}); } catch(_){}
 }
+// Och sedan 2026-11-13: den öppnade notisen försvinner ur klockan på alla enheter (klOppnad).
 document.addEventListener('click', e => {
   const g = ND && e.target.closest && e.target.closest('[data-bellgo]'); if (!g) return;
-  const n = (ND.notiser || []).find(x => 'nd-' + x.id === g.dataset.bellgo);
-  if (n && n.handelseId) ndNotisOppnad(n.handelseId);
+  klOppnad(g.dataset.bellgo);
 }, true);
 const _skalNdGa = ndGa;
 ndGa = function(href){
@@ -40835,6 +40868,293 @@ if (ND && ND.introfilm){
     if (igen) itfOppna(d.visa && !d.sedd ? 'forsta' : 'igen', d);
     else if (d.visa && !flik) itfOppna(d.sedd ? 'igen' : 'forsta', d);
   } catch(fel){ itfNod(fel); }
+}
+
+/* ---------- Klockan visar bara det du inte sett (beställaren 2026-11-13) ----------
+   "Det ska bara finnas de som man inte har sett och inget annat." Klockan var en logg: Nav 2.0 sparade varken
+   läst eller bortklickat, så den stod alltid full (25 rader av 197 notiser på två veckor, 8 öppnade). Nu är den
+   en kö:
+     - servern skickar bara det olästa (hamtaKlockan i notiser-server.ts), hur många fler som väntar under de 25
+       (klockan.totalt) och vilka av sidans egna lägen (nhl-, rxl-) som redan rensats (klockan.lage)
+     - ett tryck på en rad öppnar den och tar bort den, på alla enheter (klOppnad, POST /nav2/notis {id, notis});
+       pushen och mejlet gör samma sak i GET /nav2/notis
+     - Rensa alla tar allt, även det under de 25 (gränsen seen_at), med Ångra; raderna glider ut och siffran
+       räknar ner i klockan, rälsen och på appikonen
+     - × på raden (mus), svep i sidled (pek) och Delete rensar en rad utan att öppna den, med Ångra
+     - det som rensas stängs i telefonens notislista också (taggen nav-kal-<notisrad> från /nav2/sw.js, som
+       inte ändras: byts den tappas alla prenumerationer)
+     - klockan hämtas om när fliken tas fram, när den öppnas och var femte minut medan den syns
+       (/nav2/data?delar=klockan, en körning av frågorna); det nya glider in överst
+   Pricken betyder "kommit sedan du senast stängde klockan" (localStorage, per enhet). Det du rensar står kvar i
+   vyerna. Allt gäller bara när ND finns: demot är orört. */
+const KL = {bort:new Set(), hamtad:Date.now(), pagar:false, oppen:false, tittad:null, vidOppning:null,
+  skriver:0, skrev:0, rensar:false, rensadNyss:false, nya:new Set(), gar:new Set(), svep:null, svepKlick:false};
+try { KL.tittad = localStorage.getItem('nav-klocka-tittad'); } catch(_){}
+if (ND){
+  ND.klockan = ND.klockan || {totalt:(ND.notiser || []).length, sedd:null, lage:[]};
+  (ND.klockan.lage || []).forEach(id => KL.bort.add(id));
+}
+const klLugn = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch(_){ return false; } };
+// Olästa som inte fick plats bland raderna. Rensas raderna en och en hämtas nästa skur.
+function klOver(){ return ND && ND.klockan ? Math.max(0, (ND.klockan.totalt || 0) - (ND.notiser || []).length) : 0; }
+// Radens id i klockan -> id:t servern avfärdar. Navets notiser bär sitt eget, sidans lägen prefixet nav2-.
+const klServerId = id => { id = String(id || ''); return id.startsWith('nd-') ? id.slice(3) : /^(nhl|rxl)-/.test(id) ? 'nav2-' + id : null; };
+const klNotis = id => String(id || '').startsWith('nd-') ? (ND.notiser || []).find(x => 'nd-' + x.id === id) || null : null;
+
+// Det rensade syns inte, och navets rader bär sin tidpunkt (pricken) och sin notisrad (telefonen).
+const _klBellPoster = bellPoster;
+bellPoster = function(){
+  const p = _klBellPoster();
+  if (!ND) return p;
+  const per = new Map((ND.notiser || []).map(n => ['nd-' + n.id, n]));
+  return p.filter(x => !KL.bort.has(x.id)).map(x => { const n = per.get(x.id); return n ? {...x, tp:n.tidpunkt, hid:n.handelseId || null} : x; });
+};
+
+// Inställningar → Notiser räknar det som ligger i klockan nu, alltså inte det rensade.
+const _klPrfIKlockan = prfIKlockan;
+prfIKlockan = function(){
+  if (!ND) return _klPrfIKlockan();
+  const alla = ND.notiser; ND.notiser = (alla || []).filter(n => !KL.bort.has('nd-' + n.id));
+  try { return _klPrfIKlockan(); } finally { ND.notiser = alla; }
+};
+
+// renderBell ritar rutan med det här. Demot får utkastets egen lista.
+function bellHtml(poster, las){
+  if (ND && ND.klockan) return klHtml(poster);
+  return `<div class="bellh"><b>Notiser</b>${note(236)}${bellOlasta() ? '<button class="tlink" data-bellalla>Markera alla som lästa</button>' : ''}</div>
+    <div class="belll">${poster.map(x => `<button class="bellrad ${x.klar ? 'klar' : las.has(x.id) ? 'last' : 'ny'}" data-bellgo="${x.id}"><span class="belli">${I(x.i)}</span><span class="bellt"><b>${esc(x.t)}</b><small>${esc(x.s)}</small></span><span class="belln num">${x.klar ? `${I('check')}` : esc(x.nar)}</span></button>`).join('')}</div>
+    <p class="bellf muted">Notiser visar aldrig skälet till en ledighet eller något om hälsa, bara vad som hänt och var. <button class="tlink inl" data-go="/installningar/notiser">Välj vad du får notis om</button></p>`;
+}
+function klHtml(poster){
+  const over = klOver(), n = poster.length + over, sedan = KL.vidOppning ? Date.parse(KL.vidOppning) : 0;
+  const rad = x => {
+    const ny = !!x.tp && Date.parse(x.tp) > sedan;
+    return `<div class="kl-r${KL.nya.has(x.id) ? ' kl-in' : ''}" data-klr="${esc(x.id)}" role="listitem"><button class="bellrad${ny ? ' ny' : ''}" data-bellgo="${esc(x.id)}"><span class="belli">${I(x.i)}</span><span class="bellt"><b>${esc(x.t)}</b><small>${esc(x.s)}</small></span><span class="belln num">${esc(x.nar || '')}</span></button><button class="kl-x" data-bellx="${esc(x.id)}" aria-label="Rensa: ${esc(x.t)}" title="Rensa">${I('x')}</button></div>`;
+  };
+  const huvud = `<div class="bellh"><b>Notiser</b>${n ? `<span class="kl-n num" aria-hidden="true">${n}</span><button class="tlink" data-bellrensa>Rensa alla</button>` : ''}</div>`;
+  const lista = poster.length ? `<div class="belll" role="list" aria-label="${n === 1 ? 'En notis du inte sett' : `${n} notiser du inte sett`}">${poster.map(rad).join('')}</div>` : '';
+  // Alla rader rensade en och en men fler väntar under: nästa skur hämtas (högst var femte sekund).
+  if (!poster.length && over && Date.now() - KL.hamtad > 5000) setTimeout(klHamta, 0);
+  const fler = !over ? '' : poster.length
+    ? `<p class="kl-fler">${over === 1 ? 'En äldre väntar' : `${over} äldre väntar`} under de här. Rensa alla tar ${over === 1 ? 'den' : 'dem'} också.</p>`
+    : `<p class="kl-fler">Hämtar ${over === 1 ? 'en äldre' : `${over} äldre`}…</p>`;
+  const tom = n ? '' : `<div class="kl-tom${KL.rensadNyss ? ' nyss' : ''}" tabindex="-1"><span class="kl-tomi">${I('check')}</span><b>Allt är sett</b><small>${KL.rensadNyss ? 'Det du rensat står kvar i vyerna.' : 'Nya notiser hamnar här.'}</small></div>`;
+  return `${huvud}${lista}${fler}${tom}<p class="bellf muted">Notiser visar aldrig skälet till en ledighet eller något om hälsa, bara vad som hänt och var. <button class="tlink inl" data-go="/installningar/notiser">Välj vad du får notis om</button></p>`;
+}
+
+// Öppnas klockan: pricken räknas mot förra stängningen, och klockan hämtas om den är äldre än en halv minut.
+// Stängs den: tiden sparas, så att det som låg här nu inte får en prick nästa gång.
+const _klRenderBell = renderBell;
+renderBell = function(){
+  if (!ND) return _klRenderBell();
+  const forut = KL.oppen, bl = document.querySelector('#bellPop .belll'), top = bl ? bl.scrollTop : 0;
+  if (!forut && S.bellOpen) KL.vidOppning = KL.tittad;
+  _klRenderBell();
+  const el = document.getElementById('bellPop'); KL.oppen = !!el;
+  if (el && forut && top){ const nb = el.querySelector('.belll'); if (nb) nb.scrollTop = top; }
+  if (KL.nya.size) setTimeout(() => KL.nya.clear(), 400);
+  if (!forut && KL.oppen && Date.now() - KL.hamtad > 30000) klHamta();
+  if (forut && !KL.oppen){
+    KL.tittad = new Date().toISOString(); KL.rensadNyss = false;
+    try { localStorage.setItem('nav-klocka-tittad', KL.tittad); } catch(_){}
+  }
+};
+
+// Klockans siffra på alla ställen: sidhuvudet (rälsen rättar det), rälsen, menyarket, flikraden och appikonen.
+function klSiffror(){
+  try { renderRail(); } catch(_){}
+  try { renderBnav(); } catch(_){}
+  try { if (S.rlsMer) rlsArkRita(); } catch(_){}
+  try { ndAppSiffra(); } catch(_){}
+}
+// Under Rensa alla: talen räknar ner i takt med raderna, innan något ritas om.
+function klVisaSiffra(n){
+  const k = document.querySelector('#bellPop .kl-n');
+  if (k){ k.textContent = n; k.classList.remove('byt'); void k.offsetWidth; k.classList.add('byt'); }
+  document.querySelectorAll('#main [data-bell] .badge, [data-rlsbell] .rls-b, [data-rlsbell="ark"] .rls-n').forEach(el => { el.textContent = n || ''; });
+}
+
+function klPosta(kropp, json){
+  KL.skriver++; KL.skrev = Date.now();
+  return fetch('/nav2/notis', {method:'POST', credentials:'same-origin', keepalive:true, headers:{'Content-Type':'application/json'}, body:JSON.stringify(kropp)})
+    .then(r => r.ok ? (json ? r.json() : true) : null).catch(() => null)
+    .finally(() => { KL.skriver--; KL.skrev = Date.now(); });
+}
+
+// Telefonens notislista: det som rensats här stängs där också. Bara på den här enheten; en push kan inte tas
+// tillbaka från en annan (webbläsaren kräver att varje push visar något).
+async function klTray(stang){
+  try {
+    if (!navigator.serviceWorker || !navigator.serviceWorker.getRegistration) return;
+    const reg = await navigator.serviceWorker.getRegistration('/nav2/');
+    if (!reg || !reg.getNotifications) return;
+    for (const n of await reg.getNotifications()){ const m = /^nav-kal-(\d+)$/.exec(n.tag || ''); if (m && stang(+m[1], n)) n.close(); }
+  } catch(_){}
+}
+// Efter en hämtning: en push som visades före hämtningen men inte står bland det osedda är sedd eller rensad.
+// Ligger något under de 25 går det inte att veta, och då rörs ingenting.
+function klTraySynk(fore){
+  if (!ND || klOver()) return;
+  const har = new Set((ND.notiser || []).filter(n => n.handelseId && !KL.bort.has('nd-' + n.id)).map(n => n.handelseId));
+  klTray((h, n) => !har.has(h) && (n.timestamp || 0) < fore - 2000);
+}
+
+// Ett tryck på en rad (fångstfasen, före utkastets eget klick som öppnar posten): bokförs och rensas.
+// Rensningen läggs efter klicket, som letar upp raden i bellPoster().
+function klOppnad(id){
+  if (!ND || !id) return;
+  const n = klNotis(id), sid = klServerId(id), kropp = {};
+  if (n && n.handelseId) kropp.id = n.handelseId;
+  if (sid) kropp.notis = sid;
+  if (kropp.id || kropp.notis) klPosta(kropp);
+  if (n && n.handelseId) klTray(h => h === n.handelseId);
+  setTimeout(() => { KL.bort.add(id); klSiffror(); if (KL.oppen) renderBell(); }, 0);
+}
+
+// En rad: × , svep eller Delete. Raden glider ut och fälls ihop, fokus går till nästa rad.
+function klBortRad(id, {fokus = false, kast = 0} = {}){
+  if (!ND || !id || KL.bort.has(id) || KL.gar.has(id)) return;
+  KL.gar.add(id);
+  const r = document.querySelector(`#bellPop .kl-r[data-klr="${CSS.escape(id)}"]`);
+  const granne = r ? (r.nextElementSibling || r.previousElementSibling) : null, nasta = granne && granne.dataset.klr;
+  const sid = klServerId(id), n = klNotis(id);
+  const ut = () => {
+    KL.bort.add(id); KL.gar.delete(id); renderBell(); klSiffror();
+    if (fokus){
+      const f = (nasta && document.querySelector(`#bellPop [data-bellgo="${CSS.escape(nasta)}"]`)) || document.querySelector('#bellPop .kl-tom') || document.querySelector('#bellPop [data-bellrensa]');
+      if (f) f.focus({preventScroll:true});
+    }
+    if (klOver() && bellPoster().length < 8) klHamta();
+    toast('Notisen rensad.', () => { KL.bort.delete(id); renderBell(); klSiffror(); if (sid) klPosta({angra:{ids:[sid]}}); });
+  };
+  if (sid) klPosta({notis:sid});
+  if (n && n.handelseId) klTray(h => h === n.handelseId);
+  if (!r || klLugn()){ ut(); return; }
+  r.style.height = r.offsetHeight + 'px';
+  if (kast){
+    const b = r.querySelector('.bellrad');
+    b.style.transition = 'transform .18s var(--ease), opacity .18s var(--ease)'; b.style.transform = `translateX(${kast}px)`; b.style.opacity = '0';
+  } else r.classList.add('ut');
+  setTimeout(() => r.classList.add('ihop'), kast ? 140 : 130);
+  setTimeout(ut, kast ? 340 : 330);
+}
+
+// Rensa alla: raderna glider ut uppifrån och ned medan siffran räknar ner, sedan "Allt är sett".
+function klUt(antal){
+  const rader = [...document.querySelectorAll('#bellPop .kl-r')];
+  if (klLugn() || !rader.length) return Promise.resolve();
+  const steg = Math.min(32, 320 / rader.length);
+  rader.forEach((r, i) => {
+    r.style.setProperty('--kl-d', Math.round(i * steg) + 'ms'); r.classList.add('ut');
+    setTimeout(() => klVisaSiffra(Math.round(antal * (1 - (i + 1) / rader.length))), i * steg + 60);
+  });
+  return new Promise(res => setTimeout(res, rader.length * steg + 260));
+}
+async function klRensaAlla(){
+  if (!ND || KL.rensar) return;
+  const poster = bellPoster(), over = klOver(), antal = poster.length + over;
+  if (!antal) return;
+  KL.rensar = true;
+  const ids = poster.map(x => x.id), server = ids.map(klServerId).filter(Boolean);
+  // Gränsen är den nyaste raden som syntes, inte nu: det som kom efter att klockan hämtades är inte sett.
+  const tider = (ND.notiser || []).map(n => Date.parse(n.tidpunkt)).filter(Number.isFinite);
+  const till = tider.length ? new Date(Math.max(...tider)).toISOString() : null;
+  const hids = (ND.notiser || []).map(n => n.handelseId).filter(Boolean), maxH = hids.length ? Math.max(...hids) : 0;
+  const forut = ND.klockan.totalt;
+  const svar = klPosta({rensa:{ids:server, till}}, true);
+  const tillbaka = () => { ids.forEach(id => KL.bort.delete(id)); ND.klockan.totalt = forut; KL.rensadNyss = false; renderBell(); klSiffror(); };
+  await klUt(antal);
+  ids.forEach(id => KL.bort.add(id)); ND.klockan.totalt = (ND.notiser || []).length; KL.rensadNyss = true;
+  renderBell(); klSiffror(); KL.rensar = false;
+  const tom = document.querySelector('#bellPop .kl-tom'); if (tom) tom.focus({preventScroll:true});
+  if (maxH) klTray(h => h <= maxH);
+  toast(`${antal === 1 ? 'En notis' : `${antal} notiser`} rensade.`, async () => {
+    tillbaka();
+    const s = await svar; if (s) klPosta({angra:{ids:server, forra:s.forra, satt:s.satt}});
+  });
+  const kvitto = document.getElementById('toasts')?.lastElementChild;
+  // Sa servern nej står raderna kvar, och kvittot med Ångra ersätts av beskedet.
+  if (!(await svar)){ tillbaka(); if (kvitto) kvitto.remove(); toast('Klockan gick inte att rensa. Försök igen.'); }
+}
+
+// Färskt ur navet: när fliken tas fram, när klockan öppnas och var femte minut medan den syns. En egen
+// skrivning under hämtningen vinner, och nästa hämtning tar resten.
+async function klHamta(){
+  if (!ND || KL.pagar || document.hidden) return;
+  if (KL.skriver || KL.rensar){ setTimeout(klHamta, 800); return; }
+  KL.pagar = true; const start = Date.now(); KL.hamtad = start;
+  try {
+    const r = await fetch('/nav2/data?delar=klockan', {credentials:'same-origin', cache:'no-store'});
+    if (!r.ok) return;
+    const j = await r.json(), d = j && j.data;
+    if (!d || !Array.isArray(d.notiser) || !d.klockan) return;
+    if (KL.skriver || KL.rensar || KL.skrev > start) return;
+    const fore = new Set(bellPoster().map(x => x.id)), foreOver = klOver();
+    ND.notiser = d.notiser; ND.klockan = d.klockan; (d.klockan.lage || []).forEach(id => KL.bort.add(id));
+    const efter = bellPoster(), nya = efter.filter(x => !fore.has(x.id));
+    if (nya.length || efter.length !== fore.size || klOver() !== foreOver){
+      if (KL.oppen) nya.forEach(x => KL.nya.add(x.id));
+      if (KL.oppen) renderBell();
+      klSiffror();
+    }
+    klTraySynk(start);
+  } catch(_){} finally { KL.pagar = false; }
+}
+
+document.addEventListener('click', e => {
+  if (!ND || !e.target.closest) return;
+  const x = e.target.closest('#bellPop [data-bellx]'); if (x){ klBortRad(x.dataset.bellx, {fokus:true}); return; }
+  if (e.target.closest('#bellPop [data-bellrensa]')) klRensaAlla();
+});
+document.addEventListener('keydown', e => {
+  if (!ND || !S.bellOpen || (e.key !== 'Delete' && e.key !== 'Backspace')) return;
+  const g = e.target.closest && e.target.closest('#bellPop [data-bellgo]'); if (!g) return;
+  e.preventDefault(); klBortRad(g.dataset.bellgo, {fokus:true});
+});
+
+// Svep i sidled på pekskärm, som i telefonens egen notislista. Lodrätt rullar listan som vanligt (touch-action).
+document.addEventListener('pointerdown', e => {
+  if (!ND || e.pointerType === 'mouse' || !e.isPrimary || !e.target.closest) return;
+  const r = e.target.closest('#bellPop .kl-r'); if (!r || e.target.closest('.kl-x')) return;
+  KL.svep = {r, id:r.dataset.klr, x0:e.clientX, y0:e.clientY, dx:0, v:0, t:performance.now(), pid:e.pointerId, aktiv:false};
+}, {passive:true});
+document.addEventListener('pointermove', e => {
+  const s = KL.svep; if (!s || e.pointerId !== s.pid) return;
+  const dx = e.clientX - s.x0, dy = e.clientY - s.y0;
+  if (!s.aktiv){
+    if (Math.abs(dy) > 10 && Math.abs(dy) >= Math.abs(dx)){ KL.svep = null; return; }
+    if (Math.abs(dx) < 10) return;
+    s.aktiv = true; s.r.classList.add('svep');
+  }
+  const nu = performance.now(), w = s.r.offsetWidth || 1;
+  s.v = (dx - s.dx) / Math.max(1, nu - s.t); s.t = nu; s.dx = dx;
+  s.r.dataset.sida = dx < 0 ? 'h' : 'v';
+  s.r.style.setProperty('--kl-dx', dx + 'px');
+  s.r.style.setProperty('--kl-o', String(Math.max(.2, 1 - Math.abs(dx) / w * 1.1)));
+}, {passive:true});
+function klSlapp(e){
+  const s = KL.svep; if (!s || e.pointerId !== s.pid) return;
+  KL.svep = null;
+  if (!s.aktiv) return;
+  KL.svepKlick = true; setTimeout(() => { KL.svepKlick = false; }, 400);
+  const w = s.r.offsetWidth || 1;
+  if (e.type !== 'pointercancel' && (Math.abs(s.dx) > w * .38 || (Math.abs(s.dx) > 40 && Math.abs(s.v) > .55))){ klBortRad(s.id, {kast:Math.sign(s.dx) * w}); return; }
+  s.r.classList.add('tillbaka'); s.r.classList.remove('svep'); s.r.style.removeProperty('--kl-dx'); s.r.style.removeProperty('--kl-o');
+  setTimeout(() => s.r.classList.remove('tillbaka'), 220);
+}
+document.addEventListener('pointerup', klSlapp, {passive:true});
+document.addEventListener('pointercancel', klSlapp, {passive:true});
+// Klicket som följer på ett svep öppnar inte posten och stänger inte klockan.
+window.addEventListener('click', e => {
+  if (!KL.svepKlick || !e.target.closest || !e.target.closest('#bellPop')) return;
+  KL.svepKlick = false; e.stopPropagation(); e.preventDefault();
+}, true);
+
+if (ND){
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - KL.hamtad > 60000) klHamta(); });
+  setInterval(() => { if (!document.hidden && Date.now() - KL.hamtad > 270000) klHamta(); }, 60000);
+  // En push som redan är sedd eller rensad (på en annan enhet) stängs när Nav öppnas här.
+  setTimeout(() => klTraySynk(performance.timeOrigin || Date.now()), 1500);
 }
 
 /* Start */

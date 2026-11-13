@@ -2,7 +2,7 @@ import "server-only";
 
 import type { CurrentUser } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
-import { hamtaNotiser } from "@/lib/notiser-server";
+import { hamtaKlockan, type Klockan } from "@/lib/notiser-server";
 import type { Notis } from "@/lib/notiser";
 import { svensktDatum } from "@/lib/klocka";
 import { MFA_REQUIRED_ROLES } from "@/lib/roles";
@@ -81,6 +81,8 @@ export type Nav2Data = {
   satser: NdSats[] | null;
   loner: NdLon[] | null;
   notiser: Notis[];
+  /** Klockan visar bara det du inte sett (2026-11-13): alla olästa, gränsen och sidans rensade lägen. */
+  klockan: Klockan["klockan"];
   tid: NdTid;
   franvaro: NdFranvaro;
   uppgifter: NdUppgifter;
@@ -167,7 +169,9 @@ type Supabase = Awaited<ReturnType<typeof supabaseServer>>;
  */
 const DELAR = {
   grund: (s: Supabase, u: CurrentUser) => byggGrund(s, u),
-  notiser: (_s: Supabase, u: CurrentUser) => hamtaNotiser(u),
+  notiser: async (_s: Supabase, u: CurrentUser) => (await hamtaKlockan(u)).notiser,
+  // Klockans levande uppdatering: `notiser` och `klockan` i ett svar, med en körning av frågorna.
+  klockan: (_s: Supabase, u: CurrentUser) => hamtaKlockan(u),
   tid: byggTid,
   franvaro: byggFranvaro,
   uppgifter: byggUppgifter,
@@ -210,7 +214,7 @@ export async function byggNav2Delar(user: CurrentUser, delar: Nav2Del[], pg?: { 
     const ut: Record<string, unknown> = {};
     const lasta = await Promise.all(delar.map(async (d) => [d, await DELAR[d](supabase, user)] as const));
     for (const [d, v] of lasta) {
-      if (d === "grund") Object.assign(ut, v);
+      if (d === "grund" || d === "klockan") Object.assign(ut, v);
       else ut[d] = v;
     }
     return ut as Partial<Nav2Data>;
@@ -225,10 +229,10 @@ async function bygg(user: CurrentUser, m?: Nav2Matt): Promise<Nav2Data | null> {
   if (!user.employee) return null;
   const supabase = await supabaseServer();
 
-  const [grund, notiser, tid, franvaro, uppgifter, order, provision, kalender, arenden, fel, rutiner, utbildning, hem, rekrytering, anstallda, coachning, avtal, profil, adoption, nyheter, logg, leads, moten, motesstat, sakerhet, satsdata, saljtavlan, introfilm] =
+  const [grund, { notiser, klockan }, tid, franvaro, uppgifter, order, provision, kalender, arenden, fel, rutiner, utbildning, hem, rekrytering, anstallda, coachning, avtal, profil, adoption, nyheter, logg, leads, moten, motesstat, sakerhet, satsdata, saljtavlan, introfilm] =
     await Promise.all([
       byggGrund(supabase, user, m),
-      matt(m, "notiser", hamtaNotiser(user)),
+      matt(m, "notiser", hamtaKlockan(user)),
       matt(m, "tid", byggTid(supabase, user)),
       matt(m, "franvaro", byggFranvaro(supabase, user)),
       matt(m, "uppgifter", byggUppgifter(supabase, user)),
@@ -263,6 +267,7 @@ async function bygg(user: CurrentUser, m?: Nav2Matt): Promise<Nav2Data | null> {
     idag: svensktDatum(),
     ...grund,
     notiser,
+    klockan,
     tid,
     franvaro,
     uppgifter,

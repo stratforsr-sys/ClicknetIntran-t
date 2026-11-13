@@ -5,6 +5,48 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-13 · Klockan visar bara det du inte sett (grenen `klockan-bara-osett`, ingen migration)
+
+**Beställningen:** "markera alla lästa, rensa alla, och de som man går in på ska försvinna … det ska bara finnas de
+som man inte har sett och inget annat."
+
+**Felet bakom:** Nav 2.0-klockan sparade varken läst eller bortklickat. "Markera alla som lästa" och trycket på en rad
+lade bara id:t i `S.bellLast` (minnet), och `notification_seen` hade inte rörts sedan gamla Nav (senast 2026-10-29).
+Zen hade 197 notiser på 14 dagar och öppnade 8; klockan stod alltid full med 25 "olästa". Bästa praxis (GitHubs
+Done, Linear, SAP Fiori, Visa): klockan är en kö man tömmer, inte en logg. Läst och klart är samma sak för den här
+beställaren, och en massåtgärd ska ha Ångra hellre än en bekräftelsedialog.
+
+**Byggt:**
+- `notiser.ts`: `klockansUrval` (bara `olast`, plus `totalt` för det under de 25), `arKlockId` (källorna +
+  sidans lägen med prefixet `nav2-`: `nhl-`, `rxl-`), `rensningsgrans` (framåt, aldrig förbi nu), `MAX_RENSA` 200.
+- `notiser-server.ts`: `hamtaNotiser` delad i `allaNotiser` (okapad) + `hamtaNotiser` (oförändrad för gamla Nav) +
+  `hamtaKlockan` (Nav 2.0). `rensaKlockan` flyttar `seen_at` till den nyaste raden personen SÅG (inte nu: det
+  som kom efter hämtningen är inte sett) och avfärdar raderna en och en; `angraRensning` lägger tillbaka gränsen
+  bara om den fortfarande är den egna (`.eq("seen_at", satt)`).
+- `/nav2/notis`: POST `{id, notis}` (öppnad = avfärdad), `{rensa:{ids, till}}` → `{forra, satt}`,
+  `{angra:{ids, forra, satt}}`. GET från push och mejl avfärdar också (`notisId(kalla, id)`).
+- `data.ts`: `ND.klockan = {totalt, sedd, lage}` och delen `klockan` (`/nav2/data?delar=klockan` ger
+  `notiser` + `klockan` i EN körning av frågorna; `byggNav2Delar` sprider den som `grund`).
+- `utkast.html` (patch `~/nav2-utkast/delar/klockan-rensa/patch.py` + `klockan.js`, idempotent): Rensa alla
+  (raderna glider ut, siffran räknar ner i klockan/rälsen/appikonen, "Allt är sett" med en bock som ritas),
+  × på raden (mus), svep i sidled (pek, `touch-action:pan-y`), Delete, Ångra på allt, levande hämtning
+  (öppning > 30 s, flik fram > 60 s, var 5:e min synlig), pricken = "sedan du senast stängde klockan"
+  (`localStorage['nav-klocka-tittad']`), telefonens notislista stängs (`getRegistration('/nav2/')`,
+  taggen `nav-kal-<id>`; `sw.js` orörd). `bellOlasta` räknar det under de 25.
+- Två fel hittade i provet och rättade: raderna krympte och klipptes i en lång lista (`flex:none` på omslaget),
+  och Ångra i kvittot stängde klockan (kvittot tar bort knappen före klicket når dokumentet → `composedPath`).
+  Ett gammalt fel rättat på köpet: från sidhuvudets klocka på en telefon (390 px) hamnade rutan 10 px utanför
+  vänsterkanten.
+
+**Prov:** `tests/klockan.mjs` (nytt, i `npm test`), `notislankar.mjs` (raden om bokföringen följer nya vägen).
+Headless Chrome mot det patchade utkastet med Zens riktiga ndData och en låtsasserver i `fetch`
+(`~/nav2-utkast/delar/klockan-rensa/prov/`): ×, Ångra, Delete med fokus till nästa, svep, kort svep som studsar,
+öppna en rad, Rensa alla, Ångra rensa, serverns nej, levande hämtning, telefonbredd och mörkt läge. Inga fel i konsolen.
+
+**Inte gjort:** att en notis försvinner när man går till posten på annat sätt än via klockan (GitHub gör så); bara
+klockan, pushen och mejlet räknas som "sett". En push kan inte stängas på en ANNAN enhet än den man rensar på
+(webbläsaren kräver att varje push visar något); den stängs när Nav öppnas där.
+
 ## 2026-11-13 · Möten: bokningsbladet (kunden på ett ställe, personer, källans lista, agendan; 0290)
 
 **Vad:** beställaren ville kunna lägga till fler hos kunden där kontakten står, med telefon; en riktig dropdown för
