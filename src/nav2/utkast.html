@@ -6577,53 +6577,279 @@ html.prf-oppen{overflow:hidden}
 /* Uppgiften: rutan som hovrar */
 html.upg-oppen{overflow:hidden}
 .upg-rov{position:fixed;left:0;right:0;bottom:0;z-index:93;display:grid;place-items:center;padding:24px;background:color-mix(in srgb,var(--ink) 34%,transparent);animation:upgov .14s ease-out}
-.upg-ruta{display:flex;flex-direction:column;width:min(880px,100%);max-height:min(720px,100%);background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 30px 80px -30px rgba(8,20,16,.5);overflow:hidden;animation:upgin .18s cubic-bezier(.2,.8,.2,1)}
 @keyframes upgov{from{opacity:0}}
 @keyframes upgin{from{opacity:0;transform:translateY(8px) scale(.985)}}
 @media (prefers-reduced-motion:reduce){.upg-rov,.upg-ruta{animation:none}}
-.upg-rh{display:flex;align-items:center;gap:10px;padding:14px 14px 4px 20px}
-.upg-rh .tick{width:24px;height:24px;border-width:1.5px;flex:none}
-.upg-rh .tick svg{width:13px;height:13px}
-.upg-titel{flex:1;min-width:0;border:1px solid transparent;border-radius:6px;padding:6px 8px;margin-left:-8px;background:none;font:600 18px/1.3 var(--f-body);letter-spacing:-.01em;color:var(--ink)}
-.upg-titel:hover{border-color:var(--line)}
-.upg-titel:focus-visible{outline:2px solid var(--brand);outline-offset:-1px;border-color:var(--brand)}
-.upg-pos{font-size:12.5px;color:var(--upg-ink-3);white-space:nowrap}
 .upg-x{display:grid;place-items:center;width:32px;height:32px;border-radius:6px;color:var(--ink-2);flex:none}
 .upg-x:hover:not(:disabled){background:var(--surface-2);color:var(--ink)}
 .upg-x:disabled{opacity:.35;cursor:default}
 .upg-x svg{width:16px;height:16px}
-.upg-xs{width:24px;height:24px;margin-left:auto;opacity:0}
-.upg-xs svg{width:13px;height:13px}
-.upg-sub li:hover .upg-xs,.upg-xs:focus-visible{opacity:1}
-.upg-rstatus{display:flex;align-items:center;gap:12px;margin:0;padding:0 20px 12px 56px;font-size:12.5px;color:var(--upg-ink-3);border-bottom:1px solid var(--line)}
-.upg-rgrid{display:grid;grid-template-columns:minmax(0,1fr) 272px;min-height:0;flex:1;overflow:hidden}
-.upg-rmain{padding:16px 20px 20px 56px;overflow-y:auto;display:flex;flex-direction:column;gap:18px;overscroll-behavior:contain}
-.upg-props{margin:0;padding:16px 18px;border-left:1px solid var(--line);background:var(--bg);overflow-y:auto;display:flex;flex-direction:column;gap:14px;overscroll-behavior:contain}
-.upg-prad dt{font-size:12px;color:var(--upg-ink-3);margin-bottom:5px}
-.upg-prad dd{margin:0;font-size:13.5px;color:var(--ink)}
-.upg-props .upg-seg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;background:var(--surface)}
-.upg-props .upg-seg.upg-seg3{grid-template-columns:repeat(3,minmax(0,1fr))}
-.upg-props .upg-seg button{padding:5px 6px;text-align:center}
-.upg-lks{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
 .upg-forst label,.upg-bh{display:flex;align-items:center;gap:8px;font:600 13px var(--f-body);color:var(--ink);margin-bottom:6px}
 .upg-bh h3{font:inherit;color:inherit}
 .upg-bh .tlink{margin-left:auto;font-size:12.5px;font-weight:500}
 .upg-bh .num{font-weight:500;color:var(--upg-ink-3)}
-.upg-besk{resize:vertical;min-height:64px;line-height:1.5}
 .upg-blk .upg-kbar{margin:0 0 8px}
 .upg-blk .subadd{margin-top:8px}
 .upg-chat{display:flex;flex-direction:column;gap:10px}
 .upg-msg{display:flex;gap:10px;font-size:13px}
 .upg-msg b{font-weight:600}
 .upg-msg p{margin:2px 0 0;color:var(--ink-2)}
-.upg-hist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--ink-2)}
-.upg-hist li{display:flex;gap:12px}
-.upg-hist .num{width:56px;color:var(--upg-ink-3)}
-.upg-rf{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:12px 20px;border-top:1px solid var(--line)}
-.upg-rfsp{flex:1}
-.upg-rf .upg-val{flex-basis:100%;margin-top:4px}
-.upg-stryk{color:var(--danger-ink)}
+/* Uppgiftsrutan (2026-11-13): egenskaperna som rader med en väljare var, kommentarer och historik i en tidslinje */
+.upg-ruta{display:flex;flex-direction:column;position:relative;width:min(980px,100%);height:min(784px,100%);background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 30px 80px -30px rgba(8,20,16,.5);overflow:hidden;animation:upgin .18s cubic-bezier(.2,.8,.2,1)}
+.upg-ruta [hidden]{display:none !important}
+.upg-ruta button{font:inherit}
+.upg-rh{display:flex;align-items:center;gap:8px;padding:16px 14px 0 22px}
+.upg-rh .tick{width:26px;height:26px;border-width:2px;flex:none}
+.upg-rh .tick svg{width:14px;height:14px}
+.upg-rh .tick.upg-p1{border-color:var(--danger)}
+.upg-rh .tick.upg-p2{border-color:var(--signal)}
+.upg-rh .tick.on svg{stroke-dasharray:24;animation:upgrita .32s ease-out}
+@keyframes upgrita{from{stroke-dashoffset:24}}
+.upg-titel{flex:1;min-width:0;border:1px solid transparent;border-radius:8px;padding:5px 8px;margin-left:-2px;background:none;font:600 19px/1.3 var(--f-body);letter-spacing:-.012em;color:var(--ink)}
+.upg-titel:hover{border-color:var(--line)}
+.upg-titel:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+.upg-pos{font-size:12px;color:var(--upg-ink-3);white-space:nowrap;margin:0 2px}
+.upg-rstatus{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;margin:0;padding:6px 22px 14px 58px;font-size:12.5px;color:var(--ink-2);border-bottom:1px solid var(--line)}
+.upg-rstatus .upg-dot{padding:2px 9px 2px 8px;border-radius:999px;background:var(--surface-2);color:var(--ink-2);font-weight:550}
+.upg-rstatus .upg-dot.upg-ok{background:var(--brand-soft);color:var(--brand-ink)}
+.upg-rstatus .upg-dot.upg-hog{background:var(--warn-soft);color:var(--warn-ink)}
+.upg-rstatus .upg-dot.upg-sen{background:var(--danger-soft);color:var(--danger-ink)}
+.upg-rs-sep{color:var(--line-2)}
+.upg-rs-dag{color:var(--ink);font-weight:550}
+.upg-rs-sen{color:var(--danger-ink);font-weight:550}
 
+.upg-rgrid{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 300px}
+.upg-rvan{min-width:0;min-height:0;display:flex;flex-direction:column}
+.upg-rmain{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 28px 22px 24px}
+.upg-rmain>.upg-blk{padding-top:18px}
+.upg-lab{display:block;margin:0;font:600 13px var(--f-body);color:var(--ink)}
+.upg-hint{margin:6px 0 0;font-size:12.5px;line-height:1.45;color:var(--ink-2)}
+.upg-hint.upg-sm2{font-size:12px;color:var(--upg-ink-3)}
+.upg-kbd{font:500 10.5px/16px var(--f-body);padding:0 5px;border-radius:4px;border:1px solid var(--line);color:var(--ink-2);background:var(--surface-2);white-space:nowrap}
+.upg-ghost{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:0;border-radius:8px;background:none;font:500 13px var(--f-body);color:var(--ink-2);white-space:nowrap;cursor:pointer}
+.upg-ghost:hover{background:var(--surface-2);color:var(--ink)}
+.upg-ghost svg{width:14px;height:14px;flex:none}
+
+/* Börja med: det allra första steget, och så som det står i listan */
+.upg-forst2{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:3px 4px 3px 12px;background:var(--surface)}
+.upg-forst2:focus-within{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+.upg-forst2 label{display:flex;align-items:center;gap:6px;white-space:nowrap;font:600 13px var(--f-body);color:var(--brand-ink);margin:0}
+.upg-forst2 label svg{width:14px;height:14px}
+.upg-forst2 input{flex:1;min-width:0;height:32px;border:0;background:none;outline:none;font:400 14px var(--f-body);color:var(--ink)}
+.upg-mini{position:relative;display:flex;flex-direction:column;gap:2px;margin-top:8px;padding:8px 12px 9px 36px;border-radius:9px;background:var(--surface-2)}
+.upg-mini::before{content:"";position:absolute;left:12px;top:10px;width:14px;height:14px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--line-2)}
+.upg-mini .r1{font-size:13.5px;font-weight:550;color:var(--ink)}
+.upg-mini .r2{font-size:12.5px;color:var(--brand-ink)}
+
+/* Beskrivningen: text utan ram tills man skriver */
+.upg-falt{display:block;width:calc(100% + 10px);min-height:40px;margin:4px 0 0 -10px;padding:7px 10px;border:1px solid transparent;border-radius:8px;background:transparent;font:400 14px/1.55 var(--f-body);color:var(--ink);resize:none;overflow:hidden}
+.upg-falt:hover{background:var(--surface-2)}
+.upg-falt:focus{background:var(--surface);border-color:var(--line-2);outline:none}
+.upg-falt[readonly]:hover{background:transparent}
+.upg-ruta ::placeholder{color:var(--upg-ink-3)}
+
+/* Deluppgifterna */
+.upg-bh2{display:flex;align-items:center;gap:10px;min-height:30px;margin-bottom:2px}
+.upg-bh2 .upg-ghost{margin-left:auto;margin-right:-10px}
+.upg-prog{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2)}
+.upg-ring{transform:rotate(-90deg);flex:none}
+.upg-ring circle{fill:none;stroke:var(--line);stroke-width:2.5}
+.upg-ring .f{stroke:var(--brand);stroke-linecap:round;transition:stroke-dashoffset .4s cubic-bezier(.2,.8,.2,1)}
+.upg-subl{list-style:none;margin:0;padding:0}
+.upg-subl li{display:flex;align-items:center;gap:10px;min-height:34px;padding:0 4px 0 6px;margin:0 -4px 0 -6px;border-radius:8px}
+.upg-subl li:hover{background:var(--surface-2)}
+.upg-subl .t{flex:1;min-width:0;font-size:14px;color:var(--ink);overflow-wrap:anywhere}
+.upg-subl li.ok .t{color:var(--upg-ink-3);text-decoration:line-through;text-decoration-color:var(--line-2)}
+.upg-ruta .stick{width:18px;height:18px;padding:0;border-radius:50%;border:1.5px solid var(--line-2);display:grid;place-items:center;background:none;color:transparent;flex:none;cursor:pointer;transition:background .18s cubic-bezier(.2,.8,.2,1),border-color .18s,color .18s}
+.upg-ruta .stick:hover{border-color:var(--brand);color:var(--brand)}
+.upg-ruta .stick.on{background:var(--brand);border-color:var(--brand);color:#fff}
+.upg-ruta .stick svg{width:12px;height:12px;stroke-width:2.2}
+.upg-subl .upg-xs{width:26px;height:26px;opacity:0}
+.upg-subl .upg-xs svg{width:13px;height:13px}
+.upg-subl li:hover .upg-xs,.upg-subl .upg-xs:focus-visible{opacity:1}
+.upg-subny{display:flex;align-items:center;gap:8px;min-height:34px;padding:0 6px;margin:0 -4px 0 -6px;border-radius:8px;background:var(--surface-2)}
+.upg-subny .stick{border-style:dashed;cursor:default;margin-right:2px}
+.upg-subny .stick:hover{border-color:var(--line-2)}
+.upg-addin{flex:1;min-width:0;height:32px;border:0;background:none;outline:none;font:400 14px var(--f-body);color:var(--ink)}
+.upg-blk>.upg-ghost{margin:2px 0 0 -10px}
+
+/* Aktiviteten: kommentarer och händelser i tidsordning */
+.upg-akth{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.upg-flt{display:inline-flex;gap:2px;padding:2px;border-radius:8px;background:var(--surface-2)}
+.upg-flt button{height:24px;padding:0 9px;border:0;border-radius:6px;background:none;font:400 12.5px var(--f-body);color:var(--ink-2);white-space:nowrap;cursor:pointer}
+.upg-flt button .num{color:var(--upg-ink-3)}
+.upg-flt button[aria-pressed="true"]{background:var(--surface);color:var(--ink);font-weight:600;box-shadow:0 1px 2px rgba(19,40,32,.08),inset 0 0 0 1px var(--line)}
+.upg-tl{position:relative;padding-left:24px;margin-left:2px}
+.upg-tl::before{content:"";position:absolute;left:7px;top:8px;bottom:8px;width:1px;background:var(--line)}
+.upg-ev{position:relative;display:flex;gap:10px;align-items:baseline;padding:5px 0;font-size:13px;line-height:1.45;color:var(--ink-2)}
+.upg-ev::before{content:"";position:absolute;left:-20px;top:11px;width:7px;height:7px;border-radius:50%;background:var(--surface);box-shadow:inset 0 0 0 1.5px var(--ink-3)}
+.upg-ev b{color:var(--ink);font-weight:600}
+.upg-ev>span:first-child{min-width:0;overflow-wrap:anywhere}
+.upg-when{margin-left:auto;padding-left:8px;font-size:11.5px;color:var(--upg-ink-3);white-space:nowrap}
+.upg-cm{position:relative;padding:8px 0 6px}
+.upg-cm>.av{position:absolute;left:-28px;top:8px;box-shadow:0 0 0 2px var(--surface)}
+.upg-cmh{display:flex;align-items:baseline;gap:8px;font-size:13px}
+.upg-cmh b{font-weight:600;color:var(--ink)}
+.upg-cmh .upg-when{margin-left:0;padding-left:0}
+.upg-bub{margin:4px 0 0;padding:8px 12px;border-radius:4px 12px 12px 12px;background:var(--surface-2);font-size:14px;line-height:1.5;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere}
+.upg-tl .upg-aldre{position:relative;height:24px;margin:0 0 2px -8px;padding:0 8px;font-size:12.5px}
+.upg-tl>.upg-hint{margin:2px 0 0}
+.upg-ny{animation:upgny .32s cubic-bezier(.2,.8,.2,1)}
+@keyframes upgny{from{opacity:0;transform:translateY(6px)}}
+
+/* Kommentarsfältet står kvar under aktiviteten */
+.upg-komp{display:flex;gap:10px;align-items:flex-start;margin:0;padding:12px 26px 12px 24px;border-top:1px solid var(--line);background:var(--surface)}
+.upg-komp>.av{flex:none;margin-top:3px}
+.upg-kbox{flex:1;min-width:0}
+.upg-kfalt{display:flex;align-items:flex-end;gap:6px;padding:5px 5px 5px 12px;border:1px solid var(--line-2);border-radius:12px;background:var(--surface)}
+.upg-kfalt:focus-within{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+.upg-kin{flex:1;min-width:0;min-height:27px;max-height:120px;padding:3px 0;border:0;outline:none;resize:none;background:none;font:400 14px/1.5 var(--f-body);color:var(--ink)}
+.upg-send{display:grid;place-items:center;width:28px;height:28px;flex:none;border:0;border-radius:8px;background:var(--brand);color:#fff;cursor:pointer;transition:background .15s}
+.upg-send:hover:not(:disabled){background:var(--brand-hover)}
+.upg-send:disabled{background:var(--surface-2);color:var(--upg-ink-3);cursor:default}
+.upg-send svg{width:16px;height:16px}
+.upg-khint{margin:6px 0 0;font-size:12px;color:var(--upg-ink-3)}
+
+/* Egenskaperna: en rad var, värdet öppnar sin väljare */
+.upg-props{min-height:0;display:flex;flex-direction:column;padding:6px 14px 14px;border-left:1px solid var(--line);background:var(--surface-2);overflow-y:auto;overscroll-behavior:contain}
+.upg-pgrp{display:flex;flex-direction:column;gap:1px;padding:8px 0;border-bottom:1px solid var(--line)}
+.upg-pgrp:last-child{border-bottom:0}
+.upg-pr{display:grid;grid-template-columns:92px minmax(0,1fr);align-items:center;min-height:34px}
+.upg-pl{padding-left:6px;font-size:13px;color:var(--ink-2)}
+.upg-pgrp-k>.upg-pl{padding:6px 0 6px 6px}
+.upg-pv{display:flex;align-items:center;gap:8px;width:100%;min-width:0;height:32px;padding:0 8px;border:0;border-radius:8px;background:none;font:400 13.5px var(--f-body);color:var(--ink);text-align:left;cursor:pointer;transition:background .12s}
+button.upg-pv:hover{background:color-mix(in srgb,var(--ink) 6%,var(--surface-2))}
+.upg-pv[aria-expanded="true"]{background:var(--surface);box-shadow:inset 0 0 0 1px var(--line-2)}
+span.upg-pv{cursor:default}
+.upg-pv .v{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.upg-pv>svg{width:16px;height:16px;flex:none;color:var(--ink-2)}
+.upg-pv .av{flex:none}
+.upg-mut{color:var(--upg-ink-3)}
+.upg-pv .upg-sen{color:var(--danger-ink)}
+.upg-sq{width:10px;height:10px;border-radius:3px;flex:none}
+.upg-flagga{fill:currentColor;fill-opacity:.16}
+.upg-chips{display:flex;flex-direction:column;gap:4px}
+.upg-chip{display:flex;align-items:center;min-height:32px;min-width:0;border-radius:8px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);font-size:13px}
+.upg-chip>:first-child{display:flex;align-items:center;gap:7px;flex:1;min-width:0;height:32px;padding:0 4px 0 9px;border:0;background:none;color:var(--ink);text-align:left}
+.upg-chip>button:first-child{cursor:pointer}
+.upg-chip>button:first-child:hover .v{text-decoration:underline;text-underline-offset:2px}
+.upg-chip .ctyp{flex:none;font-size:12px;color:var(--upg-ink-3)}
+.upg-chip .v{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.upg-chip .cx{display:grid;place-items:center;width:24px;height:24px;margin-right:4px;border:0;border-radius:6px;background:none;color:var(--upg-ink-3);opacity:0;cursor:pointer}
+.upg-chip:hover .cx,.upg-chip .cx:focus-visible{opacity:1}
+.upg-chip .cx:hover{background:var(--surface-2);color:var(--ink)}
+.upg-chip .cx svg{width:13px;height:13px}
+.upg-koppla{color:var(--ink-2)}
+.upg-kform{margin-top:6px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.upg-kform .tifrow{display:flex;flex-direction:column;align-items:stretch;gap:8px}
+.upg-kform label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ink-2)}
+.upg-kform .uin{width:100%;max-width:100%}
+.upg-kform .pacts{display:flex;gap:6px;margin-top:10px}
+.upg-serieslut{height:26px;margin-left:92px;font-size:12.5px}
+
+/* Väljarna: ligger över rutan, vid sitt värde */
+.upg-pop{position:absolute;z-index:30;top:0;left:0;width:312px;max-width:calc(100% - 16px);padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--surface);box-shadow:0 1px 2px rgba(19,40,32,.05),0 18px 48px -16px rgba(10,30,24,.38);overflow-y:auto;overscroll-behavior:contain;animation:upgpop .14s cubic-bezier(.2,.8,.2,1)}
+.upg-pop.upg-pop-dag{width:340px}
+.upg-pop.upg-pop-prio{width:276px}
+.upg-pop.upg-pop-mer{width:232px}
+@keyframes upgpop{from{opacity:0;transform:translateY(-4px) scale(.985)}}
+.upg-ph{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 6px 8px;font-size:12.5px;color:var(--ink-2)}
+.upg-pin{display:block;width:100%;height:34px;padding:0 10px;border:1px solid var(--line-2);border-radius:8px;background:var(--surface);font:400 13.5px var(--f-body);color:var(--ink)}
+.upg-pin:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+.upg-pin+.upg-pin,.upg-estg+.upg-pin{margin-top:8px}
+.upg-tolk{min-height:27px;margin:0;padding:6px 6px 4px;font-size:12.5px;color:var(--brand-ink)}
+.upg-tolk.mut{color:var(--upg-ink-3)}
+.upg-tolk.fel{color:var(--danger-ink)}
+.upg-tolk.upg-skak{animation:upgskak .3s}
+@keyframes upgskak{25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+.upg-opt{display:flex;align-items:center;gap:10px;width:100%;min-height:34px;padding:0 8px;border:0;border-radius:8px;background:none;font:400 13.5px var(--f-body);color:var(--ink);text-align:left;cursor:pointer}
+.upg-opt:hover,.upg-opt:focus-visible{background:var(--surface-2);outline:none}
+.upg-opt[aria-checked="true"]{font-weight:600}
+.upg-opt>svg{width:15px;height:15px;flex:none}
+.upg-opt .r{margin-left:auto;padding-left:8px;font-size:12px;font-weight:400;color:var(--upg-ink-3);white-space:nowrap}
+.upg-opt .ok{margin-left:auto;width:16px;height:16px;color:var(--brand)}
+.upg-opt .upg-ol{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.upg-opt .upg-od{width:84px;flex:none;font-size:12px;font-weight:400;color:var(--ink-2)}
+.upg-pop-dag .upg-opt .upg-ol{width:98px;flex:none}
+.upg-o2{display:flex;flex-direction:column;line-height:1.3}
+.upg-o2>span+span{font-size:12px;font-weight:400;color:var(--upg-ink-3)}
+.upg-opt.upg-fara{color:var(--danger-ink)}
+.upg-sep{height:1px;margin:6px -8px;background:var(--line)}
+.upg-calh{display:flex;align-items:center;justify-content:space-between;padding:2px 2px 4px}
+.upg-calh b{font-size:13px;font-weight:600}
+.upg-calh .upg-x{width:28px;height:28px}
+.upg-calr{display:grid;grid-template-columns:24px repeat(7,minmax(0,1fr));gap:2px;align-items:center}
+.upg-wd{padding:2px 0 4px;font-size:11px;color:var(--upg-ink-3);text-align:center}
+.upg-wk{font-size:10px;color:var(--upg-ink-3);text-align:center;opacity:.8}
+.upg-cd{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:34px;padding:0;border:0;border-radius:8px;background:none;font:400 13px var(--f-body);color:var(--ink);cursor:pointer}
+.upg-cd:hover:not(:disabled){background:var(--surface-2)}
+.upg-cd.helg{color:var(--upg-ink-3)}
+.upg-cd.ut{opacity:.5}
+.upg-cd:disabled{color:var(--line-2);cursor:default}
+.upg-cd.idag{box-shadow:inset 0 0 0 1.5px var(--brand);color:var(--brand-ink);font-weight:600}
+.upg-cd.sel{background:var(--brand);color:#fff;font-weight:600;box-shadow:none;opacity:1}
+.upg-cd .p{display:flex;gap:2px;height:3px}
+.upg-cd .p i{width:3px;height:3px;border-radius:50%;background:currentColor;opacity:.6}
+.upg-estg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
+.upg-ep{height:32px;border:0;border-radius:8px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);font:400 13px var(--f-body);color:var(--ink);cursor:pointer}
+.upg-ep:hover{background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line-2)}
+.upg-ep[aria-pressed="true"]{background:var(--brand);color:#fff;box-shadow:none;font-weight:600}
+.upg-dagbar{padding:4px 4px 2px}
+.upg-barh{display:flex;justify-content:space-between;gap:8px;margin-bottom:7px;font-size:12.5px;color:var(--ink-2)}
+.upg-bar{display:flex;height:8px;border-radius:4px;background:var(--surface-2);box-shadow:inset 0 0 0 1px var(--line);overflow:hidden}
+.upg-bar i{display:block;height:100%;transition:width .22s cubic-bezier(.2,.8,.2,1)}
+.upg-bar .o{background:var(--ink-3);opacity:.55}
+.upg-bar .d{background:var(--brand)}
+.upg-bar .d.over{background:var(--danger)}
+
+/* Foten */
+.upg-rf{position:relative;display:flex;align-items:center;gap:8px;padding:11px 16px 11px 24px;border-top:1px solid var(--line);background:var(--surface)}
+.upg-rfsp{flex:1}
+.upg-rf .btn[aria-pressed="true"]{background:var(--signal-soft);border-color:var(--signal);color:var(--signal-ink)}
+.upg-rf .upg-mer{align-self:stretch;width:36px;min-height:32px;padding:0;justify-content:center}
+.upg-rf .upg-mer svg{width:16px;height:16px}
+.upg-slut{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:550;color:var(--brand-ink)}
+.upg-slut svg{width:16px;height:16px}
+.upg-ruta .upg-mob{display:none}
+/* Listraden: Börja med */
+.upg-rborja{display:inline-block;max-width:34ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;color:var(--brand-ink)}
+@media (prefers-reduced-motion:reduce){.upg-ruta *{animation:none !important;transition:none !important}}
+@media (max-width:760px){
+  .upg-rh{padding:10px 8px 0 16px}
+  .upg-titel{font-size:17px}
+  .upg-pos{display:none}
+  .upg-rstatus{padding:4px 16px 12px}
+  .upg-rgrid{display:flex;flex-direction:column;overflow-y:auto;overscroll-behavior:contain}
+  .upg-rvan{display:contents}
+  .upg-props{order:-1;flex:none;flex-direction:row;flex-wrap:wrap;gap:6px;padding:12px 16px 4px;border-left:0;background:none;overflow:visible}
+  .upg-pgrp{display:contents}
+  .upg-pr{display:block;min-height:0}
+  .upg-pl,.upg-pgrp-k>.upg-pl{display:none}
+  .upg-pv{width:auto;max-width:100%;height:34px;padding:0 12px;border-radius:999px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line);font-size:13px}
+  .upg-pv>svg{width:14px;height:14px}
+  .upg-chips{flex-direction:row;flex-wrap:wrap;gap:6px}
+  .upg-chip{border-radius:999px}
+  .upg-chip .cx{opacity:1}
+  .upg-serieslut{margin-left:0}
+  .upg-kform{flex-basis:100%}
+  .upg-rmain{flex:none;overflow:visible;padding:0 16px 18px}
+  .upg-komp{position:sticky;bottom:0;z-index:2;padding:10px 12px}
+  .upg-komp>.av,.upg-khint{display:none}
+  .upg-rf{padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px))}
+  .upg-rf .upg-dpc,.upg-rf .upg-rfsp{display:none}
+  .upg-komp{flex:none}
+  .upg-rf .btn{min-height:44px}
+  .upg-rf .btn-p{flex:1;justify-content:center}
+  .upg-rf .upg-mer{width:44px}
+  .upg-ruta .upg-mob{display:flex}
+  .upg-subl .upg-xs{opacity:1}
+  .upg-pop{position:fixed !important;top:auto !important;left:0 !important;right:0;bottom:0;width:auto !important;max-width:none;max-height:78vh !important;padding:12px 12px calc(14px + env(safe-area-inset-bottom,0px));border-radius:16px 16px 0 0;box-shadow:0 0 0 100vmax rgba(8,20,16,.32);animation:upgark .22s cubic-bezier(.2,.8,.2,1)}
+  @keyframes upgark{from{opacity:0;transform:translateY(24px)}}
+  .upg-pin{height:44px;font-size:16px}
+  .upg-opt{min-height:44px}
+  .upg-cd{height:40px}
+  .upg-titel,.upg-kin,.upg-forst2 input,.upg-falt,.upg-addin{font-size:16px}
+}
 /* Att göra-listan hovrar över sidan med en marginal; fäst ligger den vid kanten som förut */
 .upg-todo:not(.pinned){top:46px;right:12px;bottom:12px;width:min(400px,calc(100vw - 24px));border:1px solid var(--line);border-radius:12px;box-shadow:0 30px 80px -30px rgba(8,20,16,.45);transform:translateX(calc(100% + 24px));overflow:hidden}
 .upg-todo:not(.pinned).open{transform:none}
@@ -6659,16 +6885,7 @@ html.upg-oppen{overflow:hidden}
 @media (max-width:760px){
   .upg-rov{padding:0;place-items:stretch}
   .upg-ruta{width:100%;max-height:none;height:100%;border-radius:0;border:0}
-  .upg-rgrid{grid-template-columns:minmax(0,1fr);overflow-y:auto}
-  .upg-rmain{padding:14px 16px 18px;overflow:visible}
-  .upg-props{border-left:0;border-top:1px solid var(--line);overflow:visible}
-  .upg-rstatus{padding:0 16px 10px}
-  .upg-rh{padding:10px 8px 4px 16px}
-  .upg-pos{display:none}
-  .upg-titel{font-size:16px}
-  .upg-rf{padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px))}
   .upg-x{width:40px;height:40px}
-  .upg-xs{opacity:1}
   .upg-syntax{grid-template-columns:minmax(0,1fr)}
   .upg-veckan{gap:4px}
   .upg-kort{padding:14px 16px}
@@ -10381,7 +10598,7 @@ function renderFokus(){
     <div class="fbody">
       <div class="fk">${t.focus ? `Nummer ${t.focus} av dagens tre` : 'Snabb sak'}${t.nar ? ` · planerad ${esc(t.nar)}` : ''}</div>
       <h2>${esc(t.t)}</h2>
-      ${t.nasta ? `<p class="fnext">Första steget: ${esc(t.nasta)}</p>` : ''}
+      ${t.nasta ? `<p class="fnext">Börja med: ${esc(t.nasta)}</p>` : ''}
       <div class="ftid num" id="fokusTid">${fmtFokus(tot - fokusSek())}</div>
       <div class="fbar"><i id="fokusBar" style="width:${Math.min(100, fokusSek() / tot * 100)}%"></i></div>
       ${t.delar.length ? `<ul class="fsub">${t.delar.map(([x, ok], i) => `<li><button class="stick ${ok ? 'on' : ''}" data-sub="${t.id}|${i}">${I('check')}</button><span class="${ok ? 'st' : ''}">${esc(x)}</span></li>`).join('')}</ul>` : ''}
@@ -10871,7 +11088,7 @@ document.addEventListener('submit', e => {
   const f = e.target;
   if (f.matches('[data-quick]')){ e.preventDefault(); laggTill(f.querySelector('input').value); return; }
   if (f.dataset.subadd){ e.preventDefault(); const v = f.querySelector('input').value.trim(); if (!v) return; TASKS.find(y => y.id === f.dataset.subadd).delar.push([v, false]); render(); setTimeout(() => document.getElementById('subin')?.focus(), 0); return; }
-  if (f.dataset.chat){ e.preventDefault(); const v = f.querySelector('input').value.trim(); if (!v) return; const x = TASKS.find(y => y.id === f.dataset.chat); if (!x.chatt.length) x.chatt.push(['Johanna Ek','Hör av dig om du kör fast, så tar vi det på 1:1.','11:02']); x.chatt.push([ME[S.role].namn, v, hm(now())]); render(); setTimeout(() => document.getElementById('chatin')?.focus(), 0); return; }
+  if (f.dataset.chat){ e.preventDefault(); const v = (f.querySelector('textarea, input') || {}).value.trim(); if (!v) return; const x = TASKS.find(y => y.id === f.dataset.chat); if (!x.chatt.length) x.chatt.push(['Johanna Ek','Hör av dig om du kör fast, så tar vi det på 1:1.','11:02']); S.upgKomNy = {id:x.id, n:upgAkt(x).filter(y => y.k === 'k').length}; x.chatt.push([ME[S.role].namn, v, hm(now())]); if (S.upgKom) delete S.upgKom[x.id]; render(); setTimeout(() => document.getElementById('upgKom')?.focus(), 0); return; }
   if (f.dataset.retur){ e.preventDefault(); const x = TASKS.find(y => y.id === f.dataset.retur); const skal = f.querySelector('input').value.trim() || 'Inget skäl angivet'; x.lage = 'avbruten'; x.chatt.push([ME[S.role].namn, `Returnerad: ${skal}`, hm(now())]); S.returnFor = null; render(); toast(`Returnerad till ${x.ansvarig.split(' ')[0]} med skälet i chatten.`, () => { x.lage = 'oppen'; x.chatt.pop(); render(); }); }
 });
 // Tolkningen och förslagen visas medan man skriver, utan att fältet ritas om.
@@ -23310,6 +23527,8 @@ trow = function(t, opt = {}){
   if (opt.delat) m.push(`<span>${esc(t.ansvarig)} ansvarar, du ${esc((t.roll || '').toLowerCase())}</span>`);
   if (S.suggested.has(t.id) && t.skal && t.focus) m.push(`<span class="upg-skal">Nav valde den: ${esc(t.skal)}</span>`);
 
+  // Börja med (det första steget) står först, så att man ser var man börjar.
+  if (t.nasta && !done && !opt.vantar && !opt.granska && !opt.delat) m.unshift(`<span class="upg-rborja">Börja med: ${esc(t.nasta)}</span>`);
   const tick = opt.vantar || opt.granska || opt.delat ? avatar(t.ansvarig || '?', 26) : `<button type="button" class="tick ${t.granskare ? 'rev' : ''}" data-tick="${t.id}" aria-label="${t.granskare ? 'Lämna in' : 'Markera klar'}: ${esc(t.t)}">${I('check')}</button>`;
   const ik = (data, ikon, etikett, kl = '') => `<button type="button" class="qa upg-qa ${kl}" ${data} title="${etikett}" aria-label="${etikett}">${I(ikon)}</button>`;
   let acts = '';
@@ -23606,7 +23825,14 @@ renderPanel = function(){
   if (ny){ const a = document.activeElement; upgOppnare = a && a !== document.body ? a : null; el = document.createElement('div'); el.id = 'upgRuta'; el.className = 'upg-rov'; document.body.appendChild(el); }
   const p = document.querySelector('.proto'); el.style.top = Math.max(0, p ? p.getBoundingClientRect().bottom : 0) + 'px';
   document.documentElement.classList.add('upg-oppen');
-  el.innerHTML = upgRutaHtml(t);
+  // Samma uppgift ritad igen (en sparning, en omhämtning): rullningen, fokus och markören står kvar.
+  // En annan uppgift: väljarna stängs.
+  const samma = !ny && el.dataset.upg === t.id, f = document.activeElement, inne = samma && f && f !== el && el.contains(f);
+  if (!samma){ S.upgPop = null; S.upgQ = ''; S.upgSubNy = null; }
+  const o = {samma, rull:samma ? [...el.querySelectorAll('.upg-rmain, .upg-props, .upg-rgrid')].map(x => x.scrollTop) : [],
+    fid:inne && f.id ? f.id : null, fsel:inne && !f.id ? upgFokusVal(f) : null, sel:inne && f.id && typeof f.selectionStart === 'number' ? [f.selectionStart, f.selectionEnd] : null};
+  el.innerHTML = upgRutaHtml(t); el.dataset.upg = t.id;
+  upgEfter(el, o);
   if (ny) setTimeout(() => document.getElementById('ptitle')?.focus({preventScroll:true}), 20);
 };
 function upgOrdning(){
@@ -23621,61 +23847,496 @@ function upgRadio(namn, knappar, kl = ''){
   let forst = !valt;
   return `<div class="upg-seg ${kl}" role="radiogroup" aria-label="${namn}">${h.replace(/<button /g, () => '<button ').replace(/role="radio" aria-checked="(true|false)"/g, (m, v) => { const tab = v === 'true' || forst; forst = false; return `${m} tabindex="${tab ? 0 : -1}"`; })}</div>`;
 }
+/* ---------- Uppgiftsrutan: tolkarna (2026-11-13) ----------
+   En dag, ett klockslag och en tidsåtgång som man skriver dem. Svaret är ett värde, '' eller 0 (ta bort),
+   null (tomt fält) eller undefined (förstods inte). Provas i tests/nav2-uppgiftsrutan.mjs. */
+const UPGMAN = ['jan', 'feb', 'mar', 'apr', 'maj', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
+const UPGMANL = ['januari', 'februari', 'mars', 'april', 'maj', 'juni', 'juli', 'augusti', 'september', 'oktober', 'november', 'december'];
+const UPGVDL = ['', 'måndag', 'tisdag', 'onsdag', 'torsdag', 'fredag', 'lördag', 'söndag'];
+const upgIso = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+const upgGiltig = (y, m, d) => m >= 1 && m <= 12 && d >= 1 && new Date(Date.UTC(y, m - 1, d)).getUTCDate() === d;
+// ISO-veckan, som i almanackan.
+function upgVecka(s){ const d = new Date(Date.parse(s + 'T12:00:00Z')), v = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - v + 3); const j = new Date(Date.UTC(d.getUTCFullYear(), 0, 4)); return 1 + Math.round(((d - j) / 864e5 - 3 + (j.getUTCDay() + 6) % 7) / 7); }
+// "tor", "i morgon", "25/11", "25 nov", "fre 20 nov", "20", "v. 48", "om 2 veckor", "nästa vecka", "ingen".
+// Aldrig ett datum före i dag: ett datum som redan varit i år är nästa års.
+function upgTolkaDag(q, idag){
+  const t = String(q || '').trim().toLowerCase().replace(/\s+/g, ' ').replace(/[.!]$/, '').replace(/^den /, '');
+  if (!t) return null;
+  const plus = n => frPlus(idag, n);
+  const nasta = w => { for (let i = 1; i <= 7; i++) if (frDow(plus(i)) === w) return plus(i); return idag; };
+  if (/^i ?dag$/.test(t)) return idag;
+  if (/^i ?morgon$|^i ?morn$/.test(t)) return plus(1);
+  if (/^i ?övermorgon$/.test(t)) return plus(2);
+  if (/^nästa vecka$/.test(t)) return nasta(1);
+  if (/^(ingen( dag)?|inget datum|någon gång|ta bort)$/.test(t)) return '';
+  let m = t.match(/^om (\d{1,3}|en|ett|två|tre|fyra|fem|sex) (dag|dagar|vecka|veckor)$/);
+  if (m){ const n = {en:1, ett:1, två:2, tre:3, fyra:4, fem:5, sex:6}[m[1]] || +m[1]; return n >= 1 ? plus(/^v/.test(m[2]) ? n * 7 : n) : undefined; }
+  m = t.match(/^(?:v\.?|vecka) ?(\d{1,2})$/);
+  if (m){ const v = +m[1]; if (v < 1 || v > 53) return undefined;
+    for (const y of [+idag.slice(0, 4), +idag.slice(0, 4) + 1]){
+      const j = upgIso(y, 1, 4), man = frPlus(j, 1 - frDow(j)), s = frPlus(man, (v - 1) * 7);
+      if (upgVecka(s) === v && frPlus(s, 6) >= idag) return s > idag ? s : idag;
+    }
+    return undefined; }
+  const vd = ['mån', 'tis', 'ons', 'tor', 'fre', 'lör', 'sön'];
+  m = t.match(/^(?:nästa |på )?([a-zåäö]{2,7})$/);
+  if (m){ const i = vd.findIndex(v => m[1].startsWith(v) || v.startsWith(m[1])); if (i >= 0) return nasta(i + 1); }
+  m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m){ const s = upgIso(+m[1], +m[2], +m[3]); return upgGiltig(+m[1], +m[2], +m[3]) && s >= idag ? s : undefined; }
+  // Bara en dag i månaden: den här månaden, eller nästa om dagen varit.
+  m = t.match(/^(\d{1,2})$/);
+  if (m){ const d = +m[1], y0 = +idag.slice(0, 4), m0 = +idag.slice(5, 7);
+    for (let i = 0; i < 3; i++){ const mo = (m0 - 1 + i) % 12 + 1, y = y0 + Math.floor((m0 - 1 + i) / 12); if (upgGiltig(y, mo, d) && upgIso(y, mo, d) >= idag) return upgIso(y, mo, d); }
+    return undefined; }
+  m = t.match(/^(?:[a-zåäö]{2,7}\.? )?(\d{1,2})(?: ?[/.-] ?| )?(\d{1,2}|[a-zåäö]{3,})$/);
+  if (m){ const d = +m[1], mo = /^\d+$/.test(m[2]) ? +m[2] : UPGMAN.findIndex(x => m[2].startsWith(x)) + 1, y0 = +idag.slice(0, 4);
+    if (mo < 1) return undefined;
+    for (const y of [y0, y0 + 1]) if (upgGiltig(y, mo, d) && upgIso(y, mo, d) >= idag) return upgIso(y, mo, d);
+    return undefined; }
+  return undefined;
+}
+// "14", "1430", "14.30", "9:15", "kl 9". '' tar bort klockslaget.
+function upgTolkaTid(q){
+  const t = String(q || '').trim().toLowerCase().replace(/^kl(?:\.|ockan)? ?/, '');
+  if (!t) return null;
+  if (/^(inget|ingen|ta bort)( klockslag| tid)?$/.test(t)) return '';
+  const m = t.match(/^(\d{1,2})(?:[:., ]?(\d{2}))?$/);
+  if (!m) return undefined;
+  const h = +m[1], mi = m[2] ? +m[2] : 0;
+  return h > 23 || mi > 59 ? undefined : `${String(h).padStart(2, '0')}:${String(mi).padStart(2, '0')}`;
+}
+// "20", "20 min", "1 h", "1 h 20", "1,5 h", "1:30". 0 tar bort uppskattningen.
+function upgTolkaEst(q){
+  const t = String(q || '').trim().toLowerCase().replace(',', '.').replace(/\s+/g, ' ');
+  if (!t) return null;
+  if (/^(ingen|inget|ta bort)$/.test(t)) return 0;
+  const inom = v => v > 0 && v <= 1440 ? v : undefined;
+  let m = t.match(/^(\d+(?:\.\d+)?) ?(?:h|t|tim|timme|timmar)(?: ?(\d+) ?(?:m|min|minuter)?)?$/);
+  if (m) return inom(Math.round(parseFloat(m[1]) * 60 + (m[2] ? +m[2] : 0)));
+  m = t.match(/^(\d+) ?(?:m|min|minuter)?$/);
+  if (m) return inom(+m[1]);
+  m = t.match(/^(\d{1,2}):(\d{2})$/);
+  if (m && +m[2] < 60) return inom(+m[1] * 60 + +m[2]);
+  return undefined;
+}
+/* ---------- slut på tolkarna ---------- */
+
+/* ---------- Uppgiftsrutan (2026-11-13) ----------
+   Beställaren: för mycket på en gång, funktioner som fattas, första steget obegripligt, chatten outvecklad.
+   Egenskaperna är en rad var, och värdet öppnar sin väljare (dag med kalender, tid, tidsåtgång med dagens
+   fyllnad, prioritet med färg, projekt, ansvarig, granskare). Kommentarer och historik är en tidslinje med ett
+   fält som står kvar. Navet sparar genom upgSatt (ND-omslaget längre ned). */
+const UPGPRIO = [[1, 'Brådskande', 'Måste bli gjort i dag', 'var(--danger)'], [2, 'Hög', 'Före det vanliga', 'var(--signal)'], [3, 'Normal', 'Det vanliga', 'var(--info)'], [4, 'Låg', 'När det finns tid', 'var(--ink-3)']];
+const UPGEST = [5, 15, 30, 45, 60, 90, 120, 180, 240];
+const UPGDAGLANGD = 480;
+const UPGSVG = {
+  dag:'<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  tid:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  est:'<circle cx="12" cy="13.5" r="7.5"/><path d="M12 10v3.5l2 1.5M9.5 3h5"/>',
+  flagga:'<path d="M5 21V4.5c3-2 6 0 8 1s4.5 1 6.5-.5v9.5c-2 1.5-4.5 1.5-6.5.5s-5-3-8-1"/>',
+  gransk:'<circle cx="10" cy="8" r="3.5"/><path d="M3.5 20c.8-3.6 3.5-5.5 6.5-5.5 1.3 0 2.5.3 3.5.9M15.5 18l2 2 4-4.5"/>',
+  person:'<circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-4 4-5.5 7-5.5s6 1.5 7 5.5"/>',
+  lank:'<path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/>',
+  dela:'<circle cx="12" cy="12" r="3"/><path d="M12 3v6M12 15v6M3 12h6M15 12h6"/>',
+  upp:'<path d="M12 19V5M6 11l6-6 6 6"/>',
+  ater:'<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  stjarna:'<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/>',
+  pil:'<path d="M5 12h14M13 6l6 6-6 6"/>',
+  vanster:'<path d="M15 6l-6 6 6 6"/>',
+  hoger:'<path d="M9 6l6 6-6 6"/>',
+  bock:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  x:'<path d="M6 6l12 12M18 6L6 18"/>',
+  serie:'<path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.7 5.6L4 15.5M4 20v-4.5h4.5"/>'
+};
+const upgIk = (n, kl = '', stil = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"${kl ? ` class="${kl}"` : ''}${stil ? ` style="${stil}"` : ''}>${UPGSVG[n]}</svg>`;
+const UPGPRICKAR = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg>';
+const upgMig = () => ND ? ND.jag.namn : ME[S.role].namn;
+const upgLista = a => a.length < 2 ? a.join('') : `${a.slice(0, -1).join(', ')} och ${a[a.length - 1]}`;
+const upgDiff = s => Math.round((Date.parse(s + 'T12:00:00Z') - Date.parse(kIdag() + 'T12:00:00Z')) / 864e5);
+// Dagen räknad från i dag (dagText räknar från utkastets 9 oktober).
+const upgDagKort = d => d === null || d === undefined ? 'Ingen dag' : d === 0 ? 'I dag' : d === 1 ? 'I morgon' : d === -1 ? 'I går' : frKort(frPlus(kIdag(), d));
+function upgDagLang(s){ const n = upgDiff(s), dag = `${UPGVDL[frDow(s)]} ${+s.slice(8)} ${UPGMANL[+s.slice(5, 7) - 1]}`;
+  return `${dag[0].toUpperCase()}${dag.slice(1)}, ${n === 0 ? 'i dag' : n === 1 ? 'i morgon' : `om ${n} dagar`} (v. ${upgVecka(s)})`; }
+// Det du redan har en dag, utan uppgiften själv: antal, minuter och hur många som saknar uppskattning.
+function upgLast(d, utan){
+  const l = mine().filter(x => x.id !== utan && x.vy === 'egen' && !isDone(x) && x.lage !== 'avbruten' && x.d === d);
+  return {n:l.length, min:l.reduce((a, x) => a + (x.est || 0), 0), utan:l.filter(x => !x.est).length};
+}
+const upgLastText = l => l.n ? `${l.n} ${l.n === 1 ? 'uppgift' : 'uppgifter'}` : 'ledig';
+// Vilka som får en notis om en kommentar: den som la upp den, den som har den och granskarna, utom du.
+function upgNotisTill(t){
+  const mig = upgMig(), skapare = ((t.skapad || '').split(' · ')[0] || '').replace(/^Du$/, mig);
+  return [...new Set([skapare, t.ansvarig, ...String(t.granskare || '').split(', ')].filter(n => n && n !== mig))];
+}
+// Vem som får välja granskare och lämna över (navet: den som la upp den eller har den).
+function upgFarStyra(t){ return t.vy === 'egen'; }
+// Aktiviteten: kommentarer och händelser i tidsordning, {k:'k'|'h', vem, text, nar, note?, titel?}.
+function upgAkt(t){
+  const mig = upgMig(), [av, dag] = (t.skapad || 'Du · i dag').split(' · '), ut = [{k:'h', vem:av === 'Du' ? mig : av, text:'Skapad', nar:dag || 'i dag'}];
+  (t.flyttDatum || []).forEach(dd => ut.push({k:'h', vem:'', text:'Flyttad', nar:dd}));
+  (t.chatt.length || ND ? t.chatt : [['Johanna Ek', 'Hör av dig om du kör fast, så tar vi det på 1:1.', '11:02']]).forEach(([n, m, tm]) => ut.push({k:'k', vem:n, text:m, nar:tm}));
+  if (t.startad) ut.push({k:'h', vem:mig, text:'Påbörjad', nar:'i dag'});
+  if (isDone(t)) ut.push({k:'h', vem:mig, text:'Klar', nar:t.klarTid || 'i dag'});
+  return ut;
+}
+// Dagens fyllnad mot en arbetsdag på 8 h, med uppgiftens tid lagd ovanpå.
+function upgDagbarData(t, est){
+  if (t.d === null || t.d === undefined) return null;
+  const l = upgLast(t.d, t.id), tot = l.min + est, skala = Math.max(UPGDAGLANGD, tot), over = tot > UPGDAGLANGD;
+  return {rubrik:`${upgDagKort(t.d)}${l.n ? `, ${l.n} ${l.n === 1 ? 'annan' : 'andra'}` : ''}`, summa:`${minText(tot)} av 8 h`, o:l.min / skala * 100, d:est / skala * 100, over,
+    text:`${over ? `${minText(tot - UPGDAGLANGD)} mer än en arbetsdag.` : tot ? `${minText(UPGDAGLANGD - tot)} kvar av dagen.` : 'Dagen är tom.'}${l.utan ? ` ${l.utan} utan uppskattning räknas inte.` : ''}`};
+}
+function upgDagbar(t, est){
+  const b = upgDagbarData(t, est);
+  if (!b) return '<p class="upg-hint upg-sm2">Ingen dag än. Med en dag ser du här hur full dagen blir.</p>';
+  return `<div class="upg-barh"><span data-b="r">${esc(b.rubrik)}</span><span class="num" data-b="s">${b.summa}</span></div>
+    <div class="upg-bar" aria-hidden="true"><i class="o" style="width:${b.o}%"></i><i class="d${b.over ? ' over' : ''}" style="width:${b.d}%"></i></div>
+    <p class="upg-hint upg-sm2" data-b="t">${esc(b.text)}</p>`;
+}
+// Hovring över en tid: staplarna glider i stället för att ritas om.
+function upgDagbarVisa(t, est){
+  const el = document.getElementById('upgDagbar'), b = upgDagbarData(t, est); if (!el || !b || !el.querySelector('.upg-bar')) return;
+  el.querySelector('[data-b="r"]').textContent = b.rubrik; el.querySelector('[data-b="s"]').textContent = b.summa; el.querySelector('[data-b="t"]').textContent = b.text;
+  el.querySelector('.upg-bar .o').style.width = b.o + '%'; const d = el.querySelector('.upg-bar .d'); d.style.width = b.d + '%'; d.classList.toggle('over', b.over);
+}
+function upgTolkText(k, q){
+  if (k === 'dag'){ const s = upgTolkaDag(q, kIdag()); return s === null ? ['Skriv en dag, eller välj nedan.', 'mut'] : s === undefined ? ['Det förstod jag inte. Prova tor, 25/11 eller om 2 veckor.', 'fel'] : s === '' ? ['Ingen dag. Enter väljer.', ''] : [`${upgDagLang(s)}. Enter väljer.`, '']; }
+  if (k === 'tid'){ const v = upgTolkaTid(q), t = TASKS.find(x => x.id === S.panel), utan = !t || t.d === null || t.d === undefined;
+    return v === null ? [utan ? 'En tid lägger den i dag.' : 'Skriv en tid, eller välj nedan.', 'mut'] : v === undefined ? ['Skriv en tid som 14, 1430 eller 9.15.', 'fel'] : v === '' ? ['Inget klockslag. Enter väljer.', ''] : [`Klockan ${v}${utan ? ', i dag' : ''}. Enter väljer.`, '']; }
+  if (k === 'est'){ const v = upgTolkaEst(q); return v === null ? ['Skriv minuter eller timmar.', 'mut'] : v === undefined ? ['Skriv minuter eller timmar: 20, 1 h 20, 1,5 h.', 'fel'] : v === 0 ? ['Ingen uppskattning. Enter väljer.', ''] : [`${minText(v)}. Enter väljer.`, '']; }
+  return ['', 'mut'];
+}
+function upgPopHtml(t, k){
+  const idag = kIdag(), q = esc(S.upgQ || ''), mig = upgMig();
+  const opt = (data, inner, sel, roll = 'menuitemradio') => `<button type="button" class="upg-opt" role="${roll}" aria-checked="${!!sel}" ${data}>${inner}</button>`;
+  const bock = sel => sel ? upgIk('bock', 'ok') : '';
+  const pin = (k2, ph, etikett) => `<input id="upgPopIn" class="upg-pin" data-upgpopin="${k2}" value="${q}" placeholder="${ph}" aria-label="${etikett}" aria-describedby="upgTolk" autocomplete="off" spellcheck="false">`;
+  const tolk = k2 => { const [x, kl] = upgTolkText(k2, S.upgQ || ''); return `<p class="upg-tolk${kl ? ' ' + kl : ''}" id="upgTolk" aria-live="polite">${esc(x)}</p>`; };
+  const ram = (kl, roll, etikett, inner) => `<div class="upg-pop ${kl}" role="${roll}" aria-label="${etikett}" data-upgpopfor="${t.id}|${k}">${inner}</div>`;
+  if (k === 'dag'){
+    const valt = t.d === null || t.d === undefined ? null : frPlus(idag, t.d);
+    let mandag = frPlus(idag, 1); while (frDow(mandag) !== 1) mandag = frPlus(mandag, 1);
+    const snabb = [['I dag', idag], ['I morgon', frPlus(idag, 1)], [frDow(idag) === 1 ? 'Nästa måndag' : 'Måndag', mandag], ['Om en vecka', frPlus(idag, 7)]].filter(([, s], j, a) => a.findIndex(x => x[1] === s) === j);
+    const man = S.upgMan || (valt && valt >= idag ? valt : idag).slice(0, 7), forst = man + '-01';
+    let veckor = '';
+    for (let w = 0, mon = frPlus(forst, 1 - frDow(forst)); w < 6 && (w === 0 || mon.slice(0, 7) === man); w++, mon = frPlus(mon, 7)){
+      veckor += `<div class="upg-calr"><span class="upg-wk num" aria-hidden="true">${upgVecka(mon)}</span>${[0, 1, 2, 3, 4, 5, 6].map(j => {
+        const s = frPlus(mon, j), forr = s < idag, l = forr ? {n:0} : upgLast(upgDiff(s), t.id);
+        const kl = ['upg-cd', s.slice(0, 7) !== man ? 'ut' : '', j >= 5 ? 'helg' : '', s === idag ? 'idag' : '', s === valt ? 'sel' : ''].filter(Boolean).join(' ');
+        return `<button type="button" class="${kl}" data-upgsatt="${t.id}|dag|${upgDiff(s)}" ${forr ? 'disabled' : ''} aria-label="${UPGVDL[frDow(s)]} ${+s.slice(8)} ${UPGMANL[+s.slice(5, 7) - 1]}${l.n ? `, ${upgLastText(l)}` : ''}"${s === valt ? ' aria-current="date"' : ''}><span class="num">${+s.slice(8)}</span><span class="p">${'<i></i>'.repeat(Math.min(3, l.n))}</span></button>`;
+      }).join('')}</div>`;
+    }
+    return ram('upg-pop-dag', 'dialog', 'Välj dag', `${pin('dag', 'Skriv en dag: tor, 25/11, om 2 veckor', 'Skriv en dag')}${tolk('dag')}
+      ${snabb.map(([l, s]) => opt(`data-upgsatt="${t.id}|dag|${upgDiff(s)}"`, `<span class="upg-ol">${l}</span><span class="upg-od num">${frKort(s)}</span><span class="r">${upgLastText(upgLast(upgDiff(s), t.id))}</span>`, valt === s)).join('')}
+      ${opt(`data-upgsatt="${t.id}|dag|null"`, '<span class="upg-ol">Ingen dag</span><span class="r">ingen deadline</span>', valt === null)}
+      <div class="upg-sep"></div>
+      <div class="upg-calh"><button type="button" class="upg-x" id="upgManF" data-upgman="-1" aria-label="Förra månaden" ${man <= idag.slice(0, 7) ? 'disabled' : ''}>${upgIk('vanster')}</button><b>${UPGMANL[+man.slice(5) - 1]} ${man.slice(0, 4)}</b><button type="button" class="upg-x" id="upgManN" data-upgman="1" aria-label="Nästa månad">${upgIk('hoger')}</button></div>
+      <div class="upg-calr" aria-hidden="true"><span class="upg-wd">v.</span>${['må', 'ti', 'on', 'to', 'fr', 'lö', 'sö'].map(x => `<span class="upg-wd">${x}</span>`).join('')}</div>
+      ${veckor}
+      <p class="upg-hint upg-sm2">Prickarna visar hur mycket du redan har den dagen. Utan dag har uppgiften ingen deadline och blir aldrig försenad.</p>`);
+  }
+  if (k === 'tid'){
+    const idagValt = t.d === 0 || t.d === null || t.d === undefined, nu = Math.min(23 * 60 + 45, Math.ceil(now() / 15) * 15);
+    const val = [...(idagValt ? [['Direkt', hm(nu)]] : []), ['Före lunch', '11:30'], ['13:00', '13:00'], ['14:00', '14:00'], ['15:00', '15:00'], ['16:00', '16:00'], ['Före hemgång', '16:30']];
+    const nuv = t.tid || (/^\d{1,2}:\d{2}$/.test(t.nar || '') ? t.nar : null);
+    return ram('upg-pop-tid', 'dialog', 'Välj tid', `${pin('tid', 'Skriv en tid: 14, 1430, 9.15', 'Skriv en tid')}${tolk('tid')}
+      ${val.map(([l, v]) => opt(`data-upgsatt="${t.id}|tid|${v}"`, `<span class="upg-ol">${l}</span><span class="r num">${l === v ? '' : v}</span>`, nuv === v || t.nar === l)).join('')}
+      <div class="upg-sep"></div>${opt(`data-upgsatt="${t.id}|tid|"`, '<span class="upg-ol">Inget klockslag</span>', !t.nar)}`);
+  }
+  if (k === 'est') return ram('upg-pop-est', 'dialog', 'Hur lång tid tar den', `<div class="upg-ph"><span>Hur lång tid tar den?</span><span class="upg-kbd">E</span></div>
+      <div class="upg-estg">${UPGEST.map(m => `<button type="button" class="upg-ep" data-upgsatt="${t.id}|est|${m}" data-upgesthov="${m}" aria-pressed="${t.est === m}">${minText(m)}</button>`).join('')}</div>
+      ${pin('est', 'Egen tid: 20, 1 h 20, 1,5 h', 'Egen tid')}${tolk('est')}
+      <div class="upg-sep"></div><div class="upg-dagbar" id="upgDagbar">${upgDagbar(t, t.est || 0)}</div>
+      ${t.est ? `<div class="upg-sep"></div>${opt(`data-upgsatt="${t.id}|est|0"`, '<span class="upg-ol">Ta bort uppskattningen</span>', false)}` : ''}`);
+  if (k === 'prio') return ram('upg-pop-prio', 'menu', 'Prioritet', `<div class="upg-ph"><span>Prioritet</span><span>tryck 1–4</span></div>
+      ${UPGPRIO.map(([v, l, h, c]) => opt(`data-upgsatt="${t.id}|prio|${v}" style="min-height:44px"`, `${upgIk('flagga', 'upg-flagga', `color:${c}`)}<span class="upg-o2"><span>${l}</span><span>${h}</span></span><span class="r upg-kbd">${v}</span>`, t.prio === v)).join('')}`);
+  if (k === 'proj'){
+    const lista = PROJEKT[role()] || [];
+    return ram('upg-pop-proj', 'dialog', 'Välj projekt', `${lista.length > 4 ? `${pin('proj', 'Sök projekt', 'Sök projekt')}<div style="height:6px"></div>` : ''}
+      ${opt(`data-upgsatt="${t.id}|proj|" data-upgnamn=""`, '<span class="upg-sq" style="box-shadow:inset 0 0 0 1.5px var(--line-2)"></span><span class="upg-ol">Inget projekt</span>', !t.proj)}
+      ${lista.map(p => opt(`data-upgsatt="${t.id}|proj|${esc(p[0])}" data-upgnamn="${esc(p[0].toLowerCase())}"`, `<span class="upg-sq" style="background:${p[1]}"></span><span class="upg-ol">${esc(p[0])}</span><span class="r num">${p[3] ? `${p[2]} av ${p[3]}` : ''}</span>`, t.proj === p[0])).join('')}
+      <p class="upg-tolk fel" id="upgTolk" hidden>Inget projekt heter så.</p>
+      <div class="upg-sep"></div><button type="button" class="upg-opt" data-upgnyttproj="${t.id}">${I('plus')}Nytt projekt</button>`);
+  }
+  if (k === 'ansv'){
+    const folk = KOLLEGOR.filter(n => n !== mig && n !== t.ansvarig);
+    return ram('', 'dialog', 'Lämna över', `<div class="upg-ph"><span>Lämna över till</span></div>
+      ${folk.map(n => opt(`data-upgsatt="${t.id}|ansv|${esc(n)}"`, `${avatar(n, 22)}<span class="upg-ol">${esc(n)}</span>`, false, 'menuitem')).join('') || '<p class="upg-hint">Det finns ingen att lämna över till.</p>'}
+      <p class="upg-hint upg-sm2" style="padding:4px 6px 2px">Uppgiften flyttas till hens lista. Du hittar den under Väntar på andra.</p>`);
+  }
+  if (k === 'gransk'){
+    const nu = String(t.granskare || '').split(', ').filter(Boolean), folk = KOLLEGOR.filter(n => n !== mig && n !== t.ansvarig);
+    return ram('', 'dialog', 'Välj granskare', `<div class="upg-ph"><span>Ska någon godkänna den?</span></div>
+      ${opt(`data-upgsatt="${t.id}|gransk|"`, `<span class="upg-ol">Ingen granskare</span>${bock(!nu.length)}`, !nu.length)}
+      ${folk.map(n => opt(`data-upgsatt="${t.id}|gransk|${esc(n)}"`, `${avatar(n, 22)}<span class="upg-ol">${esc(n)}</span>${bock(nu.includes(n))}`, nu.includes(n))).join('')}
+      <p class="upg-hint upg-sm2" style="padding:4px 6px 2px">Med en granskare blir Klar en inlämning. Granskaren godkänner, eller skickar tillbaka med en kommentar.</p>`);
+  }
+  if (k === 'mer') return ram('upg-pop-mer', 'menu', 'Mer', `
+      <button type="button" class="upg-opt upg-mob" role="menuitem" data-focus="${t.id}">${upgIk('stjarna')}${t.focus ? 'Ta ur dagens tre' : 'Lägg i dagens tre'}</button>
+      <button type="button" class="upg-opt upg-mob" role="menuitem" data-snooze="${t.id}">${upgIk('pil')}Nästa arbetsdag</button>
+      ${upgFarStyra(t) ? `<button type="button" class="upg-opt" role="menuitem" data-upgpop="${t.id}|ansv">${upgIk('person')}Lämna över</button>` : ''}
+      <button type="button" class="upg-opt" role="menuitem" data-upgkopiera="${t.id}">${upgIk('lank')}Kopiera länk</button>
+      <div class="upg-sep"></div>
+      <button type="button" class="upg-opt upg-fara" role="menuitem" data-strike="${t.id}">${upgIk('x')}Stryk uppgiften</button>`);
+  return '';
+}
 function upgRutaHtml(t){
-  const done = isDone(t), egen = t.vy === 'egen';
-  const lage = done ? ['Klar','upg-ok'] : t.lage === 'granskas' ? ['Väntar på godkännande','upg-hog'] : t.lage === 'avbruten' ? ['Struken',''] : t.startad ? ['Pågår','upg-ok'] : t.d !== null && t.d < 0 ? ['Försenad','upg-sen'] : ['Ej påbörjad',''];
+  const done = isDone(t), egen = t.vy === 'egen', kan = egen && !done, mig = upgMig();
+  const pop = kan && S.upgPop && S.upgPop.split('|')[0] === t.id ? S.upgPop.split('|')[1] : null;
+  const harDag = t.d !== null && t.d !== undefined, sen = !done && harDag && t.d < 0;
+  const lage = done ? ['Klar', 'upg-ok'] : t.lage === 'granskas' ? ['Väntar på godkännande', 'upg-hog'] : t.lage === 'avbruten' ? ['Struken', ''] : t.startad ? ['Pågår', 'upg-ok'] : sen ? ['Försenad', 'upg-sen'] : ['Ej påbörjad', ''];
   const ord = upgOrdning(), i = ord.indexOf(t.id);
-  const seg = (namn, l, kl = '') => upgRadio(namn, l, kl);
-  const dag = seg('Dag', [[0,'I dag'],[1,'I morgon'],[3,'Måndag'],[null,'Någon gång']].map(([d, l]) => `<button type="button" data-setday="${t.id}|${d}" aria-pressed="${t.d === d}">${l}</button>`).join(''));
-  const prio = seg('Prioritet', [[1,'Brådskande'],[2,'Hög'],[3,'Normal'],[4,'Låg']].map(([v, l]) => `<button type="button" data-setprio="${t.id}|${v}" aria-pressed="${t.prio === v}">${l}</button>`).join(''));
-  const est = seg('Uppskattning', [5,15,30,60,120].map(mm => `<button type="button" data-upgest="${t.id}|${mm}" aria-pressed="${t.est === mm}">${minText(mm)}</button>`).join(''), 'upg-seg3');
-  const nar = `<select class="upg-in upg-sel" data-upgnar="${t.id}" aria-label="När">${['', ...NAR_VAL].map(v => `<option value="${v}" ${(t.nar || '') === v ? 'selected' : ''}>${v || 'Inget klockslag'}</option>`).join('')}</select>`;
-  const projekt = `<select class="upg-in upg-sel" data-upgproj="${t.id}" aria-label="Projekt">${['', ...PROJEKT[role()].map(x => x[0])].map(v => `<option value="${esc(v)}" ${(t.proj || '') === v ? 'selected' : ''}>${v ? esc(v) : 'Inget projekt'}</option>`).join('')}</select>`;
-  const rad = (k, v) => `<div class="upg-prad"><dt>${k}</dt><dd>${v}</dd></div>`;
-  const dk = t.delar.filter(x => x[1]).length;
-  const chatt = t.chatt.length || ND ? t.chatt : [['Johanna Ek','Hör av dig om du kör fast, så tar vi det på 1:1.','11:02']];
+  const forn = n => !n ? '' : n === mig || n === 'Du' ? 'dig' : esc(n.split(' ')[0]);
+  const skapare = (t.skapad || '').split(' · ')[0];
+  const sep = '<span class="upg-rs-sep" aria-hidden="true">·</span>';
+  const ansv = t.ansvarig || mig, gransk = String(t.granskare || '').split(', ').filter(Boolean);
+  const prio = UPGPRIO.find(p => p[0] === t.prio) || UPGPRIO[2];
+  const projP = t.proj && (PROJEKT[role()] || []).find(x => x[0] === t.proj);
+  // En egenskap: etiketten och värdet, som öppnar sin väljare när man får ändra den.
+  const rad = (k, etikett, varde, text, far = kan, titel = '') => `<div class="upg-pr"><span class="upg-pl">${etikett}</span>${far
+    ? `<button type="button" class="upg-pv" data-upgpop="${t.id}|${k}" aria-haspopup="dialog" aria-expanded="${pop === k}" aria-label="${etikett}: ${esc(text)}"${titel ? ` title="${titel}"` : ''}>${varde}</button>`
+    : `<span class="upg-pv">${varde}</span>`}</div>`;
+  const dagV = `${upgIk('dag')}<span class="v${!harDag ? ' upg-mut' : sen ? ' upg-sen' : ''}">${harDag ? `${upgDagKort(t.d)}${sen ? ', försenad' : ''}` : 'Ingen dag'}</span>`;
+  const tidV = `${upgIk('tid')}<span class="v${t.nar ? '' : ' upg-mut'}">${t.nar ? esc(t.nar) : 'Inget klockslag'}</span>`;
+  const estV = `${upgIk('est')}<span class="v${t.est ? '' : ' upg-mut'}">${t.est ? minText(t.est) : 'Ingen uppskattning'}</span>`;
+  const prioV = `${upgIk('flagga', 'upg-flagga', `color:${prio[3]}`)}<span class="v">${prio[1]}</span>`;
+  const projV = t.proj ? `<span class="upg-sq" style="background:${projP ? projP[1] : 'var(--brand)'}"></span><span class="v">${esc(t.proj)}</span>` : '<span class="upg-sq" style="box-shadow:inset 0 0 0 1.5px var(--line-2)"></span><span class="v upg-mut">Inget projekt</span>';
+  const ansvV = `${avatar(ansv, 20)}<span class="v">${ansv === mig ? 'Du' : esc(ansv)}</span>`;
+  const granskV = gransk.length ? `${avatar(gransk[0], 20)}<span class="v">${esc(gransk.join(', '))}</span>` : `${upgIk('gransk')}<span class="v upg-mut">Ingen</span>`;
+  const lankar = t.links.map(([k, v], j) => { const inne = `<span class="ctyp">${esc(k)}</span><span class="v">${esc(v)}</span>`;
+    return `<span class="upg-chip">${upgLankMal(t, k, v) ? `<button type="button" data-upglank="${t.id}|${j}" title="Öppna ${esc(v)}">${inne}</button>` : `<span>${inne}</span>`}<!--upg-lx${j}--></span>`; }).join('');
+  // Deluppgifterna, med en ring som fylls.
+  const dk = t.delar.filter(x => x[1]).length, n = t.delar.length, omkr = 2 * Math.PI * 7;
+  const ring = n ? `<span class="upg-prog"><svg class="upg-ring" width="16" height="16" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="7"/><circle class="f" cx="9" cy="9" r="7" stroke-dasharray="${omkr.toFixed(2)}" stroke-dashoffset="${(omkr * (1 - dk / n)).toFixed(2)}"/></svg><span class="num">${dk} av ${n}</span></span>` : '';
+  const nySub = kan && S.upgSubNy === t.id;
+  // Aktiviteten: filtret, och de äldsta ihopfällda när det blir många.
+  const akt = upgAkt(t), nk = akt.filter(x => x.k === 'k').length, flt = S.upgFlt || 'allt';
+  const urval = flt === 'allt' ? akt : akt.filter(x => x.k === flt);
+  const dolda = S.upgAldre !== t.id && urval.length > 7 ? urval.length - 5 : 0, visas = urval.slice(dolda);
+  const nyKom = S.upgKomNy && S.upgKomNy.id === t.id && nk > S.upgKomNy.n ? visas.filter(x => x.k === 'k').pop() : null;
+  if (nyKom) S.upgKomNy = null;
+  const nar = x => `<span class="upg-when num"${x.titel ? ` title="${esc(x.titel)}"` : ''}>${esc(x.nar || '')}</span>`;
+  const post = x => x.k === 'k'
+    ? `<div class="upg-cm${x === nyKom ? ' upg-ny' : ''}">${avatar(x.vem || '?', 22)}<div class="upg-cmh"><b>${x.vem === mig ? 'Du' : esc((x.vem || '').split(' ')[0])}</b>${nar(x)}</div><p class="upg-bub">${esc(x.text)}</p></div>`
+    : `<div class="upg-ev"><span>${esc(x.text)}${x.vem ? ` av <b>${forn(x.vem)}</b>` : ''}${x.note ? `: ${esc(x.note)}` : ''}</span>${nar(x)}</div>`;
+  const notis = upgNotisTill(t).map(x => x.split(' ')[0]);
+  const tom = flt === 'h' ? 'Ingen historik än.' : `Inga kommentarer än.${notis.length ? ` Skriv om något behöver sägas, så får ${upgLista(notis)} en notis.` : ''}`;
+  const utkast = (S.upgKom || {})[t.id] || '';
+  // Foten: det man gör med uppgiften. En stängd uppgift går att öppna igen.
+  const fot = kan && t.lage !== 'granskas'
+    ? `<button type="button" class="btn btn-p btn-sm" data-tick="${t.id}">${I('check')}${t.granskare ? 'Lämna in' : 'Klar'}</button>
+       <button type="button" class="btn btn-s btn-sm" data-fstart="${t.id}">${I('play')}Fokusera</button>
+       <button type="button" class="btn btn-s btn-sm upg-dpc" data-focus="${t.id}" aria-pressed="${!!t.focus}">${upgIk('stjarna')}${t.focus ? 'I dagens tre' : 'Lägg i dagens tre'}</button>
+       <span class="upg-rfsp"></span>
+       <button type="button" class="btn btn-s btn-sm upg-dpc" data-snooze="${t.id}" title="Nästa arbetsdag (M)">${upgIk('pil')}Nästa arbetsdag</button>
+       <button type="button" class="btn btn-s btn-sm upg-mer" data-upgpop="${t.id}|mer" aria-haspopup="menu" aria-expanded="${pop === 'mer'}" aria-label="Mer" title="Mer">${UPGPRICKAR}</button>`
+    : done ? `<span class="upg-slut">${upgIk('bock')}Klar${t.klarTid ? ` ${esc(t.klarTid)}` : ''}</span>${egen ? `<button type="button" class="btn btn-s btn-sm" data-upgsatt="${t.id}|oppna|">${upgIk('ater')}Öppna igen</button>` : ''}<span class="upg-rfsp"></span>`
+    : t.lage === 'granskas' ? `<span class="upg-slut">Inlämnad${gransk.length ? `. ${esc(gransk[0].split(' ')[0])} godkänner` : ''}.</span>${t.vy === 'granska' ? `<span class="upg-rfsp"></span><button type="button" class="btn btn-p btn-sm" data-approve="${t.id}">${I('check')}Godkänn</button>` : ''}`
+    : t.vy === 'vantar' ? `<span class="upg-slut" style="color:var(--ink-2)">Hos ${esc((t.ansvarig || '').split(' ')[0])}</span><span class="upg-rfsp"></span><button type="button" class="btn btn-s btn-sm" data-nudge="${t.id}">Påminn</button><button type="button" class="btn btn-s btn-sm" data-reclaim="${t.id}">Ta tillbaka</button>` : '';
   return `<div class="upg-ruta" role="dialog" aria-modal="true" aria-labelledby="ptitle">
     <header class="upg-rh">
-      ${egen && !done ? `<button type="button" class="tick ${t.granskare ? 'rev' : ''}" data-tick="${t.id}" aria-label="${t.granskare ? 'Lämna in' : 'Markera klar'}">${I('check')}</button>` : `<span class="tick ${done ? 'on' : ''}" aria-hidden="true">${I('check')}</span>`}
-      <input class="ptitle upg-titel" id="ptitle" data-ptitle="${t.id}" value="${esc(t.t)}" aria-label="Uppgiftens namn">
+      ${kan && t.lage !== 'granskas' ? `<button type="button" class="tick${t.granskare ? ' rev' : ''}${t.prio <= 2 ? ` upg-p${t.prio}` : ''}" data-tick="${t.id}" aria-label="${t.granskare ? 'Lämna in' : 'Markera klar'}" title="${t.granskare ? 'Lämna in' : 'Klar'}">${I('check')}</button>`
+        : done && egen ? `<button type="button" class="tick on" data-upgsatt="${t.id}|oppna|" aria-label="Öppna igen" title="Öppna igen">${I('check')}</button>` : `<span class="tick${done ? ' on' : ''}" aria-hidden="true">${I('check')}</span>`}
+      <input class="ptitle upg-titel" id="ptitle" data-ptitle="${t.id}" value="${esc(t.t)}" aria-label="Uppgiftens namn" autocomplete="off">
       <span class="upg-pos num">${i >= 0 ? `${i + 1} av ${ord.length}` : ''}</span>
       <button type="button" class="upg-x" data-pnav="${ord[i - 1] || ''}" ${i > 0 ? '' : 'disabled'} aria-label="Förra uppgiften" title="Förra (K)">${I('upgupp')}</button><button type="button" class="upg-x" data-pnav="${ord[i + 1] || ''}" ${i >= 0 && i < ord.length - 1 ? '' : 'disabled'} aria-label="Nästa uppgift" title="Nästa (J)">${I('upgned')}</button>
-      <button type="button" class="upg-x" data-panelclose aria-label="Stäng">${I('x')}</button>
+      <button type="button" class="upg-x" data-panelclose aria-label="Stäng" title="Stäng (Esc)">${I('x')}</button>
     </header>
-    <p class="upg-rstatus"><span class="upg-dot ${lage[1]}">${lage[0]}</span><span>Skapad av ${esc(t.skapad || 'dig')}</span>${note(48)}</p>
+    <p class="upg-rstatus"><span class="upg-dot ${lage[1]}">${lage[0]}</span>${done ? '' : !harDag ? `<span>Ingen deadline</span>` : sen ? `<span class="upg-rs-sen">${t.d === -1 ? 'Skulle varit klar i går' : `Försenad ${-t.d} dagar`}</span>` : `<span class="upg-rs-dag">${upgDagKort(t.d)}${t.nar ? ` ${esc(t.nar)}` : ''}</span>`}${done ? '' : sep}<span>Skapad av ${forn(skapare) || 'dig'}${(t.skapad || '').split(' · ')[1] ? `, ${esc(t.skapad.split(' · ')[1])}` : ''}</span>${ansv !== mig ? `${sep}<span>Hos ${esc(ansv.split(' ')[0])}</span>` : ''}${note(48)}</p>
     <div class="upg-rgrid">
-      <div class="upg-rmain">
-        <div class="upg-forst"><label for="pnasta">Första steget</label><input id="pnasta" class="upg-in" data-pnasta="${t.id}" value="${esc(t.nasta || '')}" placeholder="Det allra första du gör, till exempel ”hitta numret”." autocomplete="off"></div>
-        <div class="upg-blk"><label for="upgBesk" class="upg-bh">Beskrivning</label><textarea id="upgBesk" class="upg-in upg-besk" data-upgbesk="${t.id}" rows="3" placeholder="Det som behövs för att göra den.">${esc(t.besk || '')}</textarea></div>
-        <div class="upg-blk"><div class="upg-bh"><h3>Deluppgifter${t.delar.length ? ` <span class="num">${dk} av ${t.delar.length}</span>` : ''}</h3><button type="button" class="tlink" data-split="${t.id}">Dela upp med Nav</button></div>
-          ${t.delar.length ? `<span class="upg-kbar"><i style="width:${dk / t.delar.length * 100}%"></i></span>` : ''}
-          <ul class="sub upg-sub">${t.delar.map(([x, ok], j) => `<li><button type="button" class="stick ${ok ? 'on' : ''}" data-sub="${t.id}|${j}" aria-label="${ok ? 'Ångra' : 'Bocka'} ${esc(x)}">${I('check')}</button><span class="${ok ? 'st' : ''}">${esc(x)}</span><button type="button" class="upg-x upg-xs" data-upgdelbort="${t.id}|${j}" aria-label="Ta bort ${esc(x)}">${I('x')}</button></li>`).join('')}</ul>
-          <form class="subadd" data-subadd="${t.id}"><input id="subin" class="upg-in" placeholder="Lägg till en deluppgift. Enter sparar." aria-label="Ny deluppgift" autocomplete="off"></form></div>
-        <div class="upg-blk"><div class="upg-bh"><h3>Chatt</h3></div>
-          <div class="upg-chat">${chatt.map(([n, mm, tm]) => `<div class="upg-msg">${avatar(n, 26)}<div><b>${esc(n.split(' ')[0])}</b> <span class="num upg-sm">${tm}</span><p>${esc(mm)}</p></div></div>`).join('')}</div>
-          <form class="subadd" data-chat="${t.id}"><input id="chatin" class="upg-in" placeholder="Skriv ett meddelande. Enter skickar." aria-label="Meddelande" autocomplete="off"></form></div>
-        <div class="upg-blk"><div class="upg-bh"><h3>Historik</h3></div><ul class="upg-hist"><li><span class="num">${(t.skapad || '').split('· ')[1] || 'i dag'}</span>Skapad</li>${(t.flyttDatum || []).map(dd => `<li><span class="num">${dd}</span>Flyttad</li>`).join('')}${t.startad ? '<li><span class="num">i dag</span>Påbörjad</li>' : ''}${done ? `<li><span class="num">${t.klarTid || ''}</span>Klar</li>` : ''}</ul></div>
+      <div class="upg-rvan">
+        <div class="upg-rmain">
+          <div class="upg-blk upg-borjablk">
+            <div class="upg-forst2"><label for="pnasta">${upgIk('pil')}Börja med</label><input id="pnasta" data-pnasta="${t.id}" value="${esc(t.nasta || '')}" placeholder="Det minsta första steget, till exempel ”hitta numret”" autocomplete="off" maxlength="200"></div>
+            <p class="upg-hint" data-upgborjahint ${t.nasta ? 'hidden' : ''}>Svårt att komma igång? Skriv det allra första du gör, något som tar två minuter. Det står på raden i listan, så att du vet var du börjar.</p>
+            <div class="upg-mini" ${t.nasta ? '' : 'hidden'} aria-hidden="true"><span class="r1">${esc(t.t)}</span><span class="r2">Börja med: <span data-upgminitext>${esc(t.nasta || '')}</span></span></div>
+          </div>
+          <div class="upg-blk"><label for="upgBesk" class="upg-lab">Beskrivning</label><textarea id="upgBesk" class="upg-falt" data-upgbesk="${t.id}" rows="2" placeholder="Detaljer, länkar eller vad kunden sa">${esc(t.besk || '')}</textarea></div>
+          <div class="upg-blk">
+            <div class="upg-bh2"><h3 class="upg-lab">Deluppgifter</h3>${ring}${kan ? `<button type="button" class="upg-ghost" data-split="${t.id}" title="Nav föreslår steg utifrån namnet. Du ändrar dem fritt.">${upgIk('dela')}Dela upp med Nav</button>` : ''}</div>
+            ${n ? `<ul class="upg-subl">${t.delar.map(([x, ok], j) => `<li class="${ok ? 'ok' : ''}"><button type="button" class="stick ${ok ? 'on' : ''}" data-sub="${t.id}|${j}" aria-label="${ok ? 'Ångra' : 'Bocka'} ${esc(x)}">${I('check')}</button><span class="t">${esc(x)}</span>${kan ? `<button type="button" class="upg-x upg-xs" data-upgdelbort="${t.id}|${j}" aria-label="Ta bort ${esc(x)}" title="Ta bort">${I('x')}</button>` : ''}</li>`).join('')}</ul>` : ''}
+            ${nySub ? `<form class="upg-subny" data-subadd="${t.id}"><span class="stick" aria-hidden="true"></span><input id="subin" class="upg-addin" placeholder="Skriv en deluppgift" aria-label="Ny deluppgift" autocomplete="off" maxlength="200"><span class="upg-kbd">Enter</span><span class="upg-kbd">Esc</span></form>`
+              : kan ? `<button type="button" class="upg-ghost" data-upgsubny="${t.id}">${I('plus')}Lägg till deluppgift</button>` : ''}
+          </div>
+          <div class="upg-blk">
+            <div class="upg-akth"><h3 class="upg-lab">Aktivitet</h3><div class="upg-flt" role="group" aria-label="Visa i aktiviteten">${[['allt', 'Allt', akt.length], ['k', 'Kommentarer', nk], ['h', 'Historik', akt.length - nk]].map(([k, l, m]) => `<button type="button" data-upgflt="${k}" aria-pressed="${flt === k}">${l} <span class="num">${m}</span></button>`).join('')}</div></div>
+            <div class="upg-tl">
+              ${dolda ? `<button type="button" class="upg-ghost upg-aldre" data-upgaldre="${t.id}">Visa ${dolda} äldre</button>` : ''}
+              ${visas.map(post).join('')}
+              ${visas.length ? '' : `<p class="upg-hint">${tom}</p>`}
+            </div>
+          </div>
+        </div>
+        <form class="upg-komp" data-chat="${t.id}">
+          ${avatar(mig, 26)}
+          <div class="upg-kbox">
+            <div class="upg-kfalt"><textarea id="upgKom" class="upg-kin" data-upgkom="${t.id}" rows="1" placeholder="Skriv en kommentar" aria-label="Kommentar" maxlength="4000">${esc(utkast)}</textarea><button type="submit" class="upg-send" aria-label="Skicka kommentaren" title="Skicka (Enter)" ${utkast.trim() ? '' : 'disabled'}>${upgIk('upp')}</button></div>
+            <p class="upg-khint">${notis.length ? `${upgLista(notis)} får en notis` : 'Ingen annan är med i uppgiften än'}. Enter skickar, Shift+Enter ger ny rad.</p>
+          </div>
+        </form>
       </div>
-      <dl class="upg-props">
-        ${egen ? rad('Dag', dag) : rad('Dag', esc(upgDatum(t.d)))}
-        ${egen ? rad('När', nar) : ''}
-        ${egen ? rad('Uppskattning', est) : ''}
-        ${egen ? rad('Prioritet', prio) : ''}
-        ${egen ? rad('Projekt', projekt) : t.proj ? rad('Projekt', esc(t.proj)) : ''}
-        ${rad('Ansvarig', esc(t.ansvarig || ME[S.role].namn))}
-        ${t.serie ? rad('Upprepas', esc(t.serie)) : ''}
-        ${rad('Granskare', t.granskare ? esc(t.granskare) : '<span class="upg-sm">Ingen. Bocken gör den klar.</span>')}
-        ${t.links.length ? rad('Kopplad till', `<div class="upg-lks">${upgLankar(t).join('')}</div>`) : ''}
-      </dl>
+      <aside class="upg-props" aria-label="Egenskaper">
+        <div class="upg-pgrp">
+          ${rad('dag', 'Dag', dagV, harDag ? upgDagKort(t.d) : 'Ingen dag', kan, 'Dag (D)')}
+          ${rad('tid', 'Tid', tidV, t.nar || 'Inget klockslag', kan, 'Tid (T)')}
+          ${rad('est', 'Uppskattning', estV, t.est ? minText(t.est) : 'Ingen uppskattning', kan, 'Uppskattning (E)')}
+        </div>
+        <div class="upg-pgrp">
+          ${rad('prio', 'Prioritet', prioV, prio[1], kan, 'Prioritet (P)')}
+          ${rad('proj', 'Projekt', projV, t.proj || 'Inget projekt')}
+        </div>
+        <div class="upg-pgrp">
+          ${rad('ansv', 'Ansvarig', ansvV, ansv === mig ? 'Du' : ansv, kan && upgFarStyra(t))}
+          <!--upg-med-->
+          ${rad('gransk', 'Granskare', granskV, gransk.length ? gransk.join(', ') : 'Ingen', kan && upgFarStyra(t))}
+          ${t.serie ? `<div class="upg-pr"><span class="upg-pl">Upprepas</span><span class="upg-pv">${upgIk('serie')}<span class="v">${esc(t.serie)}</span></span></div><!--upg-serie-->` : ''}
+        </div>
+        <div class="upg-pgrp upg-pgrp-k"${t.links.length ? '' : ' hidden'}><span class="upg-pl">Kopplad till</span><div class="upg-chips">${lankar}<!--upg-koppla--></div></div>
+      </aside>
     </div>
-    <footer class="upg-rf">
-      ${!done && egen ? `<button type="button" class="btn btn-p btn-sm" data-tick="${t.id}">${I('check')}${t.granskare ? 'Lämna in' : 'Klar'}</button><button type="button" class="btn btn-s btn-sm" data-fstart="${t.id}">${I('play')}Fokusera</button><button type="button" class="btn btn-s btn-sm" data-focus="${t.id}">${t.focus ? 'Ta ur dagens tre' : 'Lägg i dagens tre'}</button>` : ''}
-      <span class="upg-rfsp"></span>
-      ${!done && egen ? `<button type="button" class="btn btn-s btn-sm" data-snooze="${t.id}">Nästa arbetsdag</button><button type="button" class="btn btn-s btn-sm" data-over="${t.id}" aria-expanded="${S.overFor === t.id}">Lämna över</button><button type="button" class="btn btn-s btn-sm upg-stryk" data-strike="${t.id}">Stryk</button>` : ''}
-      ${S.overFor === t.id ? upgTillVem(t) : ''}
-    </footer>
+    <footer class="upg-rf">${fot}</footer>
+    ${pop ? upgPopHtml(t, pop) : ''}
   </div>`;
 }
+// Ett val i rutan. Utkastet ändrar listan, navet sparar (ND-omslaget). tyst: inget kvitto, som när något ångras.
+function upgKvitto(vad, v, fore){
+  if (vad === 'dag') return v === null ? 'Ingen dag. Den blir aldrig försenad.' : `Flyttad till ${upgDagKort(v).replace(/^I /, 'i ')}.`;
+  if (vad === 'tid') return v ? `Klockan ${v}${fore.d === null || fore.d === undefined ? ', i dag' : ''}.` : 'Utan klockslag.';
+  if (vad === 'est') return v ? `Uppskattad till ${minText(v)}.` : 'Uppskattningen är borttagen.';
+  if (vad === 'prio') return `Prioritet: ${(UPGPRIO.find(p => p[0] === v) || UPGPRIO[2])[1].toLowerCase()}.`;
+  if (vad === 'proj') return v ? `Flyttad till ${v}.` : 'Utan projekt.';
+  if (vad === 'gransk') return v ? `${v.split(' ')[0]} granskar. Klar blir Lämna in.` : 'Ingen granskare. Klar gör den klar.';
+  return '';
+}
+function upgSatt(id, vad, v, tyst){
+  const x = TASKS.find(y => y.id === id); if (!x) return;
+  const fore = {d:x.d, nar:x.nar, tid:x.tid, est:x.est, prio:x.prio, proj:x.proj, granskare:x.granskare, focus:x.focus};
+  S.upgPop = null; S.upgQ = '';
+  if (vad === 'ansv'){ render(); lamnaOver(id, v); return; }
+  if (vad === 'oppna'){ x.lage = 'oppen'; x.klarTid = undefined; if (x.inbox) S.done.delete(x.inbox); render(); toast('Öppen igen.'); return; }
+  if (vad === 'plan') Object.assign(x, v);
+  else if (vad === 'dag'){ x.d = v; if (v !== 0 && x.focus) x.focus = 0; }
+  else if (vad === 'tid'){ x.nar = v || undefined; x.tid = v || undefined; if (v && (x.d === null || x.d === undefined)) x.d = 0; }
+  else if (vad === 'est') x.est = v || undefined;
+  else if (vad === 'prio') x.prio = v;
+  else if (vad === 'proj') x.proj = v || undefined;
+  else if (vad === 'gransk') x.granskare = v || undefined;
+  render();
+  if (!tyst) toast(upgKvitto(vad, v, fore), () => { Object.assign(x, fore); render(); });
+}
+function upgPopVaxla(k){
+  const [id, vad] = k.split('|');
+  if (S.upgPop === k){ S.upgPop = null; S.upgPopTill = k; }
+  else { S.upgPop = k; S.upgQ = ''; S.upgPopNy = true;
+    if (vad === 'dag'){ const t = TASKS.find(x => x.id === id), d = t && t.d !== null && t.d !== undefined && t.d >= 0 ? frPlus(kIdag(), t.d) : kIdag(); S.upgMan = d.slice(0, 7); } }
+  render();
+}
+function upgPopEnter(t, k, q){
+  const fel = () => { const p = document.getElementById('upgTolk'); if (p){ p.classList.remove('upg-skak'); void p.offsetWidth; p.classList.add('upg-skak'); } };
+  const val = (vad, v) => { S.upgPopTill = S.upgPop; upgSatt(t.id, vad, v); };
+  if (k === 'dag'){ const s = upgTolkaDag(q, kIdag()); if (s === undefined || s === null) return fel(); val('dag', s === '' ? null : upgDiff(s)); return; }
+  if (k === 'tid'){ const v = upgTolkaTid(q); if (v === undefined || v === null) return fel(); val('tid', v); return; }
+  if (k === 'est'){ const v = upgTolkaEst(q); if (v === undefined || v === null) return fel(); val('est', v); return; }
+  if (k === 'proj'){ const b = document.querySelector('.upg-pop [data-upgnamn]:not([hidden])'); if (b) b.click(); else fel(); }
+}
+function upgKopiera(id){
+  const url = `${location.origin}/uppgifter/${encodeURIComponent(id)}`;
+  S.upgPop = null; render();
+  (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => toast('Länken är kopierad. Den öppnar uppgiften för alla som är med i den.'), () => toast('Länken gick inte att kopiera.'));
+}
+function upgNyttProjekt(id){ S.upgPop = null; render(); toast('Ett nytt projekt får namn i Uppgifter, under Projekt.'); }
+// Höjden följer texten, så att beskrivningen och kommentaren aldrig får en rullist för två rader.
+function upgHojd(x){ if (!x) return; x.style.height = 'auto'; x.style.height = Math.min(x.scrollHeight + 2, x.classList.contains('upg-kin') ? 120 : 640) + 'px'; }
+// Väljaren läggs under sitt värde, eller över det när det inte får plats, och alltid inom rutan.
+function upgPopPlats(el){
+  const pop = el && el.querySelector('.upg-pop'), ruta = el && el.querySelector('.upg-ruta'); if (!pop || !ruta) return;
+  if (matchMedia('(max-width:760px)').matches){ pop.style.top = pop.style.left = pop.style.maxHeight = ''; return; }
+  const a = el.querySelector(`[data-upgpop="${pop.dataset.upgpopfor}"]`); if (!a) return;
+  const r = ruta.getBoundingClientRect(), b = a.getBoundingClientRect();
+  pop.style.maxHeight = (r.height - 16) + 'px';
+  const h = pop.offsetHeight, w = pop.offsetWidth;
+  let top = b.bottom - r.top + 4;
+  if (top + h > r.height - 8){ const upp = b.top - r.top - 4 - h; top = upp >= 8 ? upp : Math.max(8, r.height - 8 - h); }
+  pop.style.top = top + 'px'; pop.style.left = Math.max(8, Math.min(b.right - r.left - w, r.width - w - 8)) + 'px';
+}
+// Efter varje omritning: höjderna, rullningen, väljarens plats och fokus där man var.
+function upgEfter(el, o){
+  el.querySelectorAll('.upg-falt, .upg-kin').forEach(upgHojd);
+  if (o.samma) el.querySelectorAll('.upg-rmain, .upg-props, .upg-rgrid').forEach((x, i) => { if (o.rull[i]) x.scrollTop = o.rull[i]; });
+  upgPopPlats(el);
+  const pop = el.querySelector('.upg-pop');
+  let mal = null;
+  // Med pekskärm får fältet inte fokus av sig självt: tangentbordet skulle täcka kalendern och valen.
+  if (pop && S.upgPopNy) mal = (!matchMedia('(pointer: coarse)').matches && pop.querySelector('#upgPopIn')) || pop.querySelector('.upg-opt[aria-checked="true"], .upg-ep[aria-pressed="true"]') || pop.querySelector('.upg-opt, .upg-ep');
+  else if (!S.upgPop && S.upgPopTill) mal = el.querySelector(`[data-upgpop="${S.upgPopTill}"]`) || el.querySelector('[data-upgpop$="|mer"]');
+  else if (o.samma && o.fid) mal = document.getElementById(o.fid);
+  else if (o.samma && o.fsel) mal = el.querySelector(o.fsel);
+  S.upgPopNy = false; S.upgPopTill = null;
+  if (mal){ mal.focus({preventScroll:true}); if (o.fid && o.fid === mal.id && o.sel && typeof mal.setSelectionRange === 'function') try { mal.setSelectionRange(o.sel[0], o.sel[1]); } catch(_){} }
+}
+// Knappen man stod på, när den inte har ett id: dess första data-attribut.
+const upgFokusVal = f => { const k = Object.keys(f.dataset || {})[0]; return k ? `[data-${k.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}="${CSS.escape(f.dataset[k])}"]` : null; };
+window.addEventListener('resize', () => upgPopPlats(document.getElementById('upgRuta')));
+// Klicken i rutan. Ett klick utanför väljaren stänger den, och gör sedan det det skulle.
+document.addEventListener('click', e => {
+  const el = document.getElementById('upgRuta'); if (!el || !S.panel) return;
+  const b = e.target.closest && e.target.closest('button'), iPop = !!(e.target.closest && e.target.closest('.upg-pop'));
+  if (S.upgPop && !iPop && !(b && b.dataset.upgpop)){ S.upgPop = null; S.upgQ = ''; el.querySelector('.upg-pop')?.remove(); el.querySelectorAll('[data-upgpop][aria-expanded="true"]').forEach(x => x.setAttribute('aria-expanded', 'false')); }
+  if (!b || !el.contains(b)) return;
+  const d = b.dataset, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  if (d.upgpop){ stopp(); upgPopVaxla(d.upgpop); return; }
+  if (d.upgsatt !== undefined){ stopp(); const [id, vad, ...r] = d.upgsatt.split('|'), s = r.join('|');
+    if (iPop) S.upgPopTill = S.upgPop;
+    upgSatt(id, vad, vad === 'dag' ? (s === 'null' ? null : +s) : ['est', 'prio'].includes(vad) ? +s : vad === 'oppna' ? null : s); return; }
+  if (d.upgman){ stopp(); const [y, m] = (S.upgMan || kIdag().slice(0, 7)).split('-').map(Number), n = new Date(Date.UTC(y, m - 1 + +d.upgman, 1)).toISOString().slice(0, 7); S.upgMan = n < kIdag().slice(0, 7) ? kIdag().slice(0, 7) : n; render(); return; }
+  if (d.upgflt){ stopp(); S.upgFlt = d.upgflt; render(); return; }
+  if (d.upgaldre){ stopp(); S.upgAldre = d.upgaldre; render(); return; }
+  if (d.upgsubny){ stopp(); S.upgSubNy = d.upgsubny; render(); document.getElementById('subin')?.focus(); return; }
+  if (d.upgkopiera){ stopp(); upgKopiera(d.upgkopiera); return; }
+  if (d.upgnyttproj){ stopp(); upgNyttProjekt(d.upgnyttproj); return; }
+  if (iPop && b.classList.contains('upg-opt')) S.upgPop = null;
+}, true);
+// Det man skriver: väljarens tolkning, kommentarens utkast och höjd, Börja med som det står i listan.
+document.addEventListener('input', e => {
+  const x = e.target; if (!x.closest || !x.closest('#upgRuta')) return;
+  const d = x.dataset || {};
+  if (d.upgpopin){ S.upgQ = x.value; const p = document.getElementById('upgTolk');
+    if (d.upgpopin === 'proj'){ const s = x.value.trim().toLowerCase(); let n = 0; document.querySelectorAll('.upg-pop [data-upgnamn]').forEach(b => { b.hidden = !!s && !b.dataset.upgnamn.includes(s); if (!b.hidden) n++; }); if (p) p.hidden = n > 0; return; }
+    if (p){ const [txt, kl] = upgTolkText(d.upgpopin, x.value); p.textContent = txt; p.className = 'upg-tolk' + (kl ? ' ' + kl : ''); }
+    if (d.upgpopin === 'est'){ const t = TASKS.find(y => y.id === S.panel), v = upgTolkaEst(x.value); if (t && v !== undefined) upgDagbarVisa(t, v === null ? t.est || 0 : v); }
+    return; }
+  if (d.upgkom){ (S.upgKom ||= {})[d.upgkom] = x.value; upgHojd(x); const s = x.form && x.form.querySelector('.upg-send'); if (s) s.disabled = !x.value.trim(); return; }
+  if (d.upgbesk !== undefined){ upgHojd(x); return; }
+  if (d.pnasta){ const v = x.value.trim(), r = x.closest('.upg-borjablk'); if (r){ r.querySelector('[data-upgborjahint]').hidden = !!v; r.querySelector('.upg-mini').hidden = !v; r.querySelector('[data-upgminitext]').textContent = v; } }
+}, true);
+// Hovring över en tid i Uppskattning visar dagen med den tiden.
+document.addEventListener('mouseover', e => {
+  const t = S.panel && TASKS.find(x => x.id === S.panel), bar = document.getElementById('upgDagbar'); if (!t || !bar) return;
+  const b = e.target.closest && e.target.closest('[data-upgesthov]');
+  if (b){ if (bar.dataset.hov !== b.dataset.upgesthov){ bar.dataset.hov = b.dataset.upgesthov; upgDagbarVisa(t, +b.dataset.upgesthov); } }
+  else if (bar.dataset.hov && !(e.target.closest && e.target.closest('.upg-estg'))){ bar.dataset.hov = ''; upgDagbarVisa(t, t.est || 0); }
+});
+// Tangenterna i rutan: D, T, E och P öppnar väljarna, 1–4 väljer prioritet, Esc stänger väljaren före rutan.
+// Enter i väljarens fält väljer det som står där. I kommentaren skickar Enter, Shift+Enter ger ny rad.
+document.addEventListener('keydown', e => {
+  const el = document.getElementById('upgRuta'); if (!el || !S.panel || S.fokusMode) return;
+  const t = TASKS.find(x => x.id === S.panel); if (!t) return;
+  const a = document.activeElement, d = (a && a.dataset) || {}, stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  if (e.key === 'Escape'){
+    if (S.upgPop){ stopp(); S.upgPopTill = S.upgPop; S.upgPop = null; S.upgQ = ''; render(); return; }
+    if (S.upgSubNy && a && a.id === 'subin'){ stopp(); S.upgSubNy = null; render(); el.querySelector('[data-upgsubny]')?.focus(); return; }
+    return;
+  }
+  if (d.upgpopin && e.key === 'Enter'){ stopp(); upgPopEnter(t, d.upgpopin, a.value); return; }
+  if (a && a.closest && a.closest('.upg-pop') && (e.key === 'ArrowDown' || e.key === 'ArrowUp')){
+    const l = [...el.querySelectorAll('.upg-pop #upgPopIn, .upg-pop .upg-opt:not([hidden]), .upg-pop .upg-ep')], i = l.indexOf(a);
+    if (l.length){ stopp(); l[(i + (e.key === 'ArrowDown' ? 1 : -1) + l.length) % l.length].focus(); } return; }
+  if (d.upgkom && e.key === 'Enter' && !e.shiftKey && !e.isComposing){ stopp(); if (a.value.trim()) a.form.requestSubmit(); return; }
+  if (/INPUT|TEXTAREA|SELECT/.test(a && a.tagName || '') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (S.upgPop === `${t.id}|prio` && /^[1-4]$/.test(e.key)){ stopp(); S.upgPopTill = S.upgPop; upgSatt(t.id, 'prio', +e.key); return; }
+  const vad = {d:'dag', t:'tid', e:'est', p:'prio'}[e.key.toLowerCase()];
+  if (vad && t.vy === 'egen' && !isDone(t)){ stopp(); upgPopVaxla(`${t.id}|${vad}`); }
+}, true);
 
 /* ---------- Att göra-listan: en panel som hovrar, eller fäst vid sidan ---------- */
 renderTodo = function(){
@@ -23714,7 +24375,7 @@ renderFokus = function(){
     <div class="fbody">
       <div class="fk">${t.focus ? `En av dagens tre` : 'Snabb sak'}${t.nar ? ` · planerad ${esc(t.nar)}` : ''}</div>
       <h2>${esc(t.t)}</h2>
-      ${t.nasta ? `<p class="fnext">Första steget: ${esc(t.nasta)}</p>` : ''}
+      ${t.nasta ? `<p class="fnext">Börja med: ${esc(t.nasta)}</p>` : ''}
       <div class="ftid num" id="fokusTid" aria-live="off">${fmtFokus(tot - fokusSek())}</div>
       <div class="fbar"><i id="fokusBar" style="width:${Math.min(100, fokusSek() / tot * 100)}%"></i></div>
       ${t.delar.length ? `<ul class="fsub">${t.delar.map(([x, ok], i) => `<li><button type="button" class="stick ${ok ? 'on' : ''}" data-sub="${t.id}|${i}" aria-label="${ok ? 'Ångra' : 'Bocka'} ${esc(x)}">${I('check')}</button><span class="${ok ? 'st' : ''}">${esc(x)}</span></li>`).join('')}</ul>` : ''}
@@ -27405,17 +28066,65 @@ const _ndRxTaskSynk = rxTaskSynk; rxTaskSynk = function(){ if (ndKopplad('rekryt
 const _ndNhTaskSynk = nhTaskSynk; nhTaskSynk = function(){ if (ndKopplad('nyheter')) return _ndNhTaskSynk(); };
 const _ndKvTaskSynk = kvTaskSynk; kvTaskSynk = function(){ if (ndKopplad('kv')) return _ndKvTaskSynk(); };
 
-/* ---------- Rutan: navets historik och chatt ---------- */
+/* ---------- Rutan: navets läge, aktivitet och sparningar ---------- */
 const _ndUpgRutaHtml = upgRutaHtml;
 upgRutaHtml = function(t){
   let h = _ndUpgRutaHtml(t); if (!ndUp()) return h;
   // Returnerad är ett eget läge, inte "Ej påbörjad" eller "Försenad" (granskningen F2-15).
   if (t.ndLage === 'returnerad' && !isDone(t)) h = h.replace(/(<p class="upg-rstatus"><span class="upg-dot )[^"]*">[^<]*</, '$1upg-hog">Returnerad<');
-  if (!t.chatt.length) h = h.replace('<div class="upg-chat"></div>', '<div class="upg-chat"><p class="upg-sm">Inga kommentarer än.</p></div>');
-  const hist = (t.ndHist || []).map(e => `<li><span class="num">${frKort(ndDagAv(e.at))} ${ndKl(e.at)}</span>${esc(NDUPGH[e.typ] || e.typ)}${e.av ? ` av ${esc(e.av.split(' ')[0])}` : ''}${e.note && e.typ !== 'kommentar' ? `: ${esc(e.note)}` : ''}</li>`).join('');
-  h = h.replace(/<ul class="upg-hist">[\s\S]*?<\/ul>/, `<ul class="upg-hist">${hist || '<li>Ingen historik.</li>'}</ul>`);
-  if (t.nar && !NAR_VAL.includes(t.nar)) h = h.replace(/(<select[^>]*data-upgnar="[^"]*"[^>]*>)/, `$1<option value="${esc(t.nar)}" selected>${esc(t.nar)}</option>`).replace(/<option value="" selected>/, '<option value="">');
   return h;
+};
+// Aktiviteten ur navets händelser: kommentarerna som bubblor, resten som händelser, med dag och klockslag.
+const _ndUpgAkt = upgAkt;
+upgAkt = function(t){
+  if (!ndUp() || !t.ndHist) return _ndUpgAkt(t);
+  const idag = kIdag(), igar = frPlus(idag, -1);
+  const nar = at => { const d = ndDagAv(at); return d === idag ? ndKl(at) : d === igar ? `i går ${ndKl(at)}` : frKort(d); };
+  return t.ndHist.map(e => ({k:e.typ === 'kommentar' ? 'k' : 'h', vem:e.av || '', text:e.typ === 'kommentar' ? e.note || '' : NDUPGH[e.typ] || e.typ,
+    note:e.typ === 'kommentar' ? null : e.note, nar:nar(e.at), titel:`${frKort(ndDagAv(e.at))} ${ndKl(e.at)}`}));
+};
+// Granskare och överlämning: den som la upp uppgiften eller har den (farBjudaIn, som Stryk).
+const _ndUpgFarStyra = upgFarStyra;
+upgFarStyra = function(t){ return ndUp() && ndUpgNav(t.id) ? t.vy === 'egen' && !!t.ndFarStryk : _ndUpgFarStyra(t); };
+// Nytt projekt: projektformuläret i Uppgifter. Rutan stängs, och uppgiften får projektet när det finns.
+const _ndUpgNyttProjekt = upgNyttProjekt;
+upgNyttProjekt = function(id){ if (!ndUp()) return _ndUpgNyttProjekt(id); S.upgPop = null; S.panel = null; ndProjOppna('ny'); toast('Ge projektet ett namn. Välj det sedan under Projekt i uppgiften.'); };
+// Ett val i rutan sparas i navet. Dag, tid, tidsåtgång och prioritet syns direkt (ndUpgGenast); kvittot har Ångra.
+const _ndUpgSatt = upgSatt;
+upgSatt = function(id, vad, v, tyst){
+  const t = ndUpgT(id);
+  if (!ndUp() || !t || !ndUpgNav(t.id)) return _ndUpgSatt(id, vad, v, tyst);
+  S.upgPop = null; S.upgQ = '';
+  if (vad === 'ansv'){ render(); lamnaOver(id, v); return; }
+  if (vad === 'oppna'){ render(); ndUpgPost('ateroppna', {id}); return; }
+  const fore = {d:t.d, tid:t.tid, nar:t.nar, est:t.est, prio:t.prio, proj:t.proj, granskare:t.granskare};
+  const dag = d => d === null || d === undefined ? null : ndUpgDag(d);
+  const kvitto = upgKvitto(vad, v, fore);
+  const spara = (handling, data, ater) => ndUpgPost(handling, data, {tyst:true}).then(s => {
+    if (!s.ok){ if (!s.sagt) ndSkrivFel(s); return s; }
+    if (!tyst) toastActs(kvitto, ater ? [['Ångra', ater]] : []);
+    return s;
+  });
+  const aterPlan = () => upgSatt(id, 'plan', fore, true);
+  if (vad === 'plan'){ spara('planera', {id, dag:dag(v.d), tid:v.tid || null, est:v.est || null}); return; }
+  if (vad === 'dag'){ render(); spara('planera', v === null ? {id, dag:null, tid:null} : {id, dag:dag(v)}, aterPlan); return; }
+  if (vad === 'tid'){ render(); spara('planera', {id, dag:dag(t.d) || kIdag(), tid:v || null}, aterPlan); return; }
+  if (vad === 'est'){ render(); spara('planera', {id, est:v || null}, aterPlan); return; }
+  if (vad === 'prio'){ render(); spara('andra', {id, falt:{priority:v}}, () => upgSatt(id, 'prio', fore.prio, true)); return; }
+  if (vad === 'proj'){ const p = v ? ndProjId(v) : null; if (v && !p){ render(); toast('Projektet finns inte i Nav.'); return; }
+    t.proj = v || undefined; render(); spara('andra', {id, falt:{project_id:p}}, () => upgSatt(id, 'proj', fore.proj || '', true)); return; }
+  if (vad === 'gransk'){
+    // En granskare åt gången: de som är granskare nu tas bort (lamna), den nya bjuds in med rollen granskare.
+    const gamla = String(t.granskare || '').split(', ').filter(Boolean).map(ndPersonId).filter(Boolean), ny = v ? ndPersonId(v) : null;
+    if (v && !ny){ render(); toast('Personen finns inte i Nav.'); return; }
+    t.granskare = v || undefined; render();
+    (async () => {
+      for (const p of gamla.filter(p => p !== ny)){ const s = await ndUpgPost('lamna', {id, person:p}, {tyst:true, ladda:false}); if (!s.ok){ if (!s.sagt) ndSkrivFel(s); ndOmlas('upg'); return; } }
+      if (ny && !gamla.includes(ny)){ const s = await ndUpgPost('bjudin', {id, person:ny, roll:'granskare'}, {tyst:true, ladda:false}); if (!s.ok){ if (!s.sagt) ndSkrivFel(s); ndOmlas('upg'); return; } }
+      ndOmlas('upg');
+      if (!tyst) toastActs(kvitto, [['Ångra', () => upgSatt(id, 'gransk', fore.granskare ? fore.granskare.split(', ')[0] : '', true)]]);
+    })();
+  }
 };
 
 /* ---------- Skrivningar: /nav2/uppgifter ---------- */
@@ -27528,7 +28237,8 @@ bocka = function(id){ if (!ndUp() || !ndUpgNav(id)) return _ndBocka(id); const t
 const _ndSkjut = skjut;
 skjut = function(id, till){ if (!ndUp() || !ndUpgNav(id)) return _ndSkjut(id, till); ndUpgPost('planera', {id, dag:till !== undefined ? ndUpgDag(till) : ndNastaVardag()}); };
 const _ndStryk = stryk;
-stryk = function(id){ if (!ndUp() || !ndUpgNav(id)) return _ndStryk(id); ndUpgPost('avbryt', {id, note:'Struken'}); };
+stryk = function(id){ if (!ndUp() || !ndUpgNav(id)) return _ndStryk(id);
+  ndUpgPost('avbryt', {id, note:'Struken'}, {tyst:true}).then(s => { if (s.ok) toastActs('Struken. Den finns kvar i historiken.', [['Ångra', () => ndUpgPost('ateroppna', {id})]]); else if (!s.sagt) ndSkrivFel(s); }); };
 const _ndLamnaOver = lamnaOver;
 lamnaOver = function(id, vem){ if (!ndUp() || !ndUpgNav(id)) return _ndLamnaOver(id, vem); const p = ndPersonId(vem); if (!p){ toast('Personen finns inte i Nav.'); return; } ndUpgPost('tilldela', {id, till:p}); };
 function ndFokusSpara(){ ndUpgPost('fokus', {ids:fokus().filter(x => ndUpgNav(x.id)).map(x => x.id)}, {ladda:false, tyst:true}).then(s => { if (!s.ok) ndSkrivFel(s, 'Dagens tre sparades inte.'); }); }
@@ -27611,9 +28321,15 @@ document.addEventListener('click', e => {
 // Formulären: deluppgift, kommentar och retur. Snabbraden går genom laggTill.
 document.addEventListener('submit', e => {
   if (!ndUp() || !ndIUpg(e.target)) return;
-  const f = e.target, ds = f.dataset || {}, v = (f.querySelector('input') || {}).value || '';
-  if (ds.subadd){ e.preventDefault(); e.stopImmediatePropagation(); if (!v.trim()) return; ndUpgPost('skapa', {titel:v.trim(), foralder:ds.subadd}); return; }
-  if (ds.chat){ e.preventDefault(); e.stopImmediatePropagation(); if (!v.trim()) return; ndUpgPost('kommentera', {id:ds.chat, note:v.trim()}); return; }
+  const f = e.target, ds = f.dataset || {}, v = (f.querySelector('input, textarea') || {}).value || '';
+  if (ds.subadd){ e.preventDefault(); e.stopImmediatePropagation(); const text = v.trim(); if (!text) return; const inp = f.querySelector('input'); if (inp) inp.value = '';
+    ndUpgPost('skapa', {titel:text, foralder:ds.subadd}, {tyst:true}).then(s => { if (s.ok) return; if (!s.sagt) ndSkrivFel(s, 'Deluppgiften lades inte till.'); if (inp && inp.isConnected && !inp.value) inp.value = text; }); return; }
+  if (ds.chat){ e.preventDefault(); e.stopImmediatePropagation(); const text = v.trim(); if (!text) return; const id = ds.chat, t = ndUpgT(id);
+    // Fältet töms direkt och kommentaren glider in när den sparats. Sparas den inte kommer texten tillbaka.
+    S.upgKomNy = {id, n:t ? upgAkt(t).filter(x => x.k === 'k').length : 0}; if (S.upgKom) delete S.upgKom[id];
+    const ta = f.querySelector('textarea'); if (ta){ ta.value = ''; upgHojd(ta); const sk = f.querySelector('.upg-send'); if (sk) sk.disabled = true; }
+    ndUpgPost('kommentera', {id, note:text}, {tyst:true}).then(s => { if (s.ok) return; if (!s.sagt) ndSkrivFel(s, 'Kommentaren skickades inte.'); S.upgKomNy = null;
+      if (!(S.upgKom || {})[id]){ (S.upgKom ||= {})[id] = text; render(); } }); return; }
   if (ds.retur){ e.preventDefault(); e.stopImmediatePropagation(); if (!v.trim()){ toast('Skriv vad som behöver göras om.'); return; } ndUpgPost('returnera', {id:ds.retur, note:v.trim()}); return; }
 }, true);
 // Fälten i rutan sparas när de ändrats.
@@ -27754,17 +28470,20 @@ document.addEventListener('input', e => {
 const _ndUpgRutaHtmlD = upgRutaHtml;
 upgRutaHtml = function(t){
   let h = _ndUpgRutaHtmlD(t); if (!ndUp() || !ndUpgNav(t.id)) return h;
-  const extra = [];
-  if (t.serie && t.ndSerieAgare) extra.push(`<div class="upg-prad"><dt></dt><dd><button type="button" class="tlink" data-ndserieslut="${t.id}">Avsluta serien</button></dd></div>`);
+  if (t.serie && t.ndSerieAgare) h = h.replace('<!--upg-serie-->', `<button type="button" class="upg-ghost upg-serieslut" data-ndserieslut="${t.id}">Avsluta serien</button>`);
   if (t.ndFarRed){
+    // Kopplingarna: ett kryss på var och en, och Koppla öppnar formuläret under dem.
+    (t.ndLinkIds || []).forEach((lid, i) => { h = h.replace(`<!--upg-lx${i}-->`, `<button type="button" class="cx" data-ndkopplabort="${t.id}|${lid}" aria-label="Ta bort kopplingen till ${esc(((t.ndLinks || [])[i] || [])[1] || '')}" title="Ta bort kopplingen">${I('x')}</button>`); });
     const K = S.ndKoppla && S.ndKoppla.id === t.id ? S.ndKoppla : null;
-    const finns = (t.ndLinks || []).map((l, i) => `<li><span>${esc(l[0])}: ${esc(l[1])}</span><button type="button" class="tlink" data-ndkopplabort="${t.id}|${t.ndLinkIds[i]}">Ta bort</button></li>`).join('');
-    extra.push(`<div class="upg-prad"><dt>${t.links.length ? '' : 'Kopplad till'}</dt><dd>${K ? `<div class="tiform">${finns ? `<ul class="tilist">${finns}</ul>` : ''}
+    const knapp = K ? `<button type="button" class="upg-pv upg-koppla" data-ndkavbryt aria-expanded="true">${upgIk('lank')}<span class="v">Stäng kopplingen</span></button>`
+      : `<button type="button" class="upg-pv upg-koppla" data-ndkoppla="${t.id}" aria-expanded="false">${upgIk('lank')}<span class="v">${t.links.length ? 'Koppla till något mer' : 'Koppla till order, person eller ärende'}</span></button>`;
+    const form = K ? `<div class="tiform upg-kform">
       <div class="tifrow"><label>Koppla till<select class="uin" data-ndkslag>${NDUPGKOPPLA.map(([k, l]) => `<option value="${k}" ${K.slag === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label>Sök<input class="uin" data-ndksok value="${esc(K.sok || '')}" placeholder="${NDKSOKTEXT[K.slag]}" autocomplete="off" ${K.val ? '' : 'disabled'}></label><label style="min-width:0">Vad<select class="uin" data-ndkmal style="width:100%;max-width:100%">${ndKOpts(K)}</select></label></div>
       ${K.slag === 'person' ? `<label class="tibil"><input type="checkbox" data-ndksynlig ${K.synlig ? 'checked' : ''}> Låt personen se uppgiften. Utan bock syns den inte för hen, men den följer med i hens registerutdrag.</label>` : ''}
-      <div class="pacts"><button type="button" class="btn btn-s btn-sm" data-ndkspara="${t.id}">Koppla</button><button type="button" class="btn btn-s btn-sm" data-ndkavbryt>Stäng</button></div></div>` : `<button type="button" class="tlink" data-ndkoppla="${t.id}">${t.links.length ? 'Ändra kopplingar' : 'Koppla'}</button>`}</dd></div>`);
+      <div class="pacts"><button type="button" class="btn btn-p btn-sm" data-ndkspara="${t.id}">Koppla</button><button type="button" class="btn btn-s btn-sm" data-ndkavbryt>Avbryt</button></div></div>` : '';
+    h = h.replace('upg-pgrp-k" hidden>', 'upg-pgrp-k">').replace('<!--upg-koppla-->', knapp + form);
   }
-  return extra.length ? h.replace('</dl>', extra.join('') + '</dl>') : h;
+  return h;
 };
 // "/" i snabbraden lägger mallen som uppgifter (repots anvandUppgiftsmall), med start i dag.
 const _ndLaggTillD = laggTill;
