@@ -396,6 +396,13 @@ console.log("\n\x1b[1mbekraftelsePerBokare\x1b[0m");
   lika("b1: hållna av obekräftade 0/1", t.b1?.hallnaObekraftade, { andel: 0, n: 0, av: 1 });
   lika("b2: bekräftat efter mötet räknas som obekräftat", t.b2?.bekraftadeFore, { andel: 0, n: 0, av: 1 });
   lika("krets utan b1 ger ingen rad för b1", forma.bekraftelsePerBokare(rader, V, ["b2"]).b1, undefined);
+  {
+    // Bara första möten: uppföljningsmöten bekräftas inte och räknas inte (2026-11-13).
+    const u = forma.bekraftelsePerBokare([...rader, b("u1", { art: "uppfoljning", bekraftatNar: null, utfall: "hallet" }), b("u2", { art: "uppfoljning", bekraftatNar: null, utfall: null })], V);
+    lika("uppföljningsmöten drar inte ner andelen", u.b1?.bekraftadeFore, { andel: 2 / 3, n: 2, av: 3 });
+    lika("uppföljningsmöten räknas inte bland bokade", u.b1?.bokade, 3);
+    lika("en ombokning räknas", forma.bekraftelsePerBokare([b("o1", { art: "ombokning", bekraftatNar: "2026-10-28T09:00:00Z", utfall: "hallet" })], V).b1?.bekraftadeFore, { andel: 1, n: 1, av: 1 });
+  }
   lika("utan bekraftatNar-fält räknas mötet som obekräftat", forma.bekraftelsePerBokare([b("x", { utfall: "hallet" })], V).b1?.hallnaObekraftade, { andel: 1, n: 1, av: 1 });
 }
 

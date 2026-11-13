@@ -266,10 +266,19 @@ export function bekraftelseFonster(i: { moteTid: string; senastAndrad: string; d
   return { oppnar, senast };
 }
 
-/** Vilken kolumn ett öppet möte står i just nu. Ordningen är regeln. */
+/**
+ * Bara det första mötet med kunden bekräftas (beställaren 2026-11-13): ett nytt möte, och en ombokning av det
+ * (kunden har inte träffats än). Ett uppföljningsmöte, bokat efter ett hållet möte (`motesArt`), bekräftas inte:
+ * ingen uppgift, ingen notis, och kortet går aldrig till Att bekräfta.
+ */
+export function skaBekraftas(art: string | null | undefined): boolean {
+  return art !== "uppfoljning";
+}
+
+/** Vilken kolumn ett öppet möte står i just nu. Ordningen är regeln. Utan fönster (ett uppföljningsmöte) står det i Bokat till mötet. */
 export function pipelineKolumn(
   m: { moteTid: string; langd: number; bekraftat: boolean; utfall: string | null },
-  f: { oppnar: string },
+  f: { oppnar: string } | null,
   nu: Date,
   tz: string,
 ): PipeKolumn {
@@ -277,17 +286,17 @@ export function pipelineKolumn(
   const slut = new Date(m.moteTid).getTime() + Math.max(0, m.langd) * 60_000;
   if (nu.getTime() >= slut) return "hos_saljaren";
   if (m.bekraftat) return "bekraftat";
-  if (lokalDag(nu, tz) >= f.oppnar) return "att_bekrafta";
+  if (f && lokalDag(nu, tz) >= f.oppnar) return "att_bekrafta";
   return "bokat";
 }
 
-/** En kedja utan öppet möte står i Avgjort, annars avgör mötet. */
+/** En kedja utan öppet möte står i Avgjort, annars avgör mötet. `fonster` är null för ett möte som inte bekräftas. */
 export function kortFas(
   k: { harOppetMote: boolean; mote: Parameters<typeof pipelineKolumn>[0] | null; fonster: { oppnar: string } | null },
   nu: Date,
   tz: string,
 ): PipeKolumn {
-  if (!k.harOppetMote || !k.mote || !k.fonster) return "avgjort";
+  if (!k.harOppetMote || !k.mote) return "avgjort";
   return pipelineKolumn(k.mote, k.fonster, nu, tz);
 }
 
@@ -536,6 +545,8 @@ export type BekraftaMote = {
   senastAndrad: string;
   bokatAv: string;
   hallsAv: string;
+  /** Mötets art (`ny`, `ombokning`, `uppfoljning`): ett uppföljningsmöte bekräftas inte (`skaBekraftas`). */
+  art: string;
   bekraftat: boolean;
   utfall: string | null;
   /** `avbruten`: den som har uppgiften har strukit den. Då kommer inga fler notiser; mötet står kvar på tavlan. */
@@ -565,6 +576,7 @@ export type Bekraftelse = {
  *   - Mottagaren är den som har uppgiften (den kan ha lämnats över), annars bokaren, annars hållaren; den som
  *     slutat hoppas över.
  *   - Möten före `galler-fran`, en avstängd påminnelse och en uppgift som strukits ger ingenting.
+ *   - Ett uppföljningsmöte ger ingenting: bara det första mötet bekräftas (`skaBekraftas`).
  *
  * Samma anrop två gånger samma dag ger samma lista; att notisen inte skrivs två gånger sköter jobbet med nyckeln
  * (källa, möte, dag), och att uppgiften inte läggs upp två gånger sköter databasen (`mote_uppgift_skapa`, 0291).
@@ -577,6 +589,7 @@ export function vemBekraftar(moten: readonly BekraftaMote[], aktiva: ReadonlySet
   const ut: Bekraftelse[] = [];
   for (const m of moten) {
     if (!omfattas(m.moteTid, inst.gallerFran)) continue;
+    if (!skaBekraftas(m.art)) continue;
     if (m.bekraftat || m.utfall || m.uppgift?.avbruten) continue;
     const start = Date.parse(m.moteTid);
     if (!Number.isFinite(start) || start <= nu.getTime()) continue;

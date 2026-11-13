@@ -14,6 +14,18 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten-bara-forsta-bekraftas",
+    rubrik: "Möten: bara det första mötet bekräftas",
+    ingress: "Uppföljningsmöten behöver inte bekräftas. Du får ingen uppgift och ingen notis för dem, och kortet står kvar i Bokat.",
+    text: `Nav ber dig bara bekräfta det **första mötet** med en kund, och det gäller också när mötet bokats om. Ett
+**uppföljningsmöte**, alltså ett möte med en kund som redan haft ett hållet möte, bekräftas inte. Du får ingen uppgift och
+ingen notis för det. Kortet går inte till **Att bekräfta**, utan står kvar i **Bokat** fram till mötet och visar
+"uppföljningsmöte". Statistiken över bekräftade möten räknar bara första möten.`,
+    datum: "2026-11-13",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "saljtavlan-firar-moten",
     rubrik: "Säljtavlan firar bokade möten",
     ingress: "Ett bokat möte syns på kontorets tv med namnet och dagens rad, och det första, det femte och det tionde på en dag firas större.",

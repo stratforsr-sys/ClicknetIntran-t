@@ -36938,6 +36938,8 @@ function moFas(k){
   if (f === 'bokat' && !m.bekraftat && k.fonster && ndIdag() >= k.fonster.oppnar) return 'att_bekrafta';
   return f;
 }
+// Bara det första mötet bekräftas (2026-11-13). Ett uppföljningsmöte har inget fönster och står i Bokat till mötet.
+const moUppfMote = k => !!(k && k.mote && k.mote.art === 'uppfoljning');
 const moKr = n => `${Math.round(n || 0).toLocaleString('sv-SE')} kr`;
 const moIni = n => String(n || '').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]).join('').toUpperCase() || '?';
 const moVdag = d => { const n = moDagar(ndIdag(), d); return n <= 0 ? 'i dag' : n === 1 ? 'i morgon' : n < 7 ? FRWD[new Date(d + 'T12:00:00Z').getUTCDay() || 7] : frKort(d); };
@@ -38345,7 +38347,7 @@ function moKnappar(k, alla = false){
   const fraga = S.moBekr === 'avboka|' + k.kedja ? `<small class="mo-fraga">${k.epost ? esc(k.epost) + ' får en avbokning.' : 'Kunden har ingen e-post och får inget besked.'}</small>` : '';
   const flytt = moKnapp('Flytta', 'flyttat', k) + moKnapp('Avboka', 'avboka', k);
   if (f === 'att_bekrafta') return moKnapp('Bekräfta', 'bekrafta', k, {p:true}) + moKnapp('Fick inte tag', 'forsok', k) + (mer ? flytt : '') + merKn + fraga;
-  if (f === 'bokat') return (mer ? moKnapp('Bekräfta', 'bekrafta', k) + moKnapp('Fick inte tag', 'forsok', k) + flytt : '') + merKn + fraga;
+  if (f === 'bokat') return (mer ? (moUppfMote(k) ? '' : moKnapp('Bekräfta', 'bekrafta', k) + moKnapp('Fick inte tag', 'forsok', k)) + flytt : '') + merKn + fraga;
   if (f === 'bekraftat') return (mer ? flytt : '') + merKn + fraga;
   if (f === 'hos_saljaren') return moFarUtfall(k)
     ? `<button class="btn btn-p btn-sm" data-moa="utfall|${k.kedja}">Sätt utfall</button>`
@@ -38383,7 +38385,8 @@ function moPipeKort(k){
   const brad = moBradska(k);
   const hoger = f === 'bekraftat' && m.bekraftatNar ? `<span class="ok">✓ ${esc(moVdag(m.bekraftatNar.slice(0, 10)))}</span>`
     : f === 'hos_saljaren' ? `<span>${esc(moRel(slut - nu))}</span>` : m.flyttningar ? `<span title="Flyttat ${m.flyttningar} ${m.flyttningar === 1 ? 'gång' : 'gånger'}">flyttat</span>` : '';
-  const due = f === 'bokat' && w ? `<span class="mo-due" title="Bekräftas från ${esc(moVdag(w.oppnar))}">${brad === 'idag' ? 'bekräfta i dag' : brad === 'imorgon' ? 'bekräfta i morgon' : 'från ' + esc(moVdag(w.oppnar))}</span>`
+  const due = f === 'bokat' && moUppfMote(k) && !m.bekraftat ? '<span class="mo-due" title="Bara det första mötet bekräftas">uppföljningsmöte</span>'
+    : f === 'bokat' && w ? `<span class="mo-due" title="Bekräftas från ${esc(moVdag(w.oppnar))}">${brad === 'idag' ? 'bekräfta i dag' : brad === 'imorgon' ? 'bekräfta i morgon' : 'från ' + esc(moVdag(w.oppnar))}</span>`
     : f === 'att_bekrafta' ? `<span class="mo-due ${brad === 'idag' ? 'd' : brad === 'imorgon' ? 's' : ''}">${brad === 'idag' ? 'i dag' : brad === 'imorgon' ? 'i morgon' : w ? 'senast ' + esc(moVdag(w.senast)) : ''}</span>` : '';
   // Försöken som text (B15): "2 försök, senast i går 14:10". Står i ringraden, bredvid numret.
   const forsok = k.forsok ? `<span class="mo-fs">${k.forsok} försök${k.senastForsok && moLokal(k.senastForsok) ? ', senast ' + esc(moNar(moLokal(k.senastForsok))) : ''}</span>` : '';
@@ -38631,7 +38634,7 @@ function moInstVy(){
       ${moIfrSek(v, T)}
       <section class="rxsek"><h3>Bekräftelsen</h3>
         <div class="mo-ir"><label for="moi-dagar">Bekräfta</label><input class="uin" id="moi-dagar" type="number" min="0" max="14" step="1" data-moi="bekraftaDagar" value="${v.bekraftaDagar}"><label for="moi-dagar">arbetsdagar före mötet</label>${moInstStatus('bekraftaDagar')}</div>
-        <p class="muted">Kortet hamnar i ${esc(moKolNamn('att_bekrafta'))} så många arbetsdagar före mötesdagen. Senast arbetsdagen före ska mötet vara bekräftat, eller samma dag om det bokades så sent. Helger och röda dagar räknas inte.</p>
+        <p class="muted">Gäller det första mötet med kunden, också när det bokats om. Uppföljningsmöten bekräftas inte och står kvar i ${esc(moKolNamn('bokat'))}. Kortet hamnar i ${esc(moKolNamn('att_bekrafta'))} så många arbetsdagar före mötesdagen. Senast arbetsdagen före ska mötet vara bekräftat, eller samma dag om det bokades så sent. Helger och röda dagar räknas inte.</p>
         <div class="mo-ir"><label><input type="checkbox" data-moi="bekraftaPaminn" ${v.bekraftaPaminn !== false ? 'checked' : ''}> Lägg upp en uppgift och påminn kl.</label><input class="uin" id="moi-btid" type="time" data-moi="bekraftaTid" value="${esc(v.bekraftaTid || '09:00')}" aria-label="Klockslaget för uppgiften och påminnelsen" aria-describedby="moi-btid-h"${v.bekraftaPaminn === false ? ' disabled' : ''}>${moInstStatus('bekraftaPaminn')}${moInstStatus('bekraftaTid')}</div>
         <p class="muted" id="moi-btid-h">${v.bekraftaPaminn === false
           ? 'Av: mötet syns bara i kolumnen. Ingen uppgift och ingen notis.'
@@ -38840,7 +38843,7 @@ function moPanel(k){
     <div class="rxpverk"><span class="pill t-${lage[1]}">${esc(lage[0])}</span><span class="rxpt">${m && moFarMote(k) ? `<button class="btn btn-s btn-sm" data-moa="andra|${k.kedja}">${I('mopenna')}Ändra</button>` : ''}${!m ? `<button class="btn btn-s btn-sm" data-moa="uppf|${k.kedja}">${I('mopenna')}Ändra</button>` : ''}${tel ? `<a class="btn btn-s btn-sm" href="tel:${tel}">${I('phone')}Ring</a>` : ''}${k.epost ? `<a class="btn btn-s btn-sm" href="mailto:${esc(k.epost)}">${I('inbox')}Mejla</a>` : ''}</span></div>
     <div class="rxpb">
       <section class="rxsek"><h3>${m ? 'Mötet' : 'Uppföljning'}</h3>
-        ${m ? `<p class="mo-pt"><b class="num">${moNar(m.tid)}</b> · ${m.langd} min · ${moRel(moMin(m.tid) - moNuMin())}${m.bekraftat ? ' · <span class="pill t-ok">Bekräftat</span>' : ''}${m.flyttningar ? ` · flyttat ${m.flyttningar} ${m.flyttningar === 1 ? 'gång' : 'gånger'}` : ''}${k.forsok ? ` · ${k.forsok} försök utan svar` : ''}${k.fonster && !m.bekraftat && (f === 'bokat' || f === 'att_bekrafta') ? ` · bekräftas senast ${esc(moVdag(k.fonster.senast))}` : ''}</p>${moPlatsRad(k)}<p class="muted">Bokat av ${esc(m.bokatAvNamn)}.</p>${moMedRad(k)}`
+        ${m ? `<p class="mo-pt"><b class="num">${moNar(m.tid)}</b> · ${m.langd} min · ${moRel(moMin(m.tid) - moNuMin())}${m.bekraftat ? ' · <span class="pill t-ok">Bekräftat</span>' : ''}${m.flyttningar ? ` · flyttat ${m.flyttningar} ${m.flyttningar === 1 ? 'gång' : 'gånger'}` : ''}${k.forsok ? ` · ${k.forsok} försök utan svar` : ''}${k.fonster && !m.bekraftat && (f === 'bokat' || f === 'att_bekrafta') ? ` · bekräftas senast ${esc(moVdag(k.fonster.senast))}` : ''}${moUppfMote(k) && !m.bekraftat && f === 'bokat' ? ' · uppföljningsmöte, bekräftas inte' : ''}</p>${moPlatsRad(k)}<p class="muted">Bokat av ${esc(m.bokatAvNamn)}.</p>${moMedRad(k)}`
           : `<p class="mo-pt"><b>${!u.datum ? 'Ingen dag satt' : moDag(u.datum) === 'i dag' ? 'Ring i dag' : 'Ring ' + moDag(u.datum)}</b>${u.offert ? ' · <span class="pill t-signal">Offert ute</span>' : ''}</p>${u.text ? `<p>${esc(u.text)}</p>` : ''}<p class="muted">${u.ingetSvar ? `Inget svar ${u.ingetSvar} ${u.ingetSvar === 1 ? 'gång' : 'gånger'} i rad.` : 'Inget försök utan svar än.'}</p>`}
         <div class="mo-kn pan">${moKnappar(k, true)}</div></section>
       <section class="rxsek"><h3>Bolaget</h3><dl class="ldfakta">${fakta.map(([a, b]) => `<div><dt>${a}</dt><dd>${b}</dd></div>`).join('')}</dl></section>

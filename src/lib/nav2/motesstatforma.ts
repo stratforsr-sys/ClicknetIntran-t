@@ -9,7 +9,7 @@
  * `node --experimental-strip-types`. En kvot vars nämnare är 0 får `andel: null`
  * (gränssnittet visar `–`), aldrig NaN eller Infinity.
  */
-import { motesTz } from "./motesflode.ts";
+import { motesTz, skaBekraftas } from "./motesflode.ts";
 
 export type StatMote = {
   id: string; kedja: string; bokatAv: string; hallsAv: string; bokatNar: string; moteTid: string;
@@ -175,6 +175,8 @@ export function dagarTillMote(moten: StatMote[], v: Period, krets: readonly stri
 // Bekräftelserna per bokare (byggsteg 4, U9): bekräftar bokaren sina möten före
 // mötestiden, och håller de bekräftade oftare än de obekräftade? Underlaget är
 // mötena med mötestid i perioden som inte avbokats, ägda av den som bokade.
+// Bara första möten: ett uppföljningsmöte bekräftas inte (skaBekraftas i
+// motesflode.ts, 2026-11-13) och skulle annars dra ner andelen.
 // "Bekräftat före" = bekraftat_nar före mötestiden; en bekräftelse efteråt är
 // ingen bekräftelse. Hållet räknas bland mötena som fått utfall (hållet eller
 // uteblev), så att ett möte som väntar på utfall inte drar ner andelen.
@@ -184,7 +186,7 @@ export function bekraftelsePerBokare(
   const agd = iKrets(krets);
   const per = new Map<string, StatMote[]>();
   for (const m of moten) {
-    if (m.utfall === "avbokat" || !iVeckan(m.moteTid, v) || !agd(m.bokatAv)) continue;
+    if (m.utfall === "avbokat" || !skaBekraftas(m.art) || !iVeckan(m.moteTid, v) || !agd(m.bokatAv)) continue;
     if (!per.has(m.bokatAv)) per.set(m.bokatAv, []);
     per.get(m.bokatAv)!.push(m);
   }

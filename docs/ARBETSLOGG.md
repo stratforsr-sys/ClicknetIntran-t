@@ -5,6 +5,31 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-13 · Möten: bara det första mötet bekräftas (0295 körd; pushas till `main` som en commit)
+
+**Beställningen:** "endast det första mötet ska bekräftas dem andra ska inte bekräftas". Det kom efter den första
+körningen av bekräftelsen (4aee24a): av de 9 uppgifterna gällde en ett uppföljningsmöte, Nordic Grön måndag 16 nov,
+som Zen bokat. Beskrivningen godkänd med "ja till allt".
+
+**Varför `art`:** Nav avgör redan vid bokningen vad mötet är (`motesArt`): uppföljning om kedjan har ett hållet
+möte, annars ombokning om det finns ett föregående, annars nytt. "Det första mötet" är alltså `ny` och `ombokning`
+(kunden har inte träffats; mitt antagande, sagt till beställaren), och "de andra" är `uppfoljning`. En ny kolumn
+eller räkning behövdes inte. `art` ändras aldrig efter bokningen.
+
+**Vad som ändrats:** `skaBekraftas(art)` i `motesflode.ts` är regeln. `vemBekraftar` hoppar över uppföljningsmöten,
+tavlan ger dem inget fönster (de står i Bokat till mötet och visar "uppföljningsmöte"; `kortFas` gav tidigare
+Avgjort utan fönster, nu Bokat för ett öppet möte), knapparna Bekräfta och Fick inte tag finns inte på dem, och
+`bekraftelsePerBokare` räknar bara första möten. 0295 skriver om `mote_uppgift_skapa` (nekar uppföljningsmöten) och
+`mote_uppgift_stada` (tar också bort en öppen uppgift på ett), efter att produktionens definitioner lästs med
+`pg_get_functiondef` och stämts mot 0291. Torrkörd och sedan körd 21:56 UTC; den gamla koden som fortfarande körs
+anropar samma städning, så Zens uppgift försvinner redan vid nästa kvart.
+
+**Under samtalet, inte byggt:** knappen "flytta 4 timmar" blir ingen ny knapp. Beställaren: "lägg bara 'svarade
+inte' ... flytta påminnelsen fram 4 timmar och ... behåll kortet på att bekräfta". Beskrivningen (Fick inte tag ger
+en ny påminnelse efter 4 timmar, aldrig efter 17:00 eller på helg, på mötesdagen senast en timme före) väntar på ja.
+
+---
+
 ## 2026-11-13 · Möten på säljtavlan + rollen Mötesbokare (på `main` som `4bde8ae`, 0292 körd; Mick är Mötesbokare och Säljare)
 
 **Beställningen:** bokade möten syns på säljtavlan med en upptrappning: bokarens första möte någonsin, dagens
