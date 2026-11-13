@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-13 · Klockan visar bara det du inte sett (grenen `klockan-bara-osett`, ingen migration)
+## 2026-11-13 · Klockan visar bara det du inte sett (på `main` som `b9dff2a`, ingen migration)
 
 **Beställningen:** "markera alla lästa, rensa alla, och de som man går in på ska försvinna … det ska bara finnas de
 som man inte har sett och inget annat."
