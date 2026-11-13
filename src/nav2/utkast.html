@@ -40883,7 +40883,8 @@ if (ND && ND.introfilm){
      - × på raden (mus), svep i sidled (pek) och Delete rensar en rad utan att öppna den, med Ångra
      - det som rensas stängs i telefonens notislista också (taggen nav-kal-<notisrad> från /nav2/sw.js, som
        inte ändras: byts den tappas alla prenumerationer)
-     - klockan hämtas om när fliken tas fram, när den öppnas och var femte minut medan den syns
+     - klockan hämtas om när fliken tas fram, när den öppnas och var kvart medan den syns (glest med flit: Vercels
+       processortid tog slut 2026-11-11, och Nav stod för det mesta)
        (/nav2/data?delar=klockan, en körning av frågorna); det nya glider in överst
    Pricken betyder "kommit sedan du senast stängde klockan" (localStorage, per enhet). Det du rensar står kvar i
    vyerna. Allt gäller bara när ND finns: demot är orört. */
@@ -41077,7 +41078,7 @@ async function klRensaAlla(){
   if (!(await svar)){ tillbaka(); if (kvitto) kvitto.remove(); toast('Klockan gick inte att rensa. Försök igen.'); }
 }
 
-// Färskt ur navet: när fliken tas fram, när klockan öppnas och var femte minut medan den syns. En egen
+// Färskt ur navet: när fliken tas fram, när klockan öppnas och var kvart medan den syns. En egen
 // skrivning under hämtningen vinner, och nästa hämtning tar resten.
 async function klHamta(){
   if (!ND || KL.pagar || document.hidden) return;
@@ -41152,7 +41153,7 @@ window.addEventListener('click', e => {
 
 if (ND){
   document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - KL.hamtad > 60000) klHamta(); });
-  setInterval(() => { if (!document.hidden && Date.now() - KL.hamtad > 270000) klHamta(); }, 60000);
+  setInterval(() => { if (!document.hidden && Date.now() - KL.hamtad > 14.5 * 60000) klHamta(); }, 60000);
   // En push som redan är sedd eller rensad (på en annan enhet) stängs när Nav öppnas här.
   setTimeout(() => klTraySynk(performance.timeOrigin || Date.now()), 1500);
 }

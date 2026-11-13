@@ -30,7 +30,7 @@ beställaren, och en massåtgärd ska ha Ångra hellre än en bekräftelsedialog
 - `utkast.html` (patch `~/nav2-utkast/delar/klockan-rensa/patch.py` + `klockan.js`, idempotent): Rensa alla
   (raderna glider ut, siffran räknar ner i klockan/rälsen/appikonen, "Allt är sett" med en bock som ritas),
   × på raden (mus), svep i sidled (pek, `touch-action:pan-y`), Delete, Ångra på allt, levande hämtning
-  (öppning > 30 s, flik fram > 60 s, var 5:e min synlig), pricken = "sedan du senast stängde klockan"
+  (öppning > 30 s, flik fram > 60 s, var kvart synlig; glest med flit, Vercels processortid tog slut 2026-11-11), pricken = "sedan du senast stängde klockan"
   (`localStorage['nav-klocka-tittad']`), telefonens notislista stängs (`getRegistration('/nav2/')`,
   taggen `nav-kal-<id>`; `sw.js` orörd). `bellOlasta` räknar det under de 25.
 - Två fel hittade i provet och rättade: raderna krympte och klipptes i en lång lista (`flex:none` på omslaget),
@@ -42,6 +42,9 @@ beställaren, och en massåtgärd ska ha Ångra hellre än en bekräftelsedialog
 Headless Chrome mot det patchade utkastet med Zens riktiga ndData och en låtsasserver i `fetch`
 (`~/nav2-utkast/delar/klockan-rensa/prov/`): ×, Ångra, Delete med fokus till nästa, svep, kort svep som studsar,
 öppna en rad, Rensa alla, Ångra rensa, serverns nej, levande hämtning, telefonbredd och mörkt läge. Inga fel i konsolen.
+Previewen (`prov/preview.mjs`, som Zen, märkt provnotis som raderas): delen `klockan`, öppnad via push = borta, ett
+läge avfärdat och tillbaka i `lage`, skräp och annat ursprung avvisade, Rensa alla utan gräns och med en gräns bakåt
+flyttar ingenting, Ångra tar bort raderna, Zens `seen_at` orörd. 17 av 17 gröna.
 
 **Inte gjort:** att en notis försvinner när man går till posten på annat sätt än via klockan (GitHub gör så); bara
 klockan, pushen och mejlet räknas som "sett". En push kan inte stängas på en ANNAN enhet än den man rensar på
