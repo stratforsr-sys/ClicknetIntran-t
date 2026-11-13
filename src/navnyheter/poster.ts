@@ -14,6 +14,21 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "klockan-bara-det-du-inte-sett",
+    rubrik: "Klockan visar bara det du inte sett",
+    ingress: "Det du öppnar försvinner ur klockan, och Rensa alla tömmer den. Allt går att ångra, och det du rensar står kvar i vyerna.",
+    text: `Trycker du på en notis öppnas den och försvinner ur **klockan**, på datorn och i telefonen. Samma sak
+när du öppnar den från en push eller ett mejl. **Rensa alla** tömmer klockan, även det som inte fick plats i
+listan. Vill du ta bort en enda utan att öppna den: krysset på raden, eller svep den åt sidan i telefonen.
+Efter varje rensning finns **Ångra** en stund. Det du rensar finns kvar där det hör hemma, till exempel ordern
+i Order eller uppgiften i Uppgifter. Bara raden i klockan försvinner, och det som rensas här stängs också i
+telefonens notislista. Nya notiser dyker upp utan att du laddar om, och pricken visar vad som kommit sedan du
+senast tittade.`,
+    datum: "2026-11-13",
+    roller: [],
+    href: "/",
+  },
+  {
     slug: "moten-kunden-pa-ett-stalle",
     rubrik: "Boka möte: allt om kunden på ett ställe, fler hos kunden och en agenda",
     ingress: "Lägg till fler personer hos kunden med namn, telefon och e-post direkt under kontakten. Källan är en lista du söker i, och agendan följer med kundens inbjudan.",

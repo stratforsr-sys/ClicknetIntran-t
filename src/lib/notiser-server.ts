@@ -5,9 +5,12 @@ import { fullName, type CurrentUser } from "@/lib/auth";
 import { kursLage } from "@/lib/utbildning";
 import {
   HANDELSE_DAGAR,
+  KLOCKLAGE_PREFIX,
   MAX_NOTISER,
   arNotistyp,
+  klockansUrval,
   notisId,
+  rensningsgrans,
   sortera,
   type Notis,
   type Notiskalla,
@@ -75,7 +78,32 @@ const FRIST_VARSEL_DAGAR = 7;
  * Det ar ocksa darfor konfidentiella arenden inte behover namnas har.
  */
 export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
-  if (!user.employee) return [];
+  return (await allaNotiser(user)).kvar.slice(0, MAX_NOTISER);
+}
+
+/**
+ * Klockan i Nav 2.0: bara det du inte sett (beställaren 2026-11-13, se
+ * `klockansUrval` i notiser.ts). Samma frågor som `hamtaNotiser()`, en gång.
+ *
+ * `klockan.totalt` är alla olästa, även de som inte fick plats bland de 25,
+ * så att sidan kan säga det. `klockan.lage` är sidans egna lägen (nyheternas
+ * och rekryteringens) som personen redan rensat, utan prefixet.
+ */
+export type Klockan = {
+  notiser: Notis[];
+  klockan: { totalt: number; sedd: string | null; lage: string[] };
+};
+
+export async function hamtaKlockan(user: CurrentUser): Promise<Klockan> {
+  const { kvar, sedd, bort } = await allaNotiser(user);
+  const { notiser, totalt } = klockansUrval(kvar, MAX_NOTISER);
+  const lage = bort.filter((id) => id.startsWith(KLOCKLAGE_PREFIX)).map((id) => id.slice(KLOCKLAGE_PREFIX.length));
+  return { notiser, klockan: { totalt, sedd, lage } };
+}
+
+/** Allt i klockan, sorterat och utan det personen klickat bort, men inte kapat. */
+async function allaNotiser(user: CurrentUser): Promise<{ kvar: Notis[]; sedd: string | null; bort: string[] }> {
+  if (!user.employee) return { kvar: [], sedd: null, bort: [] };
   const mig = user.employee.id;
   const supabase = await supabaseServer();
 
@@ -1368,7 +1396,11 @@ export async function hamtaNotiser(user: CurrentUser): Promise<Notis[]> {
 
   // Utskicken (0255): det personen eller superadmin stängt för klockan. Före
   // kapningen, av samma skäl som avfärdningen: en avstängd sort tar ingen plats.
-  return sortera(await filtreraKlockan(mig, kvar)).slice(0, MAX_NOTISER);
+  return {
+    kvar: sortera(await filtreraKlockan(mig, kvar)),
+    sedd: (seddRad?.seen_at as string | undefined) ?? null,
+    bort: [...bortklickade],
+  };
 }
 
 /**
@@ -1399,4 +1431,56 @@ export async function markeraSedd(employeeId: string): Promise<void> {
   await supabaseAdmin()
     .from("notification_seen")
     .upsert({ employee_id: employeeId, seen_at: new Date().toISOString() });
+}
+
+/**
+ * "Rensa alla" i Nav 2.0 (2026-11-13). Gränsen `seen_at` flyttas fram till
+ * `till`, den nyaste raden personen såg (aldrig bakåt, aldrig förbi nu), och
+ * raderna avfärdas en och en. Se `klockansUrval` i notiser.ts för varför båda.
+ *
+ * Svarar med gränsen före och efter, så att Ångra kan lägga tillbaka den.
+ * Service role av samma skäl som `markeraSedd()`.
+ */
+export async function rensaKlockan(
+  employeeId: string,
+  ids: readonly string[],
+  till: unknown,
+): Promise<{ forra: string | null; satt: string | null }> {
+  const db = supabaseAdmin();
+  const { data } = await db.from("notification_seen").select("seen_at").eq("employee_id", employeeId).maybeSingle();
+  const forra = (data?.seen_at as string | undefined) ?? null;
+  const satt = rensningsgrans(till, forra);
+  await Promise.all([
+    satt ? db.from("notification_seen").upsert({ employee_id: employeeId, seen_at: satt }) : null,
+    ids.length
+      ? db
+          .from("notification_dismissed")
+          .upsert(
+            ids.map((notice_id) => ({ employee_id: employeeId, notice_id })),
+            { onConflict: "employee_id,notice_id", ignoreDuplicates: true },
+          )
+      : null,
+  ]);
+  return { forra, satt };
+}
+
+/**
+ * Ångra en rensning: raderna kommer tillbaka och gränsen flyttas tillbaka, men
+ * bara om ingen annan rensning (en annan enhet) har flyttat den sedan.
+ */
+export async function angraRensning(
+  employeeId: string,
+  ids: readonly string[],
+  forra: string | null,
+  satt: string | null,
+): Promise<void> {
+  const db = supabaseAdmin();
+  await Promise.all([
+    ids.length ? db.from("notification_dismissed").delete().eq("employee_id", employeeId).in("notice_id", [...ids]) : null,
+    satt
+      ? forra
+        ? db.from("notification_seen").update({ seen_at: forra }).eq("employee_id", employeeId).eq("seen_at", satt)
+        : db.from("notification_seen").delete().eq("employee_id", employeeId).eq("seen_at", satt)
+      : null,
+  ]);
 }

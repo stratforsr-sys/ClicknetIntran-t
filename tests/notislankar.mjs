@@ -150,7 +150,8 @@ const vagar = [
   ["/kalender?ko=1&order=", /if \(q\.get\('ko'\)\)/],
 ];
 for (const [namn, r] of vagar) ok(namn, r.test(vaxel));
-ok("klockan bokför öppningen (/nav2/notis)", /n && n\.handelseId\) ndNotisOppnad\(n\.handelseId\)/.test(html) && /fetch\('\/nav2\/notis'/.test(html));
+// Sedan 2026-11-13 via klOppnad, som också tar bort notisen ur klockan (tests/klockan.mjs).
+ok("klockan bokför öppningen (/nav2/notis)", /klOppnad\(g\.dataset\.bellgo\)/.test(html) && /if \(n && n\.handelseId\) kropp\.id = n\.handelseId/.test(html) && /fetch\('\/nav2\/notis'/.test(html));
 
 console.log(fel ? `\n\x1b[31m${fel} fel\x1b[0m` : "\n\x1b[32mAlla gröna\x1b[0m");
 process.exit(fel ? 1 : 0);

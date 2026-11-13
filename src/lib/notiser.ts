@@ -994,6 +994,65 @@ export function sortera(notiser: Notis[]): Notis[] {
   });
 }
 
+/**
+ * ===========================================================================
+ * KLOCKAN I NAV 2.0 VISAR BARA DET DU INTE SETT (beställaren 2026-11-13)
+ *
+ * "Det ska bara finnas de som man inte har sett och inget annat." En läst rad
+ * som står kvar i klockan är brus: den tränger undan det nya och gör att
+ * siffran aldrig når noll. Därför är klockan i Nav 2.0 en kö, inte en logg.
+ *
+ *   - "Oläst" är fortfarande `olast`-regeln i `hamtaNotiser()`: hände det efter
+ *     `notification_seen.seen_at` är det oläst. Klockan visar BARA de olästa.
+ *   - Ett tryck på en rad avfärdar just den (`notification_dismissed`, 0038),
+ *     på alla enheter. Ett tryck på pushen eller länken i mejlet gör samma sak.
+ *   - "Rensa alla" flyttar `seen_at` fram till den nyaste raden man såg OCH
+ *     avfärdar raderna en och en. Gränsen tar det som inte fick plats bland de
+ *     25 (annars hade 25 äldre dykt upp i stället); id:na tar posterna vars
+ *     tidpunkt räknas om varje dag ("7 uppgifter är försenade").
+ *
+ * Inget arbete försvinner: rutinen att kvittera står kvar i Rutiner, ordern i
+ * Order. Det är 0038:s regel, "klockan är påfarten, inte stället där arbete
+ * bokförs".
+ * ===========================================================================
+ */
+export function klockansUrval(alla: readonly Notis[], max: number = MAX_NOTISER): { notiser: Notis[]; totalt: number } {
+  const olasta = alla.filter((n) => n.olast);
+  return { notiser: olasta.slice(0, max), totalt: olasta.length };
+}
+
+/**
+ * Posterna som Nav 2.0-sidan själv räknar fram ur sin data (nyheternas
+ * kvittenser `nhl-…`, rekryteringens lägen `rxl-…`) har inget id i
+ * `NOTIS_KALLOR`. De avfärdas med prefixet, så att de aldrig kan krocka med en
+ * källa och så att servern kan lämna tillbaka just dem till sidan.
+ */
+export const KLOCKLAGE_PREFIX = "nav2-";
+
+const KLOCKLAGE = /^nav2-(nhl|rxl)-[0-9a-zA-Z-]{1,180}$/;
+
+/** Ett id klockan i Nav 2.0 får avfärda: en källa i navet eller ett av sidans lägen. */
+export function arKlockId(varde: unknown): varde is string {
+  return arNotisId(varde) || (typeof varde === "string" && KLOCKLAGE.test(varde));
+}
+
+/** Så många rader "Rensa alla" tar i ett anrop. Klockan visar 25, plus sidans lägen. */
+export const MAX_RENSA = 200;
+
+/**
+ * Var "Rensa alla" sätter gränsen. `till` är den nyaste raden personen såg;
+ * gränsen flyttas aldrig bakåt och aldrig förbi nu (en klocka som går fel får
+ * inte dölja det som inte hänt än). Null = gränsen står kvar.
+ */
+export function rensningsgrans(till: unknown, forra: string | null, nu: Date = new Date()): string | null {
+  if (typeof till !== "string") return null;
+  const t = Date.parse(till);
+  if (!Number.isFinite(t)) return null;
+  const g = Math.min(t, nu.getTime());
+  if (forra && Number.isFinite(Date.parse(forra)) && g <= Date.parse(forra)) return null;
+  return new Date(g).toISOString();
+}
+
 /** "3 min", "2 tim", "igår", "12 aug". Klockslag pa en veckogammal notis
  *  ar en precision ingen har nagon nytta av. */
 export function narTid(iso: string, nu: Date = new Date()): string {
