@@ -28859,9 +28859,10 @@ async function ndOrdSkicka(utkast){
    ”För säljare lägg till ett ställe att skriva det på, men för admin och superadmin behövs ingen.” En godkänd order
    rättas med ett skäl (redigeraOrder, rattelsensSkal). Säljaren får fältet ovanför Spara rättelsen när ordern är
    godkänd, eller när servern svarar kravSkal: ordern godkändes efter att listan lästes, och förut kom då bara
-   beskedet om skälet, utan någonstans att skriva det. Admin och superadmin får inget fält. */
+   beskedet om skälet, utan någonstans att skriva det. Admin och superadmin får inget fält. Ber servern om ett skäl
+   ritas fältet ändå, vem som än sparar: ett besked om skälet utan fältet var just felet. */
 const ndRattSalj = () => !!(ND && ND.jag && ND.jag.niva === 'salesperson');
-const ndRattSkalVisa = n => !!(ndO() && n && n.ratta && ndRattSalj() && (n.skalKrav || ORDER.some(x => x.nr === n.ratta && ['signerad', 'betald'].includes(x.st))));
+const ndRattSkalVisa = n => !!(ndO() && n && n.ratta && (n.skalKrav || (ndRattSalj() && ORDER.some(x => x.nr === n.ratta && ['signerad', 'betald'].includes(x.st)))));
 function ndRattSkalFram(n, text){
   S.ordRor.add('skal'); ordUppdatera(); toast(text);
   setTimeout(() => { const f = document.getElementById('on-skal'); if (f){ f.scrollIntoView({block:'center'}); f.focus({preventScroll:true}); } }, 30);

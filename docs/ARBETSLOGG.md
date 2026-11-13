@@ -32,6 +32,25 @@ Provet `delar/rattelse-skal/rattelse-skal-prov.mjs` (i `~/nav2-utkast`) återska
   fortfarande bara kunduppgifterna på sina egna order (`farHantera` är orörd), men utan skäl.
 - **Säljaren får ingen ny Rätta-knapp på godkända order.** Kortet visar Rätta för säljaren bara på inskickade order
   och utkast, som förut. Fältet behövs när ordern godkänts medan säljaren rättade den.
+- **Ber servern om ett skäl kommer fältet fram, vem som än sparar** (hårdprovet samma dag). Admin skickar alltid
+  Navs skäl, så det ska inte hända, men ett besked om skälet utan fältet var just felet, och klientens nivå är
+  den som gällde när sidan laddades.
+
+**Hårdprovet (beställaren: "hårdtesta så att det 100 % fungerar"):**
+
+- **Servern på riktigt:** `~/nav2-utkast/delar/rattelse-skal/server/prov.mjs` kör den RIKTIGA rutten `/nav2/order`
+  och den riktiga `redigeraOrder` genom en laddare (`krok.mjs`: `@/` till `src/`, `--experimental-transform-types`)
+  med Supabase, Next och `getCurrentUser` utbytta mot attrapper som skriver ner varje skrivning. 29 kontroller:
+  säljaren (kravSkal, inget skrivs; blanktecken; skälet trimmat i loggen), behörighet och status prövas före skälet,
+  inskickad order (rutten släpper `reason` tyst), teamledaren, säljchefen och VD utan skäl hela vägen genom
+  omräkningen, säljarens notis och rättelseposterna i en fastställd månad med "Rättad av Zen.". Mot main: 10 röda,
+  med exakt beställarens besked.
+- **Klienten:** webbläsarprovet utbyggt till 16 fall, 81 kontroller (riktiga tangenter med paus och radbrytning,
+  omritning, HTML i skälet, ett annat serverfel, stäng och öppna efter kravSkal, 500 tecken, telefonen, appläget
+  på en iPhone). Stabilt tre varv i rad; rött mot main och mot `0848bf3` (låsningen ovan).
+- **Fynd utanför lagningen:** på 390 px bredd är hela orderformuläret ~600 px brett och klipps i högerkanten,
+  alla fält, också anteckningen (före lagningen också). Gamla Navs rättelseformulär (`Atgarder.tsx`) har kvar
+  `required` på skälet, så där skriver även admin ett skäl.
 
 ## 2026-11-13 · Möten: bokningsbladet (kunden på ett ställe, personer, källans lista, agendan; 0290)
 

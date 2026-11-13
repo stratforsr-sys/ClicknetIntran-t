@@ -14,9 +14,9 @@ avgjorde "godkänd" ur sin egen orderlista, så en order som godkänts sedan lis
 Nu: admin och superadmin behöver inget skäl (Nav skriver vad som ändrades, servern "Rättad av <förnamn>."), och säljaren
 får fältet "Varför rättas ordern?" ovanför Spara rättelsen, även när servern svarar `kravSkal`. Se ARBETSLOGG.
 
-- **Prov:** `tests/rattelse.mjs` (skälsregeln), `tests/nav2-orderfalt.mjs`, `tests/nav2-order.mjs`,
-  `tests/nav2-omladdning.mjs`, `tests/order.mjs` gröna; `~/nav2-utkast/delar/rattelse-skal/rattelse-skal-prov.mjs`
-  26/26 mot grenen och rött mot main.
+- **Prov:** `tests/rattelse.mjs` (skälsregeln) och repots övriga prov gröna (utom `rls.mjs`, som rör produktionen).
+  Hårdprovet: `~/nav2-utkast/delar/rattelse-skal/server/prov.mjs` (riktiga rutten + `redigeraOrder`, 29/29) och
+  `rattelse-skal-prov.mjs` (webbläsaren, 81/81, tre varv), båda röda mot main. Se ARBETSLOGG.
 - **Kvar:** previewen, mergen efter beställarens ja, och #41 rättad i produktionen.
 
 ## MÖTEN: BOKNINGSBLADET (2026-11-13): på `main`, 0290 KÖRD
