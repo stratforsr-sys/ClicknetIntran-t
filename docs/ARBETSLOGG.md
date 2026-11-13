@@ -90,7 +90,7 @@ när sidan startar.
 
 ---
 
-## 2026-11-13 · Proven gröna: tre prov rättade, rls.mjs säker att köra (bara provfiler)
+## 2026-11-13 · Proven gröna: tre prov rättade, rls.mjs säker att köra (på `main` som `5d85263`, bara provfiler)
 
 **Vad:** beställaren efter mergen av rättelsen (`be8d894`): "gör det som krävs och gör allting grönt". Utan `npm ci`
 och nycklar föll 12 prov på `pg`. Med dem föll tre: `inbaddningar`, `sidor` och `rls` (`rls.mjs` hade inte körts).
