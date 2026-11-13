@@ -7879,9 +7879,9 @@ body.nd-riktig :is(.pv-lagrad,.arow[data-agenda],.pv-tab tbody tr[data-pvupers],
 .mo-kort.mo-tapp{opacity:.62}
 .mo-del{display:flex;align-items:baseline;gap:6px;margin:2px 2px 0;font-size:12px;color:var(--ink-3)}
 .mo-del .num{font-size:11.5px}
-.mo-pipe .mo-kn{flex-wrap:nowrap}
-.mo-pipe .mo-kn .btn{padding-inline:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.mo-pipe .mo-kn:has(.mo-btn-d, [data-moa^="hallet"]){flex-wrap:wrap}
+/* Kortets knappar bryts till en ny rad när kolumnen är smal (prov i produktionen 2026-11-13: vid 1440 px klipptes
+   "Bekräfta" till "ekräft"). En ellips går inte i .btn, som är inline-flex: texten centreras och klipps på båda sidor. */
+.mo-pipe .mo-kn .btn{padding-inline:9px;white-space:nowrap}
 .mo-mer{flex:0 0 auto!important;min-width:28px;padding-inline:6px!important;border-color:transparent!important;background:transparent!important;color:var(--ink-3)!important;letter-spacing:.08em}
 .mo-mer:hover{color:var(--ink)!important;background:var(--surface-2)!important}
 .mo-pf .mo-mer{margin:-4px -6px -4px auto;min-height:0;padding-block:2px!important}

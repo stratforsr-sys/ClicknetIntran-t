@@ -5,7 +5,21 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-12 · Möten: lyftet av vyn (på `main` som `f3b1d8a`, ingen migration, skarpa provet kvar)
+## 2026-11-13 · Möten: skarpa provet i produktionen, och kortets klippta knappar
+
+Provat inloggat i produktionen (Zen, admin, Chrome 1440 px) på två provmöten med bolagsnamn som börjar med PROV, utan
+e-post och kollegor, raderade efteråt. Gröna: Boka 60 min, Bekräfta → Ångra, Fick inte tag → Ångra på första och andra
+försöket, Flytta (nollställer Bekräftat), Radera, sök. Villkoret på exakt tid i `angra` håller mot databasen.
+
+**Varför Rätta utfall inte provades:** varje utfall på ett möte från `moten.galler-fran` låser mötesprovision.
+Raderna kan inte tas bort genom Nav (`radera` vägrar ett möte med låst provision), och Hållet ger belopp i den
+öppna månaden. Ett provmöte hade alltså lämnat provision kvar hos riktiga personer. Det görs bara efter beställarens ja.
+
+**Kortets knappar:** `.mo-pipe .mo-kn` hade `flex-wrap:nowrap` och en ellips på knapparna (`86e7739`). Ellipsen kan
+inte verka i `.btn`, som är `inline-flex`: texten är ett anonymt flexobjekt, centreras och klipps på båda sidor
+("ekräft", "k inte t" i en kolumn på 213 px). Knapparna bryts nu till två rader när kolumnen är smal.
+
+## 2026-11-12 · Möten: lyftet av vyn (på `main` som `f3b1d8a`, ingen migration, skarpa provet delvis gjort 2026-11-13)
 
 **Vad:** ett förbättringsvarv av hela vyn Möten, 22 delar, minst två märkbara förbättringar per del, i sju omgångar,
 följt av en oberoende granskning och ett rättningsvarv. Se `docs/NASTA_SESSION.md` för läget och listan över det som
