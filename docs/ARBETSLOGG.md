@@ -5,6 +5,33 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-13 · Proven gröna: tre prov rättade, rls.mjs säker att köra (bara provfiler)
+
+**Vad:** beställaren efter mergen av rättelsen (`be8d894`): "gör det som krävs och gör allting grönt". Utan `npm ci`
+och nycklar föll 12 prov på `pg`. Med dem föll tre: `inbaddningar`, `sidor` och `rls` (`rls.mjs` hade inte körts).
+Alla tre var fel i proven, inte i Nav; kontrollerat mot databasen innan något ändrades.
+
+- **`tests/inbaddningar-db.mjs`:** kommentaren sa "select före nästa `.from`", koden tittade 1 200 tecken framåt
+  och hoppade över `.select(FALT)`. `.from("employee").update()` i rekryteringens `slutorsak` parades med
+  `employee_role`-frågan under, och `hamtaAvtalsslut` med `hamtaTjanstslut`. Nu: gränsen vid nästa `.from`, och
+  det FÖRSTA select-anropet måste ta en sträng. 43 riktiga inbäddningar, alla besvarade.
+- **`tests/sidor.mjs`:** `/kalender` visar "Kalendrar du ser", alla som inte slutat med för- och efternamn
+  (`hamtaPersoner`), för alla roller. Provet läste det som läckage för säljare, teamledare och ekonomi. Undantaget
+  är lika smalt som ringlistans: bara `/kalender`, bara efternamn, bara de som inte slutat (ur databasen), aldrig
+  e-post, och listan provas positivt. Kontrollerat: svaret bar inga e-postadresser och ingen annans poster.
+- **`tests/rls.mjs`:** "Ekonomi ser 0 rader" räknade HELA `file_object` och `file_access_log`. Där ligger också
+  orderbilagor och samtalsinspelningar, som ekonomi ser via ordern. Policyn för sjukintyg är tät (punktfrågan var
+  grön). Nu räknas alla sjukintyg (`purpose=sick_certificate`, även driftens), med positiv kontroll av frågan,
+  eftersom `las()` gör ett felsvar till en tom lista.
+- **`rls.mjs` säker att köra:** de åtta `disable trigger … enable trigger` i städningen ligger i en transaktion
+  (`utanSparr`), så en krasch rullar tillbaka urkopplingen i stället för att lämna skyddet avstängt. Städningen tog
+  varje företagsschema 11:30/30 min och 08–17 (0 riktiga träffar i dag); nu märks provets rastscheman med
+  `created_by` och bara de tas. Efter körningen: inga avstängda triggrar, inga `rlstest+` kvar.
+
+**Prov:** hela sviten 101/101 med nycklarna, `rls.mjs` 518/518, `identitet.mjs` grön.
+
+---
+
 ## 2026-11-13 · Möten: bekräftelsen blir en uppgift (på `main` som `4aee24a`, 0291 körd; arbetsdagar, klockslag, notis i telefonen)
 
 **Vad:** beställaren: den som bokat ett möte ska bekräfta det två dagar före, klockslaget ska gå att välja, och det
