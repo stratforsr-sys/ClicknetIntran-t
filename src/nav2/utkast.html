@@ -6740,11 +6740,31 @@ span.upg-pv{cursor:default}
 .upg-chip .cx:hover{background:var(--surface-2);color:var(--ink)}
 .upg-chip .cx svg{width:13px;height:13px}
 .upg-koppla{color:var(--ink-2)}
-.upg-kform{margin-top:6px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
-.upg-kform .tifrow{display:flex;flex-direction:column;align-items:stretch;gap:8px}
-.upg-kform label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ink-2)}
-.upg-kform .uin{width:100%;max-width:100%}
-.upg-kform .pacts{display:flex;gap:6px;margin-top:10px}
+.upg-kform{display:flex;flex-direction:column;gap:8px;margin-top:2px;padding:8px;border-radius:10px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line)}
+.upg-kslag{display:flex;flex-wrap:wrap;gap:4px}
+.upg-kslag button{height:26px;padding:0 10px;border:0;border-radius:999px;background:var(--surface-2);color:var(--ink-2);font:500 12px/1 var(--f-body);cursor:pointer}
+.upg-kslag button:hover{color:var(--ink)}
+.upg-kslag button[aria-checked="true"]{background:var(--ink);color:var(--surface)}
+.upg-kslag button:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+.upg-ksokf{position:relative}
+.upg-ksokf svg{position:absolute;left:9px;top:50%;width:15px;height:15px;transform:translateY(-50%);color:var(--upg-ink-3);pointer-events:none}
+.upg-ksok{width:100%;height:34px;padding:0 10px 0 31px;border:1px solid var(--line-2);border-radius:8px;background:var(--bg);color:var(--ink);font:14px var(--f-body)}
+.upg-ksok::placeholder{color:var(--upg-ink-3)}
+.upg-ksok:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+.upg-ksynlig{display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--ink);cursor:pointer}
+.upg-ksynlig input{margin:2px 0 0;accent-color:var(--brand)}
+.upg-ksynlig small{display:block;margin-top:2px;font-size:11.5px;line-height:1.35;color:var(--upg-ink-3)}
+.upg-klista{display:flex;flex-direction:column;max-height:264px;margin:0 -4px;overflow-y:auto;overscroll-behavior:contain}
+.upg-kcap{margin:0;padding:2px 8px 4px;font-size:11.5px;color:var(--upg-ink-3)}
+.upg-kval{display:flex;align-items:baseline;gap:10px;min-height:32px;padding:7px 8px;border:0;border-radius:7px;background:none;color:var(--ink);font:13px/1.3 var(--f-body);text-align:left;cursor:pointer}
+.upg-kval .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.upg-kval .m{flex:none;font-size:12px;color:var(--upg-ink-3);font-variant-numeric:tabular-nums}
+.upg-kval mark{background:none;color:inherit;font-weight:650}
+.upg-kval:hover,.upg-kval:focus-visible{background:var(--surface-2);outline:none}
+.upg-kval:focus-visible{box-shadow:inset 0 0 0 1.5px var(--brand)}
+.upg-kval[aria-busy="true"]{opacity:.5;cursor:progress}
+.upg-khint{margin:0;padding:6px 8px;font-size:12.5px;line-height:1.4;color:var(--ink-3)}
+.upg-khint .upg-ghost{height:auto;padding:0 2px;color:var(--brand-ink);text-decoration:underline;text-underline-offset:2px}
 .upg-serieslut{height:26px;margin-left:92px;font-size:12.5px}
 
 /* Väljarna: ligger över rutan, vid sitt värde */
@@ -6832,6 +6852,9 @@ span.upg-pv{cursor:default}
   .upg-chip .cx{opacity:1}
   .upg-serieslut{margin-left:0}
   .upg-kform{flex-basis:100%}
+  .upg-ksok{height:40px;font-size:16px}
+  .upg-kslag button{height:32px;padding:0 12px;font-size:13px}
+  .upg-kval{min-height:42px}
   .upg-rmain{flex:none;overflow:visible;padding:0 16px 18px}
   .upg-komp{position:sticky;bottom:0;z-index:2;padding:10px 12px}
   .upg-komp>.av,.upg-khint{display:none}
@@ -23946,6 +23969,7 @@ const UPGSVG = {
   hoger:'<path d="M9 6l6 6-6 6"/>',
   bock:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   x:'<path d="M6 6l12 12M18 6L6 18"/>',
+  sok:'<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',
   serie:'<path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.5M20 4v4.5h-4.5M20 12a8 8 0 0 1-13.7 5.6L4 15.5M4 20v-4.5h4.5"/>'
 };
 const upgIk = (n, kl = '', stil = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"${kl ? ` class="${kl}"` : ''}${stil ? ` style="${stil}"` : ''}>${UPGSVG[n]}</svg>`;
@@ -28455,7 +28479,7 @@ function ndKOpts(K){
   if (val === null) return `<option value="">${K.val ? 'Söker …' : 'Hämtar …'}</option>`;
   return `<option value="">${val.length ? (q ? `${val.length === 50 ? 'Minst 50' : val.length} ${val.length === 1 ? 'träff' : 'träffar'}` : 'Välj') : q ? 'Ingen träff' : 'Inget att välja'}</option>${val.map(v => `<option value="${v.id}" ${K.mal === v.id ? 'selected' : ''}>${esc(v.namn)}</option>`).join('')}`;
 }
-function ndKRitaVal(){ const s = document.querySelector('[data-ndkmal]'); if (s && S.ndKoppla) s.innerHTML = ndKOpts(S.ndKoppla); }
+function ndKRitaVal(){ const l = document.getElementById('ndKLista'); if (l && S.ndKoppla) l.innerHTML = ndKLista(S.ndKoppla); }
 let ndKTimer = 0;
 document.addEventListener('input', e => {
   if (!ndUp() || !S.ndKoppla || !e.target.dataset || e.target.dataset.ndksok === undefined) return;
@@ -28467,6 +28491,79 @@ document.addEventListener('input', e => {
       if (S.ndKoppla !== K || K.slag !== slag || (K.sok || '').trim().toLowerCase() !== q) return;
       if (s.fel){ ndSkrivFel(s); return; } K.sokVal = {slag, q, val:s.val || []}; ndKRitaVal(); }).catch(() => toast('Nav svarade inte.')); }, 250);
 }, true);
+// Koppla (beställaren 2026-11-13: "går inte att söka", "förstår inte vad den visar"): sorten är knappar, sökfältet
+// är öppet direkt, och träffarna är en lista med en rad som säger vad den visar. Ett klick på en träff kopplar.
+const NDKKORT = {order:'Kund', person:'Person', arende:'Ärende', kurs:'Utbildning', coachning:'Coachning'};
+const NDKSOKF = {order:'Sök kund, org.nr eller kontakt', person:'Sök namn', arende:'Sök ärendets ämne', kurs:'Sök kurs', coachning:'Sök coachningsuppgift'};
+const NDKALLA = {order:'Senaste ordrarna', person:'Alla i Nav', arende:'Senaste ärendena', kurs:'Publicerade kurser', coachning:'Senaste coachningsuppgifterna'};
+const NDKTOM = {order:'Det finns inga ordrar än.', person:'Det finns ingen att koppla.', arende:'Du ser inga ärenden.', kurs:'Det finns inga publicerade kurser.', coachning:'Det finns inga coachningsuppgifter.'};
+// Träffarna: de senaste (eller alla) utan sökord, serverns sökning från två tecken, annars filtrerat här.
+function ndKTraffar(K){
+  if (!K.val) return null;
+  const q = (K.sok || '').trim().toLowerCase();
+  if (q.length >= 2 && NDKSOKSERVER.includes(K.slag)) return K.sokVal && K.sokVal.slag === K.slag && K.sokVal.q === q ? K.sokVal.val : null;
+  const l = K.val[K.slag] || [];
+  return q ? l.filter(v => v.namn.toLowerCase().includes(q)) : l;
+}
+// Serverns namn är "Kund · 2026-10-21" och "Uppgift · Person": det efter pricken blir den grå texten till höger.
+function ndKRad(v, q){
+  const j = v.namn.lastIndexOf(' · '), n = j > 0 ? v.namn.slice(0, j) : v.namn;
+  let m = j > 0 ? v.namn.slice(j + 3) : '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(m)) m = `${+m.slice(8)} ${UPGMAN[+m.slice(5, 7) - 1]}${m.slice(0, 4) === kIdag().slice(0, 4) ? '' : ' ' + m.slice(0, 4)}`;
+  const i = q ? n.toLowerCase().indexOf(q.toLowerCase()) : -1;
+  const namn = i < 0 ? esc(n) : `${esc(n.slice(0, i))}<mark>${esc(n.slice(i, i + q.length))}</mark>${esc(n.slice(i + q.length))}`;
+  return `<button type="button" class="upg-kval" role="option" data-ndkval="${esc(v.id)}"><span class="n">${namn}</span>${m ? `<span class="m">${esc(m)}</span>` : ''}</button>`;
+}
+function ndKLista(K){
+  if (K.fel) return `<p class="upg-khint" role="status">Valen kom inte fram. <button type="button" class="upg-ghost" data-ndkigen>Försök igen</button></p>`;
+  const val = ndKTraffar(K), q = (K.sok || '').trim();
+  if (val === null) return `<p class="upg-khint" role="status">${K.val ? 'Söker …' : 'Hämtar …'}</p>`;
+  if (!val.length) return `<p class="upg-khint" role="status">${q ? `Ingen träff på ”${esc(q)}”.${K.slag === 'order' ? ' Sök på kundens namn, org.nr eller kontaktperson.' : ''}` : NDKTOM[K.slag]}</p>`;
+  const rubrik = q ? (val.length >= 50 ? 'Minst 50 träffar. Skriv mer för färre.' : `${val.length} ${val.length === 1 ? 'träff' : 'träffar'}`)
+    : NDKALLA[K.slag] + (NDKSOKSERVER.includes(K.slag) && val.length >= 50 ? '. Sök för att hitta äldre.' : '');
+  return `<p class="upg-kcap" role="status">${rubrik}</p>${val.map(v => ndKRad(v, q)).join('')}`;
+}
+// Valen hämtas när formuläret öppnas. Formuläret hålls i K, aldrig i knappens data: morfen gör om samma knapp till
+// Stäng, så knappens data-ndkoppla var borta när svaret kom och valen kastades (sökningen stod avstängd).
+function ndKoppHamta(K){
+  K.fel = false;
+  ndLas('/nav2/uppgifter?kopplingsval=1').then(ndSvar).then(s => {
+    if (S.ndKoppla !== K) return;
+    if (s.fel){ K.fel = true; ndSkrivFel(s); } else K.val = s.val || {};
+    render();
+  }).catch(() => { if (S.ndKoppla === K){ K.fel = true; render(); } toast('Nav svarade inte.'); });
+}
+// Sökfältet får fokus, utom med pekskärm, där tangentbordet skulle täcka listan.
+function ndKFokus(){
+  setTimeout(() => { const f = document.querySelector('.upg-kform'), i = document.getElementById('ndKSok'); if (!f || !i) return;
+    f.scrollIntoView({block:'nearest'}); if (!matchMedia('(pointer: coarse)').matches && document.activeElement !== i) i.focus({preventScroll:true}); }, 0);
+}
+function ndKKoppla(K, b){
+  if (K.pagar) return; K.pagar = true; K.mal = b.dataset.ndkval; b.setAttribute('aria-busy', 'true');
+  ndUpgPost('koppla', {id:K.id, slag:K.slag, mal:K.mal, synlig:K.slag === 'person' && !!K.synlig}).then(s => {
+    K.pagar = false; if (b.isConnected) b.removeAttribute('aria-busy');
+    if (s && s.ok && S.ndKoppla === K){ S.ndKoppla = null; render(); document.querySelector('[data-ndkoppla]')?.focus({preventScroll:true}); }
+  });
+}
+document.addEventListener('click', e => {
+  if (!ndUp() || !S.ndKoppla) return;
+  const b = e.target.closest && e.target.closest('[data-ndkslagb], [data-ndkval], [data-ndkigen]'); if (!b) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  const K = S.ndKoppla, d = b.dataset;
+  if (d.ndkigen !== undefined){ K.fel = false; render(); ndKoppHamta(K); return; }
+  if (d.ndkslagb){ if (K.slag !== d.ndkslagb){ K.slag = d.ndkslagb; K.sok = ''; K.mal = ''; render(); } ndKFokus(); return; }
+  ndKKoppla(K, b);
+}, true);
+// Pilarna går mellan sökfältet och träffarna, Enter i fältet kopplar den första, Esc stänger formuläret.
+document.addEventListener('keydown', e => {
+  if (!ndUp() || !S.ndKoppla) return;
+  const a = document.activeElement; if (!a || !a.closest || !a.closest('.upg-kform')) return;
+  const stopp = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  if (e.key === 'Escape'){ stopp(); S.ndKoppla = null; render(); document.querySelector('[data-ndkoppla]')?.focus({preventScroll:true}); return; }
+  const l = [document.getElementById('ndKSok'), ...document.querySelectorAll('#ndKLista [data-ndkval]')].filter(Boolean), i = l.indexOf(a);
+  if (e.key === 'Enter' && a.id === 'ndKSok'){ stopp(); if (l[1]) ndKKoppla(S.ndKoppla, l[1]); return; }
+  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && i >= 0){ stopp(); l[Math.max(0, Math.min(l.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))].focus(); }
+}, true);
 const _ndUpgRutaHtmlD = upgRutaHtml;
 upgRutaHtml = function(t){
   let h = _ndUpgRutaHtmlD(t); if (!ndUp() || !ndUpgNav(t.id)) return h;
@@ -28475,12 +28572,14 @@ upgRutaHtml = function(t){
     // Kopplingarna: ett kryss på var och en, och Koppla öppnar formuläret under dem.
     (t.ndLinkIds || []).forEach((lid, i) => { h = h.replace(`<!--upg-lx${i}-->`, `<button type="button" class="cx" data-ndkopplabort="${t.id}|${lid}" aria-label="Ta bort kopplingen till ${esc(((t.ndLinks || [])[i] || [])[1] || '')}" title="Ta bort kopplingen">${I('x')}</button>`); });
     const K = S.ndKoppla && S.ndKoppla.id === t.id ? S.ndKoppla : null;
-    const knapp = K ? `<button type="button" class="upg-pv upg-koppla" data-ndkavbryt aria-expanded="true">${upgIk('lank')}<span class="v">Stäng kopplingen</span></button>`
-      : `<button type="button" class="upg-pv upg-koppla" data-ndkoppla="${t.id}" aria-expanded="false">${upgIk('lank')}<span class="v">${t.links.length ? 'Koppla till något mer' : 'Koppla till order, person eller ärende'}</span></button>`;
-    const form = K ? `<div class="tiform upg-kform">
-      <div class="tifrow"><label>Koppla till<select class="uin" data-ndkslag>${NDUPGKOPPLA.map(([k, l]) => `<option value="${k}" ${K.slag === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label><label>Sök<input class="uin" data-ndksok value="${esc(K.sok || '')}" placeholder="${NDKSOKTEXT[K.slag]}" autocomplete="off" ${K.val ? '' : 'disabled'}></label><label style="min-width:0">Vad<select class="uin" data-ndkmal style="width:100%;max-width:100%">${ndKOpts(K)}</select></label></div>
-      ${K.slag === 'person' ? `<label class="tibil"><input type="checkbox" data-ndksynlig ${K.synlig ? 'checked' : ''}> Låt personen se uppgiften. Utan bock syns den inte för hen, men den följer med i hens registerutdrag.</label>` : ''}
-      <div class="pacts"><button type="button" class="btn btn-p btn-sm" data-ndkspara="${t.id}">Koppla</button><button type="button" class="btn btn-s btn-sm" data-ndkavbryt>Avbryt</button></div></div>` : '';
+    const knapp = K ? `<button type="button" class="upg-pv upg-koppla" data-ndkavbryt aria-expanded="true">${upgIk('x')}<span class="v">Stäng</span></button>`
+      : `<button type="button" class="upg-pv upg-koppla" data-ndkoppla="${t.id}" aria-expanded="false">${upgIk('lank')}<span class="v">${t.links.length ? 'Koppla till något mer' : 'Koppla till kund, person eller ärende'}</span></button>`;
+    const form = K ? `<div class="upg-kform">
+      <div class="upg-kslag" role="radiogroup" aria-label="Koppla till">${NDUPGKOPPLA.map(([k]) => `<button type="button" role="radio" aria-checked="${K.slag === k}" data-ndkslagb="${k}">${NDKKORT[k]}</button>`).join('')}</div>
+      <div class="upg-ksokf">${upgIk('sok')}<input id="ndKSok" class="upg-ksok" data-ndksok value="${esc(K.sok || '')}" placeholder="${NDKSOKF[K.slag]}" aria-label="${NDKSOKF[K.slag]}" aria-controls="ndKLista" autocomplete="off" spellcheck="false" enterkeyhint="go"></div>
+      ${K.slag === 'person' ? `<label class="upg-ksynlig"><input type="checkbox" data-ndksynlig ${K.synlig ? 'checked' : ''}><span>Låt personen se uppgiften<small>Utan bock syns den inte för hen, men den följer med i hens registerutdrag.</small></span></label>` : ''}
+      <div class="upg-klista" id="ndKLista" role="listbox" aria-label="Träffar">${ndKLista(K)}</div>
+    </div>` : '';
     h = h.replace('upg-pgrp-k" hidden>', 'upg-pgrp-k">').replace('<!--upg-koppla-->', knapp + form);
   }
   return h;
@@ -28561,8 +28660,7 @@ document.addEventListener('click', e => {
   if (d.ndmlaggx !== undefined){ stopp(); S.ndMallLagg = null; render(); return; }
   if (d.ndmlaggok){ stopp(); const dag = S.ndMallLagg && /^\d{4}-\d{2}-\d{2}$/.test(S.ndMallLagg.dag) ? S.ndMallLagg.dag : kIdag(); S.ndMallLagg = null; ndUpgPost('mall', {mall:d.ndmlaggok, dag}); return; }
   if (d.ndserieslut){ stopp(); toastActs('Avsluta serien? Inga nya förekomster skapas, och de kommande som ingen rört tas bort. Den här står kvar.', [['Avsluta serien', () => ndUpgPost('serie-avsluta', {id:d.ndserieslut})]], 9000); return; }
-  if (d.ndkoppla){ stopp(); S.ndKoppla = {id:d.ndkoppla, slag:'order', mal:'', synlig:false, val:null}; render();
-    ndLas('/nav2/uppgifter?kopplingsval=1').then(ndSvar).then(s => { if (S.ndKoppla && S.ndKoppla.id === d.ndkoppla){ S.ndKoppla.val = s.val || {}; if (s.fel) ndSkrivFel(s); render(); } }).catch(() => { toast('Nav svarade inte.'); }); return; }
+  if (d.ndkoppla){ stopp(); const K = {id:d.ndkoppla, slag:'order', mal:'', sok:'', synlig:false, val:null}; S.ndKoppla = K; render(); ndKFokus(); ndKoppHamta(K); return; }
   if (d.ndkavbryt !== undefined){ stopp(); S.ndKoppla = null; render(); return; }
   if (d.ndkspara){ stopp(); const K = S.ndKoppla; if (!K.mal){ toast('Välj vad uppgiften ska kopplas till.'); return; } ndUpgPost('koppla', {id:d.ndkspara, slag:K.slag, mal:K.mal, synlig:!!K.synlig}); return; }
   if (d.ndkopplabort){ stopp(); const [id, lank] = d.ndkopplabort.split('|'); ndUpgPost('koppla-bort', {id, lank}); return; }

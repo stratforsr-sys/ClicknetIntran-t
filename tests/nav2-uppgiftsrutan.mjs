@@ -148,7 +148,7 @@ rubrik("Utkastets val: kvitto med Ångra");
 }
 
 // ---------- Navet ----------
-function navet() {
+function navet(extra = {}) {
   const skickat = [], toasts = [];
   const nd = (id, o) => ({ id, vy: "egen", t: "Uppgift " + id, due: null, tid: null, est: null, prio: 3, klarAt: null, links: [], proj: null, delar: [], granskare: null, ansvarig: "Zen Test",
     serie: null, besk: "", skapadAv: "Zen Test", skapadAt: "2026-10-20T08:00:00Z", stilla: false, minRoll: null, handelser: [], lage: "ej_paborjad", farRed: true, farStryk: true, ...o });
@@ -171,6 +171,7 @@ function navet() {
     upgSatt: () => { throw new Error("utkastets upgSatt anropades för en uppgift i navet"); },
     stryk: () => {}, lamnaOver: () => {},
   };
+  Object.assign(g, extra);
   kor(modul, g);
   return { g, skickat, toasts, vanta: () => new Promise((r) => setTimeout(r, 0)) };
 }
@@ -215,6 +216,38 @@ rubrik("Navet får rätt handling för varje val");
   ok("stryk har Ångra", angra?.[0] === "Ångra");
   if (angra) { angra[1](); await vanta(); }
   ok("Ångra öppnar den igen", sista().handling === "ateroppna" && sista().id === "a", JSON.stringify(sista()));
+}
+
+rubrik("Koppla: valen kommer fram fast knappen byts medan de hämtas");
+{
+  // Morfen gör om knappen Koppla till Stäng (samma element), så knappens data-ndkoppla är borta när svaret kommer.
+  // Förut kastades valen då, och sökfältet stod avstängt med "Hämtar …" (beställaren 2026-11-13).
+  const lyss = {}; let svara;
+  const { g, skickat, vanta } = navet({
+    document: { addEventListener: (typ, f) => (lyss[typ] ||= []).push(f), getElementById: () => null, querySelector: () => null },
+    ndLas: () => new Promise((r) => { svara = r; }),
+    UPGMAN: ["jan", "feb", "mar", "apr", "maj", "jun", "jul", "aug", "sep", "okt", "nov", "dec"], // ur utkastets ruta
+    upgRutaHtml: () => '<div class="upg-pgrp upg-pgrp-k" hidden><div class="upg-chips"><!--upg-koppla--></div></div>',
+  });
+  const klick = (traff) => { let stopp = false; const e = { target: { closest: (sel) => traff(sel) }, preventDefault() {}, stopImmediatePropagation() { stopp = true; } };
+    for (const f of lyss.click || []) { f(e); if (stopp) break; } };
+  const knapp = { dataset: { ndkoppla: "a" } };
+  klick((sel) => (sel === "button" ? knapp : null));
+  ok("Koppla öppnar formuläret för uppgiften", g.S.ndKoppla?.id === "a" && g.S.ndKoppla.val === null, JSON.stringify(g.S.ndKoppla));
+  delete knapp.dataset.ndkoppla; knapp.dataset.ndkavbryt = "";
+  svara({ data: { val: { order: [{ id: "o1", namn: "Lindqvist Måleri AB · 2026-10-21" }, { id: "o2", namn: "Nordic Bygg AB · 2025-09-02" }], person: [{ id: "p-elin", namn: "Elin Berg" }] } } });
+  await vanta();
+  ok("valen kommer fram fast knappen bytt data", g.S.ndKoppla?.val?.order?.length === 2, JSON.stringify(g.S.ndKoppla));
+  const t = g.TASKS.find((x) => x.id === "a"), h = g.upgRutaHtml(t);
+  ok("sökfältet är öppet", /<input id="ndKSok"[^>]*>/.test(h) && !/<input id="ndKSok"[^>]*disabled/.test(h), h.match(/<input id="ndKSok"[^>]*>/)?.[0]);
+  ok("listan säger vad den visar", h.includes("Senaste ordrarna"), h);
+  ok("träffarna är knappar med kund och dag", h.includes('data-ndkval="o1"') && h.includes("Lindqvist Måleri AB") && h.includes("21 okt") && h.includes("2 sep 2025"), h);
+  ok("sorterna är knappar, Kund vald", /aria-checked="true" data-ndkslagb="order">Kund</.test(h), h);
+  const rad = { dataset: { ndkval: "o1" }, setAttribute() {}, removeAttribute() {}, isConnected: true };
+  klick((sel) => (sel.includes("[data-ndkval]") ? rad : null));
+  await vanta(); await vanta();
+  ok("ett klick på träffen kopplar", skickat.at(-1)?.handling === "koppla" && skickat.at(-1).id === "a" && skickat.at(-1).slag === "order" && skickat.at(-1).mal === "o1", JSON.stringify(skickat.at(-1)));
+  ok("formuläret stängs när kopplingen sparats", g.S.ndKoppla === null, JSON.stringify(g.S.ndKoppla));
 }
 
 rubrik("Aktiviteten ur navets händelser");

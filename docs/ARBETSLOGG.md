@@ -24,11 +24,23 @@ Skiss först (artifact 9tLzSvdWLhYzucsNKJJzDT), godkänd med "kör bygget". Dela
 - *Servern hade allt.* planera, andra, bjudin (roll granskare), lamna, ateroppna, kommentera finns sedan tidigare;
   bara gränssnittet byggs, som en idempotent patch (`~/nav2-utkast/delar/uppgiftsrutan/patch-rutan.py`).
 
-**Provat:** `tests/nav2-uppgiftsrutan.mjs` (nytt, 114 kontroller: tolkarna, Måndag sju veckodagar, rutan i sex lägen och
+**Provat:** `tests/nav2-uppgiftsrutan.mjs` (nytt, 114 kontroller, 122 med Koppla: tolkarna, Måndag sju veckodagar, rutan i sex lägen och
 alla väljare, att varje val skickar rätt handling), `nav2-uppgifter-lage.mjs` grönt, `navnyheter.mjs` grönt, skriptet
 `node --check`. Huvudlös Chrome med påhittade uppgifter (`visa.mjs`): riktiga klick och tangenter på dator och telefon,
 ljust och mörkt, POST-kropparna rätt, inga konsolfel. INTE provat: previewen, riktiga konton, Koppla och Avsluta serien
 mot databasen.
+
+**Koppla, efter previewen (samma kväll):** beställaren: "väljer jag kund så går det inte att söka på org nummer eller
+kund", "jag förstår inte vad den visar, den visar inget", "samma sak med alla kopplingar". **Orsaken var min:** rutan
+ritas med morf (`MORF` har `taskPanel`), och i nya rutan står Stäng på samma plats som Koppla, så morfen gör om SAMMA
+knapp. Hämtningens svar jämförde med `d.ndkoppla` (knappens dataset), som då var borta: valen kastades, sökfältet stod
+avstängt och Vad visade "Hämtar …" för alltid, för alla sorter. **Regel:** läs aldrig ett klickat elements `dataset`
+efter en `render()` i en asynkron fortsättning; spara värdet först (här hålls formuläret i `S.ndKoppla` och jämförs
+som objekt). Formuläret är också omgjort: sorterna som knappar (Kund, Person, Ärende, Utbildning, Coachning),
+sökfältet öppet direkt, träffarna som en lista med en rad som säger vad den visar ("Senaste ordrarna", "3 träffar",
+"Ingen träff på …"), kund och signeringsdag, ett klick (eller Enter) kopplar, pilarna, Esc stänger. Personbocken står
+kvar. `ndKHamta` var redan kalenderns namn: den nya heter `ndKoppHamta`. Prov: 8 nya kontroller i
+`nav2-uppgiftsrutan.mjs` (knappen byter data mitt i hämtningen), Chrome-skriptet `koppla.mjs`.
 
 **Läge:** pushad på grenen `uppgiftsrutan` för preview. Main först efter beställarens ja.
 

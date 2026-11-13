@@ -28,13 +28,17 @@ Rutan som öppnas för en uppgift i Nav 2.0 (`upgRutaHtml` i `src/nav2/utkast.ht
 - **Telefonen:** egenskaperna som brickor överst, väljarna som ark nerifrån, fältet utan autofokus på pekskärm.
 - **Rättat:** Måndag = nästa måndag (förut i dag + 3); valfritt datum och valfri tidsåtgång; Öppna igen; granskare går
   att sätta; historikens datum på en rad; rullning och fokus står kvar när rutan ritas om.
+- **Koppla (rättat efter previewen):** valen kom aldrig fram, för alla sorter: morfen gör om knappen Koppla till Stäng
+  (samma element), och svaret jämfördes med knappens `data-ndkoppla`, som då var borta. Nu hålls formuläret i
+  `S.ndKoppla`. Formuläret: sorterna som knappar, sökfältet öppet direkt, träffarna som en klickbar lista med en rad
+  som säger vad den visar; ett klick eller Enter kopplar, Esc stänger.
 
 **Krock:** kollega-grenen (`~/nav-uppgift-kollega`, gren `uppgift-kollega`, opushad) patchar samma `upgRutaHtml` i sitt
 steg 5. Det steget måste skrivas om mot den nya rutan: Med hör hemma vid `<!--upg-med-->` efter Ansvarig. Dess
 migration heter 0291, men 0291 är tagen av Möten.
 
-**Prov:** `tests/nav2-uppgiftsrutan.mjs` (114), `nav2-uppgifter-lage.mjs`, `navnyheter.mjs`; huvudlös Chrome via
-`~/nav2-utkast/delar/uppgiftsrutan/visa.mjs` (dator, telefon, mörkt; POST-kropparna rätt, inga konsolfel).
+**Prov:** `tests/nav2-uppgiftsrutan.mjs` (122), `nav2-uppgifter-lage.mjs`, `navnyheter.mjs`; huvudlös Chrome via
+`~/nav2-utkast/delar/uppgiftsrutan/visa.mjs` och `koppla.mjs` (dator, telefon, mörkt; POST-kropparna rätt, inga konsolfel).
 Patchen: `~/nav2-utkast/delar/uppgiftsrutan/patch-rutan.py` + `kod/` (idempotent; krockar en merge, ta mains fil och kör
 den igen).
 
