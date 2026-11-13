@@ -33,10 +33,14 @@ försöket, Flytta (nollställer Bekräftat), Radera, sök. Villkoret på exakt 
 **Varför Rätta utfall inte provades:** varje utfall på ett möte från `moten.galler-fran` låser mötesprovision.
 Raderna kan inte tas bort genom Nav (`radera` vägrar ett möte med låst provision), och Hållet ger belopp i den
 öppna månaden. Ett provmöte hade alltså lämnat provision kvar hos riktiga personer. Det görs bara efter beställarens ja.
+Byggsteg 3:s prov (`8ef2e9e`) täcker det inte: roboten `pipeline-prov.mjs --utfall` klickar mot en provsida med
+påhittat `ND.moten` och fångar POST-anropen, och `tests/moten-db.mjs` kör bara Låt stå i en transaktion som rullas
+tillbaka. Utfallet har alltså aldrig sparats från gränssnittet mot databasen.
 
 **Kortets knappar:** `.mo-pipe .mo-kn` hade `flex-wrap:nowrap` och en ellips på knapparna (`86e7739`). Ellipsen kan
 inte verka i `.btn`, som är `inline-flex`: texten är ett anonymt flexobjekt, centreras och klipps på båda sidor
-("ekräft", "k inte t" i en kolumn på 213 px). Knapparna bryts nu till två rader när kolumnen är smal.
+("ekräft", "k inte t" i en kolumn på 213 px). Knapparna bryts nu till två rader när kolumnen är smal. Mergat till
+`main` som `36f85a2` efter beställarens "den måste fixas"; produktionsbygget grönt.
 
 ## 2026-11-12 · Möten: lyftet av vyn (på `main` som `f3b1d8a`, ingen migration, skarpa provet delvis gjort 2026-11-13)
 
