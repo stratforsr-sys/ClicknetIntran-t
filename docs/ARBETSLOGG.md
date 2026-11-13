@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-13 · Möten: bara det första mötet bekräftas (0295 körd; pushas till `main` som en commit)
+## 2026-11-13 · Möten: bara det första mötet bekräftas (på `main` som `9d86de2`, 0295 körd; bygget grönt 22:04 UTC)
 
 **Beställningen:** "endast det första mötet ska bekräftas dem andra ska inte bekräftas". Det kom efter den första
 körningen av bekräftelsen (4aee24a): av de 9 uppgifterna gällde en ett uppföljningsmöte, Nordic Grön måndag 16 nov,
@@ -22,7 +22,8 @@ Avgjort utan fönster, nu Bokat för ett öppet möte), knapparna Bekräfta och 
 `bekraftelsePerBokare` räknar bara första möten. 0295 skriver om `mote_uppgift_skapa` (nekar uppföljningsmöten) och
 `mote_uppgift_stada` (tar också bort en öppen uppgift på ett), efter att produktionens definitioner lästs med
 `pg_get_functiondef` och stämts mot 0291. Torrkörd och sedan körd 21:56 UTC; den gamla koden som fortfarande körs
-anropar samma städning, så Zens uppgift försvinner redan vid nästa kvart.
+anropar samma städning, så Zens uppgift försvann redan vid kvarten 22:00 UTC (`stadade: 1`, 8 uppgifter kvar, alla
+på första möten).
 
 **Under samtalet, inte byggt:** knappen "flytta 4 timmar" blir ingen ny knapp. Beställaren: "lägg bara 'svarade
 inte' ... flytta påminnelsen fram 4 timmar och ... behåll kortet på att bekräfta". Beskrivningen (Fick inte tag ger
