@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-13 · Möten på säljtavlan + rollen Mötesbokare (0292 körd; Mick ska ha både Mötesbokare och Säljare)
+## 2026-11-13 · Möten på säljtavlan + rollen Mötesbokare (på `main` som `4bde8ae`, 0292 körd; Mick är Mötesbokare och Säljare)
 
 **Beställningen:** bokade möten syns på säljtavlan med en upptrappning: bokarens första möte någonsin, dagens
 första, fem och tio på en dag. "Säkerställ att möten som bokas om inte räknas som ett nytt möte." Möten får aldrig
@@ -71,6 +71,12 @@ Mick får Mötesbokare och behåller Säljare. Carl nämndes inte och har inte �
 före körningen och var exakt 0001:s åtta roller under namnet `employee_role_role_check`; 0292 kördes sedan.
 Micks roll ges efter att produktionsbygget är grönt, som ett rollbyte i appen (`granted_by` + `role.granted`
 i `audit_log`), så att main-koden aldrig ser en roll den inte känner.
+
+**Mergad** som `4bde8ae`. Main flyttade två gånger medan proven gick (`5d85263` provsviten, `5da3a10` att göra-ringen),
+och commiten lades om på båda; varje gång krockade bara ARBETSLOGG, NASTA_SESSION och `poster.ts`, och
+`inbaddningar-db.mjs` från `5d85263` kördes mot de nya mötesfrågorna (grönt). Produktionsbygget grönt 21:27 UTC.
+Sedan fick Mick rollen: `employee_role` med `granted_by`, `role.granted` i `audit_log` och notisen "Du har fått
+rollen Mötesbokare" i klockan. Pushen och mejlet som appen också skickar hoppades över, mitt i natten.
 
 **Kvar:** lyssna på ljuden i riktiga Chrome; Carls roll; Higgsfields villkor för ljud från gratisplanen;
 grenen uppgift-kollegas migration måste döpas till 0294.
