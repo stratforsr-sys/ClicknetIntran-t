@@ -58,7 +58,7 @@
     "test:nav2-gallring": "TZ=UTC node --experimental-strip-types tests/nav2-gallring.mjs",
     "test:nav2-omladdning": "node tests/nav2-omladdning.mjs",
     "test:nav2-tidslinje": "node tests/nav2-tidslinje.mjs",
-    "test:nav2-uppgiftsrutan": "node tests/nav2-uppgiftsrutan.mjs",
+    "test:nav2-uppgiftsrutan": "node --experimental-strip-types tests/nav2-uppgiftsrutan.mjs",
     "test:larm": "node --experimental-strip-types tests/larm.mjs",
     "test:handelselogg": "node --experimental-strip-types tests/handelselogg.mjs",
     "test:avtal": "node --experimental-strip-types tests/avtal.mjs",

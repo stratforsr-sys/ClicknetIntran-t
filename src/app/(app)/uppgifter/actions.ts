@@ -718,7 +718,8 @@ export async function avslutaSerie(_prev: UppgiftState, form: FormData): Promise
 
     if (error) return { fel: `Serien avslutades inte: ${error.message}` };
 
-    const bortplockade = await taBortOrordFramtid(serieId);
+    // Forekomsten man avslutade fran star kvar, ocksa nar den ligger framat (Nav 2.0 lovar "Den har star kvar").
+    const bortplockade = await taBortOrordFramtid(serieId, uppgiftId);
 
     uppdatera(uppgiftId);
     return {
@@ -739,8 +740,11 @@ export async function avslutaSerie(_prev: UppgiftState, form: FormData): Promise
  * nagon paborjat, kommenterat, bockat eller tilldelat nagon annan ar inte
  * langre en rad ett jobb skrev — da finns det en manniska i historiken, och det
  * som en manniska rort raderas inte av att en regel stangs av.
+ *
+ * `behall` ar forekomsten man avslutade serien fran. Den star kvar aven om den
+ * ligger framat och ar orord: man star i den, och kvittot sager att den blir kvar.
  */
-async function taBortOrordFramtid(serieId: string): Promise<number> {
+async function taBortOrordFramtid(serieId: string, behall?: string): Promise<number> {
   const db = supabaseAdmin();
   const idag = svensktDatum();
 
@@ -751,7 +755,7 @@ async function taBortOrordFramtid(serieId: string): Promise<number> {
     .eq("series_losgjord", false)
     .gt("due_date", idag);
 
-  const ids = ((kandidater ?? []) as { id: string }[]).map((r) => r.id);
+  const ids = ((kandidater ?? []) as { id: string }[]).map((r) => r.id).filter((id) => id !== behall);
   if (ids.length === 0) return 0;
 
   const { data: handelser } = await db

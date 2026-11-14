@@ -42,6 +42,24 @@ sökfältet öppet direkt, träffarna som en lista med en rad som säger vad den
 kvar. `ndKHamta` var redan kalenderns namn: den nya heter `ndKoppHamta`. Prov: 8 nya kontroller i
 `nav2-uppgiftsrutan.mjs` (knappen byter data mitt i hämtningen), Chrome-skriptet `koppla.mjs`.
 
+**Skarpa provet i produktionen 2026-11-14** (beställaren: "hårdtesta den. Säkerställ att det inte finns ett enda
+fel"): som Zen i Chrome, på en uppgift märkt PROV, varje del av rutan klickad och databasen läst efter varje steg;
+sidprovet mot produktionen (53 sidor × 4 roller) grönt. Sju fel, alla rättade på grenen `uppgiftsrutan-prov`:
+- *Org.nr utan bindestreck* (5566685052) gav "Ingen träff": alla 35 står som 556668-5052. Ny `orgnrVillkor` provar
+  bindestrecket på varje plats (högst tio villkor, bara siffror i följd matchar).
+- *Avsluta serien* tog bort förekomsten man stod i när den låg framåt, fast kvittot (sedan tidigare) säger "Den här
+  står kvar". `taBortOrordFramtid(serieId, behall)`. Hittades med en PROV-serie lagd med appens `skapaSerie`.
+- *I dag stod som ledig* i dagväljaren: lasten räknade bara deadline exakt i dag, listan I dag tar också de försenade.
+- *En klar uppgift visade Dag: I dag*: navet lägger dagens klara på d = 0; rutan får nu `ndDue`.
+- *Nästa arbetsdag* gav "Planerad." utan Ångra; nu "Flyttad till mån 16 nov." med Ångra, som de andra dagbytena.
+- *"Första steget är sparat."* fast fältet heter Börja med: servern säger "Sparat. Det står på raden i listan."
+- *Koppla*: på en skärm 693 px hög syntes bara första träffen (formuläret rullas nu fram när listan fyllts),
+  kopplingen syntes först efter omhämtningen (nu genast), valen hämtades vid varje öppning (står nu en minut).
+Inte fel: Ångra som "inte fungerade" var mitt prov (kvittot hann försvinna, och kvitton staplas, var och en ångrar sin
+egen ändring). Regel: **ett kvitto som lovar något (Den här står kvar) ska provas mot databasen, inte bara läsas.**
+Provet 142 kontroller (de tio nya föll på den gamla koden). Städat efteråt: PROV-uppgiften, dess deluppgifter,
+kopplingar och händelser, PROV-serien.
+
 **Läge:** previewen grön 2026-11-13. Beställaren 2026-11-14: "pusha det till produktion och sen hårdtesta den". Main
 hade dragit ifrån (Möten: bara första mötet, säljtavlans möten, att göra-knappen): mergad in i grenen, ingen kodkrock
 (utkastets ändringar låg på andra ställen), bara docs, `package.json` och navnyheter. En commit på `main`.

@@ -147,8 +147,28 @@ rubrik("Utkastets val: kvitto med Ångra");
   ok("egen tidsåtgång (50 min)", t.est === 50);
 }
 
+rubrik("Provet i produktionen 2026-11-14: dagens last och den klaras dag");
+{
+  // I dag stod som "ledig" fast listan I dag hade sex försenade: de räknas nu med.
+  const g = utkastet("2026-11-14", [uppg({ id: "t1", d: 3 }), uppg({ id: "t2", d: -3, est: 20 }), uppg({ id: "t3", d: 0, est: 10 }), uppg({ id: "t4", d: 2 })]);
+  const h = g.upgPopHtml(g.TASKS[0], "dag");
+  const idag = h.match(/data-upgsatt="t1\|dag\|0"[\s\S]*?<span class="r">([^<]*)</)?.[1];
+  ok("I dag räknar den försenade med (2 uppgifter, inte 1)", idag === "2 uppgifter", idag);
+  const morgon = h.match(/data-upgsatt="t1\|dag\|1"[\s\S]*?<span class="r">([^<]*)</)?.[1];
+  ok("i morgon är fortfarande ledig", morgon === "ledig", morgon);
+  // En klar uppgift ligger på d = 0 bland dagens klara, men rutan visar dagen den hade.
+  const k = uppg({ id: "k1", lage: "klar", klarTid: "15:49", d: 0, ndDue: "2026-11-19" });
+  const g2 = utkastet("2026-11-14", [k]);
+  const hk = g2.upgRutaHtml(k);
+  ok("klar: Dag visar tor 19 nov, inte I dag", hk.includes("tor 19 nov") && !/<span class="v">I dag<\/span>/.test(hk), hk.match(/Dag<\/span>[\s\S]{0,200}/)?.[0]);
+  const k2 = uppg({ id: "k2", lage: "klar", d: 0, ndDue: null });
+  ok("klar utan deadline: Ingen dag", utkastet("2026-11-14", [k2]).upgRutaHtml(k2).includes("Ingen dag"));
+  const s1 = uppg({ id: "s1", serie: "Varje måndag och torsdag" });
+  ok("Upprepas får bryta raden", utkastet("2026-11-14", [s1]).upgRutaHtml(s1).includes('upg-pv upg-pv-lang'));
+}
+
 // ---------- Navet ----------
-function navet(extra = {}) {
+function navet(extra = {}, forbered = () => {}) {
   const skickat = [], toasts = [];
   const nd = (id, o) => ({ id, vy: "egen", t: "Uppgift " + id, due: null, tid: null, est: null, prio: 3, klarAt: null, links: [], proj: null, delar: [], granskare: null, ansvarig: "Zen Test",
     serie: null, besk: "", skapadAv: "Zen Test", skapadAt: "2026-10-20T08:00:00Z", stilla: false, minRoll: null, handelser: [], lage: "ej_paborjad", farRed: true, farStryk: true, ...o });
@@ -172,6 +192,7 @@ function navet(extra = {}) {
     stryk: () => {}, lamnaOver: () => {},
   };
   Object.assign(g, extra);
+  forbered(g);
   kor(modul, g);
   return { g, skickat, toasts, vanta: () => new Promise((r) => setTimeout(r, 0)) };
 }
@@ -248,6 +269,46 @@ rubrik("Koppla: valen kommer fram fast knappen byts medan de hämtas");
   await vanta(); await vanta();
   ok("ett klick på träffen kopplar", skickat.at(-1)?.handling === "koppla" && skickat.at(-1).id === "a" && skickat.at(-1).slag === "order" && skickat.at(-1).mal === "o1", JSON.stringify(skickat.at(-1)));
   ok("formuläret stängs när kopplingen sparats", g.S.ndKoppla === null, JSON.stringify(g.S.ndKoppla));
+  ok("kopplingen syns genast, utan dagen (omhämtningen tar 1–3 s)", JSON.stringify(t.links.at(-1)) === JSON.stringify(["Order", "Lindqvist Måleri AB"]), JSON.stringify(t.links));
+  let hamtningar = 0; g.ndLas = () => { hamtningar++; return new Promise(() => {}); };
+  knapp.dataset.ndkoppla = "a"; delete knapp.dataset.ndkavbryt;
+  klick((sel) => (sel === "button" ? knapp : null));
+  ok("valen står kvar en minut: andra gången utan hämtning", hamtningar === 0 && g.S.ndKoppla?.val?.order?.length === 2, `${hamtningar} hämtningar`);
+}
+
+rubrik("Nästa arbetsdag säger dagen och kan ångras (förut bara \"Planerad.\")");
+{
+  const { g, skickat, toasts, vanta } = navet({ ndNastaVardag: () => "2026-10-26", upgDiff: (s) => Math.round((Date.parse(s + "T12:00:00Z") - Date.parse("2026-10-23T12:00:00Z")) / 864e5),
+    upgDagKort: (d) => (d === 0 ? "I dag" : d === 1 ? "I morgon" : kort(plus("2026-10-23", d))) },
+    (g) => { g.ND.uppgifter.uppgifter[0].due = "2026-10-23"; g.ND.uppgifter.uppgifter[0].tid = "14:30"; });
+  g.skjut("a"); await vanta();
+  ok("planera till nästa vardag", skickat.at(-1)?.handling === "planera" && skickat.at(-1).dag === "2026-10-26", JSON.stringify(skickat.at(-1)));
+  ok("kvittot säger dagen", toasts.at(-1)?.[0] === "Flyttad till mån 26 okt.", toasts.at(-1)?.[0]);
+  const angra = toasts.at(-1)?.[1]?.[0];
+  ok("och har Ångra", angra?.[0] === "Ångra");
+  if (angra) { angra[1](); await vanta(); }
+  ok("Ångra lägger tillbaka dag och klockslag", skickat.at(-1)?.handling === "planera" && skickat.at(-1).dag === "2026-10-23" && skickat.at(-1).tid === "14:30", JSON.stringify(skickat.at(-1)));
+}
+
+rubrik("Den klaras dag följer med från navet");
+{
+  const { g } = navet({}, (g) => { g.ND.uppgifter.uppgifter[2].due = "2026-10-27"; });
+  const c = g.TASKS.find((x) => x.id === "c");
+  ok("klar: d = 0 för listan, ndDue = dagen", c && c.d === 0 && c.ndDue === "2026-10-27", JSON.stringify(c && { d: c.d, ndDue: c.ndDue }));
+}
+
+rubrik("Org.nr hittas hur man än skriver det (servern)");
+{
+  const { orgnrVillkor } = await import("../src/lib/nav2/orgnrsok.ts");
+  const traffar = (sok, orgnr) => orgnrVillkor(sok).some((v) => orgnr.includes(v.replace("org_number.ilike.%", "").replace(/%$/, "")));
+  ok("5566685052 hittar 556668-5052", traffar("5566685052", "556668-5052"));
+  ok("556668 5052 hittar 556668-5052", traffar("556668 5052", "556668-5052"));
+  ok("6685052 (en bit mitt i) hittar 556668-5052", traffar("6685052", "556668-5052"));
+  ok("556668-5052 med bindestreck hittar också", traffar("556668-5052", "556668-5052"));
+  ok("fel siffror hittar inte", !traffar("5566685053", "556668-5052"));
+  ok("ett namn ger inga org.nr-villkor", orgnrVillkor("spm väst").length === 0);
+  ok("för kort eller för långt ger inga", orgnrVillkor("55").length === 0 && orgnrVillkor("55666850521").length === 0);
+  ok("högst tio villkor", orgnrVillkor("5566685052").length === 10);
 }
 
 rubrik("Aktiviteten ur navets händelser");

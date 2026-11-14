@@ -6722,6 +6722,8 @@ button.upg-pv:hover{background:color-mix(in srgb,var(--ink) 6%,var(--surface-2))
 .upg-pv[aria-expanded="true"]{background:var(--surface);box-shadow:inset 0 0 0 1px var(--line-2)}
 span.upg-pv{cursor:default}
 .upg-pv .v{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.upg-pv-lang{height:auto;min-height:32px;padding-block:6px}
+.upg-pv-lang .v{white-space:normal;line-height:1.35}
 .upg-pv>svg{width:16px;height:16px;flex:none;color:var(--ink-2)}
 .upg-pv .av{flex:none}
 .upg-mut{color:var(--upg-ink-3)}
@@ -23985,8 +23987,10 @@ const upgDagKort = d => d === null || d === undefined ? 'Ingen dag' : d === 0 ? 
 function upgDagLang(s){ const n = upgDiff(s), dag = `${UPGVDL[frDow(s)]} ${+s.slice(8)} ${UPGMANL[+s.slice(5, 7) - 1]}`;
   return `${dag[0].toUpperCase()}${dag.slice(1)}, ${n === 0 ? 'i dag' : n === 1 ? 'i morgon' : `om ${n} dagar`} (v. ${upgVecka(s)})`; }
 // Det du redan har en dag, utan uppgiften själv: antal, minuter och hur många som saknar uppskattning.
+// I dag räknas de försenade med, som i listan I dag (provet i produktionen 2026-11-14: i dag stod som ledig).
 function upgLast(d, utan){
-  const l = mine().filter(x => x.id !== utan && x.vy === 'egen' && !isDone(x) && x.lage !== 'avbruten' && x.d === d);
+  const l = mine().filter(x => x.id !== utan && x.vy === 'egen' && !isDone(x) && x.lage !== 'avbruten'
+    && (x.d === d || (d === 0 && x.d !== null && x.d !== undefined && x.d < 0)));
   return {n:l.length, min:l.reduce((a, x) => a + (x.est || 0), 0), utan:l.filter(x => !x.est).length};
 }
 const upgLastText = l => l.n ? `${l.n} ${l.n === 1 ? 'uppgift' : 'uppgifter'}` : 'ledig';
@@ -24110,7 +24114,9 @@ function upgPopHtml(t, k){
 function upgRutaHtml(t){
   const done = isDone(t), egen = t.vy === 'egen', kan = egen && !done, mig = upgMig();
   const pop = kan && S.upgPop && S.upgPop.split('|')[0] === t.id ? S.upgPop.split('|')[1] : null;
-  const harDag = t.d !== null && t.d !== undefined, sen = !done && harDag && t.d < 0;
+  // En klar uppgift står på d = 0 för att synas bland dagens klara; rutan visar dagen den hade (ndDue).
+  const dd = done && t.ndDue !== undefined ? (t.ndDue ? upgDiff(t.ndDue) : null) : t.d;
+  const harDag = dd !== null && dd !== undefined, sen = !done && harDag && dd < 0;
   const lage = done ? ['Klar', 'upg-ok'] : t.lage === 'granskas' ? ['Väntar på godkännande', 'upg-hog'] : t.lage === 'avbruten' ? ['Struken', ''] : t.startad ? ['Pågår', 'upg-ok'] : sen ? ['Försenad', 'upg-sen'] : ['Ej påbörjad', ''];
   const ord = upgOrdning(), i = ord.indexOf(t.id);
   const forn = n => !n ? '' : n === mig || n === 'Du' ? 'dig' : esc(n.split(' ')[0]);
@@ -24123,7 +24129,7 @@ function upgRutaHtml(t){
   const rad = (k, etikett, varde, text, far = kan, titel = '') => `<div class="upg-pr"><span class="upg-pl">${etikett}</span>${far
     ? `<button type="button" class="upg-pv" data-upgpop="${t.id}|${k}" aria-haspopup="dialog" aria-expanded="${pop === k}" aria-label="${etikett}: ${esc(text)}"${titel ? ` title="${titel}"` : ''}>${varde}</button>`
     : `<span class="upg-pv">${varde}</span>`}</div>`;
-  const dagV = `${upgIk('dag')}<span class="v${!harDag ? ' upg-mut' : sen ? ' upg-sen' : ''}">${harDag ? `${upgDagKort(t.d)}${sen ? ', försenad' : ''}` : 'Ingen dag'}</span>`;
+  const dagV = `${upgIk('dag')}<span class="v${!harDag ? ' upg-mut' : sen ? ' upg-sen' : ''}">${harDag ? `${upgDagKort(dd)}${sen ? ', försenad' : ''}` : 'Ingen dag'}</span>`;
   const tidV = `${upgIk('tid')}<span class="v${t.nar ? '' : ' upg-mut'}">${t.nar ? esc(t.nar) : 'Inget klockslag'}</span>`;
   const estV = `${upgIk('est')}<span class="v${t.est ? '' : ' upg-mut'}">${t.est ? minText(t.est) : 'Ingen uppskattning'}</span>`;
   const prioV = `${upgIk('flagga', 'upg-flagga', `color:${prio[3]}`)}<span class="v">${prio[1]}</span>`;
@@ -24204,7 +24210,7 @@ function upgRutaHtml(t){
       </div>
       <aside class="upg-props" aria-label="Egenskaper">
         <div class="upg-pgrp">
-          ${rad('dag', 'Dag', dagV, harDag ? upgDagKort(t.d) : 'Ingen dag', kan, 'Dag (D)')}
+          ${rad('dag', 'Dag', dagV, harDag ? upgDagKort(dd) : 'Ingen dag', kan, 'Dag (D)')}
           ${rad('tid', 'Tid', tidV, t.nar || 'Inget klockslag', kan, 'Tid (T)')}
           ${rad('est', 'Uppskattning', estV, t.est ? minText(t.est) : 'Ingen uppskattning', kan, 'Uppskattning (E)')}
         </div>
@@ -24216,7 +24222,7 @@ function upgRutaHtml(t){
           ${rad('ansv', 'Ansvarig', ansvV, ansv === mig ? 'Du' : ansv, kan && upgFarStyra(t))}
           <!--upg-med-->
           ${rad('gransk', 'Granskare', granskV, gransk.length ? gransk.join(', ') : 'Ingen', kan && upgFarStyra(t))}
-          ${t.serie ? `<div class="upg-pr"><span class="upg-pl">Upprepas</span><span class="upg-pv">${upgIk('serie')}<span class="v">${esc(t.serie)}</span></span></div><!--upg-serie-->` : ''}
+          ${t.serie ? `<div class="upg-pr"><span class="upg-pl">Upprepas</span><span class="upg-pv upg-pv-lang">${upgIk('serie')}<span class="v">${esc(t.serie)}</span></span></div><!--upg-serie-->` : ''}
         </div>
         <div class="upg-pgrp upg-pgrp-k"${t.links.length ? '' : ' hidden'}><span class="upg-pl">Kopplad till</span><div class="upg-chips">${lankar}<!--upg-koppla--></div></div>
       </aside>
@@ -28055,7 +28061,7 @@ function ndUpgStart(){
     const stangd = x.lage === 'klar' || x.lage === 'avbruten';
     // Det som blev klart före i dag står i KLARA_FORR, inte bland dagens rader.
     if (stangd && (x.lage === 'avbruten' || !x.klarAt || ndDagAv(x.klarAt) !== idag)) return;
-    TASKS.push({id:x.id, who:r, vy:x.vy, t:x.t, d:stangd ? 0 : ndDagarTill(x.due), nar:x.tid || undefined, tid:x.tid || undefined, est:x.est || undefined, prio:x.prio,
+    TASKS.push({id:x.id, who:r, vy:x.vy, t:x.t, d:stangd ? 0 : ndDagarTill(x.due), ndDue:x.due || null, nar:x.tid || undefined, tid:x.tid || undefined, est:x.est || undefined, prio:x.prio,
       lage:x.lage === 'klar' ? 'klar' : x.lage === 'granskas' ? 'granskas' : 'oppen', startad:x.lage === 'pagar', klarTid:x.klarAt ? ndKl(x.klarAt) : undefined,
       links:x.links.map(([s, e]) => [s, e]), ndHref:x.links.map(l => l[2]), proj:x.proj || undefined, delar:x.delar.map(([a, b]) => [a, b]),
       granskare:x.granskare || undefined, ansvarig:x.ansvarig || undefined, serie:x.serie || undefined, besk:x.besk,
@@ -28262,7 +28268,10 @@ const ndProjId = namn => { const p = ndUp().projekt.find(x => x.namn === namn); 
 const _ndBocka = bocka;
 bocka = function(id){ if (!ndUp() || !ndUpgNav(id)) return _ndBocka(id); const t = ndUpgT(id); ndUpgPost(t && t.lage === 'klar' ? 'ateroppna' : 'bocka', {id}); };
 const _ndSkjut = skjut;
-skjut = function(id, till){ if (!ndUp() || !ndUpgNav(id)) return _ndSkjut(id, till); ndUpgPost('planera', {id, dag:till !== undefined ? ndUpgDag(till) : ndNastaVardag()}); };
+skjut = function(id, till){ if (!ndUp() || !ndUpgNav(id)) return _ndSkjut(id, till);
+  const t = ndUpgT(id), fore = t ? {d:t.d, tid:t.tid, est:t.est} : null, dag = till !== undefined ? ndUpgDag(till) : ndNastaVardag();
+  ndUpgPost('planera', {id, dag}, {tyst:true}).then(s => { if (!s.ok){ if (!s.sagt) ndSkrivFel(s); return; }
+    toastActs(`Flyttad till ${upgDagKort(upgDiff(dag)).replace(/^I /, 'i ')}.`, fore ? [['Ångra', () => upgSatt(id, 'plan', fore, true)]] : []); }); };
 const _ndStryk = stryk;
 stryk = function(id){ if (!ndUp() || !ndUpgNav(id)) return _ndStryk(id);
   ndUpgPost('avbryt', {id, note:'Struken'}, {tyst:true}).then(s => { if (s.ok) toastActs('Struken. Den finns kvar i historiken.', [['Ångra', () => ndUpgPost('ateroppna', {id})]]); else if (!s.sagt) ndSkrivFel(s); }); };
@@ -28528,12 +28537,18 @@ function ndKLista(K){
 }
 // Valen hämtas när formuläret öppnas. Formuläret hålls i K, aldrig i knappens data: morfen gör om samma knapp till
 // Stäng, så knappens data-ndkoppla var borta när svaret kom och valen kastades (sökningen stod avstängd).
+// Valen står kvar en minut (hämtningen tog 0,4–2 s i produktionen), och formuläret rullas fram när listan fyllts:
+// på en låg skärm syntes annars bara första raden.
+let NDKVAL = null;
+function ndKVisa(K){ render(); const f = document.querySelector('.upg-kform'); if (f && S.ndKoppla === K) f.scrollIntoView({block:'nearest'}); }
 function ndKoppHamta(K){
   K.fel = false;
+  if (NDKVAL && Date.now() - NDKVAL.at < 60000){ K.val = NDKVAL.val; ndKVisa(K); return; }
   ndLas('/nav2/uppgifter?kopplingsval=1').then(ndSvar).then(s => {
+    if (!s.fel) NDKVAL = {val:s.val || {}, at:Date.now()};
     if (S.ndKoppla !== K) return;
     if (s.fel){ K.fel = true; ndSkrivFel(s); } else K.val = s.val || {};
-    render();
+    ndKVisa(K);
   }).catch(() => { if (S.ndKoppla === K){ K.fel = true; render(); } toast('Nav svarade inte.'); });
 }
 // Sökfältet får fokus, utom med pekskärm, där tangentbordet skulle täcka listan.
@@ -28541,11 +28556,20 @@ function ndKFokus(){
   setTimeout(() => { const f = document.querySelector('.upg-kform'), i = document.getElementById('ndKSok'); if (!f || !i) return;
     f.scrollIntoView({block:'nearest'}); if (!matchMedia('(pointer: coarse)').matches && document.activeElement !== i) i.focus({preventScroll:true}); }, 0);
 }
+// Navets namn på sorten i Kopplad till (servern skriver Order, Person, Ärende, Utbildning, Coachning).
+const NDKSORTNAMN = {order:'Order', person:'Person', arende:'Ärende', kurs:'Utbildning', coachning:'Coachning'};
 function ndKKoppla(K, b){
   if (K.pagar) return; K.pagar = true; K.mal = b.dataset.ndkval; b.setAttribute('aria-busy', 'true');
+  const v = [...(K.sokVal && K.sokVal.slag === K.slag ? K.sokVal.val : []), ...((K.val || {})[K.slag] || [])].find(x => x.id === K.mal);
   ndUpgPost('koppla', {id:K.id, slag:K.slag, mal:K.mal, synlig:K.slag === 'person' && !!K.synlig}).then(s => {
     K.pagar = false; if (b.isConnected) b.removeAttribute('aria-busy');
-    if (s && s.ok && S.ndKoppla === K){ S.ndKoppla = null; render(); document.querySelector('[data-ndkoppla]')?.focus({preventScroll:true}); }
+    if (s && s.ok && S.ndKoppla === K){
+      // Kopplingen syns genast; omhämtningen (1–3 s) ersätter raden med navets, med krysset.
+      const t = ndUpgT(K.id), j = v ? v.namn.lastIndexOf(' · ') : -1;
+      if (t && v && (K.slag === 'order' || K.slag === 'coachning') && j > 0) t.links = [...t.links, [NDKSORTNAMN[K.slag], v.namn.slice(0, j)]];
+      else if (t && v) t.links = [...t.links, [NDKSORTNAMN[K.slag], v.namn]];
+      S.ndKoppla = null; render(); document.querySelector('[data-ndkoppla]')?.focus({preventScroll:true});
+    }
   });
 }
 document.addEventListener('click', e => {

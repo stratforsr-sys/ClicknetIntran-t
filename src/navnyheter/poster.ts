@@ -25,7 +25,7 @@ inlämning som granskaren godkänner. **Börja med** är det allra första stege
 vet var du börjar. Kommentarer och historik ligger i **Aktivitet**: Enter skickar, Shift+Enter ger ny rad. En uppgift som
 är klar går att öppna igen, och de flesta ändringar går att ångra i kvittot. Tangenterna D, T, E och P öppnar dag, tid,
 uppskattning och prioritet. Under **Kopplad till** väljer du Kund, Person, Ärende, Utbildning eller Coachning, söker (en
-kund på namn, org.nr eller kontaktperson) och klickar på träffen.`,
+kund på namn, org.nr med eller utan bindestreck, eller kontaktperson) och klickar på träffen.`,
     datum: "2026-11-14",
     roller: [],
     href: "/uppgifter",

@@ -33,6 +33,7 @@ import {
 import { andraUppgiftsmall, anvandUppgiftsmall, arkiveraUppgiftsmall, skapaUppgiftsmall } from "@/app/(app)/uppgifter/mallar/actions";
 import { slutforGenomgang } from "@/app/(app)/uppgifter/genomgang/actions";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
+import { orgnrVillkor } from "@/lib/nav2/orgnrsok";
 
 export const dynamic = "force-dynamic";
 
@@ -108,7 +109,11 @@ export async function GET(request: Request) {
   const somArende = (r: unknown[] | null) => ((r ?? []) as { id: string; subject: string }[]).map((a) => ({ id: a.id, namn: a.subject }));
   const somCoach = (r: unknown[] | null) => ((r ?? []) as { id: string; title: string; assignee_id: string | null }[]).map((c) => ({ id: c.id, namn: c.assignee_id && namn.get(c.assignee_id) ? `${c.title} · ${namn.get(c.assignee_id)}` : c.title }));
   if (sok.length >= 2 && (slag === "order" || slag === "arende" || slag === "coachning")) {
-    if (slag === "order") return svar({ ok: "", slag, val: somOrder((await orderQ().or(`company_name.ilike.${m},org_number.ilike.${m},contact_name.ilike.${m}`)).data) });
+    if (slag === "order") {
+      // Org.nr står som 556668-5052; 5566685052 och 556668 5052 ska också hitta kunden (orgnrVillkor).
+      const villkor = [`company_name.ilike.${m}`, `org_number.ilike.${m}`, `contact_name.ilike.${m}`, ...orgnrVillkor(sok)];
+      return svar({ ok: "", slag, val: somOrder((await orderQ().or(villkor.join(","))).data) });
+    }
     if (slag === "arende") return svar({ ok: "", slag, val: somArende((await arendeQ().ilike("subject", m)).data) });
     return svar({ ok: "", slag, val: somCoach((await coachQ().ilike("title", m)).data) });
   }
@@ -295,10 +300,11 @@ export async function POST(request: Request) {
       case "forsta-steg": {
         const u = await uppgiften(id);
         if (!u) return svar({ fel: "Uppgiften finns inte." }, 404);
-        if (u.assignee_id !== mig && u.created_by !== mig) return svar({ fel: "Bara den som har uppgiften skriver första steget." }, 403);
+        if (u.assignee_id !== mig && u.created_by !== mig) return svar({ fel: "Bara den som har uppgiften ändrar Börja med." }, 403);
         const text = String(b.text ?? "").trim().slice(0, 200);
         await db.from("task").update({ next_step: text || null, updated_at: new Date().toISOString() }).eq("id", id);
-        return svar({ ok: text ? "Första steget är sparat." : "Första steget är borttaget." });
+        // Fältet heter Börja med i rutan (2026-11-13); kvittot säger vad som händer med det.
+        return svar({ ok: text ? "Sparat. Det står på raden i listan." : "Borttaget." });
       }
       case "paminn": {
         const ids = Array.isArray(b.ids) ? (b.ids as string[]) : [id];
