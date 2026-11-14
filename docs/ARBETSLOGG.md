@@ -5,6 +5,29 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-14 · Säljtavlan: ett bokat möte väcker tavlan direkt (0297)
+
+**Varför.** Beställaren bad om ett hårdtest av mötena på tavlan. Allt höll utom en sak: tavlan väcks av
+`salesboard_ringklocka()` (0250) när en order skrivs, men `mote` fick aldrig någon klocka när mötena kom in på
+tavlan (`4bde8ae`). Ett bokat möte syntes därför först vid tv:ns vanliga hämtning, upp till en minut senare. Firandet
+kom ändå (`FARSK_MS` är tio minuter), men en bokare som tittar upp ser ingenting hända.
+
+**Vad.** En klocka efter satsen på `mote`, som för order. Uppdateringar ringer bara för kolumnerna tavlan räknar på:
+`bokat_av`, `bokat_nar`, `art` och `kedja_id`. `art` är med för att 0296:s `mote_art_ratta` kan göra ett nytt möte till
+ett uppföljningsmöte efteråt, och då ska talet på tavlan gå ner direkt. Utfall, bekräftelser och försök skrivs ofta
+och ändrar ingenting på tavlan, så de ringer inte.
+
+**Avvägt bort.** Klockor på `mote_kedja` och `mote_bolag`: en ändrad telefon eller ett ihopslaget bolag kan ändra
+90-dagarsregeln, men det är sällsynt och den vanliga hämtningen tar det inom en minut.
+
+**Provat.** `tests/salesboard-klocka-db.mjs` läser `pg_trigger` för alla tavlans klockor (som 0250 satte dem) och
+utlöser mötesklockan med satser utan rader i en transaktion som rullas tillbaka: `realtime.messages` får ett ping per
+sats. Rött före 0297 (nio fel, bara mötesraderna), grönt efter. Därtill en riktig lyssnare på kanalen `salesboard` med
+anon-nyckeln, som tv:n: insert, delete och update of art kom fram på cirka 65 ms, update of utfall inte alls. Första
+satsen direkt efter `SUBSCRIBED` kan gå förlorad; tv:n hämtar redan direkt när kanalen kommer upp.
+
+---
+
 ## 2026-11-14 · Möten: samma kund känns igen, och Fick inte tag påminner om att ringa igen (grenen `moten-samma-kund`)
 
 **Varför.** Beställaren såg Bekräfta på ORION CAR AB:s andra möte, dagen efter att bara det första mötet skulle
