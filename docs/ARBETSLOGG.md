@@ -68,7 +68,7 @@ till mig själv (`ndMedFolk`). Migrationen bytte nummer: 0291 togs av Mötens be
 
 ## 2026-11-13/14 · Kundens inbjudan: ett riktigt mötesbrev, Teams-länken i kalendern, tillbaka efter borttagen, namnet i avbokningen (0294)
 
-**Läge:** tre lokala commits (`7da60ca`, `7cb50cd`, `542b34b`) ihopslagna till en och flyttade ovanpå main `c462df1`; 0294 KÖRD 2026-11-14 19:06 UTC på beställarens "fixa allt". Före körningen: `UTAN=1 node tests/ics-aterinbjudan-db.mjs` 8 ok, 6 fel mot funktionen i databasen; efter: 14 ok. Provet står nu i `npm test` (`test:ics-aterinbjudan`).
+**Läge:** tre lokala commits (`7da60ca`, `7cb50cd`, `542b34b`) ihopslagna till en och flyttade ovanpå main `c462df1`; 0294 KÖRD 2026-11-14 19:06 UTC på beställarens "fixa allt". Före körningen: `UTAN=1 node tests/ics-aterinbjudan-db.mjs` 8 ok, 6 fel mot funktionen i databasen; efter: 14 ok. Provet står nu i `npm test` (`test:ics-aterinbjudan`). På `main` som `7316300` (ovanpå `c6500fe`), produktionsbygget grönt 19:16:54 UTC; skarpa provet 19:55–19:59 UTC grönt (boka telefon, Ändra till Teams, ta bort och lägga tillbaka gästen, Radera; fem brev, se NASTA_SESSION).
 
 
 **Vad:** det skarpa provet av bokningsbladet (PROV-möte i produktionen) visade tre saker i kundens brev, alla äldre
