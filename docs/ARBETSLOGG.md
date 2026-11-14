@@ -21,10 +21,19 @@ redan `overflow:hidden` + ellipsis). En ny order ryms redan på main: kundraden 
 (`delar/ordform-bredd/prov.mjs`) väntar ut öppningsanimationen (`felin`, translateX 24 px) innan det mäter; första
 versionen fick ett falskt rött av den.
 
-**Gamla Nav.** `/order` har ingen omdirigering till Nav 2.0 (bara `(app)/page.tsx` har det), så rättelseformuläret går
-att nå. `redigeraOrder` använder redan `rattelsensSkal`, så det var bara klientens `required`. Nivån räknas på sidan
+**Gamla Nav.** `/order` skickas av mellanvaran till `/nav2?till=/order` (`src/lib/nav2/vagar.ts`, bara hela
+sidladdningar, släpps igenom med Referer `/nav2`), och Nav 2.0 länkar aldrig dit: formuläret nås i praktiken inte, men
+ska följa samma regel om någon kommer dit. `redigeraOrder` använder redan `rattelsensSkal`, så det var bara klientens `required`. Nivån räknas på sidan
 (`nivaFor`, samma som servern) och skickas ned som `skalFrivilligt`; inte `hanterare`, som är en annan krets
 (säljchef/VD/ekonomi).
+
+**Sviten.** Under hårdprovet blev `npm run test:rattelse` "rött": skriptet fanns inte. 21 av 125 provfiler stod utanför
+`package.json` (`bro`, `chefsprovision`, `jobb-coachning`, `kalender-andring`, `kalender-push`, `moten-db`,
+`motesstat-db`, nio `nav2-*`, `nyheter-jobb`, `rattelse`, `rekrytering-utskick`, `utkorg-ics`), och `test:rattigheter`
+stod inte i `test`-kedjan. "Hela sviten grön" 2026-11-13 gällde alltså skripten, inte filerna. Alla 22 kördes
+(db-proven läser och rullar tillbaka; moten-db 216/216) och var gröna, utom tidskravet i `motesstat-db`: serverns egen
+körtid (`EXPLAIN ANALYZE`) var 66–1 860 ms första gången och 2,5 ms sedan, med och utan TZ. Kravet gäller om funktionen
+KAN svara under 200 ms (vyn tog ~2 s), så provet tar nu den snabbaste av tre i samma transaktion.
 
 **Prov:** bredden 120/120 (18 röda mot main), datorn identisk med main element för element; `tsc` bara Pling-felen;
 repots svit med nycklarna, se NASTA_SESSION.
@@ -70,7 +79,8 @@ kvar. `ndKHamta` var redan kalenderns namn: den nya heter `ndKoppHamta`. Prov: 8
 
 **Skarpa provet i produktionen 2026-11-14** (beställaren: "hårdtesta den. Säkerställ att det inte finns ett enda
 fel"): som Zen i Chrome, på en uppgift märkt PROV, varje del av rutan klickad och databasen läst efter varje steg;
-sidprovet mot produktionen (53 sidor × 4 roller) grönt. Sju fel, alla rättade på grenen `uppgiftsrutan-prov`:
+sidprovet mot produktionen (53 sidor × 4 roller) grönt. Åtta fel, alla rättade (`8cea8d2` och commiten efter) och
+omprovade i produktionen:
 - *Org.nr utan bindestreck* (5566685052) gav "Ingen träff": alla 35 står som 556668-5052. Ny `orgnrVillkor` provar
   bindestrecket på varje plats (högst tio villkor, bara siffror i följd matchar).
 - *Avsluta serien* tog bort förekomsten man stod i när den låg framåt, fast kvittot (sedan tidigare) säger "Den här
@@ -81,9 +91,12 @@ sidprovet mot produktionen (53 sidor × 4 roller) grönt. Sju fel, alla rättade
 - *"Första steget är sparat."* fast fältet heter Börja med: servern säger "Sparat. Det står på raden i listan."
 - *Koppla*: på en skärm 693 px hög syntes bara första träffen (formuläret rullas nu fram när listan fyllts),
   kopplingen syntes först efter omhämtningen (nu genast), valen hämtades vid varje öppning (står nu en minut).
+- *En avslutad serie* stod kvar som "Varje måndag och torsdag" med Avsluta serien (syntes först när förekomsten
+  fick stå kvar): navets data läser nu `ended_at`, "Avslutad, var varje måndag och torsdag", ingen knapp.
+- (Och: Koppla till något som redan är kopplat lägger ingen dubblett i rutan; databasen har `task_link_unik_idx`.)
 Inte fel: Ångra som "inte fungerade" var mitt prov (kvittot hann försvinna, och kvitton staplas, var och en ångrar sin
 egen ändring). Regel: **ett kvitto som lovar något (Den här står kvar) ska provas mot databasen, inte bara läsas.**
-Provet 142 kontroller (de tio nya föll på den gamla koden). Städat efteråt: PROV-uppgiften, dess deluppgifter,
+Provet 143 kontroller (de elva nya föll på den gamla koden). Städat efteråt: PROV-uppgiften, dess deluppgifter,
 kopplingar och händelser, PROV-serien.
 
 **Läge:** previewen grön 2026-11-13. Beställaren 2026-11-14: "pusha det till produktion och sen hårdtesta den". Main

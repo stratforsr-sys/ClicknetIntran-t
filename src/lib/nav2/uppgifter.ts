@@ -122,7 +122,7 @@ export async function byggUppgifter(supabase: SupabaseClient, user: CurrentUser)
 
   const [{ data: handelser }, { data: serier }, { data: personer }, { data: mallar }, { data: moment }, { data: projRader }, { data: medRader }, { data: medd }, { data: last }] = await Promise.all([
     supabase.from("task_event").select("task_id, type, by_employee_id, note, at").order("at"),
-    supabase.from("task_series").select("id, monster, veckodagar, starts_on, ends_on, assignee_id, created_by"),
+    supabase.from("task_series").select("id, monster, veckodagar, starts_on, ends_on, assignee_id, created_by, ended_at"),
     supabase.from("employee").select("id, first_name, last_name, status").neq("status", "offboarded"),
     supabase.from("task_template").select("id, name, created_by, shared, description_md, archived_at").order("name"),
     supabase.from("task_template_item").select("template_id, sort, title, offset_days, due_time, estimate_minutes, priority").order("sort"),
@@ -141,8 +141,13 @@ export async function byggUppgifter(supabase: SupabaseClient, user: CurrentUser)
     const rad = { typ: h.type as string, av: vem(h.by_employee_id), note: h.note ?? null, at: h.at as string };
     perUppgift.set(h.task_id, [...(perUppgift.get(h.task_id) ?? []), rad]);
   }
-  const serieRad = new Map((serier ?? []).map((s) => [s.id as string, s as { assignee_id: string | null; created_by: string | null }]));
-  const serie = new Map((serier ?? []).map((s) => [s.id, serietext({ monster: s.monster, veckodagar: s.veckodagar ?? [], starts_on: s.starts_on, ends_on: s.ends_on } as Serieregel)]));
+  const serieRad = new Map((serier ?? []).map((s) => [s.id as string, s as { assignee_id: string | null; created_by: string | null; ended_at: string | null }]));
+  // En avslutad serie upprepas inte längre: förekomsten som står kvar säger det, och Avsluta serien visas inte
+  // (provet i produktionen 2026-11-14: rutan sa "Varje måndag och torsdag" efter att serien avslutats).
+  const serie = new Map((serier ?? []).map((s) => {
+    const text = serietext({ monster: s.monster, veckodagar: s.veckodagar ?? [], starts_on: s.starts_on, ends_on: s.ends_on } as Serieregel);
+    return [s.id, s.ended_at ? `Avslutad, var ${text.charAt(0).toLowerCase()}${text.slice(1)}` : text];
+  }));
   const projektNamn = new Map(bild.projekt.map((p) => [p.id, p.name]));
 
   // En rad, en lista: samma urval som sidan, i sidans ordning.
@@ -185,7 +190,7 @@ export async function byggUppgifter(supabase: SupabaseClient, user: CurrentUser)
         ansvarig: namn(u.assignee_id),
         serie: u.series_id ? serie.get(u.series_id) ?? null : null,
         serieId: u.series_id ?? null,
-        serieAgare: (() => { const s = u.series_id ? serieRad.get(u.series_id) : undefined; return !!s && (s.assignee_id === mig || s.created_by === mig); })(),
+        serieAgare: (() => { const s = u.series_id ? serieRad.get(u.series_id) : undefined; return !!s && !s.ended_at && (s.assignee_id === mig || s.created_by === mig); })(),
         linkIds: u.kopplingar.map((k) => k.id),
         farRed: u.created_by === mig || u.assignee_id === mig || u.minRoll === "redigerare",
         farStryk: u.created_by === mig || u.assignee_id === mig,

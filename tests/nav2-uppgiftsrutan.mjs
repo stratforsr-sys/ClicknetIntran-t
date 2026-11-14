@@ -274,6 +274,9 @@ rubrik("Koppla: valen kommer fram fast knappen byts medan de hämtas");
   knapp.dataset.ndkoppla = "a"; delete knapp.dataset.ndkavbryt;
   klick((sel) => (sel === "button" ? knapp : null));
   ok("valen står kvar en minut: andra gången utan hämtning", hamtningar === 0 && g.S.ndKoppla?.val?.order?.length === 2, `${hamtningar} hämtningar`);
+  klick((sel) => (sel.includes("[data-ndkval]") ? rad : null));
+  await vanta(); await vanta();
+  ok("samma koppling en gång till ger ingen dubblett (databasen svarar Kopplad.)", t.links.filter((l) => l[1] === "Lindqvist Måleri AB").length === 1, JSON.stringify(t.links));
 }
 
 rubrik("Nästa arbetsdag säger dagen och kan ångras (förut bara \"Planerad.\")");
