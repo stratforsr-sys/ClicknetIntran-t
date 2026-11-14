@@ -7,6 +7,7 @@ import { notifiera, notifieraFlera } from "@/lib/notishandelse-server";
 import { skrivFel } from "@/lib/fel-server";
 import { skrivHandelse } from "@/lib/handelselogg-server";
 import { dagPlus } from "@/lib/saljtakt";
+import { dagKort } from "@/lib/kalender";
 import { lk } from "@/lib/leveranskalender-server";
 import { tomEfterFonstret } from "@/lib/utkorg-server";
 import { flytta, hamtaUpptaget, skapaMote, stallIn } from "@/app/(app)/kalender/moten/actions";
@@ -1859,7 +1860,7 @@ export async function POST(request: Request) {
     });
     const tyst = rad.inget_svar_i_rad >= TYST_EFTER_INGET_SVAR;
     return svar({
-      ok: andring ? "Uppföljningen är sparad." : vilken === "prova_igen" ? "Kortet ligger i Följ upp igen. Ring i dag." : tyst ? "Inget svar tre gånger. Kortet ligger i Tyst." : `Inget svar. Ring igen ${rad.uppfoljning_datum}.`,
+      ok: andring ? "Uppföljningen är sparad." : vilken === "prova_igen" ? "Kortet ligger i Följ upp igen. Ring i dag." : tyst ? "Inget svar tre gånger. Kortet ligger i Tyst." : `Inget svar. Ring igen ${dagKort(rad.uppfoljning_datum)}.`,
       kedja: k.id,
       uppfoljning_datum: rad.uppfoljning_datum,
       inget_svar_i_rad: rad.inget_svar_i_rad,

@@ -14,6 +14,19 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten-sparat-direkt",
+    rubrik: "Möten: det du sparar syns direkt",
+    ingress: "Kvittot kommer så fort det är sparat, och kortet byter dag med en gång när du trycker Inget svar.",
+    text: `Förut väntade kvittot i **Möten** tills hela tavlan hämtats på nytt, och när Nav var hårt belastat kunde
+det ta många sekunder fast det redan var sparat. Nu kommer kvittot direkt. **Inget svar**, **Prova igen** och
+**Ändra dag** flyttar kortet till den nya dagen med en gång, och kvittot säger dagen som kortet säger den, till
+exempel "Ring tis 17 nov". Och Nav säger inte längre "Du är utloggad" ibland när du sparar något fast du är
+inloggad: det hände i samma ögonblick som din inloggning förnyades i bakgrunden, ungefär en gång i timmen.`,
+    datum: "2026-11-14",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "bara-det-som-brinner",
     rubrik: "Färre ärenden: bara det som brinner, och sjukanmälan försvinner när du stämplar in",
     ingress: "Stämplar du in efter en sjukanmälan avslutas den av sig själv. Chefen får inget ärende om okvitterad coachning, och gamla förslag om ogiltig frånvaro städas bort.",

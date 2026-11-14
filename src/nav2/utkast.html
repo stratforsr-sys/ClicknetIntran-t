@@ -38349,6 +38349,16 @@ const MOLASFEL = {uppslag:'Uppslaget gick inte.', lediga:'Kalendern gick inte at
 // en uppgift i listan hämtas Uppgifter (och Hem) om i samma hämtning som tavlan, så att den inte står kvar.
 const MOUPGHANDL = new Set(['bekrafta', 'angra', 'flytta', 'andra', 'avboka', 'utfall', 'radera']);
 const moHarUppgift = id => typeof TASKS !== 'undefined' && Array.isArray(TASKS) && TASKS.some(t => (t.ndLinks || []).some(l => l[0] === 'Möte' && l[2] === '/moten/' + id));
+// Uppföljningens handlingar (Inget svar, Prova igen, Ändra dag) och kortets nya läge ur serverns svar.
+// Tre inget svar i rad lägger kortet i Tyst (TYST_EFTER_INGET_SVAR i motenforma.ts); Prova igen nollar räknaren.
+const MOUPPF = new Set(['inget_svar', 'prova_igen', 'uppfoljning_andra']), MOTYSTEFTER = 3;
+function moUppfLapp(s, data, handling){
+  const d = ndMo(), k = d && !d.fel && s.uppfoljning_datum ? d.kort.find(x => x.kedja === (s.kedja || data.kedja)) : null; if (!k) return;
+  const u = moUpp(k), n = typeof s.inget_svar_i_rad === 'number' ? s.inget_svar_i_rad : u.ingetSvar;
+  k.uppfoljning = {...u, datum:s.uppfoljning_datum, ingetSvar:n, andrad:s.uppfoljning_andrad || u.andrad, ...(handling === 'uppfoljning_andra' ? {text:data.text ?? null} : {})};
+  if (k.kolumn === 'folj_upp' || k.kolumn === 'tyst') k.kolumn = n >= MOTYSTEFTER ? 'tyst' : 'folj_upp';
+  if (S.view === 'moten') render();
+}
 async function ndMoPost(handling, data = {}, {ladda = true, tyst = false, kedja = null, visaFel = !tyst, tyst409 = false} = {}){
   try {
     const r = await ndSkriv('/nav2/moten', {handling, ...data}), s = ndSvar(r);
@@ -38357,9 +38367,19 @@ async function ndMoPost(handling, data = {}, {ladda = true, tyst = false, kedja 
     else if (MOLASFEL[handling] && (r.hangde || r.status >= 500)) s.fel = MOLASFEL[handling];
     if (s.ok && !s.fel){
       if (MOUPGHANDL.has(handling) && data.mote && NDOMLAS.upg && moHarUppgift(data.mote)) ndOmlas('upg');
+      // Inget svar: kvittot säger dagen som kortet säger den ("Ring i morgon", "Ring tis 17 nov"), aldrig som ISO.
+      if (handling === 'inget_svar' && s.uppfoljning_datum && (s.inget_svar_i_rad ?? 0) < MOTYSTEFTER) s.ok = `Inget svar. Ring ${moDag(s.uppfoljning_datum)}.`;
+      // Uppföljningens tre handlingar rör bara kortets dag, rad och räknare, och svaret bär dem: kortet ritas om direkt
+      // och bara tavlan och statistiken läses om (den lätta omläsningen). Utfallsprovet 2026-11-14: kortet bytte dag
+      // först efter 17,6 s, när /nav2/data med sex delar fick vänta på en belastad databas (själva sparningen tog 0,8 s).
+      const uppf = MOUPPF.has(handling);
+      if (uppf) moUppfLapp(s, data, handling);
       // Kvittot bär också rättelsens not när servern bokfört en (rattelse från ratta_utfall, F8.1).
+      // Kvittot kommer när servern sagt ja, inte när omläsningen är klar: det sparade är sparat, och en långsam
+      // omläsning ska inte se ut som en sparning som inte gått igenom.
       if (ladda){ if (s.kedja_borta) S.moOpen = null;   // kortet finns inte mer: panelen öppnas inte igen efter omladdningen
-        ndOmlas('mo', {kedja, msg:!tyst ? s.ok + (s.rattelse ? ` Bokfört: ${s.rattelse}.` : '') : null, varning:s.varning || null}); }
+        if (!tyst) toast(s.ok + (s.rattelse ? ` Bokfört: ${s.rattelse}.` : ''));
+        ndOmlas(uppf ? 'mo-latt' : 'mo', {kedja, varning:s.varning || null}); }
       else if (!tyst) toast(s.ok);
       return s;
     }
