@@ -70,7 +70,7 @@ satsen direkt efter `SUBSCRIBED` kan gå förlorad; tv:n hämtar redan direkt n�
 
 ---
 
-## 2026-11-14 · Möten: samma kund känns igen, och Fick inte tag påminner om att ringa igen (grenen `moten-samma-kund`)
+## 2026-11-14 · Möten: samma kund känns igen, och Fick inte tag påminner om att ringa igen (på `main` som `135ba68` + `c462df1`, 0296 körd; bygget grönt 19:00 UTC)
 
 **Varför.** Beställaren såg Bekräfta på ORION CAR AB:s andra möte, dagen efter att bara det första mötet skulle
 bekräftas (0295). Felet låg inte i 0295 utan i vad Nav kallar ett första möte: arten sattes vid bokningen ur kortets
