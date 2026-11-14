@@ -27248,12 +27248,14 @@ function ndTidGoraVy(){
   const c = ndChefTid(), alla = ndTidGora(), f = S.tFilt;
   const lista = f ? alla.filter(x => f === 'beslut' ? x.typ === 'beslut' : f === 'ej' ? x.id.startsWith('ej-') : x.id === f) : alla;
   const klara = (c.klaraIdag || 0) + (S.ndTiKlara || 0), tot = klara + alla.filter(x => x.typ !== 'info').length;
-  if (!alla.length) return `<div class="tiempty tiklart"><span class="tic ok">${I('check')}</span><b>Klart för i dag</b><span class="muted">${klara} ${klara === 1 ? 'sak' : 'saker'} avklarade. Det som dyker upp senare får du som notis 16:00.</span></div>`;
-  const stod = c.rattelser.filter(r => (c.stod || {})[r.id]);
+  if (!alla.length) return `<div class="tiempty tiklart"><span class="tic ok">${I('check')}</span><b>Klart för i dag</b><span class="muted">${klara} ${klara === 1 ? 'sak' : 'saker'} avklarade. Det som dyker upp senare hamnar här.</span></div>`;
+  const stod = c.rattelser.filter(r => (c.stod || {})[r.id]), og = c.ogiltig.filter(o => o.status === 'foreslagen');
+  // Rensa: alla förslag om ogiltig frånvaro avvisas på en gång, efter en fråga. Avvisat räknas inte och kommer inte tillbaka.
+  const rensa = og.length < 2 ? '' : S.ndTiRensa ? `<span class="tibulk"><span class="muted">Rensa ${og.length} förslag? De räknas inte och kommer inte tillbaka.</span> <button class="tlink" data-ndtirensa="ja">Rensa</button> <button class="tlink" data-ndtirensa="nej">Avbryt</button></span>` : `<button class="tlink tibulk" data-ndtirensa="fraga">${I('check')}Rensa ${og.length} förslag på ogiltig frånvaro</button>`;
   return `<div class="tiprog"><span>Klart i dag: <b class="num">${klara}</b> av <span class="num">${tot}</span></span><span class="tiprogbar"><i style="width:${tot ? klara / tot * 100 : 0}%"></i></span><span class="muted">ungefär ${Math.max(1, tot - klara)} min kvar</span></div>
     ${f ? `<div class="tifilt"><span class="muted">Visar: ${f === 'beslut' ? 'beslut' : f === 'ej' ? 'inte instämplade' : 'urval'}</span><button class="tlink" data-tifilt="">Visa allt</button></div>` : ''}
-    ${['beslut', 'fraga', 'info'].map(t => { const x = lista.filter(y => y.typ === t); return x.length ? `<div class="sect"><h3>${GRUPP[t]}</h3><span>${x.length}</span>${t === 'beslut' && stod.length >= 2 ? `<button class="tlink tibulk" data-ndtibulk>${I('check')}Godkänn de ${stod.length} rättelserna med stöd</button>` : ''}</div><div class="tigolist">${x.map(y => y.html).join('')}</div>` : ''; }).join('')}
-    <p class="muted tismall tinotisrad">${I('bell')}Det som ligger kvar 16:00 får du som notis. Rättelser äldre än 48 h står överst på startsidan.</p>`;
+    ${['beslut', 'fraga', 'info'].map(t => { const x = lista.filter(y => y.typ === t); return x.length ? `<div class="sect"><h3>${GRUPP[t]}</h3><span>${x.length}</span>${t === 'beslut' && stod.length >= 2 ? `<button class="tlink tibulk" data-ndtibulk>${I('check')}Godkänn de ${stod.length} rättelserna med stöd</button>` : ''}${t === 'beslut' ? rensa : ''}</div><div class="tigolist">${x.map(y => y.html).join('')}</div>` : ''; }).join('')}
+    <p class="muted tismall tinotisrad">${I('bell')}Rättelser äldre än 48 h står överst på startsidan. Förslag äldre än två veckor stängs av sig själva.</p>`;
 }
 
 function ndTidChef(){
@@ -27278,8 +27280,7 @@ function ndTidRytm(){
   const R = [['Varje morgon', '2 min', kvarDag ? `${kvarDag} kvar: rättelser och den som inte stämplat in` : 'Klart i dag', 'gora', !kvarDag], ['Måndagar', '10 min', kvarVecka ? `${kvarVecka} förslag på ogiltig frånvaro, och sena med mönster` : 'Klart den här veckan', 'sena', !kvarVecka], ['Första vardagen i månaden', '15 min', kvarMan ? `Lönerapporten: ${kvarMan} saker stoppar den` : 'Lönerapporten är redo', 'lon', !kvarMan]];
   return `<section class="card"><div class="chead"><h2>Din rytm i Tid</h2><span class="end"><span class="muted" style="font-size:12px">27 min i månaden</span></span></div>
     ${R.map(([n, m, d, tab, ok]) => `<div class="tirytm ${ok ? 'on' : ''}"><span class="tick">${I('check')}</span><div><b>${n}</b> <span class="muted num">${m}</span><p>${d}</p></div><button class="tlink" data-titab="${tab}">Öppna</button></div>`).join('')}
-    <div class="goalnums" style="margin-top:10px"><span>Rättelser beslutade inom 48 h</span><span>${c.beslut48.av ? `<b>${c.beslut48.inom}</b> av ${c.beslut48.av} senaste` : 'inga beslut än'}</span></div>
-    <div class="usak" style="margin-top:10px"><span>Morgonnotis</span>${['07:45', '08:15', '09:00'].map(x => `<button data-tirytmtid="${x}" aria-pressed="${c.morgonnotis === x}">${x}</button>`).join('')}</div></section>`;
+    <div class="goalnums" style="margin-top:10px"><span>Rättelser beslutade inom 48 h</span><span>${c.beslut48.av ? `<b>${c.beslut48.inom}</b> av ${c.beslut48.av} senaste` : 'inga beslut än'}</span></div></section>`;
 }
 function ndTidLoggKort(){
   const l = ndChefTid().logg || [];
@@ -27624,6 +27625,7 @@ document.addEventListener('click', e => {
   if (d.tibeslut){ stopp(); ndTidPost('beslut', {id:d.tibeslut, beslut:'ja'}); return; }
   if (d.tiavslagskal){ stopp(); ndTidPost('beslut', {id:d.tiavslagskal, beslut:'nej', skal:d.text}); return; }
   if (d.ndtibulk !== undefined){ stopp(); ndTidPost('beslut-stod', {ids:c.rattelser.filter(r => (c.stod || {})[r.id]).map(r => r.id)}); return; }
+  if (d.ndtirensa){ stopp(); if (d.ndtirensa === 'fraga'){ S.ndTiRensa = true; render(); return; } S.ndTiRensa = false; if (d.ndtirensa === 'ja') ndTidPost('ogiltig-rensa', {ids:c.ogiltig.filter(o => o.status === 'foreslagen').map(o => o.id)}); else render(); return; }
   if (d.ndtiogiltig){ stopp(); if (d.b === 'fraga'){ ndTidPost('ogiltig', {id:d.ndtiogiltig, b:'fraga'}, {ladda:false}).then(s => { if (s.ok){ S.ndTiFragat.add('o-' + d.ndtiogiltig); render(); } }); return; }
     ndTidPost('ogiltig', {id:d.ndtiogiltig, b:d.b}); return; }
   if (d.ndtihav){ stopp(); ndTidPost('ogiltig', {id:d.ndtihav, b:'hav', skal:'Hävd i Tid.'}); return; }
@@ -27635,7 +27637,6 @@ document.addEventListener('click', e => {
   if (d.tisenaperson){ stopp(); S.tSenaOpen = S.tSenaOpen === d.tisenaperson ? null : d.tisenaperson; render();
     if (S.tSenaOpen && d.pid) ndTidPost('sena-visad', {vem:d.pid}, {ladda:false, tyst:true}).then(s => { if (!s.fel) toast(`Öppningen är loggad. ${fornamn(d.tisenaperson)} ser den under ”Vem har tittat”.`); else if (s.laslage) toast('Läsläge: öppningen loggas när Tid slås på.'); }); return; }
   if (d.ndtischemapamin){ stopp(); ndTidPost('schema-paminn', {fran:d.ndtischemapamin}, {ladda:false}).then(s => { if (s.ok){ S.ndTiFragat.add('schema-' + d.ndtischemapamin); render(); } }); return; }
-  if (d.tirytmtid){ stopp(); ndTidPost('morgonnotis', {tid:d.tirytmtid}); return; }
   if (d.titol){ stopp(); const t = c.tolerans; if (!t) return; S.ndTol = Math.min(15, Math.max(1, (S.ndTol ?? t.tol) + +d.titol)); render(); return; }
   if (d.tolspara !== undefined){ stopp(); ndTidPost('tolerans', {tol:S.ndTol}); return; }
   if (d.ndtiper){ stopp(); const k = d.ndtiper; S.ndLonPer = k; render();

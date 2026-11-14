@@ -14,6 +14,22 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "bara-det-som-brinner",
+    rubrik: "Färre ärenden: bara det som brinner, och sjukanmälan försvinner när du stämplar in",
+    ingress: "Stämplar du in efter en sjukanmälan avslutas den av sig själv. Chefen får inget ärende om okvitterad coachning, och gamla förslag om ogiltig frånvaro städas bort.",
+    text: `**Sjukanmälan:** när du stämplar in är du tillbaka. Sista sjukdagen blir dagen före, och anmälan försvinner ur
+chefens sjuklista. Gjorde du anmälan i dag och kommer in ändå tas den bort. Är du sjukskriven på deltid stämplar du
+som vanligt, och anmälan står kvar.
+
+**För chefen:** en utebliven instämpling blir ett enda förslag om ogiltig frånvaro i **Tid › Att göra**, inte också en
+påminnelse i klockan och en daglig notis. Förslag som är äldre än två veckor, eller gäller någon som slutat, stängs
+av sig själva. **Rensa** överst i Att göra avvisar alla förslag på en gång. Okvitterad coachning och systemguider
+blir inte längre ärenden. Personen ser fortfarande sin påminnelse, och läget syns i Coachning och Utbildning.`,
+    datum: "2026-11-14",
+    roller: [],
+    href: "/tid",
+  },
+  {
     slug: "moten-ring-igen",
     rubrik: "Möten: Fick inte tag påminner dig att ringa igen",
     ingress: "Svarar inte kunden när du ringer för att bekräfta, tryck Fick inte tag. Fyra timmar senare får du en notis i klockan och telefonen: Ring kunden igen.",

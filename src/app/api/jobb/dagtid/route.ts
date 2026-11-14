@@ -4,7 +4,6 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { korKalendersteget } from "@/lib/jobb/kalender";
 import { SKRIVLAGE } from "@/lib/nav2/skrivlage";
 import { skickaRundor } from "@/lib/nav2/franvaro-runda";
-import { korTidpaminnelser } from "@/lib/nav2/tid-paminnelser";
 import { skickaKvallsnotiser } from "@/lib/nav2/hem-kvall";
 import { korAnstalldaPaminnelser } from "@/lib/nav2/anstallda-paminnelser";
 import { publiceraSchemalagda } from "@/lib/nav2/nyheter-jobb";
@@ -59,14 +58,10 @@ async function kor(request: NextRequest) {
       runda = { fel: e instanceof Error ? e.message : String(e) };
     }
   }
-  let tid: unknown = null;
-  if (SKRIVLAGE.tid) {
-    try {
-      tid = await korTidpaminnelser(db);
-    } catch (e) {
-      tid = { fel: e instanceof Error ? e.message : String(e) };
-    }
-  }
+  // Chefens dagliga notiser om Tid (`tid-chef-morgon`, `tid-chef-kvar`) är
+  // borta (beställaren 2026-11-12). De räknade förslag om ogiltig frånvaro som
+  // aldrig stängdes, gick varje vardag och öppnades inte en enda gång på 30
+  // dagar. Det som väntar står i Tid › Att göra och på startsidan.
   // Nav 2.0 (0121, E5.8): kvällsnotisen till ledarna, vardagar från 17:00 och söndagar från 18:00.
   // Bakom SKRIVLAGE.hem (i funktionen). Söndagens anrop är cron-jobbet `nav-dagtid-sondag` (0235_hem_sondag).
   let kvall: unknown = null;
@@ -111,7 +106,7 @@ async function kor(request: NextRequest) {
     morgon = { fel };
     await larmaEnGangOmDagen(db, `morgon-kvitto-fel-${dag}`, fel);
   }
-  return NextResponse.json({ kalender, runda, tid, kvall, anstallda, utbildning, nyheter, morgon });
+  return NextResponse.json({ kalender, runda, kvall, anstallda, utbildning, nyheter, morgon });
 }
 
 /**

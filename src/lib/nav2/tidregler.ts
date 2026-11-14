@@ -9,12 +9,6 @@
 export const SCHEMA_KVITTENS_FRAN = "2026-10-16";
 
 
-/** Chefens samlade notis om det som ligger kvar i Tid. */
-export const CHEF_KVAR_KL = "16:00";
-
-/** Morgonnotisens val i "Din rytm i Tid". */
-export const MORGONNOTIS_VAL = ["07:45", "08:15", "09:00"] as const;
-
 /** Påminn mig: minuter efter schemats start respektive slut. */
 export const PAMINN_MINUTER = [5, 10, 15] as const;
 

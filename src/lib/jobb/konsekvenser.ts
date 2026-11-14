@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { gallandeSchema } from "@/lib/raster";
 import { gallande, type Handelse } from "@/lib/tid";
-import { uteblivenInstampling } from "@/lib/konsekvens";
+import { inaktuelltForslag, uteblivenInstampling } from "@/lib/konsekvens";
 import { stampelfriaAnstallda } from "@/lib/stampelfri-server";
 import {
   svensktDatum,
@@ -57,7 +57,10 @@ export type Konsekvensutfall = {
   aterkallade: number;
   /** Dagar som hoppats over for att de tacks av godkand franvaro eller sjukdom. */
   tackta: number;
+  /** Forslag som stangts for att de blivit for gamla eller personen slutat. */
+  stangda: number;
 };
+
 
 /**
  * Dagarna en person ar franvarande med giltigt skal.
@@ -138,7 +141,7 @@ async function tacktaDagar(
  * som stanger dygnet.
  */
 export async function foreslaOgiltigFranvaro(db: SupabaseClient): Promise<Konsekvensutfall> {
-  const utfall: Konsekvensutfall = { foreslagna: 0, aterkallade: 0, tackta: 0 };
+  const utfall: Konsekvensutfall = { foreslagna: 0, aterkallade: 0, tackta: 0, stangda: 0 };
 
   const idag = svensktDatum(new Date());
   const senaste = dagarBakat(idag, KARENS_DAGAR);
@@ -175,11 +178,39 @@ export async function foreslaOgiltigFranvaro(db: SupabaseClient): Promise<Konsek
 
   const tackt = await tacktaDagar(db, tidigaste, senaste);
 
+  // -------------------------------------------------------------------------
+  // 0. Stang det ingen langre ska ta stallning till (`inaktuelltForslag`).
+  // -------------------------------------------------------------------------
+  const stangda = new Set<string>();
+  {
+    const [{ data: oppna }, { data: alla }] = await Promise.all([
+      db.from("attendance_incident").select("id, employee_id, occurred_on").eq("status", "foreslagen"),
+      db.from("employee").select("id, status, end_date"),
+    ]);
+    const per = new Map((alla ?? []).map((p) => [String(p.id), { status: String(p.status), end_date: p.end_date as string | null }]));
+    for (const o of oppna ?? []) {
+      const orsak = inaktuelltForslag(String(o.occurred_on), per.get(String(o.employee_id)), tidigaste);
+      if (!orsak) continue;
+      const { error } = await db.from("attendance_incident").delete().eq("id", o.id).eq("status", "foreslagen");
+      if (error) continue;
+      utfall.stangda++;
+      stangda.add(String(o.id));
+      await db.from("audit_log").insert({
+        actor_id: null,
+        action: "attendance_incident.withdrawn",
+        object_type: "attendance_incident",
+        object_id: o.id,
+        meta: { orsak },
+      });
+    }
+  }
+
   // En dag som redan har en rad rors aldrig igen — oavsett status. Det unika
   // indexet `attendance_incident_dag_idx` skulle neka en andra rad anda, men en
   // motor som forsokte hade byggt sin egen trappa av sina omkorningar.
   const harRad = new Map<string, { id: string; status: string }>();
   for (const b of befintliga ?? []) {
+    if (stangda.has(String(b.id))) continue;
     harRad.set(`${b.employee_id}|${String(b.occurred_on).slice(0, 10)}`, {
       id: String(b.id),
       status: String(b.status),
