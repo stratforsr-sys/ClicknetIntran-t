@@ -290,6 +290,8 @@ export const SORT_NAMN: Record<string, string> = {
   "uppgift-godkand": "Uppgift godkänd",
   "uppgift-kommentar": "Kommentar på en uppgift",
   "uppgift-avbruten": "Uppgift avbruten",
+  "uppgift-med": "Tillagd i en uppgift",
+  "uppgift-delad": "Kollegan gjorde något i er uppgift",
   "uppgift-paminnelse": "Påminnelse om en uppgift",
   veckogenomgang: "Veckogenomgången",
   projektchatt: "Projektchatten",

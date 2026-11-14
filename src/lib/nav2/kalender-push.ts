@@ -44,6 +44,10 @@ export const PUSHKALLOR = new Set<string>([
   "kalender-forberedelse",
   "kalender-paminnelse",
   "uppgift-paminnelse",
+  // 0298: "Zen la till dig" ska nå telefonen i samma stund. Det kollegan sedan
+  // gör i uppgiften (`uppgift-delad`) står i klockan och pushas inte som förval;
+  // den som vill ha det slår på sorten i Utskick.
+  "uppgift-med",
   "leverans-ny",
   "leverans-bokad",
   "leverans-makulerad",

@@ -499,6 +499,24 @@ export const NOTIS_KALLOR = [
   "uppgift-godkand",
   "uppgift-kommentar",
   "uppgift-avbruten",
+  /**
+   * 0298, EN KOLLEGA I UPPGIFTEN (beställaren 2026-11-13).
+   *
+   * `uppgift-med`: någon la till mig i en uppgift. Samma skäl som
+   * `uppgift-tilldelad` precis ovanför: den härledda `uppgift-ny` fångar en
+   * nyss upplagd uppgift, men den som läggs till i något som pågått i tre
+   * veckor fick inget besked alls. Posten tändes bara i `ej_paborjad` och
+   * daterades med uppgiftens ålder.
+   *
+   * `uppgift-delad`: det en kollega gör i en uppgift vi har ihop och som jag
+   * annars inte hade märkt — hen bockade av den, öppnade den igen, la till en
+   * person, flyttade min boll eller lämnade. Bocken är samma fall som
+   * `uppgift-godkand`: raden blir bara `klar`, och utan händelsen försvinner
+   * den tyst ur min lista. EN källa för alla fem, så att det är en inställning
+   * i Utskick och inte fem.
+   */
+  "uppgift-med",
+  "uppgift-delad",
 
   /**
    * Kalenderdelningen (0057). TVA KALLOR, och den andra ar den nodvandiga.
@@ -793,6 +811,8 @@ export const HANDELSEKALLOR = [
   "uppgift-godkand",
   "uppgift-kommentar",
   "uppgift-avbruten",
+  "uppgift-med",
+  "uppgift-delad",
   "kalender-delad",
   "kalender-aterkallad",
   "prov-rattat",

@@ -5,6 +5,67 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-13/14 · Uppgifter: lägg till en kollega i min uppgift (0298)
+
+**Läge:** sju lokala commits ihopslagna till en och flyttade ovanpå main `7316300` på beställarens "fixa allt"
+2026-11-14. **0298 KÖRD 19:30 UTC och 0299 KÖRD 19:37 UTC.**
+
+**0299, hittat när 0298:s prov kördes om efter körningen:** "Två som bockar samtidigt" föll en gång av tre.
+`uppgift_handelse_villkorad` väljer den senaste lägesbärande händelsen på `at desc, id desc`; `at` är now(), samma för
+allt i en transaktion, och `id` är en slumpad uuid. Två lägesbärande händelser i samma transaktion blev lika, och
+slumpen avgjorde om en andra `klar` släpptes igenom. Händelsen funktionen skriver får nu clock_timestamp(). Mot
+databasen med bara 0298 föll provet tre av fem gånger; med 0299 i transaktionen tio av tio gröna, och mot databasen
+efter körningen sex av sex. Provet själv lade "Öppna igen" på now() + 2 s, vilket hamnar före en riktig klocka när
+provet kört i mer än två sekunder; det lägger nu händelserna med clock_timestamp().
+
+
+**Vad:** beställaren 2026-11-13: "jag vill kunna lägga till en annan kollega med min uppgift så att vi båda får
+uppgiften och båda kan jobba i den". Tabellen fanns (`task_member`, 0054) och `mittAttGora()` har sedan 2026-09-23
+lagt en redigerares uppgift bland hens egna. Nav 2.0 saknade knappen, och runt omkring fanns sexton hål (H1–H16 i
+`~/nav2-utkast/delar/uppgift-kollega/PROMPT.md` och `PLAN.md`).
+
+**Beslut som inte går att läsa ur koden:**
+- **En uppgift, inte kopior** (beställaren, "Kör som Asana"). En bock stänger den för alla; de andra får beskedet.
+- **"Har bollen" och "Passa"** (beställaren). Bollen är `assignee_id`. Den som passar är kvar som med.
+- **Alla som är med får lägga till fler** (beställaren, "Gör som Asana"). Det vänder på `farBjudaIn()`, som till dess
+  bara släppte in den som la upp uppgiften och den ansvariga. Skälet (kretsen är integritetslöftet) betalas nu med
+  historik (`krets`-händelsen) och besked till ägarna (`uppgift-delad`). Kommentaren över funktionen säger det.
+- **Ta bort någon annan och stryka** ligger kvar hos den som la upp uppgiften och den som har bollen (`farStyra()`).
+  Det är byggarens val, inte beställarens: frågan gällde att lägga till.
+- **Ingen tappar en uppgift av att någon annan flyttar den.** `uppgift_passa()` låter den som hade bollen vara kvar
+  som med. Undantaget är "Ta tillbaka" (`slapp`), som bara den som får ta bort folk kan använda.
+- **Beskedet "du är med" är en skriven händelse** (`uppgift-med`), tvärt emot den gamla kommentaren i `bjudIn()`.
+  Förebilden är `uppgift-tilldelad`: den härledda `uppgift-ny` tändes bara i `ej_paborjad` och bar uppgiftens ålder.
+- **Två som skriver samtidigt:** rubriken och beskrivningen sparas med jämför-och-byt (klienten skickar texten den
+  utgick från, servern svarar 409). `updated_at` duger inte som märke, varje händelse flyttar den.
+- **Återkommande uppgifter:** kollegan är med den gången (0062 avsnitt 3 står kvar). Väljaren säger det.
+
+**Det som hittades på vägen:**
+- **H16:** `task_event_read` saknade föräldergrenen som `task_read` har. Den som var med i en uppgift såg stegen men
+  inte deras händelser, och läget räknas ur händelserna: varje bockat steg stod som ogjort hos kollegan. Rättat i
+  0298 (`uppgift_synlig_i_trad`), och det gäller också `main` så fort migrationen är körd.
+- **H2:** "Sluta följa" kunde aldrig lyckas (`taBortMedlem` krävde `farBjudaIn`). Egen action, `lamnaUppgift`.
+- **H6:** arbetsrätten i ett steg räknades ur stegets egen rad. `kravKrets()` bär nu förälderns krets (`viaForalder`).
+
+**Prov:** `tests/uppgifter.mjs` (regeltabellen, 246 kontroller), `tests/uppgift-kollega-db.mjs` (33, i en
+transaktion som rullas tillbaka), `tests/nav2-uppgift-kollega.mjs` (51, rött på orörd `main`). `tsc --noEmit` ger
+samma sex fel som `main`.
+
+**2026-11-14, ovanpå uppgiftsrutan (beställarens "fixa allt").** Grenen byggdes före rutan (`36831fb`), och dess
+steg 5 ritade om den gamla rutan. Gränssnittet är omgjort efter rutans skiss (artifact 9tLzSvdWLhYzucsNKJJzDT):
+**Ansvarig** har taggen *har bollen* i en delad uppgift, och **Med** står under Ansvarig där rutan lämnat plats
+(`<!--upg-med-->`): en stapel bilder och namnen, och valet **Lägg till kollegor** bockar i (lägg till) och ur (ta bort
+för den som får styra, Lämna för mig själv). **Lämna över** till någon som är med flyttar bara bollen (`passa`), och den
+som har bollen bockar i **Jag är kvar i uppgiften** innan hen lämnar över till någon utanför. Den som bara är med får
+öppna valet som **Ge bollen**, inom kretsen. Stryk står bara för den som får styra, **Gå med själv** står i foten på
+det man lagt på någon annan, och den som bockade ett steg står på steget. Navets lager skriver över `upgPopHtml` som
+det redan gör med `upgSatt`, så rutans eget prov kör rutan orörd. Servern skickar kollegorna utan mig, så valen lägger
+till mig själv (`ndMedFolk`). Migrationen bytte nummer: 0291 togs av Mötens bekräftelse, och 0292–0297 är också körda.
+
+**Inte gjort:** steg 4 i prompten ("nytt sedan sist", en läsmarkör per person). Inget är klickat i en webbläsare.
+
+---
+
 ## 2026-11-13/14 · Kundens inbjudan: ett riktigt mötesbrev, Teams-länken i kalendern, tillbaka efter borttagen, namnet i avbokningen (0294)
 
 **Läge:** tre lokala commits (`7da60ca`, `7cb50cd`, `542b34b`) ihopslagna till en och flyttade ovanpå main `c462df1`; 0294 KÖRD 2026-11-14 19:06 UTC på beställarens "fixa allt". Före körningen: `UTAN=1 node tests/ics-aterinbjudan-db.mjs` 8 ok, 6 fel mot funktionen i databasen; efter: 14 ok. Provet står nu i `npm test` (`test:ics-aterinbjudan`).

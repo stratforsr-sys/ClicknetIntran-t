@@ -5,15 +5,19 @@ import { supabaseAdmin } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
 import {
-  MEDLEMSROLLER,
+  LAGESHANDELSER,
   PRIORITETER,
+  andringstext,
   arStangd,
   farArbeta,
-  farBjudaIn,
   farGranska,
+  farLamna,
   farPlanera,
   farRedigera,
+  farStyra,
   lageAv,
+  provaLaggaTill,
+  provaLamnaOver,
   tolkaSnabbrad,
   type Handelsetyp,
   type Krets,
@@ -44,7 +48,13 @@ import { notifiera, notifieraFlera } from "@/lib/notishandelse-server";
  * provade var for sig.
  */
 
-export type UppgiftState = { fel?: string; ok?: string; id?: string };
+export type UppgiftState = {
+  fel?: string;
+  ok?: string;
+  id?: string;
+  /** 0298: någon annan hann ändra fältet. `nu` är texten som står i databasen. */
+  konflikt?: { falt: "title" | "description_md"; nu: string };
+};
 
 async function kravInloggad() {
   const user = await getCurrentUser();
@@ -67,7 +77,15 @@ type Rad = {
   created_by: string;
   project_id: string | null;
   parent_id: string | null;
+  // 0298: det som var innan en ändring. `andringstext()` jämför mot det, och
+  // jämför-och-byt i `andraUppgift()` frågar om texten hunnit ändras.
+  description_md: string;
+  due_date: string | null;
+  due_time: string | null;
+  priority: number;
 };
+
+type Medlemsrad = { employee_id: string; role: Medlemsroll };
 
 /**
  * Raden, den inloggade, och vad hen far gora med den.
@@ -83,15 +101,23 @@ async function kravKrets(taskId: string): Promise<{
   granskare: string[];
   /** 0057: nivan den ansvariga gett mig i sin kalender. Null nar ingen finns. */
   kalenderniva: Delningsniva | null;
+  /** 0298: alla tillagda, med roll. */
+  medlemmar: Medlemsrad[];
+  /**
+   * 0298: de som arbetar i uppgiften — den som la upp den, den som har bollen
+   * och de som ar med — och for en deluppgift ocksa foralderns. Det ar mellan
+   * de har bollen kan flyttas utan att nagon ny kommer in i kretsen.
+   */
+  arbetar: string[];
 }> {
   const user = await kravInloggad();
   const mig = user.employee!.id;
   const db = supabaseAdmin();
 
-  const [{ data: rad }, { data: medlemmar }] = await Promise.all([
+  const [{ data: rad }, { data: medlemsrader }] = await Promise.all([
     db
       .from("task")
-      .select("id, title, assignee_id, created_by, project_id, parent_id")
+      .select("id, title, assignee_id, created_by, project_id, parent_id, description_md, due_date, due_time, priority")
       .eq("id", taskId)
       .maybeSingle(),
     db.from("task_member").select("employee_id, role").eq("task_id", taskId),
@@ -99,17 +125,23 @@ async function kravKrets(taskId: string): Promise<{
 
   if (!rad) throw new Error("Uppgiften finns inte.");
 
-  const minRoll =
-    ((medlemmar ?? []).find((m) => m.employee_id === mig)?.role as Medlemsroll | undefined) ?? null;
+  const r = rad as Rad;
+  const medlemmar = (medlemsrader ?? []) as Medlemsrad[];
+  const minRoll = medlemmar.find((m) => m.employee_id === mig)?.role ?? null;
 
-  const kalenderniva = await delningsniva((rad as Rad).assignee_id, mig);
+  const [kalenderniva, foralder] = await Promise.all([
+    delningsniva(r.assignee_id, mig),
+    foralderskrets(db, r.parent_id, mig),
+  ]);
 
   const krets: Krets = {
     mig,
-    assignee_id: (rad as Rad).assignee_id,
-    created_by: (rad as Rad).created_by,
+    assignee_id: r.assignee_id,
+    created_by: r.created_by,
     minRoll,
     somDelegat: farArbetaSomAgaren(kalenderniva),
+    // 0298 (H6). Den som far arbeta i foraldern far arbeta i steget.
+    viaForalder: foralder.arbetar.includes(mig),
   };
 
   /**
@@ -128,16 +160,29 @@ async function kravKrets(taskId: string): Promise<{
     // detaljer" eller mer oppnar raden. RLS och den har kontrollen maste saga
     // samma sak, annars svarar lasningen och skrivningen olika pa vem som ser.
     serDetaljer(kalenderniva) ||
-    (await serViaForalder(db, (rad as Rad).parent_id, mig));
+    foralder.ser;
 
   if (!ser) throw new Error("Uppgiften finns inte.");
 
+  const arbetar = [
+    ...new Set(
+      [
+        r.created_by,
+        r.assignee_id,
+        ...medlemmar.filter((m) => m.role === "redigerare").map((m) => m.employee_id),
+        ...foralder.arbetar,
+      ].filter((x): x is string => Boolean(x)),
+    ),
+  ];
+
   return {
     user,
-    rad: rad as Rad,
+    rad: r,
     krets,
-    granskare: (medlemmar ?? []).filter((m) => m.role === "granskare").map((m) => m.employee_id as string),
+    granskare: medlemmar.filter((m) => m.role === "granskare").map((m) => m.employee_id),
     kalenderniva,
+    medlemmar,
+    arbetar,
   };
 }
 
@@ -166,25 +211,34 @@ async function delningsniva(agare: string | null, lasare: string): Promise<Delni
   return arDelningsniva(niva) ? niva : null;
 }
 
-/** En deluppgift arvs av forlderns krets — samma gren som RLS-policyn har. */
-async function serViaForalder(
+/** En deluppgift arvs av forlderns krets — samma gren som RLS-policyn har — och sedan 0298 ocksa arbetsratten. */
+async function foralderskrets(
   db: ReturnType<typeof supabaseAdmin>,
   parentId: string | null,
   mig: string,
-): Promise<boolean> {
-  if (!parentId) return false;
+): Promise<{ ser: boolean; arbetar: string[] }> {
+  if (!parentId) return { ser: false, arbetar: [] };
 
   const [{ data: far }, { data: medlemmar }] = await Promise.all([
     db.from("task").select("assignee_id, created_by").eq("id", parentId).maybeSingle(),
-    db.from("task_member").select("employee_id").eq("task_id", parentId),
+    db.from("task_member").select("employee_id, role").eq("task_id", parentId),
   ]);
 
-  if (!far) return false;
-  return (
-    far.assignee_id === mig ||
-    far.created_by === mig ||
-    (medlemmar ?? []).some((m) => m.employee_id === mig)
-  );
+  if (!far) return { ser: false, arbetar: [] };
+
+  const rader = (medlemmar ?? []) as Medlemsrad[];
+  const ser =
+    far.assignee_id === mig || far.created_by === mig || rader.some((m) => m.employee_id === mig);
+
+  // 0298 (H6): de som ARBETAR i foraldern. Den som bara kan se, och granskaren,
+  // ser steget men bockar det inte — samma grans som i foraldern sjalv.
+  const arbetar = [
+    far.created_by as string,
+    far.assignee_id as string | null,
+    ...rader.filter((m) => m.role === "redigerare").map((m) => m.employee_id),
+  ].filter((x): x is string => Boolean(x));
+
+  return { ser, arbetar };
 }
 
 /** En rad i historiken. Allt som andrar laget gar igenom den har. */
@@ -208,6 +262,174 @@ async function nuvarandeLage(taskId: string) {
     .eq("task_id", taskId)
     .order("at");
   return lageAv((data ?? []) as { type: Handelsetyp }[]);
+}
+
+/**
+ * 0298: skriv handelsen bara om laget tillater det, i ETT steg i databasen.
+ *
+ * Svarar med typen som stoppade, eller null nar handelsen skrevs. Se
+ * `uppgift_handelse_villkorad` i 0298 for varfor: tva som bockar samtidigt i en
+ * delad uppgift gav tva `klar`, eftersom laget lastes i ett anrop och
+ * handelsen skrevs i ett annat.
+ */
+async function skrivVillkorad(
+  taskId: string,
+  typ: Handelsetyp,
+  av: string,
+  note: string | null,
+  stoppande: Handelsetyp[],
+): Promise<Handelsetyp | null> {
+  const { data, error } = await supabaseAdmin().rpc("uppgift_handelse_villkorad", {
+    p_task: taskId,
+    p_typ: typ,
+    p_av: av,
+    p_note: note,
+    p_lagestyper: LAGESHANDELSER,
+    p_stoppande: stoppande,
+  });
+  if (error) throw new Error(`Händelsen sparades inte: ${error.message}`);
+  return (data as Handelsetyp | null) ?? null;
+}
+
+/** De som har uppgiften som SIN: den som har bollen och de som ar med. */
+function harDenSomSin(rad: Rad, medlemmar: Medlemsrad[]): string[] {
+  return [rad.assignee_id, ...medlemmar.filter((m) => m.role === "redigerare").map((m) => m.employee_id)].filter(
+    (x): x is string => Boolean(x),
+  );
+}
+
+/** Ar uppgiften delad — finns det fler an en som arbetar i den? */
+function arDelad(rad: Rad, medlemmar: Medlemsrad[]): boolean {
+  return new Set([rad.created_by, ...harDenSomSin(rad, medlemmar)]).size > 1;
+}
+
+/** Namnet och om personen slutat. Null nar id:t inte finns (eller inte ar ett id). */
+async function slaUppAnstalld(id: string): Promise<{ namn: string; slutat: boolean } | null> {
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
+  const { data } = await supabaseAdmin()
+    .from("employee")
+    .select("first_name, last_name, status")
+    .eq("id", id)
+    .maybeSingle();
+  if (!data) return null;
+  const p = data as { first_name: string; last_name: string; status: string };
+  return { namn: `${p.first_name} ${p.last_name}`.trim(), slutat: p.status === "offboarded" };
+}
+
+/** H13: har uppgiften en personkoppling till `person` som ar dold for hen? */
+async function doldKopplingTill(taskId: string, person: string): Promise<boolean> {
+  const { data } = await supabaseAdmin()
+    .from("task_link")
+    .select("id")
+    .eq("task_id", taskId)
+    .eq("employee_id", person)
+    .eq("visible_to_subject", false)
+    .limit(1);
+  return (data ?? []).length > 0;
+}
+
+/**
+ * En granskare forsvann ur en uppgift som vantar pa godkannande. Finns ingen
+ * kvar kan ingen godkanna, och uppgiften hade statt i "Väntar på godkännande"
+ * for alltid. Den gar tillbaka till arbetet, med en rad som sager varfor.
+ */
+async function slappUrGranskning(taskId: string, av: string, kvarvarandeGranskare: number): Promise<void> {
+  if (kvarvarandeGranskare > 0) return;
+  if ((await nuvarandeLage(taskId)) !== "granskas") return;
+  await skrivHandelse(taskId, "paborjad", av, "Ingen granskare är kvar. Uppgiften är öppen igen.");
+}
+
+/**
+ * Lagger till en person och sager till dem det ror. Kontrollerna ar gjorda av
+ * anroparen (`provaLaggaTill`).
+ *
+ * =============================================================================
+ * BESKEDET AR EN SKRIVEN HANDELSE (`uppgift-med`), OCH DET ANDRAR ETT GAMMALT VAL
+ *
+ * Fram till 0298 stod har "SKRIV INTE EN NOTISRAD": att vara inbjuden ar ett
+ * tillstand, och den harledda `uppgift-ny` skulle falla bort av sig sjalv nar
+ * arbetet borjat. Regeln ar riktig for en NY uppgift. Men att laggas till i en
+ * uppgift som funnits i tre veckor ar samma fall som omtilldelningen, och for
+ * den finns `uppgift-tilldelad` av just det skalet (se notiser.ts): den
+ * harledda posten tandes bara i `ej_paborjad`, daterades med uppgiftens
+ * `created_at` och sa "Från" den som la upp uppgiften. Den som lades till i
+ * nagot som redan pagick fick alltsa inget besked alls, och ingen push.
+ *
+ * `uppgiftsnotiser()` tander darfor inte langre `uppgift-ny` for den som bara
+ * ar med, sa att beskedet kommer en gang.
+ * =============================================================================
+ */
+async function laggTill(a: {
+  rad: Pick<Rad, "id" | "title" | "assignee_id" | "created_by">;
+  person: string;
+  namn: string;
+  roll: Medlemsroll;
+  av: string;
+  avFornamn: string;
+}): Promise<string | null> {
+  const db = supabaseAdmin();
+  const { error } = await db
+    .from("task_member")
+    .upsert(
+      { task_id: a.rad.id, employee_id: a.person, role: a.roll, added_by: a.av },
+      { onConflict: "task_id,employee_id" },
+    );
+  if (error) return `Personen lades inte till: ${error.message}`;
+
+  const som = a.roll === "redigerare" ? "" : a.roll === "granskare" ? " som granskare" : " som kan se";
+  // B9: den som la upp uppgiften och går med själv har inte "lagt till" någon.
+  await skrivHandelse(a.rad.id, "krets", a.av, a.person === a.av ? "gick med" : `la till ${a.namn}${som}`);
+
+  await notifieraFlera([a.person], {
+    av: a.av,
+    kalla: "uppgift-med",
+    typ: "uppgift",
+    rubrik: a.rad.title,
+    detalj:
+      a.roll === "redigerare"
+        ? `${a.avFornamn} la till dig. Uppgiften är din också nu.`
+        : a.roll === "granskare"
+          ? `${a.avFornamn} satte dig som granskare.`
+          : `${a.avFornamn} lät dig följa uppgiften.`,
+    href: `/uppgifter/${a.rad.id}`,
+    objekt: { typ: "task", id: a.rad.id },
+  });
+
+  // B4: den som la upp uppgiften och den som har bollen far veta nar NAGON
+  // ANNAN lagger till en person. `notifieraFlera` tar sjalv bort avsandaren.
+  await notifieraFlera(
+    [a.rad.created_by, a.rad.assignee_id].filter((x): x is string => Boolean(x) && x !== a.person),
+    {
+      av: a.av,
+      kalla: "uppgift-delad",
+      typ: "uppgift",
+      rubrik: a.rad.title,
+      detalj: a.person === a.av ? `${a.avFornamn} gick med i uppgiften.` : `${a.avFornamn} la till ${a.namn}${som}.`,
+      href: `/uppgifter/${a.rad.id}`,
+      objekt: { typ: "task", id: a.rad.id },
+    },
+  );
+
+  await db.from("audit_log").insert({ actor_id: a.av, action: "task.member_added", object_type: "task", object_id: a.rad.id });
+  return null;
+}
+
+/**
+ * 0298 (H14): en flytt i en DELAD uppgift far en rad i historiken.
+ *
+ * Bara delade: i en egen uppgift vet man sjalv att man flyttade den, och en
+ * historik full av "flyttade till i morgon" ar brus. I en delad ar raden
+ * skillnaden mellan "Simon flyttade den till måndag" och "den är borta".
+ */
+async function noteraFlytt(
+  rad: Rad,
+  medlemmar: Medlemsrad[],
+  av: string,
+  efter: { due_date: string | null; due_time: string | null; priority: number },
+): Promise<void> {
+  if (!arDelad(rad, medlemmar)) return;
+  const vad = andringstext(rad, efter, svensktDatum());
+  if (vad) await skrivHandelse(rad.id, "andrad", av, vad);
 }
 
 function uppdatera(id: string) {
@@ -255,6 +477,8 @@ export async function skapaUppgift(_prev: UppgiftState, form: FormData): Promise
     let projektId = valfritt(form, "project_id");
     let ansvarig = valfritt(form, "assignee_id");
     let rest = "";
+    // 0298: kollegorna efter `+` i snabbraden ("Ring Nordic fredag +simon").
+    const medTraffar: { id: string; namn: string }[] = [];
 
     if (snabbrad) {
       // Nav 2.0 skickar utan_dag. En rad utan dag far da ingen deadline, men ett
@@ -284,6 +508,16 @@ export async function skapaUppgift(_prev: UppgiftState, form: FormData): Promise
         else rest += ` @${tolkad.person}`;
       }
 
+      // Ett namn som inte gar att sla upp star kvar i rubriken, precis som ett
+      // okant `@` och `#` gor: raden sparas, och det syns vad som inte togs.
+      for (const namn of tolkad.med) {
+        const traff = await slaUppPerson(namn);
+        const person = traff ? await slaUppAnstalld(traff) : null;
+        if (traff && person) {
+          if (!medTraffar.some((m) => m.id === traff)) medTraffar.push({ id: traff, namn: person.namn });
+        } else rest += ` +${namn}`;
+      }
+
       titel = `${titel}${rest}`.trim();
     }
 
@@ -310,6 +544,10 @@ export async function skapaUppgift(_prev: UppgiftState, form: FormData): Promise
     const regel = due ? regelUrFormular(form, due) : null;
     if (regel) {
       if (foralder) return { fel: "En deluppgift kan inte återkomma. Lägg upp rutinen som en egen uppgift." };
+      // B7: en kollega ar med en gang, inte i hela rutinen (0062, avsnitt 3).
+      if (medTraffar.length > 0) {
+        return { fel: "En återkommande uppgift delas en gång i taget. Lägg upp den först och lägg till kollegan i den gång det gäller." };
+      }
 
       const klagomal = granskaRegel(regel);
       if (klagomal) return { fel: klagomal };
@@ -352,8 +590,25 @@ export async function skapaUppgift(_prev: UppgiftState, form: FormData): Promise
 
     await skrivHandelse(skapad.id as string, "skapad", mig);
 
+    // 0298: de som stod efter `+`. Den som fick bollen ar redan inne, och en
+    // deluppgift har ingen egen krets (den arvs fran uppgiften den hor till).
+    const nya = foralder ? [] : medTraffar.filter((m) => m.id !== (skapad.assignee_id as string | null));
+    for (const m of nya) {
+      await laggTill({
+        rad: { id: skapad.id as string, title: titel, assignee_id: skapad.assignee_id as string | null, created_by: mig },
+        person: m.id,
+        namn: m.namn,
+        roll: "redigerare",
+        av: mig,
+        avFornamn: user.employee!.first_name,
+      });
+    }
+
     uppdatera(skapad.id as string);
-    return { ok: "Upplagd.", id: skapad.id as string };
+    return {
+      ok: nya.length > 0 ? `Upplagd. ${nya.map((m) => m.namn.split(" ")[0]).join(" och ")} är med.` : "Upplagd.",
+      id: skapad.id as string,
+    };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }
@@ -462,11 +717,35 @@ async function slaUppPerson(namn: string): Promise<string | null> {
 export async function andraUppgift(_prev: UppgiftState, form: FormData): Promise<UppgiftState> {
   try {
     const id = text(form, "id");
-    const { krets } = await kravKrets(id);
+    const { krets, rad, medlemmar } = await kravKrets(id);
     if (!farRedigera(krets)) return { fel: "Du får inte ändra den här uppgiften." };
 
     const titel = text(form, "title");
     if (!titel) return { fel: "Rubriken kan inte vara tom." };
+
+    /**
+     * 0298 (H15): JAMFOR OCH BYT for de tva fritextfalten.
+     *
+     * Tva som har samma ruta oppen skrev over varandra, och den som sparade
+     * sist vann utan att nagon marktes. Klienten skickar texten den UTGICK
+     * fran; har databasen en annan nu har nagon annan hunnit emellan, och da
+     * vagrar vi i stallet for att kasta deras text. `updated_at` duger inte
+     * som marke: varje handelse flyttar den, ocksa en kommentar.
+     *
+     * Skickas ingen bas (gamla Nav) galler det gamla beteendet.
+     */
+    for (const [falt, nu, nytt] of [
+      ["title", rad.title, titel],
+      ["description_md", rad.description_md ?? "", text(form, "description_md")],
+    ] as const) {
+      if (!form.has(`bas_${falt}`)) continue;
+      if (text(form, `bas_${falt}`) !== nu.trim() && nytt !== nu.trim()) {
+        return {
+          fel: falt === "title" ? "Någon annan ändrade rubriken nyss. Läs den nya innan du sparar din." : "Någon annan ändrade beskrivningen nyss. Läs den nya innan du sparar din.",
+          konflikt: { falt, nu },
+        };
+      }
+    }
 
     const due = valfritt(form, "due_date");
     const prioritet = Number(text(form, "priority") || "3");
@@ -519,6 +798,12 @@ export async function andraUppgift(_prev: UppgiftState, form: FormData): Promise
       .eq("id", id);
 
     if (error) return { fel: `Ändringen sparades inte: ${error.message}` };
+
+    await noteraFlytt(rad, medlemmar, krets.mig, {
+      due_date: due,
+      due_time: due ? valfritt(form, "due_time") : null,
+      priority: PRIORITETER.includes(prioritet as Prioritet) ? prioritet : 3,
+    });
 
     if (helaSerien) {
       const svar = await andraHelaSerien(serieId!, form, {
@@ -801,20 +1086,58 @@ async function taBortOrordFramtid(serieId: string, behall?: string): Promise<num
 export async function tilldela(_prev: UppgiftState, form: FormData): Promise<UppgiftState> {
   try {
     const id = text(form, "id");
-    const { rad, krets, user } = await kravKrets(id);
-    if (!farRedigera(krets)) return { fel: "Du får inte ändra den här uppgiften." };
+    const { rad, krets, user, medlemmar, arbetar } = await kravKrets(id);
 
     const till = valfritt(form, "assignee_id");
     if (till === rad.assignee_id) return { ok: "Oförändrad." };
 
-    const { error } = await supabaseAdmin()
-      .from("task")
-      .update({ assignee_id: till, updated_at: new Date().toISOString() })
-      .eq("id", id);
+    const mottagare = till ? await slaUppAnstalld(till) : null;
+    if (till && !mottagare) return { fel: "Personen finns inte." };
 
-    if (error) return { fel: `Gick inte att tilldela: ${error.message}` };
+    /**
+     * 0298: HELA BESLUTET STAR I `provaLamnaOver()` (lib/uppgifter.ts).
+     *
+     * Inom kretsen ar det en passning och kraver bara att man arbetar i
+     * uppgiften. Till nagon utanfor ar det att lagga till en person och ge hen
+     * bollen, och da galler samma sparrar som nar nagon laggs till: den som
+     * slutat, den dolda personkopplingen (H13) och granskaren.
+     */
+    const fel = provaLamnaOver({
+      krets,
+      till,
+      iKretsen: till !== null && arbetar.includes(till),
+      befintligRoll: medlemmar.find((m) => m.employee_id === till)?.role ?? null,
+      slutat: mottagare?.slutat ?? false,
+      doldKoppling: till ? await doldKopplingTill(id, till) : false,
+    });
+    if (fel) return { fel };
 
-    await skrivHandelse(id, "tilldelad", krets.mig);
+    /**
+     * B5: INGEN TAPPAR EN UPPGIFT AV ATT NAGON ANNAN FLYTTAR DEN.
+     *
+     * Den som sjalv har bollen och lamnar over valjer om hen vill vara kvar
+     * (`stanna`). Flyttar nagon annan bollen blir den som hade den alltid kvar
+     * som med. Fore 0298 forsvann hen ur kretsen utan besked om hen inte ocksa
+     * hade lagt upp uppgiften (H8).
+     */
+    const jagHade = rad.assignee_id === krets.mig;
+    // "Ta tillbaka": den som la upp uppgiften (eller annars får ta bort folk)
+    // släpper den som hade den, som före 0298. Ingen annan kan släppa någon.
+    const slapper = !jagHade && text(form, "slapp") === "ja" && farStyra(krets);
+    const stanna = jagHade ? text(form, "stanna") === "ja" : !slapper;
+    const delad = arDelad(rad, medlemmar);
+
+    const { error } = await supabaseAdmin().rpc("uppgift_passa", {
+      p_task: id,
+      p_till: till,
+      p_av: krets.mig,
+      p_stanna: stanna,
+      p_note: till === null ? "la den i inkorgen" : till === krets.mig ? "tog bollen" : `passade till ${mottagare!.namn}`,
+    });
+
+    if (error) return { fel: `Gick inte att lämna över: ${error.message}` };
+
+    const fornamn = user.employee!.first_name;
 
     if (till) {
       await notifiera({
@@ -823,14 +1146,40 @@ export async function tilldela(_prev: UppgiftState, form: FormData): Promise<Upp
         kalla: "uppgift-tilldelad",
         typ: "uppgift",
         rubrik: rad.title,
-        detalj: `${user.employee!.first_name} la uppgiften på dig`,
+        detalj: delad || stanna ? `${fornamn} passade bollen till dig` : `${fornamn} la uppgiften på dig`,
         href: `/uppgifter/${id}`,
         objekt: { typ: "task", id },
       });
     }
 
+    // Den som hade bollen och inte sjalv flyttade den far veta vart den tog vagen.
+    if (rad.assignee_id && !jagHade && rad.assignee_id !== till) {
+      await notifieraFlera([rad.assignee_id], {
+        av: krets.mig,
+        kalla: "uppgift-delad",
+        typ: "uppgift",
+        rubrik: rad.title,
+        detalj: slapper
+          ? `${fornamn} tog tillbaka uppgiften.`
+          : till
+            ? `${fornamn} gav bollen till ${till === krets.mig ? "sig själv" : mottagare!.namn}. Du är kvar i uppgiften.`
+            : `${fornamn} la uppgiften i inkorgen. Du är kvar i den.`,
+        // Den som släppts ser inte uppgiften längre: länken går till listan.
+        href: slapper ? "/uppgifter" : `/uppgifter/${id}`,
+        objekt: { typ: "task", id },
+      });
+    }
+
     uppdatera(id);
-    return { ok: till ? "Tilldelad." : "Lagd i inkorgen." };
+    return {
+      ok: !till
+        ? "Lagd i inkorgen."
+        : till === krets.mig
+          ? "Du har bollen."
+          : jagHade && !stanna
+            ? "Tilldelad."
+            : `${mottagare!.namn.split(" ")[0]} har bollen.${jagHade ? " Du är kvar i uppgiften." : ""}`,
+    };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }
@@ -870,7 +1219,7 @@ export async function tilldela(_prev: UppgiftState, form: FormData): Promise<Upp
 export async function planera(_prev: UppgiftState, form: FormData): Promise<UppgiftState> {
   try {
     const id = text(form, "id");
-    const { krets, kalenderniva } = await kravKrets(id);
+    const { krets, kalenderniva, rad, medlemmar } = await kravKrets(id);
     if (!farPlanera(krets, farPlaneraOm(kalenderniva))) {
       return { fel: "Du får inte planera om den här uppgiften." };
     }
@@ -889,6 +1238,12 @@ export async function planera(_prev: UppgiftState, form: FormData): Promise<Uppg
       .eq("id", id);
 
     if (error) return { fel: `Gick inte att planera: ${error.message}` };
+
+    await noteraFlytt(rad, medlemmar, krets.mig, {
+      due_date: due,
+      due_time: due ? valfritt(form, "due_time") : null,
+      priority: rad.priority,
+    });
 
     uppdatera(id);
     return { ok: due ? "Planerad." : "Datumet togs bort." };
@@ -926,37 +1281,48 @@ export async function paborja(_prev: UppgiftState, form: FormData): Promise<Uppg
 export async function bocka(_prev: UppgiftState, form: FormData): Promise<UppgiftState> {
   try {
     const id = text(form, "id");
-    const { krets, granskare } = await kravKrets(id);
+    const { rad, krets, granskare, medlemmar, user } = await kravKrets(id);
     if (!farArbeta(krets)) return { fel: "Du får inte bocka av den här uppgiften." };
 
-    const lage = await nuvarandeLage(id);
-    if (lage === "klar") return { ok: "Redan klar." };
-    if (lage === "granskas") return { fel: "Den ligger redan hos granskaren." };
+    // FORST TILL KVARN. Den som bockar och sjalv ar granskare har godkant i
+    // samma rorelse — att lamna in till sig sjalv vore en omvag utan innehall.
+    const gransk = granskare.filter((g) => g !== krets.mig);
+    const typ: Handelsetyp = gransk.length > 0 ? "inlamnad" : granskare.includes(krets.mig) ? "godkand" : "klar";
+
+    // 0298 (H15): laget lases och handelsen skrivs i ETT steg. Tva som bockar
+    // samtidigt i en delad uppgift ger en `klar`, och den andra far svaret.
+    const stopp = await skrivVillkorad(id, typ, krets.mig, valfritt(form, "note"), ["klar", "godkand", "inlamnad"]);
+    if (stopp === "inlamnad") return { fel: "Den ligger redan hos granskaren." };
+    if (stopp) return { ok: "Redan klar." };
 
     /**
-     * EN GRANSKARE SOM BOCKAR AV SIN EGEN UPPGIFT GODKANNER DEN.
+     * 0298 (H4): DE ANDRA SOM HAR UPPGIFTEN FAR VETA ATT DEN AR BOCKAD.
      *
-     * Utan den har grenen hamnar hon i en slinga: hon lamnar in till sig sjalv
-     * och maste sedan godkanna sig sjalv i ett andra klick. Det ar inte en
-     * kontroll, det ar en bekraftelsedialog utstrackt over tva sidladdningar.
+     * Fore bygget forsvann raden tyst ur kollegans lista. Det har ar en
+     * handelse som skriver over tillstandet den kom ur (uppgiften star inte
+     * langre som oppen), alltsa en riktig handelsekalla enligt regeln i
+     * notiser.ts — samma skal som `uppgift-godkand` har.
+     *
+     * INTE FOR ETT STEG. En deluppgift som bockas syns i uppgiften, och ett
+     * besked per steg hade gjort det dyrt att arbeta ihop.
      */
-    const gransk = granskare.filter((g) => g !== krets.mig);
-
-    if (gransk.length === 0) {
-      await skrivHandelse(id, granskare.includes(krets.mig) ? "godkand" : "klar", krets.mig, valfritt(form, "note"));
-      uppdatera(id);
-      return { ok: "Klar." };
+    if (!rad.parent_id) {
+      await notifieraFlera(harDenSomSin(rad, medlemmar), {
+        av: krets.mig,
+        kalla: "uppgift-delad",
+        typ: "uppgift",
+        rubrik: rad.title,
+        detalj:
+          typ === "inlamnad"
+            ? `${user.employee!.first_name} lämnade in den för godkännande.`
+            : `${user.employee!.first_name} bockade av den.`,
+        href: `/uppgifter/${id}`,
+        objekt: { typ: "task", id },
+      });
     }
 
-    await skrivHandelse(id, "inlamnad", krets.mig, valfritt(form, "note"));
-
-    /**
-     * Ingen notis skrivs har. "Vantar pa MIN bock" ar HARLEDD ur laget
-     * (`uppgift-granska` i notiser.ts) och star kvar tills nagon gor nagot at
-     * den — en handelsepost hade legat kvar i klockan aven efter godkannandet.
-     */
     uppdatera(id);
-    return { ok: "Inlämnad för godkännande." };
+    return { ok: typ === "inlamnad" ? "Inlämnad för godkännande." : "Klar." };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }
@@ -1033,10 +1399,30 @@ export async function returnera(_prev: UppgiftState, form: FormData): Promise<Up
 export async function ateroppna(_prev: UppgiftState, form: FormData): Promise<UppgiftState> {
   try {
     const id = text(form, "id");
-    const { krets } = await kravKrets(id);
+    const { rad, krets, medlemmar, user } = await kravKrets(id);
     if (!farArbeta(krets)) return { fel: "Du får inte öppna den här uppgiften igen." };
 
-    await skrivHandelse(id, "ateroppnad", krets.mig, valfritt(form, "note"));
+    // 0298: samma ett-stegs-skrivning som bocken. Tva som angrar samtidigt ger en rad.
+    const stopp = await skrivVillkorad(id, "ateroppnad", krets.mig, valfritt(form, "note"), [
+      "skapad",
+      "paborjad",
+      "returnerad",
+      "ateroppnad",
+    ]);
+    if (stopp) return { ok: "Redan öppen." };
+
+    if (!rad.parent_id) {
+      await notifieraFlera(harDenSomSin(rad, medlemmar), {
+        av: krets.mig,
+        kalla: "uppgift-delad",
+        typ: "uppgift",
+        rubrik: rad.title,
+        detalj: `${user.employee!.first_name} öppnade den igen.`,
+        href: `/uppgifter/${id}`,
+        objekt: { typ: "task", id },
+      });
+    }
+
     uppdatera(id);
     return { ok: "Öppen igen." };
   } catch (e) {
@@ -1047,17 +1433,23 @@ export async function ateroppna(_prev: UppgiftState, form: FormData): Promise<Up
 export async function avbryt(_prev: UppgiftState, form: FormData): Promise<UppgiftState> {
   try {
     const id = text(form, "id");
-    const { rad, krets, user } = await kravKrets(id);
-    if (!farBjudaIn(krets)) return { fel: "Bara den som la upp uppgiften eller är ansvarig kan avbryta den." };
+    const { rad, krets, user, medlemmar } = await kravKrets(id);
+    // 0298: `farStyra` ar det `farBjudaIn` betydde fore B4. Den som ar med far lagga till, inte stryka.
+    // Ett STEG får alla som arbetar i uppgiften ta bort (regeltabellen): steget
+    // är en rad i det de gör ihop, inte en egen uppgift med en egen ägare.
+    if (!(farStyra(krets) || (rad.parent_id !== null && farRedigera(krets)))) {
+      return { fel: "Bara den som la upp uppgiften eller har bollen kan stryka den." };
+    }
 
     const skal = text(form, "note");
     if (!skal) return { fel: "Skriv varför den inte ska göras." };
 
     await skrivHandelse(id, "avbruten", krets.mig, skal);
 
-    if (rad.assignee_id) {
-      await notifiera({
-        till: rad.assignee_id,
+    // 0298: alla som har uppgiften som sin, inte bara den som har bollen.
+    const berorda = harDenSomSin(rad, medlemmar);
+    if (berorda.length > 0) {
+      await notifieraFlera(berorda, {
         av: krets.mig,
         kalla: "uppgift-avbruten",
         typ: "uppgift",
@@ -1123,59 +1515,49 @@ export async function kommentera(_prev: UppgiftState, form: FormData): Promise<U
 export async function bjudIn(_prev: UppgiftState, form: FormData): Promise<UppgiftState> {
   try {
     const id = text(form, "id");
-    const { rad, krets } = await kravKrets(id);
-    if (!farBjudaIn(krets)) return { fel: "Bara den som la upp uppgiften eller är ansvarig kan bjuda in." };
+    const { rad, krets, medlemmar, user } = await kravKrets(id);
 
     const person = text(form, "employee_id");
-    const roll = text(form, "role") as Medlemsroll;
+    const roll = (text(form, "role") || "redigerare") as Medlemsroll;
 
-    if (!person) return { fel: "Välj vem som ska bjudas in." };
-    if (!MEDLEMSROLLER.includes(roll)) return { fel: "Okänd roll." };
+    const anstalld = person ? await slaUppAnstalld(person) : null;
+    if (person && !anstalld) return { fel: "Personen finns inte." };
 
-    // Den ansvariga och den som la upp den ar redan inne. En rad till hade gett
-    // en person tva roller i granssnittet och ett svar pa fragan "far hon
-    // godkanna" som beror pa vilken rad man laser forst.
-    if (person === rad.assignee_id || person === rad.created_by) {
-      return { fel: "Personen är redan med i uppgiften." };
-    }
+    // Hela beslutet — vem som far, vem som redan ar inne, den som slutat, den
+    // dolda personkopplingen (H13), granskaren — star i lib/uppgifter.ts och
+    // provas dar. Se ocksa kommentaren over `farBjudaIn()` om beslutet B4.
+    const fel = provaLaggaTill({
+      krets,
+      person,
+      roll,
+      befintligRoll: medlemmar.find((m) => m.employee_id === person)?.role ?? null,
+      slutat: anstalld?.slutat ?? false,
+      doldKoppling: person ? await doldKopplingTill(id, person) : false,
+    });
+    if (fel) return { fel };
 
-    const { error } = await supabaseAdmin()
-      .from("task_member")
-      .upsert(
-        { task_id: id, employee_id: person, role: roll, added_by: krets.mig },
-        { onConflict: "task_id,employee_id" },
-      );
+    const lagtTill = await laggTill({
+      rad,
+      person,
+      namn: anstalld!.namn,
+      roll,
+      av: krets.mig,
+      avFornamn: user.employee!.first_name,
+    });
+    if (lagtTill) return { fel: lagtTill };
 
-    if (error) return { fel: `Inbjudan sparades inte: ${error.message}` };
-
-    /**
-     * Ingen notis. Att BLI INBJUDEN ar ett tillstand som star kvar sa lange
-     * raden finns — uppgiften dyker upp i personens lista i samma sekund, och
-     * en granskare far dessutom sin harledda post nar det finns nagot att
-     * granska. En handelsepost hade legat kvar i klockan efter att hen redan
-     * arbetat i uppgiften i en vecka.
-     *
-     * =======================================================================
-     * DET STYCKET OVAN VAR RIKTIGT OCH PREMISSEN VAR FALSK, 0054 → 2026-09-23
-     *
-     * Uppgiften dok INTE upp i personens lista. Ingen av vyerna pa /uppgifter
-     * fragade efter medlemskap — alla sex filtrerade pa `assignee_id` eller
-     * `created_by` — sa den inbjudna fick varken rad, notis eller brev, och
-     * enda vagen fram till uppgiften var adressen i klartext. Beskedet "hon
-     * ser den direkt" var alltsa skalet till att hon inte fick veta nagot,
-     * och ingenting gjorde att det markes.
-     *
-     * Hallet ar tatat pa ratt stalle: `mittAttGora()` och `delatTillMig()` i
-     * `lib/uppgifter.ts` styr numera vyerna, och redigeraren far dessutom sin
-     * HARLEDDA `uppgift-ny`-post i `uppgiftsnotiser()`. Darmed star
-     * slutsatsen har kvar — men nu pa en premiss som finns.
-     *
-     * SKRIV INTE EN NOTISRAD HAR. Den skulle bli den enda i modulen som inte
-     * kan falla bort av sig sjalv nar arbetet borjat.
-     * =======================================================================
-     */
     uppdatera(id);
-    return { ok: "Inbjuden." };
+    const fornamn = anstalld!.namn.split(" ")[0];
+    return {
+      ok:
+        person === krets.mig
+          ? "Du är med. Uppgiften står bland dina egna."
+          : roll === "redigerare"
+          ? `${fornamn} är med. Hen får en notis.`
+          : roll === "granskare"
+            ? `${fornamn} är granskare.`
+            : `${fornamn} kan se uppgiften.`,
+    };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }
@@ -1184,16 +1566,101 @@ export async function bjudIn(_prev: UppgiftState, form: FormData): Promise<Uppgi
 export async function taBortMedlem(_prev: UppgiftState, form: FormData): Promise<UppgiftState> {
   try {
     const id = text(form, "id");
-    const { krets } = await kravKrets(id);
-    if (!farBjudaIn(krets)) return { fel: "Du får inte ändra vilka som är med." };
+    const { krets, medlemmar } = await kravKrets(id);
+    // 0298: att ta bort NAGON ANNAN ligger kvar hos den som la upp uppgiften
+    // och den som har bollen. Den som vill ga sjalv anvander `lamnaUppgift()`.
+    if (!farStyra(krets)) return { fel: "Bara den som la upp uppgiften eller har bollen kan ta bort någon." };
 
     const person = text(form, "employee_id");
     if (!person) return { fel: "Vem?" };
 
-    await supabaseAdmin().from("task_member").delete().eq("task_id", id).eq("employee_id", person);
+    const rad = medlemmar.find((m) => m.employee_id === person);
+    if (!rad) return { ok: "Personen är inte med." };
+
+    const { error } = await supabaseAdmin().from("task_member").delete().eq("task_id", id).eq("employee_id", person);
+    if (error) return { fel: `Gick inte att ta bort: ${error.message}` };
+
+    const anstalld = await slaUppAnstalld(person);
+    await skrivHandelse(id, "krets", krets.mig, `tog bort ${anstalld?.namn ?? "en person"}`);
+    if (rad.role === "granskare") {
+      await slappUrGranskning(id, krets.mig, medlemmar.filter((m) => m.role === "granskare" && m.employee_id !== person).length);
+    }
+    await supabaseAdmin().from("audit_log").insert({ actor_id: krets.mig, action: "task.member_removed", object_type: "task", object_id: id });
 
     uppdatera(id);
-    return { ok: "Borttagen." };
+    return { ok: `${anstalld?.namn.split(" ")[0] ?? "Personen"} är borttagen.` };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Något gick fel." };
+  }
+}
+
+/**
+ * 0298 (H2): LAMNA UPPGIFTEN SJALV.
+ *
+ * "Sluta följa" i Nav 2.0 anropade `taBortMedlem()`, som kravde `farBjudaIn()`.
+ * Den som ar inbjuden var per definition varken skapare eller ansvarig, sa
+ * knappen kunde aldrig lyckas. Den har vagen har ett enda argument — uppgiften
+ * — och tar alltid bort DEN INLOGGADES rad, aldrig nagon annans.
+ */
+export async function lamnaUppgift(_prev: UppgiftState, form: FormData): Promise<UppgiftState> {
+  try {
+    const id = text(form, "id");
+    const { rad, krets, medlemmar, user } = await kravKrets(id);
+
+    if (krets.minRoll === null) return { fel: "Du är inte tillagd i den här uppgiften." };
+    if (!farLamna(krets)) return { fel: "Du har bollen. Passa den till någon annan först." };
+
+    const { error } = await supabaseAdmin().from("task_member").delete().eq("task_id", id).eq("employee_id", krets.mig);
+    if (error) return { fel: `Gick inte att lämna: ${error.message}` };
+
+    await skrivHandelse(id, "krets", krets.mig, "lämnade uppgiften");
+    if (krets.minRoll === "granskare") {
+      await slappUrGranskning(id, krets.mig, medlemmar.filter((m) => m.role === "granskare" && m.employee_id !== krets.mig).length);
+    }
+
+    // De tva som svarar for uppgiften far veta att en hand forsvann.
+    if (krets.minRoll !== "visare") {
+      await notifieraFlera([rad.created_by, rad.assignee_id].filter((x): x is string => Boolean(x)), {
+        av: krets.mig,
+        kalla: "uppgift-delad",
+        typ: "uppgift",
+        rubrik: rad.title,
+        detalj: `${user.employee!.first_name} lämnade uppgiften.`,
+        href: `/uppgifter/${id}`,
+        objekt: { typ: "task", id },
+      });
+    }
+    await supabaseAdmin().from("audit_log").insert({ actor_id: krets.mig, action: "task.member_left", object_type: "task", object_id: id });
+
+    uppdatera(id);
+    return { ok: krets.minRoll === "redigerare" ? "Du är inte med i uppgiften längre." : "Du följer inte uppgiften längre." };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Något gick fel." };
+  }
+}
+
+/**
+ * 0298 (H7): FORSTA STEGET, for alla som arbetar i uppgiften.
+ *
+ * Fore bygget skrev rutten faltet sjalv och slappte bara in den som la upp
+ * uppgiften och den ansvariga. Kollegan fick 403 pa det enda falt som handlar
+ * om hur man kommer igang.
+ */
+export async function sattForstaSteg(_prev: UppgiftState, form: FormData): Promise<UppgiftState> {
+  try {
+    const id = text(form, "id");
+    const { krets } = await kravKrets(id);
+    if (!farRedigera(krets)) return { fel: "Bara de som arbetar i uppgiften ändrar Börja med." };
+
+    const steg = text(form, "text").slice(0, 200);
+    const { error } = await supabaseAdmin()
+      .from("task")
+      .update({ next_step: steg || null, updated_at: new Date().toISOString() })
+      .eq("id", id);
+    if (error) return { fel: `Börja med sparades inte: ${error.message}` };
+
+    uppdatera(id);
+    return { ok: steg ? "Sparat. Det står på raden i listan." : "Borttaget." };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }
@@ -1218,7 +1685,7 @@ const KOLUMN: Record<string, string> = {
 export async function koppla(_prev: UppgiftState, form: FormData): Promise<UppgiftState> {
   try {
     const id = text(form, "id");
-    const { krets } = await kravKrets(id);
+    const { krets, rad, medlemmar } = await kravKrets(id);
     if (!farRedigera(krets)) return { fel: "Du får inte ändra den här uppgiften." };
 
     const slag = text(form, "slag");
@@ -1237,6 +1704,12 @@ export async function koppla(_prev: UppgiftState, form: FormData): Promise<Uppgi
      * skrivs — hade gjort en halvfardig tanke till ett besked.
      */
     const synlig = slag === "person" && form.get("visible_to_subject") === "ja";
+
+    // 0298 (B8, at andra hallet): en DOLD koppling till nagon som redan ar i
+    // uppgiften ar ett lofte som inte gar att halla. Hen ser raden.
+    if (slag === "person" && !synlig && (mal === rad.assignee_id || medlemmar.some((m) => m.employee_id === mal))) {
+      return { fel: "Personen är med i uppgiften och ser den. En dold koppling går inte; gör den synlig." };
+    }
 
     const { error } = await supabaseAdmin()
       .from("task_link")

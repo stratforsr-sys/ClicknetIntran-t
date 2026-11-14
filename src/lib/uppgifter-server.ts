@@ -596,7 +596,14 @@ export async function uppgiftsnotiser(user: CurrentUser): Promise<Notis[]> {
      * skriven hade legat kvar i klockan en vecka efter att hon redan arbetat
      * i den. Visaren står inte med: hon har inte fått något att göra.
      */
-    if (!mittAttGora(u, mig) || u.created_by === mig) continue;
+    /**
+     * 0298: BARA DEN SOM HAR BOLLEN. Den som lagts till som med får sedan
+     * 0298 en skriven händelse (`uppgift-med`, se `laggTill()` i actions.ts),
+     * för den härledda posten ovan gällde bara en uppgift i `ej_paborjad` och
+     * bar uppgiftens ålder som tidpunkt. Båda på en gång hade gett två besked
+     * om samma sak.
+     */
+    if (u.assignee_id !== mig || u.created_by === mig) continue;
     if (u.lage !== "ej_paborjad") continue;
     if (tystade.has(u.id)) continue;
 

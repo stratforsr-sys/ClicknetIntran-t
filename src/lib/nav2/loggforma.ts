@@ -327,6 +327,10 @@ const RUBRIK: Record<string, string> = {
   "sick.note_added": "Anteckning om frånvaro",
   "sick.registered": "Frånvaro anmäld",
   "task.completed": "Uppgift klar",
+  // Kollegan i uppgiften (0298): någon lades till, lämnade själv, eller togs bort av den som la upp den eller har bollen.
+  "task.member_added": "Kollega tillagd i uppgift",
+  "task.member_left": "Lämnade en uppgift",
+  "task.member_removed": "Kollega borttagen ur uppgift",
   "task.submitted": "Uppgift inlämnad för godkännande",
   "task_series.created": "Uppgiftsserie skapad",
   "task_template.applied": "Uppgiftsmall använd",

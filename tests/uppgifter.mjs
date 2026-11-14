@@ -24,14 +24,21 @@ import {
   dagarMellan,
   datumPlusDagar,
   delatTillMig,
+  LAGESHANDELSER,
+  andringstext,
   farArbeta,
   farBjudaIn,
   farGranska,
+  farLamna,
+  farPassa,
   farRedigera,
+  farStyra,
   forsenad,
   fristtext,
   lageAv,
   mittAttGora,
+  provaLaggaTill,
+  provaLamnaOver,
   sorteraUppgifter,
   tidstext,
   tolkaSnabbrad,
@@ -78,7 +85,7 @@ ok("varje roll har etikett och forklaring", MEDLEMSROLLER.every((r) => ROLL_ETIK
 
 ok("sex lagen", LAGEN.length === 6);
 ok("varje lage har etikett och ton", LAGEN.every((l) => LAGE_ETIKETT[l] && LAGE_TON[l]));
-ok("tio handelsetyper", HANDELSETYPER.length === 10);
+ok("tolv handelsetyper", HANDELSETYPER.length === 12);
 
 // =============================================================================
 rubrik("Laget raknas fram ur historiken");
@@ -175,9 +182,12 @@ ok("en redigerare far redigera", farRedigera(krets({ assignee_id: "a", created_b
 ok("en visare far INTE redigera", !farRedigera(krets({ assignee_id: "a", created_by: "b", minRoll: "visare" })));
 ok("en utomstaende far inte", !farRedigera(krets({ assignee_id: "a", created_by: "b" })));
 
+// B4, bestallaren 2026-11-13 ("Gor som Asana"): den som ar med far lagga till fler.
+// Fore det sa provet tvartom, och skalet (kretsen ar integritetsloftet) betalas
+// nu med historik och besked i stallet for med en sparr.
 ok(
-  "en redigerare far INTE bjuda in fler",
-  !farBjudaIn(krets({ assignee_id: "a", created_by: "b", minRoll: "redigerare" })),
+  "en redigerare FAR lagga till fler (B4)",
+  farBjudaIn(krets({ assignee_id: "a", created_by: "b", minRoll: "redigerare" })),
 );
 ok("skaparen far bjuda in", farBjudaIn(krets({ assignee_id: "annan" })));
 
@@ -362,6 +372,157 @@ ok(
   "allt som inte kands igen blir alltid titel",
   t("Kolla med Erik om det dar med 3 saker").titel === "Kolla med Erik om det dar med 3 saker",
 );
+
+// =============================================================================
+// Regeltabellen for en delad uppgift (PROMPT.md, 2026-11-13).
+//
+// TABELLEN AR KONTRAKTET. Varje rad ar en handling, varje kolumn en stallning,
+// och svaret star har innan nagon action fragar. Sju stallningar: den som la
+// upp, den som har bollen, den som ar med, den som kan se, granskaren, den
+// utanfor, och kalenderns delegat (som ska ha exakt det hen hade fore bygget).
+// =============================================================================
+rubrik("Regeltabellen — vem far gora vad i en delad uppgift");
+
+const STALLNING = {
+  laUpp: krets({ assignee_id: "annan" }),
+  bollen: krets({ created_by: "annan" }),
+  med: krets({ assignee_id: "a", created_by: "b", minRoll: "redigerare" }),
+  kanSe: krets({ assignee_id: "a", created_by: "b", minRoll: "visare" }),
+  granskare: krets({ assignee_id: "a", created_by: "b", minRoll: "granskare" }),
+  utanfor: krets({ assignee_id: "a", created_by: "b" }),
+  delegat: krets({ assignee_id: "a", created_by: "b", somDelegat: true }),
+};
+/** Ordningen: laUpp, bollen, med, kanSe, granskare, utanfor, delegat. */
+const tabell = (namn, fn, svar) => {
+  const fick = Object.values(STALLNING).map((k) => (fn(k) ? "j" : "n")).join("");
+  ok(namn, fick === svar, fick === svar ? "" : `fick ${fick}, vantade ${svar}`);
+};
+
+tabell("andra, bocka, deluppgifter, forsta steget", farRedigera, "jjjnnnj");
+tabell("lagga till en kollega", farBjudaIn, "jjjnnnn");
+tabell("ta bort nagon annan, stryka", farStyra, "jjnnnnn");
+tabell("passa bollen", farPassa, "jjjnnnj");
+tabell("lamna sjalv", farLamna, "nnjjjnn");
+tabell("godkanna", farGranska, "nnnnjnn");
+
+ok(
+  "den som har bollen OCH en medlemsrad lamnar inte forran hen passat",
+  !farLamna(krets({ created_by: "annan", minRoll: "redigerare" })),
+);
+ok(
+  "skaparen som gatt med (B9) kan lamna sin plats som med",
+  farLamna(krets({ assignee_id: "annan", minRoll: "redigerare" })),
+);
+
+// H6: arbetsratten i en deluppgift foljer foralderns krets.
+ok(
+  "den som far arbeta i foraldern far bocka deluppgiften",
+  farRedigera(krets({ assignee_id: "a", created_by: "a", viaForalder: true })),
+);
+ok(
+  "men far inte lagga till folk i deluppgiften den vagen",
+  !farBjudaIn(krets({ assignee_id: "a", created_by: "a", viaForalder: true })),
+);
+ok(
+  "och inte stryka den",
+  !farStyra(krets({ assignee_id: "a", created_by: "a", viaForalder: true })),
+);
+
+rubrik("Lagga till en kollega — beslutet");
+
+const lagg = (over = {}) =>
+  provaLaggaTill({
+    krets: STALLNING.bollen,
+    person: "simon",
+    roll: "redigerare",
+    befintligRoll: null,
+    slutat: false,
+    doldKoppling: false,
+    ...over,
+  });
+
+ok("den som har bollen lagger till en kollega", lagg() === null);
+ok("den som ar med lagger till en kollega (B4)", lagg({ krets: STALLNING.med }) === null);
+ok("den som kan se far inte", typeof lagg({ krets: STALLNING.kanSe }) === "string");
+ok("delegaten far inte", typeof lagg({ krets: STALLNING.delegat }) === "string");
+ok("ingen vald", typeof lagg({ person: "" }) === "string");
+ok("okand roll", typeof lagg({ roll: "chef" }) === "string");
+ok("sig sjalv", typeof lagg({ person: "jag" }) === "string");
+ok("den som har bollen ar redan med", typeof lagg({ krets: STALLNING.med, person: "a" }) === "string");
+ok("redan med: sager det, ingen dubblett", /redan med/i.test(lagg({ befintligRoll: "redigerare" }) ?? ""));
+ok("kan se lyfts till med", lagg({ befintligRoll: "visare" }) === null);
+ok("en granskare kan inte ocksa vara med", /granskare/i.test(lagg({ befintligRoll: "granskare" }) ?? ""));
+ok("den som slutat laggs inte till", /slutat/i.test(lagg({ slutat: true }) ?? ""));
+ok("H13: dold personkoppling sparrar", /dold/i.test(lagg({ doldKoppling: true }) ?? ""));
+ok("B9: skaparen far ga med nar nagon annan har bollen", lagg({ krets: STALLNING.bollen, person: "annan" }) === null);
+ok("B9: skaparen lagger till SIG SJALV i det hen lagt pa nagon annan", lagg({ krets: STALLNING.laUpp, person: "jag" }) === null);
+ok("men den som ar med kan inte lagga till sig en gang till", typeof lagg({ krets: STALLNING.med, person: "jag", befintligRoll: "redigerare" }) === "string");
+ok("och den som har bollen ar redan inne", typeof lagg({ krets: STALLNING.bollen, person: "jag" }) === "string");
+ok("den som kan se lyfter inte sig sjalv till med", typeof lagg({ krets: STALLNING.kanSe, person: "jag", befintligRoll: "visare" }) === "string");
+// Rollerna Kan se och Granskare ar agarens sak: den som bara ar med delar ut plats, inte roller.
+ok("den som ar med far inte dela ut granskarrollen", typeof lagg({ krets: STALLNING.med, roll: "granskare" }) === "string");
+ok("agaren far", lagg({ roll: "granskare" }) === null);
+ok(
+  "den som ar med far inte sanka en kollega till kan se",
+  typeof lagg({ krets: STALLNING.med, roll: "visare", befintligRoll: "redigerare" }) === "string",
+);
+
+rubrik("Lamna over och passa — beslutet");
+
+const over = (o = {}) =>
+  provaLamnaOver({ krets: STALLNING.bollen, till: "simon", iKretsen: false, befintligRoll: null, slutat: false, doldKoppling: false, ...o });
+
+ok("den som har bollen lamnar over till nagon utanfor", over() === null);
+ok("den som ar med passar inom kretsen", over({ krets: STALLNING.med, iKretsen: true }) === null);
+ok("den som ar med lamnar over till nagon utanfor (B4 + B5)", over({ krets: STALLNING.med }) === null);
+ok("till inkorgen", over({ till: null }) === null);
+ok("den som kan se flyttar ingenting", typeof over({ krets: STALLNING.kanSe, iKretsen: true }) === "string");
+ok("den utanfor flyttar ingenting", typeof over({ krets: STALLNING.utanfor }) === "string");
+ok("delegaten lamnar over som fore bygget", over({ krets: STALLNING.delegat }) === null);
+// Ett steg i en delad uppgift: den som arbetar i foraldern far ge steget till en annan dar inne...
+const viaForalder = krets({ assignee_id: "a", created_by: "a", viaForalder: true });
+ok("via foraldern: inom kretsen gar", over({ krets: viaForalder, iKretsen: true }) === null);
+// ...men inte dra in en ny person i kretsen genom ett steg.
+ok("via foraldern: inte till nagon utanfor", typeof over({ krets: viaForalder }) === "string");
+ok("H13: dold personkoppling sparrar aven overlamningen", /dold/i.test(over({ doldKoppling: true }) ?? ""));
+ok("den som slutat far inte bollen", /slutat/i.test(over({ slutat: true }) ?? ""));
+ok("granskaren far inte bollen i det hon ska granska", /granskare/i.test(over({ befintligRoll: "granskare" }) ?? ""));
+ok("den som kan se far ta emot bollen", over({ befintligRoll: "visare" }) === null);
+
+rubrik("Handelserna som inte andrar laget");
+
+ok("andrad och krets finns", HANDELSETYPER.includes("andrad") && HANDELSETYPER.includes("krets"));
+ok("en flytt gor inte en klar uppgift ogjord", lageAv([{ type: "klar" }, { type: "andrad" }]) === "klar");
+ok("att nagon laggs till avbryter inte arbetet", lageAv([{ type: "paborjad" }, { type: "krets" }]) === "pagar");
+ok(
+  "lageshandelserna ar de som bar ett lage",
+  LAGESHANDELSER.includes("klar") && LAGESHANDELSER.includes("ateroppnad") &&
+    !LAGESHANDELSER.includes("kommentar") && !LAGESHANDELSER.includes("andrad") &&
+    !LAGESHANDELSER.includes("krets") && !LAGESHANDELSER.includes("tilldelad"),
+);
+
+const fore = { due_date: "2026-09-11", due_time: null, priority: 3 };
+ok("ingen andring: ingen rad", andringstext(fore, { ...fore }, IDAG) === null);
+ok("flytt till en dag", andringstext(fore, { ...fore, due_date: "2026-09-14" }, IDAG) === "flyttade till mån 14 sep", String(andringstext(fore, { ...fore, due_date: "2026-09-14" }, IDAG)));
+ok("dagen togs bort", andringstext(fore, { ...fore, due_date: null }, IDAG) === "tog bort dagen");
+ok("klockslag", andringstext(fore, { ...fore, due_time: "14:00" }, IDAG) === "satte 14:00");
+ok("sekunderna fran databasen ar ingen andring", andringstext({ ...fore, due_time: "14:00:00" }, { ...fore, due_time: "14:00" }, IDAG) === null);
+ok("prioritet", andringstext(fore, { ...fore, priority: 1 }, IDAG) === "satte prioritet Brådskande", String(andringstext(fore, { ...fore, priority: 1 }, IDAG)));
+ok(
+  "flera pa en gang blir en rad",
+  andringstext(fore, { due_date: "2026-09-14", due_time: "09:30", priority: 3 }, IDAG) === "flyttade till mån 14 sep, satte 09:30",
+  String(andringstext(fore, { due_date: "2026-09-14", due_time: "09:30", priority: 3 }, IDAG)),
+);
+
+rubrik("Snabbinmatningen — +namn lagger till en kollega");
+
+ok("en kollega", t("Ring Nordic fredag +simon").med.join() === "simon" && t("Ring Nordic fredag +simon").titel === "Ring Nordic");
+ok("flera", t("Ring Nordic +simon +anna").med.join() === "simon,anna");
+ok("ingen: tom lista", t("Ring Nordic").med.length === 0);
+ok("@ ar fortfarande den som far bollen", t("Ring Nordic @anna +simon").person === "anna" && t("Ring Nordic @anna +simon").med.join() === "simon");
+ok("ett telefonnummer ar ingen kollega", t("Ring +46701234567").med.length === 0 && t("Ring +46701234567").titel === "Ring +46701234567");
+ok("ett plus mitt i en mening ar ingen kollega", t("Rakna 2 + 2").med.length === 0 && t("Rakna 2+2").titel === "Rakna 2+2");
+ok("samma namn tva ganger blir en", t("Ring +simon +Simon").med.length === 1);
 
 console.log(fel === 0 ? "\n\x1b[32mAlla prov gick igenom.\x1b[0m" : `\n\x1b[31m${fel} prov föll.\x1b[0m`);
 process.exit(fel === 0 ? 0 : 1);
