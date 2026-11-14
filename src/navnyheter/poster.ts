@@ -28,6 +28,8 @@ dig utan sin uppgift.`,
     datum: "2026-11-14",
     roller: [],
     href: "/uppgifter",
+  },
+  {
     slug: "moten-pengarna-skyddade",
     rubrik: "Möten: mötesprovisionen är bättre skyddad",
     ingress: "Frågorna efter mötet ändras av samma personer som beloppen, och ett möte som redan varit kan bara avbokas av den som är med på det eller en säljchef.",
