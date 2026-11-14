@@ -5,6 +5,33 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-14 · Möten: utfallsprovets tre fynd, och varför Nav sa "Du är utloggad"
+
+Beställaren: "Fixa alla fel" (fynden från utfallsprovet i Möten), sedan "merga till main".
+
+**På `main` som `2da2173`** (grenen `moten-utfall-fel` ihopslagen till en commit ovanpå `d1d2189`; krocken i
+`poster.ts` löst med båda posterna kvar), produktionsbygget grönt 22:47 UTC. Ingen migration.
+
+1. **Falskt "Du är utloggad".** Inte databasens belastning, som först misstänktes, utan mellanvaran:
+   `src/lib/supabase/middleware.ts` kopierade begärans rubriker innan `getUser()` förnyade tokenen, och
+   `request.cookies.set` skriver bara i originalet. Den begäran som förnyar tokenen (ungefär en gång i timmen per
+   person) nådde alltså rutten med den utgångna kakan: identiteten verifierad, PostgREST nekade frågan efter
+   `employee`, `employee: null`, 401, och klienten sa "utloggad". `setAll` skriver nu om `cookie` i kopian.
+   Dessutom skiljer `getCurrentUser` på fel och ingen rad: fel ger ett nytt försök efter 300 ms och sedan ett kastat
+   fel (500, "kunde inte spara"), aldrig `employee: null`. **Regel:** ett fel från databasen får aldrig se ut som
+   "ingen rad"; det blir ett påstående om inloggningen som inte stämmer.
+2. **Kvittot och kortet kom sent.** Kvittot väntade på `ndOmlas('mo')` (sex delar, 17,6 s under last mot 0,8 s för
+   sparningen). Nu kommer kvittot när servern sagt ja; Inget svar, Prova igen och Ändra dag ritar kortet ur svaret
+   (`moUppfLapp`, dag och kolumn Följ upp/Tyst) och läser bara om `mo-latt` (tavlan och statistiken).
+3. **ISO-datum i kvittot.** Servern skriver `dagKort`, klienten `moDag` ("Ring tis 17 nov", "Ring i morgon").
+
+Prov: tsc bara Pling-felen; navnyheter, moten, nav2-omladdning, nav2-skriv, nav2-fart, nav2-uppgift-kollega,
+uppgifter, motesposter-server, kalender och behorighet-b13 gröna efter krocken; bokningsbladets prov 66/0;
+klickprovet 661/3, där alla tre felen finns också på main (F2.3 två gånger, g19 som Möten-session 85 rättat i sitt
+prov). Inte provat i produktionens gränssnitt än.
+
+---
+
 ## 2026-11-14 · Uppgifter: nytt sedan sist (0301), provet med två konton, Carl är Mötesbokare
 
 Beställaren, på frågan om det som återstod: "Kör med Zen och med calle", "Ja han ska vara mötesbokare", "Jag har
