@@ -94,15 +94,38 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
    * `employee` blir null och varje inloggad ser "vantar pa aktivering".
    * Typecheck sager ingenting om detta; det syns forst mot databasen.
    */
-  const { data: employee } = await las
-    .from("employee")
-    .select(
-      "id, first_name, last_name, email, status, team_id, employment_type, start_date," +
-        " employee_role!employee_role_employee_id_fkey(role)," +
-        " employee_permission!employee_permission_employee_id_fkey(permission)",
-    )
-    .eq("auth_user_id", identitet.authUserId)
-    .maybeSingle();
+  const hamta = () =>
+    las
+      .from("employee")
+      .select(
+        "id, first_name, last_name, email, status, team_id, employment_type, start_date," +
+          " employee_role!employee_role_employee_id_fkey(role)," +
+          " employee_permission!employee_permission_employee_id_fkey(permission)",
+      )
+      .eq("auth_user_id", identitet.authUserId)
+      .maybeSingle();
+
+  /**
+   * ETT FEL AR INTE "INGEN RAD".
+   *
+   * Utan felkontrollen blev en fraga som inte gick igenom (databasen belastad,
+   * en natverksblinkning, en utgangen token) `employee: null`, och varje rutt
+   * svarade da 401 "Du maste vara inloggad". Navet visar det som "Du ar
+   * utloggad" for nagon som ar inloggad (utfallsprovet 2026-11-14: en 401 pa
+   * startsidans `sett`, nasta anrop 200; orsaken da var den utgangna tokenen,
+   * se `setAll` i supabase/middleware.ts). Mellanvaran har redan verifierat
+   * inloggningen, sa en utloggad nar aldrig hit: den skickas till /logga-in.
+   *
+   * Ett nytt forsok efter en kort paus, och fortfarande fel ger ett kastat fel
+   * (500, "Nav kunde inte spara") i stallet for ett pastaende om inloggningen.
+   * Ingen far mer atkomst av det: fallet gav ingen atkomst forut heller.
+   */
+  let { data: employee, error } = await hamta();
+  if (error) {
+    await new Promise((r) => setTimeout(r, 300));
+    ({ data: employee, error } = await hamta());
+    if (error) throw new Error(`getCurrentUser: employee gick inte att lasa (${error.code ?? "okand kod"})`);
+  }
 
   if (!employee) {
     return {

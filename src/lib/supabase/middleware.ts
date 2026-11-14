@@ -131,6 +131,17 @@ export async function updateSession(request: NextRequest) {
       getAll: () => request.cookies.getAll(),
       setAll: (list) => {
         list.forEach(({ name, value }) => request.cookies.set(name, value));
+        /**
+         * Rutten ska se den FORNYADE tokenen. `request.cookies.set` skriver i
+         * `request.headers`, men rutten far `headers`, en kopia som gjordes
+         * ovanfor innan tokenen fornyades. Utan raden gick begaran som fornyade
+         * tokenen vidare med den utgangna: identiteten var verifierad, men
+         * fragan efter employee nekades, `getCurrentUser` gav `employee: null`
+         * och rutten svarade 401 "Du maste vara inloggad". Webblasaren hade da
+         * redan fatt de nya kakorna, sa nasta anrop gick igenom (utfallsprovet
+         * 2026-11-14: "Du ar utloggad" pa startsidans `sett`, nasta anrop 200).
+         */
+        headers.set("cookie", request.headers.get("cookie") ?? "");
         kakor.push(...list);
       },
     },
