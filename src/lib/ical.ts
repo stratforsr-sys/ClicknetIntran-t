@@ -172,7 +172,12 @@ function vevent(
   if (m.andrad) rader.push(`LAST-MODIFIED:${utc(m.andrad)}`);
   if (m.plats?.trim()) rader.push(`LOCATION:${esc(m.plats.trim())}`);
   if (m.url?.trim()) rader.push(`URL:${m.url.trim()}`);
-  if (m.beskrivning?.trim()) rader.push(`DESCRIPTION:${esc(m.beskrivning.trim())}`);
+  // Möteslänken (Teams, Meet, Zoom) står också först i beskrivningen (2026-11-14): Outlook och Gmail visar inte
+  // URL-fältet, och utan raden fanns länken bara i mejlet, inte i mötet i kundens kalender.
+  // Ett inställt möte ber ingen ansluta.
+  const anslut = m.url?.trim() && extra.status !== "CANCELLED" ? `Anslut till mötet: ${m.url.trim()}` : "";
+  const beskrivning = [anslut, m.beskrivning?.trim() ?? ""].filter(Boolean).join("\n\n");
+  if (beskrivning) rader.push(`DESCRIPTION:${esc(beskrivning)}`);
   if (extra.organisator) rader.push(`ORGANIZER${cn(extra.organisator.namn)}:mailto:${extra.organisator.epost}`);
   for (const d of extra.deltagare ?? []) {
     rader.push(

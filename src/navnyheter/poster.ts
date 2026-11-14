@@ -14,6 +14,23 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "kundens-inbjudan-omskriven",
+    rubrik: "Kundens inbjudan låter som en mötesinbjudan",
+    ingress: "Mejlet kunden får när du bokar, flyttar eller ställer in ett möte är omskrivet. Mötet heter Möte med Clicknet, och du står med hela namnet.",
+    text: `Förut stod det "Välkommen till clicknet - Bolaget AB: Möte med Clicknet", som lät som en inbjudan att
+registrera sig någonstans. Nu börjar mejlet med vad det gäller, **Här kommer inbjudan till vårt möte.**, följt av
+mötet: **Möte med Clicknet**, dagen och tiden, platsen och agendan. Ett telefonmöte säger **vi ringer dig**. Ett
+Teams-möte säger Microsoft Teams och har länken, både i mejlet och i mötet i kundens kalender; utan länk står det att
+den kommer i ett eget mejl. Lägger du in länken efteråt får kunden **Här kommer länken till mötet.** Mejlet är en
+kalenderinbjudan: kunden trycker Ja och mötet ligger i kalendern, så brevet ber inte längre kunden lägga in mötet
+med en bifogad fil. Sist står vad kunden gör om tiden inte passar, och din signatur med hela namnet. Kunden svarar direkt till dig. En kund
+du tagit bort från ett möte och sedan lagt tillbaka får nu en ny inbjudan; förut fick hen bara avbokningen. En
+avbokning hälsar kunden med samma namn som inbjudan gjorde, också när mötet raderats.`,
+    datum: "2026-11-14",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "moten-ring-igen",
     rubrik: "Möten: Fick inte tag påminner dig att ringa igen",
     ingress: "Svarar inte kunden när du ringer för att bekräfta, tryck Fick inte tag. Fyra timmar senare får du en notis i klockan och telefonen: Ring kunden igen.",

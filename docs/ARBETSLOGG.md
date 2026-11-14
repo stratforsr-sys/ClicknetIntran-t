@@ -5,6 +5,48 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-13/14 · Kundens inbjudan: ett riktigt mötesbrev, Teams-länken i kalendern, tillbaka efter borttagen, namnet i avbokningen (0294)
+
+**Läge:** tre lokala commits (`7da60ca`, `7cb50cd`, `542b34b`) ihopslagna till en och flyttade ovanpå main `c462df1`; 0294 KÖRD 2026-11-14 19:06 UTC på beställarens "fixa allt". Före körningen: `UTAN=1 node tests/ics-aterinbjudan-db.mjs` 8 ok, 6 fel mot funktionen i databasen; efter: 14 ok. Provet står nu i `npm test` (`test:ics-aterinbjudan`).
+
+
+**Vad:** det skarpa provet av bokningsbladet (PROV-möte i produktionen) visade tre saker i kundens brev, alla äldre
+än bladet. Beställaren: "1. Ja 2. Fixa det så ska det inte vara, det ska vara proffsigt och vad är välkommen till
+clicknet? Jag trodde att det var en inbjudan till att registera sig i en plattform. 3. … fixa det". Se NASTA_SESSION.
+
+**Beslut som inte går att läsa ur koden:**
+
+- **Sekvensen höjs inte vid en återinbjudan.** Det RFC-riktiga vore en högre SEQUENCE, men triggern
+  `calendar_event_ics` skickar då en ny inbjudan till varje gäst, och de andra hade fått ett "Ändrat" om ingenting.
+  Kalenderfilens DTSTAMP är tiden då brevet byggs, så den nya inbjudan är ändå nyare än avbokningen.
+- **Det senaste brevet avgör, inte nyckeln.** Första försöket lade löpnumret på varje brev som följde det motsatta;
+  provet visade att den andra likadana avbokningen då gick in under den vanliga nyckeln som en dubblett. Nu är samma
+  metod som det senaste brevet en dubblett, och löpnumret läggs bara till när den vanliga nyckeln är tagen.
+- **Mötens rubrik känns igen på formen.** Efter Radera är mötesraden borta när avbokningen byggs, så "är det ett
+  möte i Möten?" kan inte frågas till databasen. Formen ": Möte" sist (eller "SEO-möte: " först) är Mötens egen
+  (`moteRubrik`); en rubrik som bara heter "Möte" räknas inte.
+- **Namnet tas ur loggen, inte ur kön.** Att lägga namnet i utkorgens rad hade krävt att varje databasfunktion som
+  köar en avbokning (`mote_radera`, `lk_stall_in`, Ändra …) slår upp det. Loggen har redan brevet gästen fick.
+- **"Vi ringer dig"** står bara när platsen är exakt "Telefon" (Mötens platsval). Säljaren ringer kunden på ett
+  telefonmöte; kunden ska inte behöva undra.
+- **Teams-länken står i beskrivningen, inte bara i URL-fältet** (2026-11-14, efter beställarens "dubbelkolla … Teams-
+  möte"). Outlook och Gmail visar inte `URL:`, så kunden som öppnar mötet i sin kalender fem minuter före hittade
+  ingen länk. Raden "Anslut till mötet: …" läggs i `vevent()` och gäller därför också kollegornas filer och
+  iCal-flödet; en avbokning har den inte.
+- **Utkorgen säger att platsen är ett videomöte, inte brevet.** `leveranskalender.ts` är ren logik utan importer, och
+  videotjänsternas namn bor i Mötens `motenforma.ts`. Utkorgen skickar `video: arVideoplats(plats)`.
+- **Förra brevets plats ur loggen, som namnet.** En ändring på samma tid kan vara ny plats eller bara länken
+  (Teams utan länk, länken inklistrad efteråt); databasen vet inte vad som stod förut när brevet byggs. Brev från
+  före 2026-11-14 saknar platsen och ger en mening om var mötet hålls nu ("Mötet hålls i Microsoft Teams."), som
+  stämmer oavsett vad som ändrats.
+- **Inget brev pratar om den bifogade filen** (2026-11-14, beställaren: "de får väl en kalenderinbjudan i exakt
+  samma mejl"). Bilagan går som `text/calendar; method=REQUEST` med kunden som deltagare och RSVP=TRUE, så Outlook
+  och Gmail visar mejlet som en inbjudan med Ja/Nej och lägger själva in, flyttar och tar bort mötet. "Lägg in mötet
+  med den bifogade filen" var en instruktion till något kunden inte behöver göra, och "filen tar bort mötet" lovade
+  något klienten gör (eller ber kunden om) själv. Ett svar Ja går till organisatörens adress (ORGANIZER), som förut.
+
+---
+
 ## 2026-11-14 · Säljtavlan: ett bokat möte väcker tavlan direkt (0297)
 
 **Varför.** Beställaren bad om ett hårdtest av mötena på tavlan. Allt höll utom en sak: tavlan väcks av
