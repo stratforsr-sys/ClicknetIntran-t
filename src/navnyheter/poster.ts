@@ -14,6 +14,23 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "uppgiftsrutan-omgjord",
+    rubrik: "Uppgifter: rutan för en uppgift är omgjord",
+    ingress: "Välj vilken dag som helst i en kalender, skriv tider som 1430 eller 1 h 20, och följ kommentarer och historik i en och samma tidslinje.",
+    text: `Öppna en uppgift i **Uppgifter**. Till höger står Dag, Tid, Uppskattning, Prioritet, Projekt, Ansvarig och
+Granskare, en rad var. Klicka på ett värde för att ändra det. Under **Dag** finns en kalender med veckonummer och prickar
+för hur mycket du redan har den dagen, och du kan skriva dagen: tor, 25/11, v. 48 eller om 2 veckor. **Uppskattning** tar
+egna tider och visar hur full dagen blir. **Prioritet** har en färg per nivå. Välj en **granskare**, så blir Klar en
+inlämning som granskaren godkänner. **Börja med** är det allra första steget, och det står på raden i listan så att du
+vet var du börjar. Kommentarer och historik ligger i **Aktivitet**: Enter skickar, Shift+Enter ger ny rad. En uppgift som
+är klar går att öppna igen, och de flesta ändringar går att ångra i kvittot. Tangenterna D, T, E och P öppnar dag, tid,
+uppskattning och prioritet. Under **Kopplad till** väljer du Kund, Person, Ärende, Utbildning eller Coachning, söker (en
+kund på namn, org.nr eller kontaktperson) och klickar på träffen.`,
+    datum: "2026-11-14",
+    roller: [],
+    href: "/uppgifter",
+  },
+  {
     slug: "moten-bara-forsta-bekraftas",
     rubrik: "Möten: bara det första mötet bekräftas",
     ingress: "Uppföljningsmöten behöver inte bekräftas. Du får ingen uppgift och ingen notis för dem, och kortet står kvar i Bokat.",

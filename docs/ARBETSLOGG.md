@@ -5,6 +5,47 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-13/14 · Uppgiftsrutan omgjord (på `main` 2026-11-14, ingen migration)
+
+**Vad:** beställaren om rutan för en uppgift: "lite för mycket som händer", funktioner som fattas, "jag förstår inte
+första steget", chatten "ser jätteoutvecklad ut", prioritet som en lista med färger, egna tider i uppskattningen.
+Skiss först (artifact 9tLzSvdWLhYzucsNKJJzDT), godkänd med "kör bygget". Delarna står i NASTA_SESSION.
+
+**Varför så:**
+- *En rad per egenskap, en väljare per rad.* Förut stod sju segmentkontroller och tre listor öppna samtidigt i en
+  kolumn som rullade för sig och dolde Kopplad till. Nu syns bara värdena; väljaren öppnas vid sitt värde (Linear).
+- *Kalender med prickar och tolk.* Fyra fasta dagar räckte inte, och "Måndag" sparade i dag + 3 (rätt bara en
+  fredag). Kalendern visar hur mycket man redan har per dag; tolken tar svenska som man skriver det (Todoist).
+- *Kommentarer och historik i en tidslinje.* Två tomma block blev ett flöde med filter och ett fält som står kvar.
+- *Börja med i stället för Första steget.* Fältet förklaras när det är tomt och visas som det står i listan, och
+  listraden visar det nu på riktigt (förut bara fokusläget).
+- *Med, har bollen och Passa byggs inte här.* Det är kollega-grenens (`~/nav-uppgift-kollega`, opushad); rutan
+  lämnar platsen `<!--upg-med-->` efter Ansvarig.
+- *Servern hade allt.* planera, andra, bjudin (roll granskare), lamna, ateroppna, kommentera finns sedan tidigare;
+  bara gränssnittet byggs, som en idempotent patch (`~/nav2-utkast/delar/uppgiftsrutan/patch-rutan.py`).
+
+**Provat:** `tests/nav2-uppgiftsrutan.mjs` (nytt, 114 kontroller, 122 med Koppla: tolkarna, Måndag sju veckodagar, rutan i sex lägen och
+alla väljare, att varje val skickar rätt handling), `nav2-uppgifter-lage.mjs` grönt, `navnyheter.mjs` grönt, skriptet
+`node --check`. Huvudlös Chrome med påhittade uppgifter (`visa.mjs`): riktiga klick och tangenter på dator och telefon,
+ljust och mörkt, POST-kropparna rätt, inga konsolfel. INTE provat: previewen, riktiga konton, Koppla och Avsluta serien
+mot databasen.
+
+**Koppla, efter previewen (samma kväll):** beställaren: "väljer jag kund så går det inte att söka på org nummer eller
+kund", "jag förstår inte vad den visar, den visar inget", "samma sak med alla kopplingar". **Orsaken var min:** rutan
+ritas med morf (`MORF` har `taskPanel`), och i nya rutan står Stäng på samma plats som Koppla, så morfen gör om SAMMA
+knapp. Hämtningens svar jämförde med `d.ndkoppla` (knappens dataset), som då var borta: valen kastades, sökfältet stod
+avstängt och Vad visade "Hämtar …" för alltid, för alla sorter. **Regel:** läs aldrig ett klickat elements `dataset`
+efter en `render()` i en asynkron fortsättning; spara värdet först (här hålls formuläret i `S.ndKoppla` och jämförs
+som objekt). Formuläret är också omgjort: sorterna som knappar (Kund, Person, Ärende, Utbildning, Coachning),
+sökfältet öppet direkt, träffarna som en lista med en rad som säger vad den visar ("Senaste ordrarna", "3 träffar",
+"Ingen träff på …"), kund och signeringsdag, ett klick (eller Enter) kopplar, pilarna, Esc stänger. Personbocken står
+kvar. `ndKHamta` var redan kalenderns namn: den nya heter `ndKoppHamta`. Prov: 8 nya kontroller i
+`nav2-uppgiftsrutan.mjs` (knappen byter data mitt i hämtningen), Chrome-skriptet `koppla.mjs`.
+
+**Läge:** previewen grön 2026-11-13. Beställaren 2026-11-14: "pusha det till produktion och sen hårdtesta den". Main
+hade dragit ifrån (Möten: bara första mötet, säljtavlans möten, att göra-knappen): mergad in i grenen, ingen kodkrock
+(utkastets ändringar låg på andra ställen), bara docs, `package.json` och navnyheter. En commit på `main`.
+
 ## 2026-11-13 · Möten: bara det första mötet bekräftas (på `main` som `9d86de2`, 0295 körd; bygget grönt 22:04 UTC)
 
 **Beställningen:** "endast det första mötet ska bekräftas dem andra ska inte bekräftas". Det kom efter den första
