@@ -39,10 +39,10 @@ const DYGN = 24 * 3600 * 1000;
 const MAX_REPARATIONER = 50;
 
 type MoteRad = { id: string; kedja_id: string; mote_tid: string; langd_min: number | null; utfall: string | null; niva: string | null; utfall_nar: string | null; halls_av: string };
-export type MotenJobbKvitto = { utfallSaknas: number; bedomningSaknas: number; reparerade: number; hoppade: number; uppgifter: number; bekrafta: number; stadade: number; hoppade_over?: string };
+export type MotenJobbKvitto = { utfallSaknas: number; bedomningSaknas: number; reparerade: number; hoppade: number; uppgifter: number; bekrafta: number; stadade: number; uppfoljning: number; hoppade_over?: string };
 
 export async function korMotenJobb(db: Db, nu: Date = new Date()): Promise<MotenJobbKvitto> {
-  const kvitto: MotenJobbKvitto = { utfallSaknas: 0, bedomningSaknas: 0, reparerade: 0, hoppade: 0, uppgifter: 0, bekrafta: 0, stadade: 0 };
+  const kvitto: MotenJobbKvitto = { utfallSaknas: 0, bedomningSaknas: 0, reparerade: 0, hoppade: 0, uppgifter: 0, bekrafta: 0, stadade: 0, uppfoljning: 0 };
   const { data: iRader } = await db.from("nav_setting").select("key, value").like("key", "moten.%").limit(100);
   const inst = lasInstallningar((iRader ?? []) as { key: string; value: unknown }[]);
   if (!inst.gallerFran) return { ...kvitto, hoppade_over: "moten.galler-fran saknas" };
@@ -132,9 +132,15 @@ function ringText(k: KortRad | undefined): string {
  * skickas inga notiser den körningen (annars hade varje kvart gett en ny), men uppgifterna läggs ändå upp.
  * Bara det första mötet bekräftas: ett uppföljningsmöte får ingen uppgift (`vemBekraftar`, och databasen nekar),
  * och städningen tar bort en öppen uppgift som redan lagts upp på ett (0295).
+ * Först gör `mote_art_ratta` (0296) ett kommande möte till ett uppföljningsmöte när kunden redan har träffats, också
+ * på ett annat kort för samma kund (namn, telefon, domän eller e-post): ett möte som bokades innan det förra fick sitt
+ * utfall, eller med ett annat nummer, slutar då att bekräftas inom en kvart, och städningen tar dess uppgift.
  */
 async function bekraftelser(db: Db, inst: MotenInst, gallerFran: string, nu: Date, kvitto: MotenJobbKvitto): Promise<void> {
-  // Städningen först, men den får aldrig stoppa nya uppgifter och notiser: ett fel loggas och jobbet går vidare.
+  // Arten och städningen först, men de får aldrig stoppa nya uppgifter och notiser: ett fel loggas och jobbet går vidare.
+  const { data: rattat, error: artfel } = await db.rpc("mote_art_ratta");
+  if (artfel) await skrivFel({ kind: "automatic", path: "/api/jobb/moten", digest: "moten-jobb-art", message: `Möten-jobbet: mote_art_ratta föll: ${artfel.message}`, blocking: false });
+  kvitto.uppfoljning = typeof rattat === "number" ? rattat : 0;
   const { data: stadat, error: stadfel } = await db.rpc("mote_uppgift_stada");
   if (stadfel) await skrivFel({ kind: "automatic", path: "/api/jobb/moten", digest: "moten-jobb-stada", message: `Möten-jobbet: mote_uppgift_stada föll: ${stadfel.message}`, blocking: false });
   kvitto.stadade = typeof stadat === "number" ? stadat : 0;

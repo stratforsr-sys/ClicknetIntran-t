@@ -311,9 +311,12 @@ export const farRadera = (u: Aktor, m: MoteParter & { utfall: string | null }): 
 
 export type MotesArt = "ny" | "ombokning" | "uppfoljning";
 
-/** Har kedjan redan ett hållet möte är nästa en uppföljning, hur den än bokades. */
-export function motesArt(kedjaHarHallet: boolean, ombokningAv: string | null): MotesArt {
-  if (kedjaHarHallet) return "uppfoljning";
+/**
+ * Har kunden redan träffats är nästa möte en uppföljning, hur det än bokades. Träffats = ett hållet möte i kedjan,
+ * eller före mötet på ett annat kort för samma kund (`mote_kunden_traffad`, 0296).
+ */
+export function motesArt(kundenTraffad: boolean, ombokningAv: string | null): MotesArt {
+  if (kundenTraffad) return "uppfoljning";
   return ombokningAv ? "ombokning" : "ny";
 }
 

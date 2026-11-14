@@ -14,6 +14,18 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten-uppfoljning-kanns-igen",
+    rubrik: "Möten: Nav ser när kunden redan träffats",
+    ingress: "Ett möte med en kund som redan haft ett hållet möte är ett uppföljningsmöte, också när det bokats med ett annat nummer eller innan det förra mötet fick sitt utfall.",
+    text: `Nav känner igen kunden på **namnet, telefonnumret, e-postadressen eller hemsidan**, inte bara på numret. Bokar du
+ett möte med en kund som redan träffats blir det ett **uppföljningsmöte**, också om du skrev ett annat nummer och kunden
+hamnade på ett nytt kort. Bokade du mötet innan det förra mötet fick sitt utfall rättar Nav det inom en kvart efter att
+utfallet satts. Ett uppföljningsmöte bekräftas inte, och det räknas inte som ett nytt bokat möte.`,
+    datum: "2026-11-14",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "order-tjanster-provision-finans",
     rubrik: "Tjänster på en order ger provision, och finans ger 12 % av det som blir kvar",
     ingress: "Varje tjänst på en paketorder får egen provision, i kronor eller procent. En finansorder ger 12 % av det som blir kvar efter finansavgiften, som ett utköp.",

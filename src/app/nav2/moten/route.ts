@@ -565,7 +565,9 @@ export async function POST(request: Request) {
   }): Promise<{ res: Response; kvar: string | null }> {
     const { kedja, bolag, v, motetid, varningar, skapadBolag, skapadKedja, stada } = i;
     const ut = (data: Svar, status = 200) => ({ res: svar(data, status), kvar: null });
-    // 4. Art: hållet möte i kedjan = uppföljning, annars ombokning om det finns ett föregående.
+    // 4. Art: kunden har träffats (ett hållet möte i kedjan, eller före den här tiden på ett annat kort för samma kund,
+    //    `mote_kunden_traffad`, 0296) = uppföljning, annars ombokning om det finns ett föregående. Svarar inte
+    //    databasen räcker kedjan; jobbet rättar arten inom en kvart (`mote_art_ratta`).
     if (v.foregaende) {
       const { data } = await db.from("mote").select("id").eq("id", v.foregaende).eq("kedja_id", kedja).maybeSingle();
       if (!data) {
@@ -573,8 +575,13 @@ export async function POST(request: Request) {
         return ut({ fel: "Det tidigare mötet hör inte till kedjan." }, 400);
       }
     }
-    const { data: hallna } = await db.from("mote").select("id").eq("kedja_id", kedja).eq("utfall", "hallet").limit(1);
-    const art = motesArt(((hallna ?? []) as unknown[]).length > 0, v.foregaende);
+    const { data: traffad, error: traffFel } = await db.rpc("mote_kunden_traffad", { p_kedja: kedja, p_fore: motetid.toISOString() });
+    let kundenTraffad = traffad === true;
+    if (traffFel) {
+      const { data: hallna } = await db.from("mote").select("id").eq("kedja_id", kedja).eq("utfall", "hallet").limit(1);
+      kundenTraffad = ((hallna ?? []) as unknown[]).length > 0;
+    }
+    const art = motesArt(kundenTraffad, v.foregaende);
 
     // 5. Mötesraden, villkorad på att kedjan inte har något öppet möte (unika indexet mote_ett_oppet).
     const { data: oppet } = await db.from("mote").select("id").eq("kedja_id", kedja).is("utfall", null).limit(1);
