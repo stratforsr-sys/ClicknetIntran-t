@@ -38315,6 +38315,8 @@ const moAdmin = () => (ND.jag.roller || []).some(r => MOADMIN.includes(r));
 // Speglar serverns arMedPaMote: bokaren, hållaren eller en kollega på mötet (m.med, utan hållaren).
 const moArMed = m => m.bokatAv === ND.jag.id || m.hallsAv === ND.jag.id || (m.med || []).some(p => p.id === ND.jag.id);
 const moFarUtfall = k => !!k.mote && (moArMed(k.mote) || moAdmin());
+// Avboka och Flytta: före mötets start som moFarMote, efter starten bara den som får sätta utfallet (servern: farAvboka).
+const moFarAvboka = k => !!k.mote && (moMin(k.mote.tid) > moNuMin() ? moFarMote(k) : moFarUtfall(k));
 // Speglar serverns farRadera: de som är med på det öppna mötet, eller en chef. Ett avslutat möte i historiken raderar bara en chef (moAdmin).
 const moFarRadera = m => !!m && (moArMed(m) || moAdmin());
 const moChef = () => !!(ndMo() && ndMo().chef);
@@ -39730,7 +39732,7 @@ function moKnappar(k, alla = false){
   if (m && (f === 'bokat' || f === 'att_bekrafta' || f === 'bekraftat') && !moFarMote(k)) return alla ? `<span class="mo-vantar">${esc(moGen(m.hallsAvNamn))} möte</span>` : '';
   // Knapparna heter det de gör (B15): Bekräfta, Flytta, Avboka. Medan Avboka frågar Säker? står det vad kunden får.
   const fraga = S.moBekr === 'avboka|' + k.kedja ? `<small class="mo-fraga">${k.epost ? esc(k.epost) + ' får en avbokning.' : 'Kunden har ingen e-post och får inget besked.'}</small>` : '';
-  const flytt = moKnapp('Flytta', 'flyttat', k) + moKnapp('Avboka', 'avboka', k);
+  const flytt = moFarAvboka(k) ? moKnapp('Flytta', 'flyttat', k) + moKnapp('Avboka', 'avboka', k) : '';
   if (f === 'att_bekrafta') return moKnapp('Bekräfta', 'bekrafta', k, {p:true}) + moKnapp('Fick inte tag', 'forsok', k) + (mer ? flytt : '') + merKn + fraga;
   if (f === 'bokat') return (mer ? (moUppfMote(k) ? '' : moKnapp('Bekräfta', 'bekrafta', k) + moKnapp('Fick inte tag', 'forsok', k)) + flytt : '') + merKn + fraga;
   if (f === 'bekraftat') return (mer ? flytt : '') + merKn + fraga;

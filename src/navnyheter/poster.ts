@@ -14,6 +14,22 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "provisionsmanaden-last-for-order",
+    rubrik: "Provision: ordrar väntar också när månaden fastställs",
+    ingress: "Under de sekunder en provisionsmånad fastställs kan ingen order i den månaden godkännas, ändras eller makuleras. Ingen affär faller utanför bokföringen.",
+    text: `**När en provisionsmånad fastställs** väntar Navet nu ut en order som sparas just då, och spärrar nya
+ändringar i månaden tills den är bokförd. Det gäller det som rör pengarna: godkännande, provision, makulering och
+säljchefens påslag. Ett utkast eller ett byte från signerad till betald går igenom som förut.
+
+Sparar du en order just då står det att månaden fastställs. **Försök igen om en minut.**
+
+**I Möten** syns Avboka och Flytta bara för den som får göra det. När mötet har börjat är det de som är med på mötet
+och säljchefen.`,
+    datum: "2026-11-14",
+    roller: [],
+    href: "/nav2",
+  },
+  {
     slug: "moten-sparat-direkt",
     rubrik: "Möten: det du sparar syns direkt",
     ingress: "Kvittot kommer så fort det är sparat, och kortet byter dag med en gång när du trycker Inget svar.",

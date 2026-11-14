@@ -95,7 +95,8 @@ export async function faststallPeriod(
     // LÅSET (0300, hårdtestet 2026-11-14): väntar ut varje mötesbedömning som pågår och spärrar nya tills
     // perioden är skriven. Utan det kunde en bedömning låsas mellan läsningen nedan och perioden, och föll
     // då utanför både bokföringen och rättelsen. Markeringen tas bort i `finally`, också när något fallerar.
-    const { error: lasfel } = await db.rpc("provision_stangning_borjar", { p_manad: manad, p_av: user.employee!.id });
+    // NYCKELN (0302): `klar` tar bara bort den här stängningens markering, aldrig en som tagit över efter den.
+    const { data: nyckel, error: lasfel } = await db.rpc("provision_stangning_borjar", { p_manad: manad, p_av: user.employee!.id });
     if (lasfel) {
       return {
         fel: lasfel.code === "P0409"
@@ -166,11 +167,30 @@ export async function faststallPeriod(
       if (rader.length > 0) {
         const { error } = await db.from("commission_entry").insert(rader);
 
-        // 23505 = unique_violation. Posterna finns redan, alltsa har ett tidigare
+        // 23505 = unique_violation. Nagra poster finns redan, alltsa har ett tidigare
         // forsok kommit halvvags. Ratt atgard ar att fortsatta och stanga
         // perioden, inte att avbryta — annars star manaden kvar halvfardig.
+        //
+        // MEN INSATTNINGEN AR EN SATS: kolliderar en rad skrivs ingen. Utan andra
+        // forsoket nedan hade varje post som tillkommit sedan forsta forsoket (en ny
+        // person, ett nytt slag) fallit bort i tysthet nar perioden stangdes
+        // (hardtestet 2026-11-14). Darfor skrivs de som saknas, en gang till.
         if (error && error.code !== "23505") {
           return { fel: `Posterna bokfordes inte: ${error.message}` };
+        }
+        if (error) {
+          const { data: finns, error: lasfel2 } = await db
+            .from("commission_entry")
+            .select("external_ref")
+            .eq("source", "motor")
+            .in("external_ref", rader.map((r) => r.external_ref));
+          if (lasfel2) return { fel: `Posterna kontrollerades inte: ${lasfel2.message}` };
+          const redanBokforda = new Set((finns ?? []).map((f) => String(f.external_ref)));
+          const saknas = rader.filter((r) => !redanBokforda.has(r.external_ref));
+          if (saknas.length > 0) {
+            const { error: igen } = await db.from("commission_entry").insert(saknas);
+            if (igen) return { fel: `Posterna bokfordes inte: ${igen.message}` };
+          }
         }
       }
 
@@ -203,7 +223,7 @@ export async function faststallPeriod(
         } bokförda.`,
       };
     } finally {
-      await db.rpc("provision_stangning_klar", { p_manad: manad });
+      await db.rpc("provision_stangning_klar", { p_manad: manad, p_nyckel: nyckel ?? null });
     }
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Nagot gick fel." };

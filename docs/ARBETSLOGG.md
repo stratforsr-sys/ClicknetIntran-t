@@ -5,6 +5,30 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-14 · Provisionslåset: resterna efter hårdtestet (0302)
+
+Beställaren: "fixa allting" om de fyra resterna.
+
+- **Nyckeln.** `provision_stangning_klar` raderade markeringen oavsett vems. En stängning som dragit över fem minuter
+  och tagits över tog då bort den nyas markering. Nu lämnar `borjar` en nyckel och `klar` tar bara bort sin. `klar`
+  utan nyckel beter sig som förut, så att koden som kördes mellan migrationen och bygget inte gick sönder.
+- **Orderna.** Samma lucka som mötena hade före 0300: en order som godkändes mellan stängningens läsning och perioden
+  föll utanför bokföringen. Triggrar på `sales_order` och `order_manager_commission` tar mötesvaktens delade lås.
+  Bara skrivningar som ändrar ett "provisionsavtryck" (det `hamtaAllaOrder` läser, för en godkänd/makulerad order)
+  spärras, så Inkio-synken och stegen aldrig stoppas av en stängning. Utkast räknas inte (`harGodkants`).
+  AFTER-trigger, eftersom `period_month` och `cancel_period_month` är genererade och inte räknade i BEFORE.
+  Avtrycket tar jsonb, så att provet kan köra triggern på en tillfällig kopia av tabellen.
+- **23505.** Insättningen av motorns poster är en sats: kolliderar en rad skrivs ingen, och perioden stängdes ändå.
+  Nu läses de redan bokförda referenserna och resten skrivs.
+- **Avboka/Flytta** syns inte längre för teamledaren efter mötets start (mellan start och slut stod kortet kvar i
+  Bekräftat med knapparna, servern svarade 403).
+- **Misstag:** ett första försök skrev en provorder i `sales_order` i en transaktion som rullades tillbaka.
+  Identitetssekvensen rullas inte tillbaka, så ordernummer 42 förbrukades. Ingen order hade tagit numret, och
+  sekvensen återställdes till 41 under lås. Provet använder nu en tillfällig tabell.
+- Klickprovets två F2.3-fel var gamla förväntningar ("2 dagar före"; texten är "2 arbetsdagar" sedan 4aee24a).
+
+---
+
 ## 2026-11-14 · Möten: utfallsprovets tre fynd, och varför Nav sa "Du är utloggad"
 
 Beställaren: "Fixa alla fel" (fynden från utfallsprovet i Möten), sedan "merga till main".
