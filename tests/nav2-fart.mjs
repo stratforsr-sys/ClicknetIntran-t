@@ -88,7 +88,8 @@ ok("ett ja och ett nej avslutar ändringen", /ndUpgSvarat\(v, true\)/.test(post)
 ok("samma uppgift sparas i tur och ordning", /ndUpgITur\(v\.id, /.test(post));
 ok("bara i skrivläge och för navets egna uppgifter", /ndUpgNav\(t\.id\) && ndUp\(\)\.skriv && ndUpgFar\(t, handling\) \? ndUpgForutse/.test(utkast));
 ok("bara det servern släpper igenom gissas: stryka kräver farStryk, resten farRed", /const ndUpgFar = \(t, handling\) => handling === 'avbryt' \? !!t\.ndFarStryk : !!t\.ndFarRed;/.test(utkast) && /t\.ndFarStryk = x\.farStryk;/.test(utkast));
-ok("farStryk är serverns farBjudaIn", /farStryk: u\.created_by === mig \|\| u\.assignee_id === mig,/.test(upgData) && /export function farBjudaIn\(k: Krets\): boolean \{\s*return k\.created_by === k\.mig \|\| k\.assignee_id === k\.mig;\s*\}/.test(upgRegler));
+// 0298: farBjudaIn släpper också in den som är med (B4); att stryka ligger kvar hos den som la upp den eller har bollen.
+ok("farStryk är serverns farStyra", /farStryk: u\.created_by === mig \|\| u\.assignee_id === mig,/.test(upgData) && /export function farStyra\(k: Krets\): boolean \{\s*return k\.created_by === k\.mig \|\| k\.assignee_id === k\.mig;\s*\}/.test(upgRegler));
 for (const h of ["bocka", "ateroppna", "avbryt", "planera", "andra"]) ok(`${h} förutses`, new RegExp(`handling === '${h}'`).test(utkast.slice(utkast.indexOf("function ndUpgForutse("), utkast.indexOf("function ndUpgGenast("))));
 ok("väntande ändringar läggs på igen efter en omhämtning", /in:\(\) => \{ ndUpgIgen\(\);/.test(utkast) && /NDUPGVANTAR\.forEach\(v => \{ const t = ndUpgT\(v\.id\); if \(t\) Object\.assign\(t, v\.falt\); \}\);/.test(utkast));
 ok("en sparad ändring släpps först av en omhämtning som började efter svaret", /if \(v\.klar && v\.klar < NDOMLASSTART\) NDUPGVANTAR\.delete\(v\)/.test(utkast) && /NDOMLASSTART = Date\.now\(\);\n\s*const s = await ndLas\('\/nav2\/data\?delar='/.test(utkast));
