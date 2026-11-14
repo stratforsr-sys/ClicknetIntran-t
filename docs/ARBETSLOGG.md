@@ -29,6 +29,9 @@ hade sett ut som ett beslut av en chef. Rensa i gränssnittet avvisar däremot, 
 `franvaro`, `tid`, `guider`, `coachning`, `navnyheter` gröna. `tsc --noEmit`: inga fel i ändrade filer (två
 kända fel om `Pling`/`pling`, som bara uppstår på macOS eftersom filsystemet inte skiljer på stora och små bokstäver).
 Sidans skript klarar `node --check`.
+
+---
+
 ## 2026-11-13/14 · Kundens inbjudan: ett riktigt mötesbrev, Teams-länken i kalendern, tillbaka efter borttagen, namnet i avbokningen (0294)
 
 **Läge:** tre lokala commits (`7da60ca`, `7cb50cd`, `542b34b`) ihopslagna till en och flyttade ovanpå main `c462df1`; 0294 KÖRD 2026-11-14 19:06 UTC på beställarens "fixa allt". Före körningen: `UTAN=1 node tests/ics-aterinbjudan-db.mjs` 8 ok, 6 fel mot funktionen i databasen; efter: 14 ok. Provet står nu i `npm test` (`test:ics-aterinbjudan`).

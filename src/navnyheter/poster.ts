@@ -28,6 +28,8 @@ blir inte längre ärenden. Personen ser fortfarande sin påminnelse, och läget
     datum: "2026-11-14",
     roller: [],
     href: "/tid",
+  },
+  {
     slug: "kundens-inbjudan-omskriven",
     rubrik: "Kundens inbjudan låter som en mötesinbjudan",
     ingress: "Mejlet kunden får när du bokar, flyttar eller ställer in ett möte är omskrivet. Mötet heter Möte med Clicknet, och du står med hela namnet.",
