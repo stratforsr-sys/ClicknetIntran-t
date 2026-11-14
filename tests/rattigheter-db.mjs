@@ -109,6 +109,11 @@ export const TILLATNA = {
   "lk_ser_serie(uuid,uuid)": { roller: "authenticated", md5: "084b93123831" },
   "projekt_synligt(uuid,uuid)": { roller: "authenticated", md5: "0411928c948b" },
   "uppgift_synlig(uuid,uuid)": { roller: "authenticated", md5: "03cda14602c3" },
+  // 0298: `task_event_read` frågar den. Samma form som uppgift_synlig (svarar
+  // ja eller nej om en uppgift och en person), plus föräldergrenen som
+  // `task_read` haft sedan 0054: den som ser en uppgift ser dess deluppgifters
+  // händelser, annars står varje bockat steg som ogjort hos kollegan.
+  "uppgift_synlig_i_trad(uuid,uuid)": { roller: "authenticated", md5: "e9f383d85a8f" },
   // Skriver bara at den inloggade eller utan person.
   "registrera_aktivitet()": { roller: "authenticated", md5: "811f6fd8d2ab" },
   "registrera_sokmiss(text)": { roller: "authenticated", md5: "10a8b54ac558" },

@@ -6459,6 +6459,16 @@ html.prf-oppen{overflow:hidden}
 .upg-val button{padding:3px 9px;border-radius:6px;border:1px solid var(--line-2);font-size:12.5px;background:var(--surface);color:var(--ink-2)}
 .upg-val button:hover{background:var(--surface-2);border-color:var(--line-2);color:var(--ink)}
 .upg-val button[aria-pressed="true"]{border-color:var(--brand);color:var(--brand-ink);font-weight:600}
+/* Kollegan i uppgiften (0298). Rutans egenskaper: Ansvarig har bollen, Med är en stapel bilder och namnen. */
+.upg-boll{margin-left:auto;padding-left:6px;font-size:11.5px;color:var(--brand-ink);font-weight:600;white-space:nowrap;flex:none}
+.upg-boll::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--brand);margin-right:5px;vertical-align:1px}
+.upg-medst{display:flex;flex:none}
+.upg-medst .av+.av{margin-left:-6px;box-shadow:0 0 0 1.5px var(--surface)}
+.upg-opt[disabled]{opacity:.55;cursor:default}
+.upg-medm{display:inline-flex;align-items:center;gap:5px}
+.upg-medm .av{flex:none}
+.upg-medm .av+.av{margin-left:-9px;box-shadow:0 0 0 1.5px var(--surface)}
+.upg-delav{flex:none;font-size:12px;color:var(--upg-ink-3);white-space:nowrap}
 .upg-sub{margin:8px 0 2px;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px}
 .upg-sub li{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2)}
 .upg-akt{margin-top:4px;font-size:12px;color:var(--upg-ink-3)}
@@ -10505,7 +10515,7 @@ const used = k => { if (!S.keysUsed.has(k)){ S.keysUsed.add(k); } };
 const VDAG = {mandag:1, tisdag:2, onsdag:3, torsdag:4, fredag:5, lordag:6, sondag:0};
 function tolka(rad){
   let s = ' ' + rad + ' ';
-  const o = {d:undefined, tid:null, est:null, prio:null, proj:null, person:null, nagon:false};
+  const o = {d:undefined, tid:null, est:null, prio:null, proj:null, person:null, nagon:false, med:[]};
   const ta = (re, fn) => { s = s.replace(re, (...m) => { fn(...m); return ' '; }); };
   ta(/\s(i\s?dag)\s/i, () => o.d = 0);
   ta(/\s(i\s?morgon)\s/i, () => o.d = 1);
@@ -10518,6 +10528,8 @@ function tolka(rad){
   ta(/\s!([1-4])\s/, (m, p) => o.prio = +p);
   ta(/\s#(\S+)\s/, (m, p) => o.proj = p);
   ta(/\s@(\S+)\s/, (m, p) => o.person = p);
+  // +namn lägger till en kollega (0298). Börjar med en bokstav: "+46…" är ett nummer och "2 + 2" en räkning. Som tolkaSnabbrad.
+  for (let i = 0; i < 8 && /\s\+\p{L}[^\s#@+]*\s/u.test(s); i++) ta(/\s\+(\p{L}[^\s#@+]*)\s/u, (m, n) => { if (!o.med.some(x => x.toLowerCase() === n.toLowerCase())) o.med.push(n); });
   ta(/\s(någon\s?gång)\s/i, () => o.nagon = true);
   o.titel = s.replace(/\s+/g, ' ').trim();
   return o;
@@ -10531,6 +10543,7 @@ function chipsFor(o){
   if (o.prio && o.prio <= 2) c.push([o.prio === 1 ? 'Brådskande' : 'Hög','danger']);
   if (o.proj) c.push(['#' + o.proj,'info']);
   if (o.person) c.push(['@' + o.person,'info']);
+  (o.med || []).forEach(n => c.push(['med ' + n,'info']));
   return c;
 }
 // Förslag medan man skriver: mallar efter "/", projekt efter "#", kollegor efter "@".
@@ -23585,6 +23598,8 @@ trow = function(t, opt = {}){
   if (t.alder >= 30) m.push(`<span class="upg-hog">Legat i ${t.alder} dagar</span>`);
   if (opt.vantar) m.push(`<span class="${t.stilla >= 7 ? 'upg-sen' : ''}">Stilla i ${t.stilla} ${t.stilla === 1 ? 'dag' : 'dagar'}</span>`);
   if (opt.delat) m.push(`<span>${esc(t.ansvarig)} ansvarar, du ${esc((t.roll || '').toLowerCase())}</span>`);
+  if (t.ndDelad && !opt.delat) m.push(ndMedMeta(t));
+  if (t.ndKlarAv && isDone(t)) m.push(`<span>${esc(t.ndKlarAv)} bockade</span>`);
   if (S.suggested.has(t.id) && t.skal && t.focus) m.push(`<span class="upg-skal">Nav valde den: ${esc(t.skal)}</span>`);
 
   // Börja med (det första steget) står först, så att man ser var man börjar.
@@ -23676,7 +23691,7 @@ quickAdd = function(compact){
     <div class="qsug" id="${compact ? 'qsTodo' : 'qsMain'}" ${sug.length ? '' : 'hidden'}>${sugHtml(sug)}</div>
   </form>
   <div class="qchips upg-chips" id="${compact ? 'qcTodo' : 'qcMain'}" aria-live="polite">${S.upgTomt === (compact ? 'todo' : 'main') ? '<span class="upg-sen">Skriv vad som behöver göras först.</span>' : c.length ? c.map(([x, ton]) => `<span class="pill t-${ton}">${esc(x)}</span>`).join('') : compact ? '' : `<span id="qhelp" class="qh">Skriv som du tänker, till exempel <b>ring Elin i morgon 14:00</b>. <button type="button" class="tlink inl" data-upghjalp aria-expanded="${!!S.upgHjalp}">${S.upgHjalp ? 'Dölj' : 'Mer'}</button></span>${note(186)}`}</div>
-  ${!compact && S.upgHjalp && !c.length ? `<dl class="upg-syntax">${[['i morgon, fredag, om 3 dagar','dag'],['14:00, kl 9','klockslag'],['15 min, 1 h','uppskattning'],['!1, !2','brådskande, hög'],['#projekt','projekt'],['@namn','lämna över'],['; mellan två','flera på en gång'],['/ först','mallar']].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>` : ''}`;
+  ${!compact && S.upgHjalp && !c.length ? `<dl class="upg-syntax">${[['i morgon, fredag, om 3 dagar','dag'],['14:00, kl 9','klockslag'],['15 min, 1 h','uppskattning'],['!1, !2','brådskande, hög'],['#projekt','projekt'],['@namn','lämna över'],['+namn','lägg till en kollega'],['; mellan två','flera på en gång'],['/ först','mallar']].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>` : ''}`;
 };
 
 /* ---------- Flikarna ---------- */
@@ -24139,8 +24154,8 @@ function upgPopHtml(t, k){
       <button type="button" class="upg-opt upg-mob" role="menuitem" data-snooze="${t.id}">${upgIk('pil')}Nästa arbetsdag</button>
       ${upgFarStyra(t) ? `<button type="button" class="upg-opt" role="menuitem" data-upgpop="${t.id}|ansv">${upgIk('person')}Lämna över</button>` : ''}
       <button type="button" class="upg-opt" role="menuitem" data-upgkopiera="${t.id}">${upgIk('lank')}Kopiera länk</button>
-      <div class="upg-sep"></div>
-      <button type="button" class="upg-opt upg-fara" role="menuitem" data-strike="${t.id}">${upgIk('x')}Stryk uppgiften</button>`);
+      ${upgFarStyra(t) ? `<div class="upg-sep"></div>
+      <button type="button" class="upg-opt upg-fara" role="menuitem" data-strike="${t.id}">${upgIk('x')}Stryk uppgiften</button>` : ''}`);
   return '';
 }
 function upgRutaHtml(t){
@@ -24166,7 +24181,7 @@ function upgRutaHtml(t){
   const estV = `${upgIk('est')}<span class="v${t.est ? '' : ' upg-mut'}">${t.est ? minText(t.est) : 'Ingen uppskattning'}</span>`;
   const prioV = `${upgIk('flagga', 'upg-flagga', `color:${prio[3]}`)}<span class="v">${prio[1]}</span>`;
   const projV = t.proj ? `<span class="upg-sq" style="background:${projP ? projP[1] : 'var(--brand)'}"></span><span class="v">${esc(t.proj)}</span>` : '<span class="upg-sq" style="box-shadow:inset 0 0 0 1.5px var(--line-2)"></span><span class="v upg-mut">Inget projekt</span>';
-  const ansvV = `${avatar(ansv, 20)}<span class="v">${ansv === mig ? 'Du' : esc(ansv)}</span>`;
+  const ansvV = `${avatar(ansv, 20)}<span class="v">${ansv === mig ? 'Du' : esc(t.ndDelad ? ansv.split(' ')[0] : ansv)}</span>${t.ndDelad ? '<span class="upg-boll">har bollen</span>' : ''}`;
   const granskV = gransk.length ? `${avatar(gransk[0], 20)}<span class="v">${esc(gransk.join(', '))}</span>` : `${upgIk('gransk')}<span class="v upg-mut">Ingen</span>`;
   const lankar = t.links.map(([k, v], j) => { const inne = `<span class="ctyp">${esc(k)}</span><span class="v">${esc(v)}</span>`;
     return `<span class="upg-chip">${upgLankMal(t, k, v) ? `<button type="button" data-upglank="${t.id}|${j}" title="Öppna ${esc(v)}">${inne}</button>` : `<span>${inne}</span>`}<!--upg-lx${j}--></span>`; }).join('');
@@ -24197,7 +24212,7 @@ function upgRutaHtml(t){
        <button type="button" class="btn btn-s btn-sm upg-mer" data-upgpop="${t.id}|mer" aria-haspopup="menu" aria-expanded="${pop === 'mer'}" aria-label="Mer" title="Mer">${UPGPRICKAR}</button>`
     : done ? `<span class="upg-slut">${upgIk('bock')}Klar${t.klarTid ? ` ${esc(t.klarTid)}` : ''}</span>${egen ? `<button type="button" class="btn btn-s btn-sm" data-upgsatt="${t.id}|oppna|">${upgIk('ater')}Öppna igen</button>` : ''}<span class="upg-rfsp"></span>`
     : t.lage === 'granskas' ? `<span class="upg-slut">Inlämnad${gransk.length ? `. ${esc(gransk[0].split(' ')[0])} godkänner` : ''}.</span>${t.vy === 'granska' ? `<span class="upg-rfsp"></span><button type="button" class="btn btn-p btn-sm" data-approve="${t.id}">${I('check')}Godkänn</button>` : ''}`
-    : t.vy === 'vantar' ? `<span class="upg-slut" style="color:var(--ink-2)">Hos ${esc((t.ansvarig || '').split(' ')[0])}</span><span class="upg-rfsp"></span><button type="button" class="btn btn-s btn-sm" data-nudge="${t.id}">Påminn</button><button type="button" class="btn btn-s btn-sm" data-reclaim="${t.id}">Ta tillbaka</button>` : '';
+    : t.vy === 'vantar' ? `<span class="upg-slut" style="color:var(--ink-2)">Hos ${esc((t.ansvarig || '').split(' ')[0])}</span><span class="upg-rfsp"></span><button type="button" class="btn btn-s btn-sm" data-nudge="${t.id}">Påminn</button><button type="button" class="btn btn-s btn-sm" data-reclaim="${t.id}">Ta tillbaka</button>${ndGaMedKnapp(t)}` : '';
   return `<div class="upg-ruta" role="dialog" aria-modal="true" aria-labelledby="ptitle">
     <header class="upg-rh">
       ${kan && t.lage !== 'granskas' ? `<button type="button" class="tick${t.granskare ? ' rev' : ''}${t.prio <= 2 ? ` upg-p${t.prio}` : ''}" data-tick="${t.id}" aria-label="${t.granskare ? 'Lämna in' : 'Markera klar'}" title="${t.granskare ? 'Lämna in' : 'Klar'}">${I('check')}</button>`
@@ -24219,7 +24234,7 @@ function upgRutaHtml(t){
           <div class="upg-blk"><label for="upgBesk" class="upg-lab">Beskrivning</label><textarea id="upgBesk" class="upg-falt" data-upgbesk="${t.id}" rows="2" placeholder="Detaljer, länkar eller vad kunden sa">${esc(t.besk || '')}</textarea></div>
           <div class="upg-blk">
             <div class="upg-bh2"><h3 class="upg-lab">Deluppgifter</h3>${ring}${kan ? `<button type="button" class="upg-ghost" data-split="${t.id}" title="Nav föreslår steg utifrån namnet. Du ändrar dem fritt.">${upgIk('dela')}Dela upp med Nav</button>` : ''}</div>
-            ${n ? `<ul class="upg-subl">${t.delar.map(([x, ok], j) => `<li class="${ok ? 'ok' : ''}"><button type="button" class="stick ${ok ? 'on' : ''}" data-sub="${t.id}|${j}" aria-label="${ok ? 'Ångra' : 'Bocka'} ${esc(x)}">${I('check')}</button><span class="t">${esc(x)}</span>${kan ? `<button type="button" class="upg-x upg-xs" data-upgdelbort="${t.id}|${j}" aria-label="Ta bort ${esc(x)}" title="Ta bort">${I('x')}</button>` : ''}</li>`).join('')}</ul>` : ''}
+            ${n ? `<ul class="upg-subl">${t.delar.map(([x, ok], j) => `<li class="${ok ? 'ok' : ''}"><button type="button" class="stick ${ok ? 'on' : ''}" data-sub="${t.id}|${j}" aria-label="${ok ? 'Ångra' : 'Bocka'} ${esc(x)}">${I('check')}</button><span class="t">${esc(x)}</span>${ok && t.ndDelad && (t.ndDelAv || [])[j] ? `<span class="upg-delav">${esc(String(t.ndDelAv[j]).split(' ')[0])}</span>` : ''}${kan ? `<button type="button" class="upg-x upg-xs" data-upgdelbort="${t.id}|${j}" aria-label="Ta bort ${esc(x)}" title="Ta bort">${I('x')}</button>` : ''}</li>`).join('')}</ul>` : ''}
             ${nySub ? `<form class="upg-subny" data-subadd="${t.id}"><span class="stick" aria-hidden="true"></span><input id="subin" class="upg-addin" placeholder="Skriv en deluppgift" aria-label="Ny deluppgift" autocomplete="off" maxlength="200"><span class="upg-kbd">Enter</span><span class="upg-kbd">Esc</span></form>`
               : kan ? `<button type="button" class="upg-ghost" data-upgsubny="${t.id}">${I('plus')}Lägg till deluppgift</button>` : ''}
           </div>
@@ -24251,8 +24266,8 @@ function upgRutaHtml(t){
           ${rad('proj', 'Projekt', projV, t.proj || 'Inget projekt')}
         </div>
         <div class="upg-pgrp">
-          ${rad('ansv', 'Ansvarig', ansvV, ansv === mig ? 'Du' : ansv, kan && upgFarStyra(t))}
-          <!--upg-med-->
+          ${rad('ansv', 'Ansvarig', ansvV, ansv === mig ? 'Du' : ansv, kan && (upgFarStyra(t) || !!(t.ndDelad && (t.ndKan || {}).passa)))}
+          ${ndMedRad(t, rad, kan)}<!--upg-med-->
           ${rad('gransk', 'Granskare', granskV, gransk.length ? gransk.join(', ') : 'Ingen', kan && upgFarStyra(t))}
           ${t.serie ? `<div class="upg-pr"><span class="upg-pl">Upprepas</span><span class="upg-pv upg-pv-lang">${upgIk('serie')}<span class="v">${esc(t.serie)}</span></span></div><!--upg-serie-->` : ''}
         </div>
@@ -28080,8 +28095,9 @@ const ndUp = () => ND && ND.uppgifter;
 const ndDagarTill = d => d ? Math.round((Date.parse(d + 'T12:00:00Z') - Date.parse(kIdag() + 'T12:00:00Z')) / 864e5) : null;
 const ndKl = iso => new Date(iso).toLocaleTimeString('sv-SE', {timeZone:'Europe/Stockholm', hour:'2-digit', minute:'2-digit'});
 const ndDagAv = iso => new Date(iso).toLocaleDateString('sv-SE', {timeZone:'Europe/Stockholm'});
-const NDUPGH = {paminnelse:'Påmind', skapad:'Skapad', tilldelad:'Tilldelad', paborjad:'Påbörjad', inlamnad:'Inlämnad', godkand:'Godkänd', returnerad:'Returnerad', klar:'Klar', ateroppnad:'Öppnad igen', avbruten:'Struken', kommentar:'Kommenterad'};
-const NDUPGROLL = {redigerare:'Redigerare', visare:'Kan se', granskare:'Granskare'};
+const NDUPGH = {paminnelse:'Påmind', skapad:'Skapad', tilldelad:'Tilldelad', paborjad:'Påbörjad', inlamnad:'Inlämnad', godkand:'Godkänd', returnerad:'Returnerad', klar:'Klar', ateroppnad:'Öppnad igen', avbruten:'Struken', kommentar:'Kommenterad', andrad:'Ändrad', krets:'De som är med'};
+// 0298: databasens redigerare heter Med. Den som är med har uppgiften som sin egen.
+const NDUPGROLL = {redigerare:'Med', visare:'Kan se', granskare:'Granskare'};
 // "3 h", "1 dag", "4 dagar": hur länge något har väntat.
 function ndSedan(iso){ const min = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 6e4)); if (min < 60) return `${min} min`; if (min < 1440) return `${Math.round(min / 60)} h`; const d = Math.round(min / 1440); return `${d} ${d === 1 ? 'dag' : 'dagar'}`; }
 
@@ -28101,7 +28117,8 @@ function ndUpgStart(){
       flyttad:0, stilla:x.stilla, aktivitet:sista ? `${sista.av.split(' ')[0]}: ${(NDUPGH[sista.typ] || sista.typ).toLowerCase()} ${frKort(ndDagAv(sista.at))}` : '',
       vantat:inl ? ndSedan(inl.at) : undefined, sammanfattning:(x.besk || '').split('\n')[0], roll:x.minRoll ? NDUPGROLL[x.minRoll] : undefined,
       alder:x.due ? undefined : Math.max(0, -ndDagarTill(ndDagAv(x.skapadAt))), ndHist:h, ndLage:x.lage, nasta:(u.forstaSteg || {})[x.id] || '',
-      focus:(u.fokus || []).indexOf(x.id) + 1, ndDelId:x.delar.map(d => d[2])});
+      focus:(u.fokus || []).indexOf(x.id) + 1, ndDelId:x.delar.map(d => d[2]),
+      ndMed:x.med || [], ndBollen:x.bollenId || null, ndSkapare:x.skapareId || null, ndDelad:!!x.delad, ndKan:x.kan || {}, ndKlarAv:x.klarAv || null, ndDelAv:x.delar.map(d => d[3] || null)});
   });
   // Projekten: navets färg, antal och deadline. Tidsandelen räknas från projektets start.
   const proj = u.projekt.map(p => {
@@ -28145,8 +28162,11 @@ upgAkt = function(t){
   if (!ndUp() || !t.ndHist) return _ndUpgAkt(t);
   const idag = kIdag(), igar = frPlus(idag, -1);
   const nar = at => { const d = ndDagAv(at); return d === idag ? ndKl(at) : d === igar ? `i går ${ndKl(at)}` : frKort(d); };
-  return t.ndHist.map(e => ({k:e.typ === 'kommentar' ? 'k' : 'h', vem:e.av || '', text:e.typ === 'kommentar' ? e.note || '' : NDUPGH[e.typ] || e.typ,
-    note:e.typ === 'kommentar' ? null : e.note, nar:nar(e.at), titel:`${frKort(ndDagAv(e.at))} ${ndKl(e.at)}`}));
+  const mig = upgMig();
+  return t.ndHist.map(e => { const mening = !!e.note && (e.typ === 'andrad' || e.typ === 'krets' || e.typ === 'tilldelad');
+    const vem = !e.av ? '' : e.av === mig ? 'Du' : e.av.split(' ')[0];
+    return {k:e.typ === 'kommentar' ? 'k' : 'h', vem:mening ? '' : e.av || '', text:e.typ === 'kommentar' ? e.note || '' : mening ? `${vem} ${e.note}`.trim() : NDUPGH[e.typ] || e.typ,
+      note:e.typ === 'kommentar' || mening ? null : e.note, nar:nar(e.at), titel:`${frKort(ndDagAv(e.at))} ${ndKl(e.at)}`}; });
 };
 // Granskare och överlämning: den som la upp uppgiften eller har den (farBjudaIn, som Stryk).
 const _ndUpgFarStyra = upgFarStyra;
@@ -28191,6 +28211,120 @@ upgSatt = function(id, vad, v, tyst){
     })();
   }
 };
+
+/* ---------- Kollegan i uppgiften (0298, beställaren 2026-11-13) ----------
+   "Jag vill kunna lägga till en annan kollega med min uppgift så att vi båda får uppgiften och båda kan jobba i den."
+   En uppgift, inte kopior. Den som har bollen (navets assignee) står först; de som är med har uppgiften som sin egen.
+   Servern avgör vem som får vad och skickar svaret i `kan`: laggaTill (alla som arbetar i uppgiften), styra (ta bort
+   någon annan, stryka: den som la upp uppgiften eller har bollen), lamna (den som är tillagd och inte har bollen) och
+   passa (flytta bollen inom kretsen; den som passar är kvar). */
+const ndMedNamn = (lista, p) => { const fn = p.namn.split(' ')[0]; return lista.filter(x => x.namn.split(' ')[0] === fn).length > 1 ? p.namn : fn; };
+const ndMedLista = t => (t.ndMed || []).filter(m => m.roll === 'redigerare');
+// Navets personer är kollegorna, utan mig. Valen behöver mig också: jag kan vara med, lämna, och ta bollen.
+const ndMedFolk = () => [...(ND.jag ? [{id:ND.jag.id, namn:ND.jag.namn}] : []), ...(((ndUp() && ndUp().personer) || []).filter(p => !ND.jag || p.id !== ND.jag.id))];
+// Raden Med i rutans egenskaper. Utan navet (utkastets påhittade data) finns ingen krets, och raden står inte.
+function ndMedRad(t, rad, kan){
+  if (!t.ndMed || !ndUp()) return '';
+  const k = t.ndKan || {}, jag = ND.jag.id, med = ndMedLista(t);
+  if (!med.length && !k.laggaTill) return '';
+  const v = med.length
+    ? `<span class="upg-medst">${med.slice(0, 3).map(m => avatar(m.namn, 20)).join('')}</span><span class="v">${upgLista(med.map(m => m.id === jag ? 'du' : esc(ndMedNamn(med, m))))}</span>`
+    : `${upgIk('person')}<span class="v upg-mut">Ingen</span>`;
+  return rad('med', 'Med', v, med.length ? med.map(m => m.namn).join(', ') : 'Ingen', kan && !!(k.laggaTill || k.styra || k.lamna), 'Lägg till kollegor');
+}
+// Valen ritas som rutans egna (upgPopHtml): samma ram, samma val, samma bock.
+const ndPopRam = (t, k, kl, roll, etikett, inner) => `<div class="upg-pop ${kl}" role="${roll}" aria-label="${etikett}" data-upgpopfor="${t.id}|${k}">${inner}</div>`;
+const ndPopOpt = (data, inner, sel, roll) => `<button type="button" class="upg-opt" role="${roll}" aria-checked="${!!sel}" ${data}>${inner}</button>`;
+const ndPopBock = sel => sel ? upgIk('bock', 'ok') : '';
+// Valet "Lägg till kollegor": bocka i lägger till, bocka ur tar bort (den som får styra) eller lämnar (jag själv).
+function ndMedPop(t){
+  const ram = (kl, roll, etikett, inner) => ndPopRam(t, 'med', kl, roll, etikett, inner), opt = ndPopOpt, bock = ndPopBock;
+  const k = t.ndKan || {}, jag = ND.jag.id, alla = t.ndMed || [], med = ndMedLista(t);
+  const personer = ndMedFolk().filter(p => p.id !== t.ndBollen);
+  const nej = 'aria-disabled="true" disabled';
+  const rad = p => { const ar = med.some(m => m.id === p.id), ser = !ar && alla.some(m => m.id === p.id && m.roll === 'visare'), mig = p.id === jag;
+    const data = ar ? (mig ? (k.lamna ? `data-ndlamna="${t.id}"` : nej) : k.styra ? `data-ndmedbort="${t.id}|${p.id}"` : nej) : k.laggaTill ? `data-ndmedlagg="${t.id}|${p.id}"` : nej;
+    return opt(data, `${avatar(p.namn, 22)}<span class="upg-ol">${esc(p.namn)}${mig ? ' (du)' : ''}</span>${ser ? '<span class="r upg-sm2">kan se</span>' : ''}${bock(ar)}`, ar, 'menuitemcheckbox'); };
+  const hint = ['De som är med har uppgiften bland sina egna, kan bocka deluppgifter och får notis om kommentarer.'];
+  if (t.serie) hint.push('Gäller den här gången. Nästa gång i rutinen är din egen.');
+  if (!k.styra && med.some(m => m.id !== jag)) hint.push('Bara den som la upp uppgiften eller har bollen tar bort någon annan.');
+  return ram('upg-pop-med', 'dialog', 'Lägg till kollegor', `<div class="upg-ph"><span>Lägg till kollegor</span><span>${med.length ? `${med.length} med` : ''}</span></div>
+      ${personer.map(rad).join('') || '<p class="upg-hint">Det finns ingen att lägga till.</p>'}
+      <p class="upg-hint upg-sm2" style="padding:4px 6px 2px">${hint.join(' ')}</p>`);
+}
+// Lämna över i en delad uppgift. Den som får styra lämnar över till vem som helst; väljer hen någon som är med flyttas
+// bara bollen (passa), och hen är kvar. Den som bara är med ger bollen inom kretsen, också till sig själv.
+function ndAnsvPop(t){
+  if (!t.ndMed || !ndUp() || !ndUpgNav(t.id)) return '';
+  const ram = (kl, roll, etikett, inner) => ndPopRam(t, 'ansv', kl, roll, etikett, inner), opt = ndPopOpt, bock = ndPopBock;
+  const k = t.ndKan || {}, jag = ND.jag.id, styr = upgFarStyra(t), med = ndMedLista(t);
+  const arMed = p => med.some(m => m.id === p.id);
+  const personer = ndMedFolk().filter(p => p.id !== t.ndBollen && (styr || arMed(p)));
+  const rader = personer.map(p => arMed(p) && k.passa
+    ? opt(`data-ndpassa="${t.id}|${p.id}"`, `${avatar(p.namn, 22)}<span class="upg-ol">${p.id === jag ? 'Du' : esc(p.namn)}</span><span class="r upg-sm2">med</span>`, false, 'menuitem')
+    : opt(`data-upgsatt="${t.id}|ansv|${esc(p.namn)}"`, `${avatar(p.namn, 22)}<span class="upg-ol">${esc(p.namn)}</span>`, false, 'menuitem')).join('');
+  const bollen = t.ndBollen === jag;
+  const stanna = styr && bollen ? `<div class="upg-sep"></div>${opt('data-ndstanna', `<span class="upg-ol">Jag är kvar i uppgiften</span>${bock(!!S.ndStanna)}`, !!S.ndStanna, 'menuitemcheckbox')}` : '';
+  const hint = !styr ? 'Den du ger bollen till har uppgiften först. Du är kvar som med.'
+    : bollen && S.ndStanna ? 'Uppgiften flyttas till hens lista, och du är kvar som med. Väljer du någon som är med får hen bollen.'
+    : bollen ? 'Uppgiften flyttas till hens lista. Du hittar den under Väntar på andra. Väljer du någon som är med får hen bollen, och du är kvar.'
+    : 'Uppgiften flyttas till hens lista.';
+  return ram('', 'dialog', styr ? 'Lämna över' : 'Ge bollen', `<div class="upg-ph"><span>${styr ? 'Lämna över till' : 'Ge bollen till'}</span></div>
+      ${rader || '<p class="upg-hint">Det finns ingen att lämna över till.</p>'}${stanna}
+      <p class="upg-hint upg-sm2" style="padding:4px 6px 2px">${hint}</p>`);
+}
+// B9: Gå med själv, i foten på en uppgift man lagt på någon annan.
+function ndGaMedKnapp(t){
+  const jag = ndUp() && ND.jag ? ND.jag.id : null, k = t.ndKan || {};
+  if (!t.ndMed || !jag || !k.laggaTill || isDone(t) || t.ndSkapare !== jag || t.ndBollen === jag || ndMedLista(t).some(m => m.id === jag)) return '';
+  return `<button type="button" class="btn btn-s btn-sm" data-ndmedlagg="${t.id}|${jag}">Gå med själv</button>`;
+}
+// Valen Med och Lämna över i en delad uppgift ritas av navet; resten av rutans val som förut.
+const _ndUpgPopHtml = upgPopHtml;
+upgPopHtml = function(t, k){
+  if (k === 'med' && t.ndMed && ndUp()) return ndMedPop(t);
+  if (k === 'ansv'){ const p = ndAnsvPop(t); if (p) return p; }
+  return _ndUpgPopHtml(t, k);
+};
+// Vem kommentaren når: kommentera() skickar notisen till den som har bollen, den som la upp uppgiften och alla
+// tillagda. Rutan räknade bara de två första och skrev "Ingen annan är med i uppgiften än" i en delad uppgift.
+const _ndUpgNotisTill = upgNotisTill;
+upgNotisTill = function(t){
+  const bas = _ndUpgNotisTill(t);
+  if (!t.ndMed || !ndUp()) return bas;
+  const mig = upgMig();
+  return [...new Set([...bas, ...t.ndMed.map(m => m.namn)].filter(n => n && n !== mig))];
+};
+// Raden i listan: de andra som arbetar i uppgiften, och vem som har bollen när det inte är jag.
+function ndMedMeta(t){
+  const jag = ND.jag.id, andra = [...(t.ndBollen && t.ndBollen !== jag ? [{id:t.ndBollen, namn:t.ansvarig || 'Okänd'}] : []), ...(t.ndMed || []).filter(m => m.roll === 'redigerare' && m.id !== jag)];
+  if (!andra.length) return '';
+  const fn = p => esc(p.namn.split(' ')[0]);
+  const text = t.ndBollen && t.ndBollen !== jag ? `${fn(andra[0])} har bollen` : `med ${andra.length > 2 ? `${fn(andra[0])} och ${andra.length - 1} till` : andra.map(fn).join(' och ')}`;
+  return `<span class="upg-medm" title="${esc(andra.map(p => p.namn).join(', '))}">${andra.slice(0, 3).map(p => avatar(p.namn, 18)).join('')}${text}</span>`;
+}
+/* Färskt när man kommer tillbaka. Det kollegan gjort i en delad uppgift ska synas utan att hela Nav laddas om: när
+   fliken visas igen, och när en ruta öppnas, läses uppgifterna om (högst en gång i minuten). Aldrig medan man skriver
+   i ett fält eller något sparas, och inte genom ndOmlas: går läsningen inte ska listan stå kvar, inte laddas om. */
+const NDUPGFARSKMS = 60000;
+const ndUpgSkriver = () => { const a = document.activeElement; return !!a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName); };
+async function ndUpgFarska(){
+  const v = NDOMLAS.upg;
+  if (ndUpgFarska.pagar || !v || !ndUp() || document.hidden || Date.now() - (ndUpgFarska.sist || 0) < NDUPGFARSKMS) return;
+  if (ndUpgSkriver() || NDUPGVANTAR.size || ndOmlasPagar) return;
+  ndUpgFarska.pagar = true;
+  try {
+    const s = await ndLas('/nav2/data?delar=' + v.delar.join(','));
+    if (!s.ok || !s.data || !s.data.data || !s.data.data.uppgifter) return;
+    if (ndUpgSkriver() || NDUPGVANTAR.size || ndOmlasPagar) return;
+    const lage = v.lage ? v.lage() : {};
+    Object.assign(ND, s.data.data); if (v.start) v.start(); if (v.in) v.in(lage);
+    ndUpgFarska.sist = Date.now(); render();
+  } catch(_){} finally { ndUpgFarska.pagar = false; }
+}
+ndUpgFarska.sist = Date.now();
+document.addEventListener('visibilitychange', () => { if (!document.hidden) ndUpgFarska(); });
+document.addEventListener('click', () => setTimeout(() => { if (!S.panel){ ndUpgFarska.ruta = null; return; } if (S.panel !== ndUpgFarska.ruta){ ndUpgFarska.ruta = S.panel; ndUpgFarska(); } }, 0));
 
 /* ---------- Skrivningar: /nav2/uppgifter ---------- */
 async function ndUpgPost(handling, data = {}, {ladda = true, tyst = false} = {}){
@@ -28308,7 +28442,7 @@ const _ndStryk = stryk;
 stryk = function(id){ if (!ndUp() || !ndUpgNav(id)) return _ndStryk(id);
   ndUpgPost('avbryt', {id, note:'Struken'}, {tyst:true}).then(s => { if (s.ok) toastActs('Struken. Den finns kvar i historiken.', [['Ångra', () => ndUpgPost('ateroppna', {id})]]); else if (!s.sagt) ndSkrivFel(s); }); };
 const _ndLamnaOver = lamnaOver;
-lamnaOver = function(id, vem){ if (!ndUp() || !ndUpgNav(id)) return _ndLamnaOver(id, vem); const p = ndPersonId(vem); if (!p){ toast('Personen finns inte i Nav.'); return; } ndUpgPost('tilldela', {id, till:p}); };
+lamnaOver = function(id, vem){ if (!ndUp() || !ndUpgNav(id)) return _ndLamnaOver(id, vem); const p = ndPersonId(vem); if (!p){ toast('Personen finns inte i Nav.'); return; } const stanna = !!S.ndStanna && S.panel === id; S.ndStanna = false; ndUpgPost('tilldela', {id, till:p, stanna}); };
 function ndFokusSpara(){ ndUpgPost('fokus', {ids:fokus().filter(x => ndUpgNav(x.id)).map(x => x.id)}, {ladda:false, tyst:true}).then(s => { if (!s.ok) ndSkrivFel(s, 'Dagens tre sparades inte.'); }); }
 const _ndVaxlaFokus = vaxlaFokus;
 vaxlaFokus = function(id, plats){
@@ -28348,8 +28482,10 @@ laggTill = function(rad){
   // En rad utan dag har ingen deadline och läggs inte i dag (beställaren 2026-11-11): den hamnar under Kommande, och
   // kvittot säger det med Visa. En rad som försvinner ur listan den skrevs i ser osparad ut (2026-11-02, fyra gånger).
   (async () => { const svar = []; for (let i = 0; i < delar.length; i++){ const s = await ndUpgPost('skapa', {rad:delar[i]}, {ladda:false, tyst:true}); if (!s.ok){ if (!S.quick) falt(delar.slice(i).join('; ')); ndSkrivFel(s, 'Uppgiften lades inte upp.'); if (i) ndOmlas('upg'); return; } svar.push(s); }
-    if (svar.every(s => s.dag === null && s.egen === true)) toastActs(delar.length > 1 ? `${delar.length} uppgifter upplagda utan deadline, under Kommande.` : 'Upplagd utan deadline, under Kommande.', [['Visa', () => { S.view = 'uppgifter'; S.tab = 'kommande'; S.todoOpen = false; render(); window.scrollTo(0, 0); }]]);
-    else toast(delar.length > 1 ? `${delar.length} uppgifter upplagda.` : 'Uppgiften är upplagd.');
+    // 0298: "+simon" i raden. Navets svar slutar då med "Simon är med.", och kvittot säger det.
+    const med = svar.map(s => (String(s.ok || '').match(/[^.]* är med\.$/) || [''])[0].trim()).filter(Boolean).join(' ');
+    if (svar.every(s => s.dag === null && s.egen === true)) toastActs((delar.length > 1 ? `${delar.length} uppgifter upplagda utan deadline, under Kommande.` : 'Upplagd utan deadline, under Kommande.') + (med ? ' ' + med : ''), [['Visa', () => { S.view = 'uppgifter'; S.tab = 'kommande'; S.todoOpen = false; render(); window.scrollTo(0, 0); }]]);
+    else toast((delar.length > 1 ? `${delar.length} uppgifter upplagda.` : 'Uppgiften är upplagd.') + (med ? ' ' + med : ''));
     ndOmlas('upg'); })();
 };
 
@@ -28366,8 +28502,17 @@ document.addEventListener('click', e => {
   if (d.setwhen){ stopp(); const [id, v] = del('setwhen'); const t = ndUpgT(id); ndUpgPost('planera', {id, dag:t && t.d !== null && t.d !== undefined ? ndUpgDag(t.d) : kIdag(), tid:v}); return; }
   if (d.book){ stopp(); const t = ndUpgT(d.book); if (!t) return; const s = nastaLucka(t.est || 15); ndUpgPost('planera', {id:t.id, dag:kIdag(), tid:hm(s), est:t.est || 15}); return; }
   if (d.take){ stopp(); ndUpgPost('planera', {id:d.take, dag:kIdag()}); return; }
-  if (d.reclaim){ stopp(); ndUpgPost('tilldela', {id:d.reclaim, till:ND.jag.id}); return; }
+  if (d.reclaim){ stopp(); ndUpgPost('tilldela', {id:d.reclaim, till:ND.jag.id, slapp:true}); return; }
   if (d.unfollow){ stopp(); ndUpgPost('lamna', {id:d.unfollow}); return; }
+  // Kollegan i uppgiften (0298).
+  // Rutan stänger valet vid varje val (upgRutaHtml:s klick, före det här). Lägg till kollegor bockar man i flera i, och
+  // Jag är kvar är en bock: valet står kvar öppet.
+  const iValet = () => { const p = b.closest && b.closest('.upg-pop'); if (p && p.dataset.upgpopfor) S.upgPop = p.dataset.upgpopfor; };
+  if (d.ndmedlagg){ stopp(); const [id, person] = del('ndmedlagg'); iValet(); ndUpgPost('med-lagg', {id, person}); return; }
+  if (d.ndmedbort){ stopp(); const [id, person] = del('ndmedbort'); iValet(); ndUpgPost('med-bort', {id, person}); return; }
+  if (d.ndpassa){ stopp(); const [id, till] = del('ndpassa'); ndUpgPost('passa', {id, till}); return; }
+  if (d.ndlamna){ stopp(); ndUpgPost('lamna', {id:d.ndlamna}); return; }
+  if (d.ndstanna !== undefined){ stopp(); S.ndStanna = !S.ndStanna; iValet(); render(); return; }
   if (d.nudge){ stopp(); ndUpgPost('paminn', {id:d.nudge}); return; }
   if (d.nudgeall !== undefined){ stopp(); const ids = listaFor('vantar').filter(t => t.stilla > 5 && ndUpgNav(t.id)).map(t => t.id); if (!ids.length){ toast('Det finns ingen att påminna.'); return; } ndUpgPost('paminn', {ids}); return; }
   if (d.tri){ stopp(); const [id, v] = del('tri'); if (v === 'stryk') ndUpgPost('avbryt', {id, note:'Struken'}); else ndUpgPost('planera', {id, dag:v === 'idag' ? kIdag() : v === 'mon' ? ndNastaMandag() : null}); return; }
@@ -28383,7 +28528,7 @@ document.addEventListener('click', e => {
   if (d.closeday !== undefined){ stopp(); ndUpgPost('dag', {vad:'avsluta'}, {ladda:false}).then(s => { if (s.ok){ S.dayClosed = true; S.shutdown = false; render(); } }); return; }
   if (d.reopen !== undefined && S.dayClosed){ stopp(); ndUpgPost('dag', {vad:'oppna'}, {ladda:false}).then(s => { if (s.ok){ S.dayClosed = false; render(); } }); return; }
   if (d.wrgo === 'klar'){ stopp(); ndUpgPost('genomgang', {}); return; }
-  if (d.wract){ stopp(); const [id, v] = del('wract'); if (v === 'pamin') ndUpgPost('paminn', {id}); else if (v === 'tillbaka') ndUpgPost('tilldela', {id, till:ND.jag.id}); else if (v === 'stryk') ndUpgPost('avbryt', {id, note:'Struken'}); else ndUpgPost('planera', {id, dag:v === 'idag' ? kIdag() : ndNastaMandag()}); return; }
+  if (d.wract){ stopp(); const [id, v] = del('wract'); if (v === 'pamin') ndUpgPost('paminn', {id}); else if (v === 'tillbaka') ndUpgPost('tilldela', {id, till:ND.jag.id, slapp:true}); else if (v === 'stryk') ndUpgPost('avbryt', {id, note:'Struken'}); else ndUpgPost('planera', {id, dag:v === 'idag' ? kIdag() : ndNastaMandag()}); return; }
   if (d.act === 'toast'){ stopp(); if (ndProjNyttFran(d.msg)){ ndProjOppna('ny'); return; } toast(d.msg || ''); }
 }, true);
 // Formulären: deluppgift, kommentar och retur. Snabbraden går genom laggTill.
@@ -28406,8 +28551,9 @@ document.addEventListener('change', e => {
   const d = e.target.dataset, v = e.target.value;
   if (d.upgnar){ e.stopImmediatePropagation(); const t = ndUpgT(d.upgnar); ndUpgPost('planera', {id:d.upgnar, dag:t && t.d !== null && t.d !== undefined ? ndUpgDag(t.d) : kIdag(), tid:/^\d{1,2}:\d{2}$/.test(v) ? v : null}); return; }
   if (d.upgproj){ e.stopImmediatePropagation(); ndUpgPost('andra', {id:d.upgproj, falt:{project_id:v ? ndProjId(v) : null}}); return; }
-  if (d.upgbesk){ e.stopImmediatePropagation(); ndUpgPost('andra', {id:d.upgbesk, falt:{description_md:v.trim()}}, {ladda:false}); return; }
-  if (d.ptitle){ e.stopImmediatePropagation(); if (!v.trim()){ toast('Skriv vad som ska göras.'); return; } ndUpgPost('andra', {id:d.ptitle, falt:{title:v.trim()}}, {ladda:false}); return; }
+  // Basen är navets text från senaste läsningen (ndUp().uppgifter), inte raden i TASKS: den har utkastets egna lyssnare redan ändrat.
+  if (d.upgbesk){ e.stopImmediatePropagation(); const x = ndUp().uppgifter.find(u => u.id === d.upgbesk), ny = v.trim(); ndUpgPost('andra', {id:d.upgbesk, falt:{description_md:ny}, ...(x ? {bas:{description_md:(x.besk || '').trim()}} : {})}, {ladda:false}).then(s => { if (s && s.ok){ if (x) x.besk = ny; } else if (s && s.konflikt) ndOmlas('upg'); }); return; }
+  if (d.ptitle){ e.stopImmediatePropagation(); if (!v.trim()){ toast('Skriv vad som ska göras.'); return; } const x = ndUp().uppgifter.find(u => u.id === d.ptitle), ny = v.trim(); ndUpgPost('andra', {id:d.ptitle, falt:{title:ny}, ...(x ? {bas:{title:(x.t || '').trim()}} : {})}, {ladda:false}).then(s => { if (s && s.ok){ if (x) x.t = ny; } else if (s && s.konflikt) ndOmlas('upg'); }); return; }
   if (d.pnasta){ e.stopImmediatePropagation(); const t = ndUpgT(d.pnasta); if (t) t.nasta = v.trim(); ndUpgPost('forsta-steg', {id:d.pnasta, text:v.trim()}, {ladda:false}); return; }
 }, true);
 // Kortkommandot M flyttar till nästa arbetsdag (utkastets skjut), X bockar av och F väljer dagens tre — samma funktioner.

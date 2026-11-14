@@ -83,6 +83,12 @@ export const HANDELSETYPER = [
   "ateroppnad",
   "avbruten",
   "kommentar",
+  // 0298. Ingen av de två ändrar läget. `andrad` är en flytt i tiden eller en
+  // ny prioritet i en DELAD uppgift ("flyttade till mån 17 nov"), `krets` är
+  // att någon lades till, togs bort, lämnade eller fick bollen. Utan dem ser
+  // den andra bara att raden är borta ur i dag, inte vem som flyttade den.
+  "andrad",
+  "krets",
 ] as const;
 export type Handelsetyp = (typeof HANDELSETYPER)[number];
 
@@ -140,6 +146,13 @@ const LAGE_AV_HANDELSE: Partial<Record<Handelsetyp, Lage>> = {
   avbruten: "avbruten",
 };
 
+/**
+ * De händelser som bär ett läge. Databasfunktionen `uppgift_handelse_villkorad`
+ * (0298) får listan härifrån och frågar "vilken var den senaste av de här" —
+ * så står regeln om vad som ändrar läget kvar på ETT ställe, i den här filen.
+ */
+export const LAGESHANDELSER = Object.keys(LAGE_AV_HANDELSE) as Handelsetyp[];
+
 export function lageAv(handelser: readonly { type: Handelsetyp }[]): Lage {
   let lage: Lage = "ej_paborjad";
   for (const h of handelser) {
@@ -184,6 +197,20 @@ export type Krets = {
    * ===========================================================================
    */
   somDelegat?: boolean;
+
+  /**
+   * 0298: raden är en DELUPPGIFT, och jag får arbeta i dess förälder.
+   *
+   * Hålet H6: en deluppgift får den som skrev den som ansvarig, och kretsen
+   * räknades ur deluppgiftens egen rad. Den som lagts till i föräldern såg
+   * stegen (RLS har haft föräldergrenen sedan 0054) men fick "Du får inte
+   * bocka av den här uppgiften". Att se ett steg man inte får bocka är inte
+   * att arbeta i uppgiften.
+   *
+   * Flaggan ger ARBETSRÄTT och inget annat: inte rätten att lägga till folk i
+   * deluppgiften och inte att stryka den. Kretsen sätts i föräldern.
+   */
+  viaForalder?: boolean;
 };
 
 /**
@@ -197,7 +224,8 @@ export function farRedigera(k: Krets): boolean {
     k.created_by === k.mig ||
     k.assignee_id === k.mig ||
     k.minRoll === "redigerare" ||
-    k.somDelegat === true
+    k.somDelegat === true ||
+    k.viaForalder === true
   );
 }
 
@@ -218,18 +246,148 @@ export function farPlanera(k: Krets, farPlaneraOm = false): boolean {
 }
 
 /**
- * Bjuda in andra och peka ut granskare.
+ * Lägga till en kollega.
  *
- * SNÄVARE ÄN REDIGERA, med flit. En redigerare som får bjuda in fler
- * redigerare kan bygga ut kretsen kring någon annans anteckning utan att
- * ägaren märker det, och kretsen är hela integritetslöftet i den här modulen.
+ * =============================================================================
+ * BESTÄLLARENS BESLUT 2026-11-13 (B4, "Gör som Asana"): DEN SOM ÄR MED FÅR
+ * LÄGGA TILL FLER.
  *
- * DELEGATEN STÅR INTE MED, av exakt samma skäl. En kalenderdelning är ett
- * förtroende mellan två personer; den som kan bjuda in en tredje har gjort den
- * till ett förtroende mellan tre, och ägaren får veta det i efterhand.
+ * Fram till dess stod här "SNÄVARE ÄN REDIGERA, med flit": bara den som la upp
+ * uppgiften och den ansvariga fick bjuda in, för att en redigerare annars kan
+ * bygga ut kretsen kring någon annans anteckning utan att ägaren märker det.
+ * Skälet var riktigt och är inte glömt. Det betalas nu på ett annat sätt:
+ *
+ *   1. varje tillägg skriver en `krets`-händelse med vem som la till vem,
+ *   2. den som la upp uppgiften och den som har bollen får besked
+ *      (`uppgift-delad`) när någon ANNAN lägger till en person,
+ *   3. spärren mot den dolda personkopplingen (H13) gäller alla som lägger till.
+ *
+ * Ägaren märker det alltså. Det som försvann är att hen kunde hindra det.
+ *
+ * DELEGATEN STÅR FORTFARANDE INTE MED. En kalenderdelning är ett förtroende
+ * mellan två personer; den som kan lägga till en tredje har gjort den till ett
+ * förtroende mellan tre. Det valet (0057) rördes inte av beslutet.
+ *
+ * `viaForalder` STÅR INTE HELLER MED. Kretsen sätts i föräldern och ärvs nedåt.
+ *
+ * ROLLERNA Kan se och Granskare delas fortfarande bara ut av ägaren — se
+ * `provaLaggaTill()`. Den som är med ger bort en plats, inte ett uppdrag.
+ * =============================================================================
  */
 export function farBjudaIn(k: Krets): boolean {
+  return k.created_by === k.mig || k.assignee_id === k.mig || k.minRoll === "redigerare";
+}
+
+/**
+ * Ta bort någon annan ur uppgiften, och stryka den.
+ *
+ * Det `farBjudaIn()` betydde före 2026-11-13: den som la upp uppgiften och den
+ * som har bollen. Frågan till beställaren gällde att LÄGGA TILL; att kunna
+ * kasta ut en kollega eller stryka det ni gör ihop är något annat, och det
+ * ligger kvar hos de två som svarar för uppgiften.
+ */
+export function farStyra(k: Krets): boolean {
   return k.created_by === k.mig || k.assignee_id === k.mig;
+}
+
+/**
+ * Lämna uppgiften själv.
+ *
+ * Alla som har en plats bland de tillagda får gå — med, kan se och granskare.
+ * Fram till 0298 gick det inte alls: "Sluta följa" anropade `taBortMedlem()`,
+ * som krävde `farBjudaIn()`, och den som är inbjuden var per definition varken
+ * skapare eller ansvarig (H2).
+ *
+ * DEN SOM HAR BOLLEN LÄMNAR INTE. Hen passar först. En uppgift vars boll
+ * ligger hos någon som gått är precis det "båda tror att den andra har den"
+ * som bollen finns för att förhindra.
+ */
+export function farLamna(k: Krets): boolean {
+  return k.minRoll !== null && k.assignee_id !== k.mig;
+}
+
+/**
+ * Flytta bollen.
+ *
+ * Alla som arbetar i uppgiften får passa den, också ta den själva. Mottagaren
+ * utanför kretsen är samma sak som lägga till och passa, och det får den som
+ * är med (B4), så någon särskild regel för "ut ur kretsen" finns inte. Det som
+ * finns är löftet i `uppgift_passa()` (0298): den som hade bollen blir kvar
+ * som med. Ingen tappar en uppgift av att någon annan flyttar den (B5).
+ *
+ * DELEGATEN STÅR MED, för hen kunde tilldela om före bygget och ska ha exakt
+ * det hen hade. `viaForalder` står inte med här utan kommer in via
+ * `farRedigera()` i `tilldela()`, där "vem tar vilket steg" hör hemma.
+ */
+export function farPassa(k: Krets): boolean {
+  return (
+    k.created_by === k.mig ||
+    k.assignee_id === k.mig ||
+    k.minRoll === "redigerare" ||
+    k.somDelegat === true
+  );
+}
+
+/**
+ * Får `person` läggas till med `roll`? Feltexten, eller null när det går.
+ *
+ * HELA BESLUTET STÅR HÄR och inte i `bjudIn()`, av samma skäl som resten av
+ * filen: en action går inte att prova utan att starta Next, och det här är
+ * elva frågor som var och en har ett svar någon förr eller senare ändrar.
+ */
+export function provaLaggaTill(a: {
+  krets: Krets;
+  person: string;
+  roll: string;
+  /** Rollen personen redan har bland de tillagda, om någon. */
+  befintligRoll: Medlemsroll | null;
+  /** `employee.status = 'offboarded'`. */
+  slutat: boolean;
+  /** Uppgiften har en personkoppling till `person` med `visible_to_subject = false`. */
+  doldKoppling: boolean;
+}): string | null {
+  const { krets: k, person, roll } = a;
+
+  if (!farBjudaIn(k)) return "Bara de som arbetar i uppgiften kan lägga till någon.";
+  if (!person) return "Välj vem som ska läggas till.";
+  if (!(MEDLEMSROLLER as readonly string[]).includes(roll)) return "Okänd roll.";
+
+  if (person === k.assignee_id) return person === k.mig ? "Du har redan uppgiften." : "Personen har redan uppgiften.";
+  // B9: den som lagt en uppgift på någon annan får gå med själv. Det är enda
+  // fallet där man lägger till sig själv; alla andra är redan inne.
+  if (person === k.mig && !(k.created_by === k.mig && k.minRoll === null)) return "Du är redan med i uppgiften.";
+
+  // Den som bara är med ger bort en plats bredvid sig. Att peka ut en granskare
+  // eller sätta någon på läktaren ändrar vad uppgiften kräver för att bli klar,
+  // och det avgör de två som svarar för den.
+  if (!farStyra(k) && roll !== "redigerare") {
+    return "Bara den som la upp uppgiften eller har bollen delar ut rollerna Kan se och Granskare.";
+  }
+
+  if (a.slutat) return "Personen har slutat och kan inte läggas till.";
+
+  /**
+   * H13. `task_link.visible_to_subject = false` är löftet att en uppgift OM
+   * någon inte syns för den personen. En medlemsrad hade brutit det tyst:
+   * `uppgift_synlig()` släpper in varje medlem, och den dolda kopplingen bryter
+   * bara igenom kalenderdelningen, inte medlemskapet.
+   */
+  if (a.doldKoppling) {
+    return "Uppgiften är kopplad till den här personen och dold för hen. Gör kopplingen synlig eller ta bort den först.";
+  }
+
+  if (a.befintligRoll === roll) return roll === "redigerare" ? "Personen är redan med." : "Personen har redan den rollen.";
+
+  // En rad per person och uppgift (0054). Granskaren som också arbetar i
+  // uppgiften hade godkänt sitt eget arbete.
+  if (a.befintligRoll === "granskare" && roll === "redigerare") {
+    return "Personen är granskare i uppgiften och kan inte också vara med. Ta bort hen som granskare först.";
+  }
+  if (a.befintligRoll !== null && !farStyra(k) && a.befintligRoll !== "visare") {
+    return "Bara den som la upp uppgiften eller har bollen ändrar någons roll.";
+  }
+
+  return null;
 }
 
 /** Markera klar, eller lämna in till granskning om det finns granskare. */
@@ -252,6 +410,47 @@ export function farArbeta(k: Krets): boolean {
  */
 export function farGranska(k: Krets): boolean {
   return k.minRoll === "granskare";
+}
+
+/**
+ * Får bollen flyttas till `till`? Feltexten, eller null när det går.
+ *
+ * INOM KRETSEN är det en passning: den som arbetar i uppgiften får flytta
+ * bollen mellan dem som arbetar i den. `iKretsen` räknas av anroparen och
+ * innehåller, för ett steg, också förälderns folk — "vem tar vilket steg" är
+ * hela poängen med att göra något ihop.
+ *
+ * UTANFÖR KRETSEN är det att lägga till en person och ge hen bollen, så
+ * samma spärrar gäller som i `provaLaggaTill()`. Den som bara nått raden via
+ * föräldern får inte dra in någon ny den vägen: kretsen sätts i uppgiften,
+ * inte i ett steg. Delegaten får, som före 0298.
+ */
+export function provaLamnaOver(a: {
+  krets: Krets;
+  /** Null är inkorgen. */
+  till: string | null;
+  iKretsen: boolean;
+  befintligRoll: Medlemsroll | null;
+  slutat: boolean;
+  doldKoppling: boolean;
+}): string | null {
+  const k = a.krets;
+  if (!farRedigera(k)) return "Du får inte ändra den här uppgiften.";
+  if (a.till === null) return null;
+
+  if (a.slutat) return "Personen har slutat och kan inte få uppgiften.";
+  if (a.befintligRoll === "granskare") {
+    return "Personen är granskare i uppgiften och kan inte också ha bollen. Ta bort hen som granskare först.";
+  }
+  if (a.iKretsen) return null;
+
+  if (!(farBjudaIn(k) || k.somDelegat === true)) {
+    return "Kretsen sätts i uppgiften, inte i ett steg. Lägg till personen i uppgiften först.";
+  }
+  if (a.doldKoppling) {
+    return "Uppgiften är kopplad till den här personen och dold för hen. Gör kopplingen synlig eller ta bort den först.";
+  }
+  return null;
 }
 
 // -----------------------------------------------------------------------------
@@ -402,6 +601,36 @@ export function fristtext(due: string | null, idag: string): string | null {
   return `${dagNummer(due)} ${MANAD_KORT[manadNummer(due)]}`;
 }
 
+/**
+ * Vad som ändrades i tiden, som en rad i historiken. Null när inget ändrades.
+ *
+ * BARA DAG, KLOCKSLAG OCH PRIORITET. Det är de tre som flyttar en rad mellan
+ * listorna hos den andra: en uppgift som försvinner ur "i dag" utan förklaring
+ * ser ut som ett fel. Rubrik och beskrivning syns där de står, och en rad per
+ * sparad bokstav hade dränkt historiken.
+ */
+export function andringstext(
+  fore: { due_date: string | null; due_time: string | null; priority: number },
+  efter: { due_date: string | null; due_time: string | null; priority: number },
+  _idag: string,
+): string | null {
+  const kl = (t: string | null) => (t ? t.slice(0, 5) : null);
+  const dag = (d: string) => `${VECKODAG_KORT[veckodag(d)]} ${dagNummer(d)} ${MANAD_KORT[manadNummer(d)]}`;
+  const delar: string[] = [];
+
+  if (fore.due_date !== efter.due_date) {
+    delar.push(efter.due_date ? `flyttade till ${dag(efter.due_date)}` : "tog bort dagen");
+  }
+  if (kl(fore.due_time) !== kl(efter.due_time) && efter.due_date) {
+    delar.push(kl(efter.due_time) ? `satte ${kl(efter.due_time)}` : "tog bort klockslaget");
+  }
+  if (fore.priority !== efter.priority) {
+    delar.push(`satte prioritet ${PRIORITET_ETIKETT[efter.priority as Prioritet] ?? efter.priority}`);
+  }
+
+  return delar.length ? delar.join(", ") : null;
+}
+
 /** "30 min", "1 h", "1 h 30 min". */
 export function tidstext(minuter: number | null): string | null {
   if (!minuter || minuter <= 0) return null;
@@ -494,6 +723,11 @@ export type Snabbrad = {
   /** Rå text efter `#` respektive `@`. Slås upp mot databasen av anroparen. */
   projekt: string | null;
   person: string | null;
+  /**
+   * 0298: rå text efter varje `+`. Kollegor som ska vara MED i uppgiften, till
+   * skillnad från `@`, som säger vem som får den. Slås upp av anroparen.
+   */
+  med: string[];
 };
 
 /**
@@ -535,6 +769,7 @@ export function tolkaSnabbrad(rad: string, idag: string, klockslagetsDag?: strin
     priority: 3,
     projekt: null,
     person: null,
+    med: [],
   };
 
   /** Plockar bort det som matchat, så att titeln blir det som blev över. */
@@ -553,6 +788,17 @@ export function tolkaSnabbrad(rad: string, idag: string, klockslagetsDag?: strin
     ut.person = m[1];
     return true;
   });
+
+  // --- Kollegor som ska vara med. "+simon", flera går. ----------------------
+  //
+  // MÅSTE BÖRJA MED EN BOKSTAV och stå efter ett mellanslag: "+46701234567" är
+  // ett telefonnummer och "2 + 2" en räkning, och båda hör hemma i rubriken.
+  for (;;) {
+    const m = text.match(/\s\+(\p{L}[^\s#@+]*)/u);
+    if (!m) break;
+    if (!ut.med.some((n) => n.toLowerCase() === m[1].toLowerCase())) ut.med.push(m[1]);
+    text = text.replace(m[0], " ");
+  }
 
   // --- Prioritet -----------------------------------------------------------
   plocka(/\s!([a-zA-ZåäöÅÄÖ1-4]+)/u, (m) => {

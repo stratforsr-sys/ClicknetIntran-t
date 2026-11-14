@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { SKRIVLAGE } from "./skrivlage";
 import { fullName, type CurrentUser } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
-import { arStangd, type Lage } from "@/lib/uppgifter";
+import { arStangd, farBjudaIn, farLamna, farPassa, farStyra, mittAttGora, type Krets, type Lage } from "@/lib/uppgifter";
 import {
   KOPPLING_ETIKETT,
   attGranska,
@@ -44,7 +44,8 @@ export type NdUppgift = {
   klarAt: string | null;
   links: [string, string, string | null][];
   proj: string | null;
-  delar: [string, boolean, string][];
+  /** Rubrik, bockad, id och (0298) förnamnet på den som bockade, om någon. */
+  delar: [string, boolean, string, string | null][];
   granskare: string | null;
   ansvarig: string | null;
   serie: string | null;
@@ -61,7 +62,20 @@ export type NdUppgift = {
   skapadAt: string;
   stilla: number;
   minRoll: string | null;
-  handelser: { typ: string; av: string; note: string | null; at: string }[];
+  handelser: { typ: string; av: string; avId: string; note: string | null; at: string }[];
+  /**
+   * 0298, kollegan i uppgiften. `med` är alla tillagda med sin roll, `bollenId`
+   * den som har bollen (`assignee_id`), `delad` om fler än en arbetar i den.
+   * `kan` är regeltabellen i src/lib/uppgifter.ts uträknad för den inloggade:
+   * klienten ritar knapparna efter den och räknar ingenting själv.
+   */
+  med: { id: string; namn: string; roll: string }[];
+  bollenId: string | null;
+  skapareId: string;
+  delad: boolean;
+  kan: { laggaTill: boolean; styra: boolean; lamna: boolean; passa: boolean };
+  /** Förnamnet på den som bockade av uppgiften, när det var någon annan än den inloggade. */
+  klarAv: string | null;
 };
 
 export type NdUppgifter = {
@@ -138,7 +152,7 @@ export async function byggUppgifter(supabase: SupabaseClient, user: CurrentUser)
 
   const perUppgift = new Map<string, NdUppgift["handelser"]>();
   for (const h of handelser ?? []) {
-    const rad = { typ: h.type as string, av: vem(h.by_employee_id), note: h.note ?? null, at: h.at as string };
+    const rad = { typ: h.type as string, av: vem(h.by_employee_id), avId: h.by_employee_id as string, note: h.note ?? null, at: h.at as string };
     perUppgift.set(h.task_id, [...(perUppgift.get(h.task_id) ?? []), rad]);
   }
   const serieRad = new Map((serier ?? []).map((s) => [s.id as string, s as { assignee_id: string | null; created_by: string | null; ended_at: string | null }]));
@@ -161,7 +175,9 @@ export async function byggUppgifter(supabase: SupabaseClient, user: CurrentUser)
   // Det egna som blivit klart de senaste 14 dagarna, för "Klart i dag" och veckan.
   const grans = new Date(Date.now() - 14 * 864e5).toISOString();
   for (const u of bild.uppgifter) {
-    if (vy.has(u.id) || u.assignee_id !== mig || !arStangd(u.lage)) continue;
+    // 0298 (H10): `mittAttGora` och inte `assignee_id`. Det kollegan bockade i en
+    // uppgift vi hade ihop är klart för mig också, och ska stå bland mina klara.
+    if (vy.has(u.id) || !mittAttGora(u, mig) || !arStangd(u.lage)) continue;
     const h = perUppgift.get(u.id) ?? [];
     const sista = [...h].reverse().find((x) => x.typ === "klar" || x.typ === "avbruten");
     if (sista && sista.at >= grans) vy.set(u.id, "egen");
@@ -185,7 +201,10 @@ export async function byggUppgifter(supabase: SupabaseClient, user: CurrentUser)
         klarAt: u.lage === "klar" && klar ? klar.at : null,
         links: u.kopplingar.map((k): [string, string, string | null] => [KOPPLING_ETIKETT[k.slag], k.etikett, k.href]),
         proj: u.project_id ? projektNamn.get(u.project_id) ?? null : null,
-        delar: u.delar.map((d): [string, boolean, string] => [d.title, d.lage === "klar", d.id]),
+        delar: u.delar.map((d): [string, boolean, string, string | null] => {
+          const bock = d.lage === "klar" ? [...(perUppgift.get(d.id) ?? [])].reverse().find((x) => x.typ === "klar" || x.typ === "godkand") : undefined;
+          return [d.title, d.lage === "klar", d.id, bock ? bock.av.split(" ")[0] : null];
+        }),
         granskare: granskare.length ? granskare.join(", ") : null,
         ansvarig: namn(u.assignee_id),
         serie: u.series_id ? serie.get(u.series_id) ?? null : null,
@@ -200,11 +219,21 @@ export async function byggUppgifter(supabase: SupabaseClient, user: CurrentUser)
         stilla: stilla(u, idag),
         minRoll: u.minRoll,
         handelser: h,
+        med: u.medlemmar.map((m) => ({ id: m.employee_id, namn: m.namn, roll: m.role })),
+        bollenId: u.assignee_id,
+        skapareId: u.created_by,
+        delad: new Set([u.created_by, u.assignee_id, ...u.medlemmar.filter((m) => m.role === "redigerare").map((m) => m.employee_id)].filter(Boolean)).size > 1,
+        kan: (() => {
+          const k: Krets = { mig, assignee_id: u.assignee_id, created_by: u.created_by, minRoll: u.minRoll };
+          return { laggaTill: farBjudaIn(k), styra: farStyra(k), lamna: farLamna(k), passa: farPassa(k) };
+        })(),
+        klarAv: u.lage === "klar" && klar && klar.avId !== mig ? klar.av.split(" ")[0] : null,
       };
     });
 
   const klara = uppgifter
-    .flatMap((u) => (perUppgift.get(u.id) ?? []).filter((x) => x.typ === "klar" && x.av === vem(mig) && x.at >= grans).map((x) => ({ at: x.at, t: u.t })))
+    // 0298: på id och inte på namn. Två kollegor med samma namn hade fått varandras klara.
+    .flatMap((u) => (perUppgift.get(u.id) ?? []).filter((x) => x.typ === "klar" && x.avId === mig && x.at >= grans).map((x) => ({ at: x.at, t: u.t })))
     .sort((a, b) => b.at.localeCompare(a.at));
 
   // Mallarna den inloggade får använda: delade och egna, som /uppgifter/mallar.

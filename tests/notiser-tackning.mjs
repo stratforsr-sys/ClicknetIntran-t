@@ -70,6 +70,8 @@ const TACKNING = {
   // skriver over forra agaren, avbrottet stanger, och en kommentar lamnar inget
   // spar alls i uppgiftens lage.
   // ---------------------------------------------------------------------------
+  // 0298: en ny uppgift ar fortfarande harledd (`uppgift-ny`). Kollegorna efter
+  // `+` i snabbraden far sitt besked av laggTill(), som bjudIn ocksa anvander.
   "uppgifter::skapaUppgift": "harledd",
   "uppgifter::andraUppgift":
     "En andrad rubrik eller frist ar inget besked. Ar den forsenad sager den harledda posten till anda.",
@@ -84,14 +86,22 @@ const TACKNING = {
     "Ett flyttat datum syns i listan och i morgonbrevet. En notis per omplanering hade gjort planeringen dyr.",
   "uppgifter::paborja":
     "En anteckning om att arbetet startat. Den som borjade vet om det, och kretsen ser det i historiken.",
-  "uppgifter::bocka": "harledd",
+  // 0298: i en DELAD uppgift sager bocken till de andra som har den som sin
+  // (`uppgift-delad`). Bocken skriver over tillstandet den kom ur, och fore
+  // bygget forsvann raden tyst ur kollegans lista.
+  "uppgifter::bocka": "notifierar",
   "uppgifter::godkann": "notifierar",
   "uppgifter::returnera": "harledd",
-  "uppgifter::ateroppna":
-    "Bara den som far arbeta med uppgiften kan oppna den igen, och da ar hon redan den som skulle fatt posten.",
+  // 0298: stammer inte langre nar tva har uppgiften. Den andra far veta att den ar oppen igen.
+  "uppgifter::ateroppna": "notifierar",
   "uppgifter::avbryt": "notifierar",
   "uppgifter::kommentera": "notifierar",
-  "uppgifter::bjudIn": "harledd",
+  // 0298: `uppgift-med` till den som lades till, `uppgift-delad` till agarna
+  // nar nagon annan la till (B4). Se kommentaren over laggTill() i actions.ts.
+  "uppgifter::bjudIn": "notifierar via laggTill() i samma fil (delas med skapaUppgift och +namn i snabbraden)",
+  "uppgifter::lamnaUppgift": "notifierar",
+  "uppgifter::sattForstaSteg":
+    "Forsta steget ar en anteckning i uppgiften. Den som oppnar uppgiften ser den.",
   "uppgifter::taBortMedlem":
     "Den som tagits bort ur en uppgift ska inte fa en notis om en rad hon inte langre kommer at.",
   "uppgifter::koppla":

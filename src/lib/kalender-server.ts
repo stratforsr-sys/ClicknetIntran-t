@@ -5,7 +5,7 @@ import { fullName, hasRole, type CurrentUser } from "@/lib/auth";
 import { svensktDatum, svenskaMinuter } from "@/lib/klocka";
 import { forfallodag, kursLage } from "@/lib/utbildning";
 import { arbetsdagarIManad } from "@/lib/saljtakt";
-import { arStangd, type Lage } from "@/lib/uppgifter";
+import { arStangd, mittAttGora, type Lage } from "@/lib/uppgifter";
 import { hamtaUppgiftsbild, type Uppgiftsbild } from "@/lib/uppgifter-server";
 import { uppgift as coachningsuppgift, uppgifterFor } from "@/lib/coachning-server";
 import {
@@ -160,7 +160,10 @@ export async function hamtaEgenKalender(
   // "planerat 4 h av 6 h".
   for (const u of bild.uppgifter) {
     if (!u.due_date || u.due_date < fran || u.due_date > till) continue;
-    const min = u.assignee_id === mig || (u.assignee_id === null && u.created_by === mig);
+    // 0298 (H5): `mittAttGora()` och inte `assignee_id`. Den som är MED i en
+    // uppgift har den i sin lista sedan 2026-09-23 men fick den aldrig i sin
+    // dag: kalendern frågade en egen fråga om vems raden var. En fråga, ett svar.
+    const min = mittAttGora(u, mig) || (u.assignee_id === null && u.created_by === mig);
     if (!min) continue;
 
     poster.push(uppgiftspost(u, mig, idag));
@@ -651,11 +654,21 @@ export async function kommandeposter(user: CurrentUser): Promise<Kalenderpost[]>
 
   const supabase = await supabaseServer();
 
+  // 0298 (H5): plinget går också till den som är med i uppgiften. RLS släpper
+  // bara fram mina egna medlemsrader och dem i uppgifter jag ser, och urvalet
+  // på `employee_id` gör resten.
+  const { data: medrader } = await supabase
+    .from("task_member")
+    .select("task_id")
+    .eq("employee_id", mig)
+    .eq("role", "redigerare");
+  const medI = ((medrader ?? []) as { task_id: string }[]).map((r) => r.task_id);
+
   const [{ data: rader }, { data: coachrader }] = await Promise.all([
     supabase
       .from("task")
       .select("id, title, due_date, due_time, estimate_minutes, assignee_id")
-      .eq("assignee_id", mig)
+      .or(medI.length ? `assignee_id.eq.${mig},id.in.(${medI.join(",")})` : `assignee_id.eq.${mig}`)
       .eq("due_date", idag)
       .is("parent_id", null)
       .not("due_time", "is", null),

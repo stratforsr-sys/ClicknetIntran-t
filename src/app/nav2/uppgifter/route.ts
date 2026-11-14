@@ -14,6 +14,7 @@ import {
   bjudIn,
   bjudInProjekt,
   koppla,
+  lamnaUppgift,
   markeraProjektchattLast,
   skapaProjekt,
   skrivProjektmeddelande,
@@ -25,6 +26,7 @@ import {
   paborja,
   planera,
   returnera,
+  sattForstaSteg,
   skapaUppgift,
   taBortMedlem,
   tilldela,
@@ -48,6 +50,12 @@ export const dynamic = "force-dynamic";
  * samma historik och samma notiser. Planera och ändra skriver alla sina fält,
  * så rutten fyller i de nuvarande värdena för det som inte ändras.
  *
+ * KOLLEGAN I UPPGIFTEN (0298, beställaren 2026-11-13): `med-lagg` lägger till
+ * en kollega som är MED (repots `bjudIn` med rollen redigerare), `med-bort`
+ * tar bort någon annan, `lamna` tar bort den inloggade själv, `passa` flyttar
+ * bollen och låter den som hade den vara kvar. Vem som får vad står i
+ * regeltabellen i src/lib/uppgifter.ts; rutten avgör ingenting själv.
+ *
  * Det nya (0092): dagens tre (`task_focus`), dagens början och slut
  * (`task_day`), första steget (`task.next_step`) och påminn (en händelse
  * `paminnelse` och en notis till den som har uppgiften). "Dela upp med Nav"
@@ -65,7 +73,9 @@ const FARGER = ["brand", "info", "accent", "ok", "warn", "danger"];
 
 type Svar = { ok?: string; fel?: string; [k: string]: unknown };
 const svar = (data: Svar, status = 200) => NextResponse.json(data, { status, headers: { "Cache-Control": "private, no-store, max-age=0" } });
-const fran = (s: UppgiftState, okText: string) => (s.fel ? svar({ fel: s.fel }, 400) : svar({ ok: s.ok ?? okText, id: s.id ?? null }));
+// 0298: en konflikt (någon annan hann ändra fältet) är 409 och bär texten som står i databasen nu.
+const fran = (s: UppgiftState, okText: string) =>
+  s.konflikt ? svar({ fel: s.fel, konflikt: s.konflikt }, 409) : s.fel ? svar({ fel: s.fel }, 400) : svar({ ok: s.ok ?? okText, id: s.id ?? null });
 
 function form(falt: Record<string, unknown>): FormData {
   const f = new FormData();
@@ -194,7 +204,16 @@ export async function POST(request: Request) {
       case "returnera":
         return fran(await returnera({}, form({ id, note: b.note ?? "" })), "Returnerad.");
       case "tilldela":
-        return fran(await tilldela({}, form({ id, assignee_id: b.till ?? "" })), "Uppgiften är överlämnad.");
+        // `stanna`: den som har bollen och lämnar över väljer om hen är kvar som med.
+        // `slapp`: Ta tillbaka. Den som la upp uppgiften släpper den som hade den; servern avgör om hen får.
+        return fran(await tilldela({}, form({ id, assignee_id: b.till ?? "", stanna: b.stanna === true ? "ja" : "", slapp: b.slapp === true ? "ja" : "" })), "Uppgiften är överlämnad.");
+      case "passa":
+        // Bollen byter hand och den som passade är kvar. Samma action, med löftet påslaget.
+        return fran(await tilldela({}, form({ id, assignee_id: b.till ?? "", stanna: "ja" })), "Bollen är passad.");
+      case "med-lagg":
+        return fran(await bjudIn({}, form({ id, employee_id: b.person ?? "", role: "redigerare" })), "Tillagd.");
+      case "med-bort":
+        return fran(await taBortMedlem({}, form({ id, employee_id: b.person ?? "" })), "Borttagen.");
       case "avbryt":
         return fran(await avbryt({}, form({ id, note: b.note ?? "" })), "Struken.");
       case "paborja":
@@ -204,7 +223,8 @@ export async function POST(request: Request) {
       case "bjudin":
         return fran(await bjudIn({}, form({ id, employee_id: b.person ?? "", role: b.roll ?? "visare" })), "Inbjuden.");
       case "lamna":
-        return fran(await taBortMedlem({}, form({ id, employee_id: b.person ?? mig })), "Du följer inte uppgiften längre.");
+        // H2: fram till 0298 gick det här genom taBortMedlem, som bara ägaren får anropa, och kunde aldrig lyckas.
+        return fran(await lamnaUppgift({}, form({ id })), "Du följer inte uppgiften längre.");
       case "planera": {
         const u = await uppgiften(id);
         if (!u) return svar({ fel: "Uppgiften finns inte." }, 404);
@@ -219,6 +239,9 @@ export async function POST(request: Request) {
         if (!u) return svar({ fel: "Uppgiften finns inte." }, 404);
         const f = (b.falt ?? {}) as Record<string, unknown>;
         const v = (k: string, nu: unknown) => (k in f ? f[k] : nu);
+        // 0298 (H15): texten klienten utgick från, för rubriken och beskrivningen. Se andraUppgift.
+        const bas = (b.bas ?? {}) as Record<string, unknown>;
+        const basFalt = (k: "title" | "description_md") => (k in f && typeof bas[k] === "string" ? { [`bas_${k}`]: bas[k] } : {});
         return fran(
           await andraUppgift(
             {},
@@ -233,6 +256,8 @@ export async function POST(request: Request) {
               estimate_minutes: v("estimate_minutes", u.estimate_minutes) ?? "",
               project_id: v("project_id", u.project_id) ?? "",
               serie_omfattning: f.serie === true ? "serie" : "",
+              ...basFalt("title"),
+              ...basFalt("description_md"),
             }),
           ),
           "Sparat.",
@@ -297,15 +322,10 @@ export async function POST(request: Request) {
         else await db.from("task_day").insert({ employee_id: mig, dag: idag, ...(vad === "planera" ? { planned_at: nu } : { closed_at: nu }) });
         return svar({ ok: vad === "planera" ? "Dagen är planerad." : "Dagen är avslutad. Ha en bra kväll." });
       }
-      case "forsta-steg": {
-        const u = await uppgiften(id);
-        if (!u) return svar({ fel: "Uppgiften finns inte." }, 404);
-        if (u.assignee_id !== mig && u.created_by !== mig) return svar({ fel: "Bara den som har uppgiften ändrar Börja med." }, 403);
-        const text = String(b.text ?? "").trim().slice(0, 200);
-        await db.from("task").update({ next_step: text || null, updated_at: new Date().toISOString() }).eq("id", id);
-        // Fältet heter Börja med i rutan (2026-11-13); kvittot säger vad som händer med det.
-        return svar({ ok: text ? "Sparat. Det står på raden i listan." : "Borttaget." });
-      }
+      case "forsta-steg":
+        // H7: alla som arbetar i uppgiften skriver Börja med, inte bara den som la upp den eller har bollen.
+        // Fältet heter Börja med i rutan (2026-11-13); kvittot kommer från actionen och säger vad som händer med det.
+        return fran(await sattForstaSteg({}, form({ id, text: String(b.text ?? "") })), "Sparat. Det står på raden i listan.");
       case "paminn": {
         const ids = Array.isArray(b.ids) ? (b.ids as string[]) : [id];
         let n = 0;

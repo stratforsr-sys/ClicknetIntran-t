@@ -14,6 +14,21 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "uppgifter-lagg-till-kollega",
+    rubrik: "Lägg till en kollega i din uppgift",
+    ingress: "Gör ni något ihop? Lägg till kollegan i uppgiften, så har ni den båda bland era egna och kan arbeta i den båda två.",
+    text: `Öppna en uppgift i **Uppgifter**, tryck på **Med** under Ansvarig och bocka i kollegan. Kollegan får en notis
+och har uppgiften i sin lista, på startsidan och i kalendern, och ni kan båda ändra den, lägga till och bocka
+deluppgifter och skriva kommentarer. En av er **har bollen**: välj någon som är med under **Ansvarig**, så går
+bollen dit utan att någon tappar uppgiften. Bockar den ena av uppgiften är den klar för er båda, och den andra får
+veta vem som bockade. Flyttar kollegan uppgiften till en annan dag står det i aktiviteten. Du kan också skriva
+**+namn** i snabbraden, till exempel "Ring Nordic fredag +simon". Den som är med kan lägga till fler och lämna
+uppgiften själv; ta bort någon annan och stryka uppgiften gör den som la upp den eller har bollen.`,
+    datum: "2026-11-14",
+    roller: [],
+    href: "/uppgifter",
+  },
+  {
     slug: "kundens-inbjudan-omskriven",
     rubrik: "Kundens inbjudan låter som en mötesinbjudan",
     ingress: "Mejlet kunden får när du bokar, flyttar eller ställer in ett möte är omskrivet. Mötet heter Möte med Clicknet, och du står med hela namnet.",
