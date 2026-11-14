@@ -44,7 +44,8 @@ kvar. `ndKHamta` var redan kalenderns namn: den nya heter `ndKoppHamta`. Prov: 8
 
 **Skarpa provet i produktionen 2026-11-14** (beställaren: "hårdtesta den. Säkerställ att det inte finns ett enda
 fel"): som Zen i Chrome, på en uppgift märkt PROV, varje del av rutan klickad och databasen läst efter varje steg;
-sidprovet mot produktionen (53 sidor × 4 roller) grönt. Sju fel, alla rättade på grenen `uppgiftsrutan-prov`:
+sidprovet mot produktionen (53 sidor × 4 roller) grönt. Åtta fel, alla rättade (`8cea8d2` och commiten efter) och
+omprovade i produktionen:
 - *Org.nr utan bindestreck* (5566685052) gav "Ingen träff": alla 35 står som 556668-5052. Ny `orgnrVillkor` provar
   bindestrecket på varje plats (högst tio villkor, bara siffror i följd matchar).
 - *Avsluta serien* tog bort förekomsten man stod i när den låg framåt, fast kvittot (sedan tidigare) säger "Den här
@@ -55,9 +56,12 @@ sidprovet mot produktionen (53 sidor × 4 roller) grönt. Sju fel, alla rättade
 - *"Första steget är sparat."* fast fältet heter Börja med: servern säger "Sparat. Det står på raden i listan."
 - *Koppla*: på en skärm 693 px hög syntes bara första träffen (formuläret rullas nu fram när listan fyllts),
   kopplingen syntes först efter omhämtningen (nu genast), valen hämtades vid varje öppning (står nu en minut).
+- *En avslutad serie* stod kvar som "Varje måndag och torsdag" med Avsluta serien (syntes först när förekomsten
+  fick stå kvar): navets data läser nu `ended_at`, "Avslutad, var varje måndag och torsdag", ingen knapp.
+- (Och: Koppla till något som redan är kopplat lägger ingen dubblett i rutan; databasen har `task_link_unik_idx`.)
 Inte fel: Ångra som "inte fungerade" var mitt prov (kvittot hann försvinna, och kvitton staplas, var och en ångrar sin
 egen ändring). Regel: **ett kvitto som lovar något (Den här står kvar) ska provas mot databasen, inte bara läsas.**
-Provet 142 kontroller (de tio nya föll på den gamla koden). Städat efteråt: PROV-uppgiften, dess deluppgifter,
+Provet 143 kontroller (de elva nya föll på den gamla koden). Städat efteråt: PROV-uppgiften, dess deluppgifter,
 kopplingar och händelser, PROV-serien.
 
 **Läge:** previewen grön 2026-11-13. Beställaren 2026-11-14: "pusha det till produktion och sen hårdtesta den". Main

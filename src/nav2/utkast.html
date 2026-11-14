@@ -28565,9 +28565,10 @@ function ndKKoppla(K, b){
     K.pagar = false; if (b.isConnected) b.removeAttribute('aria-busy');
     if (s && s.ok && S.ndKoppla === K){
       // Kopplingen syns genast; omhämtningen (1–3 s) ersätter raden med navets, med krysset.
+      // Fanns kopplingen redan (databasen har ett unikt index och svarar Kopplad.) läggs ingen dubblett till.
       const t = ndUpgT(K.id), j = v ? v.namn.lastIndexOf(' · ') : -1;
-      if (t && v && (K.slag === 'order' || K.slag === 'coachning') && j > 0) t.links = [...t.links, [NDKSORTNAMN[K.slag], v.namn.slice(0, j)]];
-      else if (t && v) t.links = [...t.links, [NDKSORTNAMN[K.slag], v.namn]];
+      const ny = v && [NDKSORTNAMN[K.slag], (K.slag === 'order' || K.slag === 'coachning') && j > 0 ? v.namn.slice(0, j) : v.namn];
+      if (t && ny && !t.links.some(([k, n]) => k === ny[0] && n === ny[1])) t.links = [...t.links, ny];
       S.ndKoppla = null; render(); document.querySelector('[data-ndkoppla]')?.focus({preventScroll:true});
     }
   });
