@@ -156,6 +156,31 @@ async function foraldralosaKonton() {
   return konton;
 }
 
+/** Sjukintygen och deras oppningslogg, och inga andra filer. */
+const INTYG = "purpose=eq.sick_certificate&select=id";
+const INTYGSLOGG = "select=id,file_object!inner(purpose)&file_object.purpose=eq.sick_certificate";
+
+/**
+ * Kopplar ur en skyddstrigger for EN stadning och kopplar in den igen, i en
+ * transaktion. ALTER TABLE ar transaktionell i Postgres: faller raderingen,
+ * eller dor provet mittemellan (Ctrl-C, natet), rullas aven urkopplingen
+ * tillbaka och skyddet star kvar. Forut kordes de tre satserna var for sig, och
+ * en krasch mellan disable och enable lamnade skyddet avstangt for ALLA i
+ * produktionen (2026-11-13).
+ */
+async function utanSparr(tabell, trigger, gor) {
+  await db.query("begin");
+  try {
+    await db.query(`alter table ${tabell} disable trigger ${trigger}`);
+    await gor();
+    await db.query(`alter table ${tabell} enable trigger ${trigger}`);
+    await db.query("commit");
+  } catch (e) {
+    await db.query("rollback").catch(() => {});
+    throw e;
+  }
+}
+
 async function stad() {
   // 0069. Möten och serier hänger i employee och måste bort före kontona.
   // Tabellerna finns inte på en databas som ligger före 0069 — då hoppas det över.
@@ -179,18 +204,18 @@ async function stad() {
   await db.query(`delete from employee_permission where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   // AC-2.3 galler aven testdata: enda vagen bort ar att medvetet koppla ur
   // skyddet. Att det kravs ett aktivt handgrepp ar sjalva poangen.
-  await db.query(`alter table time_event disable trigger time_event_orubblig`);
-  await db.query(`delete from time_event where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
-  await db.query(`alter table time_event enable trigger time_event_orubblig`);
+  await utanSparr("time_event", "time_event_orubblig", async () => {
+    await db.query(`delete from time_event where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  });
   await db.query(`delete from break_deviation where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   // Loneperioder fran testet ar alltid utkast. En attesterad period gar inte
   // att stada bort — det ar hela poangen med AC-2.16, och provas i stallet i
   // tests/lonerapport-db.mjs inuti en transaktion som rullas tillbaka.
   // Ett skickat meddelande gar inte att ta bort — samma sorts sparr som pa
   // time_event, och samma satt att stada: koppla ur den medvetet.
-  await db.query(`alter table case_message disable trigger case_message_orubblig`);
-  await db.query(`delete from hr_case where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
-  await db.query(`alter table case_message enable trigger case_message_orubblig`);
+  await utanSparr("case_message", "case_message_orubblig", async () => {
+    await db.query(`delete from hr_case where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  });
   // E7. Bade sjukanmalan och saldo har triggrar som vagrar delete och update.
   // Att stadningen kraver ett aktivt handgrepp ar samma poang som pa
   // time_event: sparren galler aven den som skrev den.
@@ -201,19 +226,19 @@ async function stad() {
   // 0024. Rollspelen forst: de haller i filerna, och kurserna raderas langre
   // ned i samma funktion.
   await db.query(`delete from roleplay_submission where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
-  await db.query(`alter table file_object disable trigger file_object_last`);
-  await db.query(`delete from file_object where uploaded_by in (select id from employee where email like $1)`, [PREFIX + "%"]);
-  await db.query(`alter table file_object enable trigger file_object_last`);
-  await db.query(`alter table sick_report disable trigger sick_report_last`);
-  await db.query(`delete from sick_deadline where report_id in (select id from sick_report where employee_id in (select id from employee where email like $1))`, [PREFIX + "%"]);
-  await db.query(`delete from sick_report where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
-  await db.query(`alter table sick_report enable trigger sick_report_last`);
-  await db.query(`alter table absence_balance disable trigger absence_balance_orubblig`);
-  await db.query(`delete from absence_balance where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
-  await db.query(`alter table absence_balance enable trigger absence_balance_orubblig`);
-  await db.query(`alter table absence_request disable trigger absence_request_last`);
-  await db.query(`delete from absence_request where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
-  await db.query(`alter table absence_request enable trigger absence_request_last`);
+  await utanSparr("file_object", "file_object_last", async () => {
+    await db.query(`delete from file_object where uploaded_by in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  });
+  await utanSparr("sick_report", "sick_report_last", async () => {
+    await db.query(`delete from sick_deadline where report_id in (select id from sick_report where employee_id in (select id from employee where email like $1))`, [PREFIX + "%"]);
+    await db.query(`delete from sick_report where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  });
+  await utanSparr("absence_balance", "absence_balance_orubblig", async () => {
+    await db.query(`delete from absence_balance where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  });
+  await utanSparr("absence_request", "absence_request_last", async () => {
+    await db.query(`delete from absence_request where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  });
   await db.query(`delete from absence_reminder where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`delete from calendar_feed where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`delete from absence_blackout where label like 'rlstest-%'`);
@@ -223,14 +248,16 @@ async function stad() {
   // handgrepp som sjukanmalan: sparren galler aven den som skrev den.
   await db.query(`delete from cost_calculation where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`delete from revenue_entry where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
-  await db.query(`alter table salary_basis disable trigger salary_basis_last`);
-  await db.query(`delete from salary_basis where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
-  await db.query(`alter table salary_basis enable trigger salary_basis_last`);
+  await utanSparr("salary_basis", "salary_basis_last", async () => {
+    await db.query(`delete from salary_basis where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  });
   await db.query(`delete from payroll_row where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`delete from payroll_period where status = 'draft' and period_start in ('2019-03-01','2019-04-01','2019-05-01')`);
   await db.query(`delete from work_time_journal where employee_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
-  await db.query(`delete from scheduled_break where scope = 'company' and window_start = '11:30' and duration_minutes = 30`);
-  await db.query(`delete from work_schedule where scope = 'company' and start_time = '08:00' and end_time = '17:00'`);
+  // Bara provets egna scheman, markta med created_by. Forut togs varje
+  // foretagsschema 11:30/30 min och 08–17, aven ett riktigt (2026-11-13).
+  await db.query(`delete from scheduled_break where created_by in (select id from employee where email like $1)`, [PREFIX + "%"]);
+  await db.query(`delete from work_schedule where created_by in (select id from employee where email like $1)`, [PREFIX + "%"]);
   await db.query(`delete from candidate where email like $1`, [PREFIX + "%"]);
   await db.query(`update employee set team_id = null where team_id in (select id from team where name like 'rlstest-%')`);
   await db.query(`delete from employee where email like $1`, [PREFIX + "%"]);
@@ -455,8 +482,9 @@ console.log("\n\x1b[1mStämpling: egen tid, chefens insyn och oföränderlighet\
 console.log("\n\x1b[1mScheman och avvikelser\x1b[0m");
 {
   const { rows: sch } = await db.query(
-    `insert into scheduled_break (scope, weekday, window_start, window_end, duration_minutes)
-     values ('company', 1, '11:30', '13:00', 30) returning id`,
+    `insert into scheduled_break (scope, weekday, window_start, window_end, duration_minutes, created_by)
+     values ('company', 1, '11:30', '13:00', 30, $1::uuid) returning id`,
+    [chef.id],
   );
   const schemaId = sch[0].id;
 
@@ -703,8 +731,9 @@ console.log("\n\x1b[1mSparren for raststampling sitter i databasen, inte i koden
     const { rows: r } = await db.query(`select count(*)::int as n from scheduled_break`);
     if (r[0].n === 0) {
       await db.query(
-        `insert into scheduled_break (scope, weekday, window_start, window_end, duration_minutes)
-         values ('company', 2, '11:30', '13:00', 30)`,
+        `insert into scheduled_break (scope, weekday, window_start, window_end, duration_minutes, created_by)
+         values ('company', 2, '11:30', '13:00', 30, $1::uuid)`,
+        [chef.id],
       );
     }
 
@@ -1607,22 +1636,29 @@ console.log("\n\x1b[1mFiler: bucketen ar stangd och varje oppning skrivs (K36, X
     "David ser det som saljchef",
     (await las(tD, "file_object", `id=eq.${fil.id}&select=*`)).length === 1,
   );
-  ok("Bertil ser 0 rader", (await las(tB, "file_object")).length === 0);
+  // Frageformen provas positivt forst: `las` gor ett felsvar till en tom lista,
+  // sa en trasig fraga hade gjort nollkontrollerna nedan grona utan att prova nagot.
+  ok("intygsfragan hittar intyget for saljchefen", (await las(tD, "file_object", INTYG)).length >= 1);
+  ok("Bertil ser 0 rader", (await las(tB, "file_object", INTYG)).length === 0);
   ok(
     "Bertils direkta fraga pa id ger ocksa 0",
     (await las(tB, "file_object", `id=eq.${fil.id}&select=*`)).length === 0,
   );
 
+  // file_object och file_access_log bar ALLA filer i navet, inte bara intyg:
+  // orderbilagor och samtalsinspelningar syns for den som ser ordern, ekonomi
+  // inraknad. Kontrollerna raknar darfor alla SJUKINTYG (aven driftens), inte
+  // hela tabellen. Hela tabellen gav tre roda 2026-11-13 som inte var lackage.
   // AC-3.26: ekonomi far sjukminuterna via loneunderlaget. Intyget ar nagot
   // annat, och K26 ger tillgang till kostnad — inte till halsa.
-  ok("Ekonomi ser 0 rader", (await las(tE, "file_object")).length === 0);
+  ok("Ekonomi ser 0 rader", (await las(tE, "file_object", INTYG)).length === 0);
   await db.query(
     `insert into employee_permission (employee_id, permission) values ($1::uuid, 'payroll_cost_viewer')
      on conflict do nothing`,
     [ekonomi.id],
   );
   const tE3 = await loggaIn(ekonomi.epost);
-  ok("inte heller med payroll_cost_viewer", (await las(tE3, "file_object")).length === 0);
+  ok("inte heller med payroll_cost_viewer", (await las(tE3, "file_object", INTYG)).length === 0);
   ok(
     "och inte pa en direkt fraga pa id",
     (await las(tE3, "file_object", `id=eq.${fil.id}&select=*`)).length === 0,
@@ -1637,8 +1673,9 @@ console.log("\n\x1b[1mFiler: bucketen ar stangd och varje oppning skrivs (K36, X
     "Cecilia ser loggen",
     (await las(tC, "file_access_log", `file_id=eq.${fil.id}&select=*`)).length === 1,
   );
-  ok("Bertil ser 0 rader i loggen", (await las(tB, "file_access_log")).length === 0);
-  ok("Ekonomi ser 0 rader i loggen", (await las(tE3, "file_access_log")).length === 0);
+  ok("loggfragan hittar Annas intygslogg", (await las(tA, "file_access_log", INTYGSLOGG)).length === 1);
+  ok("Bertil ser 0 rader i loggen", (await las(tB, "file_access_log", INTYGSLOGG)).length === 0);
+  ok("Ekonomi ser 0 rader i loggen", (await las(tE3, "file_access_log", INTYGSLOGG)).length === 0);
   await db.query(`delete from employee_permission where employee_id = $1::uuid`, [ekonomi.id]);
 
   // ---------------------------------------------------------------------
@@ -1933,9 +1970,9 @@ console.log("\n\x1b[1mLonekostnad: behorigheten ar payroll_cost_viewer, inte en 
   );
 
   await db.query(`delete from cost_calculation where period_id = $1::uuid`, [period.id]);
-  await db.query(`alter table salary_basis disable trigger salary_basis_last`);
-  await db.query(`delete from salary_basis where employee_id = $1::uuid`, [saljareA.id]);
-  await db.query(`alter table salary_basis enable trigger salary_basis_last`);
+  await utanSparr("salary_basis", "salary_basis_last", async () => {
+    await db.query(`delete from salary_basis where employee_id = $1::uuid`, [saljareA.id]);
+  });
   await db.query(`delete from payroll_row where period_id = $1::uuid`, [period.id]);
   await db.query(`delete from payroll_period where id = $1::uuid`, [period.id]);
 }

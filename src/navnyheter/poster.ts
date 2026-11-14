@@ -26,9 +26,47 @@ vet var du börjar. Kommentarer och historik ligger i **Aktivitet**: Enter skick
 är klar går att öppna igen, och de flesta ändringar går att ångra i kvittot. Tangenterna D, T, E och P öppnar dag, tid,
 uppskattning och prioritet. Under **Kopplad till** väljer du Kund, Person, Ärende, Utbildning eller Coachning, söker (en
 kund på namn, org.nr eller kontaktperson) och klickar på träffen.`,
-    datum: "2026-11-13",
+    datum: "2026-11-14",
     roller: [],
     href: "/uppgifter",
+  },
+  {
+    slug: "moten-bara-forsta-bekraftas",
+    rubrik: "Möten: bara det första mötet bekräftas",
+    ingress: "Uppföljningsmöten behöver inte bekräftas. Du får ingen uppgift och ingen notis för dem, och kortet står kvar i Bokat.",
+    text: `Nav ber dig bara bekräfta det **första mötet** med en kund, och det gäller också när mötet bokats om. Ett
+**uppföljningsmöte**, alltså ett möte med en kund som redan haft ett hållet möte, bekräftas inte. Du får ingen uppgift och
+ingen notis för det. Kortet går inte till **Att bekräfta**, utan står kvar i **Bokat** fram till mötet och visar
+"uppföljningsmöte". Statistiken över bekräftade möten räknar bara första möten.`,
+    datum: "2026-11-13",
+    roller: [],
+    href: "/moten",
+  },
+  {
+    slug: "saljtavlan-firar-moten",
+    rubrik: "Säljtavlan firar bokade möten",
+    ingress: "Ett bokat möte syns på kontorets tv med namnet och dagens rad, och det första, det femte och det tionde på en dag firas större.",
+    text: `När ett möte bokas i **Möten** syns det på säljtavlan, i en egen färg och med egna ljud, så att ingen
+blandar ihop det med en order. Ett möte till glider in i en remsa i nederkanten med bokarens namn och **dagens
+rad**: tio platser, ett block per möte. Dagens första möte, och ditt första möte någonsin, tar hela skärmen. Vid
+fem möten på en dag sluts raden till en balk, och vid det tionde fyller färgen hela tv:n. Ett möte med en kund
+som redan haft ett möte de senaste 90 dagarna räknas inte, så en ombokning firas aldrig två gånger. Under
+topplistan står **Möten** med varje mötesbokares rad för dagen och månadens antal.`,
+    datum: "2026-11-13",
+    roller: [],
+    href: "/salesboard",
+  },
+  {
+    slug: "att-gora-knappen-minns-ringen",
+    rubrik: "Att göra-knappen står kvar som du lämnade den",
+    ingress: "Trycker du ner knappen till en ring är den en ring nästa gång också, även efter att du loggat ut och in. Öppnar du den igen står den kvar öppen.",
+    text: `Knappen med nästa att göra längst ner till höger på datorn går att trycka ner till en liten ring med
+**–**. Nu minns Nav valet: ringen står kvar när du byter sida, laddar om och loggar ut och in igen. Trycker du på
+ringen öppnas knappen, och då står den kvar öppen tills du trycker ner den igen. Valet sparas i webbläsaren, så det
+gäller på den dator där du gjorde det.`,
+    datum: "2026-11-13",
+    roller: [],
+    href: "/",
   },
   {
     slug: "moten-bekrafta-uppgift",

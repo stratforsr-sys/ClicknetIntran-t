@@ -7,7 +7,7 @@ import { dagarBakat, svenskTidpunkt, svenskVeckodag, svensktDatum } from "@/lib/
 import { lokal } from "./leads";
 import { arHallare, arKapad, nejSkal, saljarePerKedja, skivor, slaIhopAvgjorda, sorteraAvgjorda, farAndraInstallning, farRattaUtfall, farSeInstallningar, KOLUMNER, MOTE_PLATS, platsTyp, type Kolumn, type Platstyp } from "./motenforma";
 import {
-  bekraftelseFonster, bradska, fordela, kortFas, lasInstallningar, manadFor, motesVal, PIPE_KOLUMNER, sorteraFas, sparadeSvar, ursprungligBokare,
+  bekraftelseFonster, bradska, fordela, kortFas, lasInstallningar, manadFor, motesVal, PIPE_KOLUMNER, skaBekraftas, sorteraFas, sparadeSvar, ursprungligBokare,
   type MotenInst, type MotesVal, type PipeKolumn,
 } from "./motesflode";
 
@@ -54,7 +54,7 @@ export type NdMoteKort = {
   idag: boolean;
   /** Kolumnen på tavlan (motesflode.ts). En kedja utan öppet möte står i Avgjort. */
   fas: PipeKolumn;
-  /** Bekräftelsefönstret, lokala dagar "YYYY-MM-DD". Null utan öppet möte. */
+  /** Bekräftelsefönstret, lokala dagar "YYYY-MM-DD". Null utan öppet möte, och för ett uppföljningsmöte (bekräftas inte). */
   fonster: { oppnar: string; senast: string } | null;
   bradska: "idag" | "imorgon" | null;
   /** Försöken att nå kunden sedan mötet bokades eller senast flyttades. */
@@ -63,6 +63,8 @@ export type NdMoteKort = {
   deltagare: string[];
   mote: {
     id: string;
+    /** `ny`, `ombokning` eller `uppfoljning` (motesArt). Bara det första mötet bekräftas. */
+    art: string;
     tid: string;
     langd: number;
     hallsAv: string;
@@ -200,7 +202,7 @@ type KortRad = {
   idag: boolean | null;
 };
 type MoteRad = { id: string; kedja_id: string; mote_tid: string; utfall: string | null; resultat: string | null };
-type FlodeRad = { id: string; event_id: string | null; kalla: string | null; agenda: string | null; personer: { namn: string | null; telefon: string | null; epost: string | null }[] | null; bokat_nar: string; bekraftat_nar: string | null; flyttad_nar: string | null; forsok: number | null; senast_forsok: string | null };
+type FlodeRad = { id: string; event_id: string | null; kalla: string | null; agenda: string | null; personer: { namn: string | null; telefon: string | null; epost: string | null }[] | null; bokat_nar: string; bekraftat_nar: string | null; flyttad_nar: string | null; forsok: number | null; senast_forsok: string | null; art: string | null };
 type AvgjortRad = { id: string; kedja_id: string; mote_tid: string; utfall: string; niva: string | null; bokat_av: string; halls_av: string; bekraftat_nar: string | null };
 type PersonRad = { id: string; first_name: string; last_name: string; employee_role: { role: string }[] | null };
 
@@ -349,7 +351,7 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
   const moteIds = rader.map((r) => r.mote_id).filter((x): x is string => !!x);
   if (moteIds.length) {
     // Bokningstiden, bekräftelsen, flyttiden och försöken (0287) står på mötesraden.
-    const { data: ev } = await supabaseAdmin().from("mote").select("id, event_id, kalla, agenda, personer, bokat_nar, bekraftat_nar, flyttad_nar, forsok, senast_forsok").in("id", moteIds).limit(MAX_KORT);
+    const { data: ev } = await supabaseAdmin().from("mote").select("id, event_id, kalla, agenda, personer, bokat_nar, bekraftat_nar, flyttad_nar, forsok, senast_forsok, art").in("id", moteIds).limit(MAX_KORT);
     for (const x of (ev ?? []) as unknown as FlodeRad[]) {
       flode.set(x.id, x);
       if (x.kalla) kallor.set(x.id, x.kalla);
@@ -388,7 +390,8 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
   const kort: NdMoteKort[] = rader.map((r) => {
     const f = r.mote_id ? flode.get(r.mote_id) : undefined;
     const oppet = !!(r.mote_id && r.mote_tid);
-    const fonster = oppet
+    // Ett uppföljningsmöte har inget fönster: det bekräftas inte och står i Bokat till mötet.
+    const fonster = oppet && skaBekraftas(f?.art)
       ? bekraftelseFonster({ moteTid: r.mote_tid as string, senastAndrad: f?.flyttad_nar ?? f?.bokat_nar ?? (r.mote_tid as string), dagar: inst.bekraftaDagar, tz })
       : null;
     const fas = kortFas(
@@ -416,6 +419,7 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
       r.mote_id && r.mote_tid
         ? {
             id: r.mote_id,
+            art: f?.art ?? "ny",
             tid: lokal(r.mote_tid),
             langd: r.langd_min ?? 30,
             hallsAv: r.halls_av ?? "",

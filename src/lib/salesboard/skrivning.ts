@@ -172,6 +172,10 @@ const TESTTYPER: Record<Testtyp, true> = {
   tavling: true,
   knuff: true,
   grans: true,
+  mote: true,
+  moteForsta: true,
+  moteFem: true,
+  moteTio: true,
 };
 
 type Objekt = Record<string, unknown>;

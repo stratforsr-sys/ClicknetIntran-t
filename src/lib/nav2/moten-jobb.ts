@@ -100,7 +100,7 @@ export async function korMotenJobb(db: Db, nu: Date = new Date()): Promise<Moten
 /** Upp till 14 arbetsdagar före mötet, plus helger och röda dagar emellan. */
 const BEKRAFTA_FRAMAT = 30 * DYGN;
 
-type ObekraftatRad = { id: string; kedja_id: string; mote_tid: string; bokat_av: string; halls_av: string; bokat_nar: string; flyttad_nar: string | null };
+type ObekraftatRad = { id: string; kedja_id: string; mote_tid: string; bokat_av: string; halls_av: string; bokat_nar: string; flyttad_nar: string | null; art: string };
 type KortRad = { kedja_id: string; namn: string | null; kontakt: string | null; telefon: string | null };
 
 /** "tis 17 nov 10:00" i tidszonen. */
@@ -130,6 +130,8 @@ function ringText(k: KortRad | undefined): string {
  * uppgiften läggs upp (databasen nekar en andra, och en som gäller en tid mötet inte längre har) med senast-dagen
  * som deadline, och notisen skrivs en gång per möte, dag och mottagare. Går det inte att läsa vad som redan skickats
  * skickas inga notiser den körningen (annars hade varje kvart gett en ny), men uppgifterna läggs ändå upp.
+ * Bara det första mötet bekräftas: ett uppföljningsmöte får ingen uppgift (`vemBekraftar`, och databasen nekar),
+ * och städningen tar bort en öppen uppgift som redan lagts upp på ett (0295).
  */
 async function bekraftelser(db: Db, inst: MotenInst, gallerFran: string, nu: Date, kvitto: MotenJobbKvitto): Promise<void> {
   // Städningen först, men den får aldrig stoppa nya uppgifter och notiser: ett fel loggas och jobbet går vidare.
@@ -142,7 +144,7 @@ async function bekraftelser(db: Db, inst: MotenInst, gallerFran: string, nu: Dat
   const fran = new Date(Math.max(Date.parse(gallerFran), nu.getTime())).toISOString();
   const { data: mr, error: mfel } = await db
     .from("mote")
-    .select("id, kedja_id, mote_tid, bokat_av, halls_av, bokat_nar, flyttad_nar")
+    .select("id, kedja_id, mote_tid, bokat_av, halls_av, bokat_nar, flyttad_nar, art")
     .is("utfall", null)
     .is("bekraftat_nar", null)
     .gt("mote_tid", fran)
@@ -179,6 +181,7 @@ async function bekraftelser(db: Db, inst: MotenInst, gallerFran: string, nu: Dat
       senastAndrad: r.flyttad_nar ?? r.bokat_nar,
       bokatAv: r.bokat_av,
       hallsAv: r.halls_av,
+      art: r.art,
       bekraftat: false,
       utfall: null,
       uppgift: t ? { id: t, till: task.get(t)?.assignee_id ?? null, avbruten: sistaTyp.get(t) === "avbruten" } : null,

@@ -8007,6 +8007,7 @@ body.nd-riktig :is(.pv-lagrad,.arow[data-agenda],.pv-tab tbody tr[data-pvupers],
 .sb-farg{width:8px;height:8px;border-radius:50%;flex:none}
 .sb-mint{background:var(--brand)}
 .sb-barnsten{background:var(--warn)}
+.sb-ljung{background:#C4A3E8;border-radius:2px}
 .prf-summa+.sb-rad{border-top:0}
 @media (max-width:640px){.sb-para>.prf-f:first-child,.sb-para>.prf-f:nth-child(2){max-width:none}
   /* Texten får hela raden; valen, knapparna och brytaren lägger sig under den. */
@@ -10409,6 +10410,8 @@ Object.assign(S, {
   keysUsed:new Set(), hideKeys:false, keysOverlay:false, projFilter:null, shutdown:false, dayClosed:false, expanded:new Set(),
   editing:null, overFor:null, streakOpen:false, pending:null, capDone:false, suggested:new Set(), drag:null
 });
+// Ringen eller den öppna knappen: valet står kvar efter omladdning och efter ut- och inloggning (utloggningen rör inte localStorage).
+try { S.pillMin = localStorage.getItem('nav2-pillmin') === '1'; } catch(_){}
 const role = () => S.role === 'chef' ? 'chef' : 'saljare';
 const mine = () => TASKS.filter(t => t.who === role());
 const isDone = t => t.lage === 'klar' || (t.inbox && S.done.has(t.inbox));
@@ -11060,7 +11063,7 @@ function taskClick(t, e){
   if (d.todo !== undefined){ S.todoOpen = true; S.pending = null; render(); setTimeout(() => document.getElementById('qinTodo')?.focus(), 50); return true; }
   if (d.todoclose !== undefined){ S.todoOpen = false; render(); return true; }
   if (d.pin !== undefined){ S.pinned = !S.pinned; S.todoOpen = false; render(); toast(S.pinned ? 'Listan är fäst vid sidan och följer med på varje sida.' : 'Listan är lossad.'); return true; }
-  if (d.pillmin !== undefined){ S.pillMin = !S.pillMin; render(); return true; }
+  if (d.pillmin !== undefined){ S.pillMin = !S.pillMin; try { localStorage.setItem('nav2-pillmin', S.pillMin ? '1' : '0'); } catch(_){} render(); return true; }
   if (d.undo){ const x = TASKS.find(y => y.id === d.undo); x.lage = 'oppen'; if (x.wasFocus){ x.focus = 9; x.wasFocus = false; } if (x.inbox) S.done.delete(x.inbox); render(); return true; }
   if (d.startday !== undefined){ S.planned = true; S.streak[role()] += 1; render(); toast(`Dagen är planerad. ${S.streak[role()]} vardagar i rad.`); return true; }
   if (d.suggest !== undefined){ foreslaTre(); return true; }
@@ -18864,7 +18867,7 @@ FEAT.push(
    och regler som mejlar den som ska sätta upp ett konto, med påminnelse och
    eskalering till chefen när något glöms.
    ===================================================================== */
-const AEROLL = {salesperson:'Säljare', team_lead:'Teamledare', sales_manager:'Säljchef', ceo:'VD', finance:'Ekonomi', project_manager:'Projektledare', delivery:'Leverans', admin:'Administratör'};
+const AEROLL = {salesperson:'Säljare', meeting_booker:'Mötesbokare', team_lead:'Teamledare', sales_manager:'Säljchef', ceo:'VD', finance:'Ekonomi', project_manager:'Projektledare', delivery:'Leverans', admin:'Administratör'};
 const AEMFA = ['sales_manager', 'ceo', 'finance', 'admin'];  // MFA_REQUIRED_ROLES i roles.ts
 const AEFORM = {probation:'Tillsvidare med provanställning', permanent:'Tillsvidare', consultant:'Konsult', intern:'Praktikant'};
 const AESTATUS = {onboarding:['Onboarding', 't-warn'], active:['Aktiv', 't-ok'], offboarded:['Avslutad', 't-neutral']};
@@ -25816,9 +25819,9 @@ const BRHNIVA = {
   superadmin:{l:'Superadmin', k:'Äger pengarna, behörigheterna och det som inte går att ångra.'}
 };
 const BRHORDNING = ['salesperson', 'admin', 'superadmin'];
-// Befattningen i repot (åtta roller) ger behörigheten tills någon ändrar den.
+// Befattningen i repot (nio roller) ger behörigheten tills någon ändrar den.
 // Leverans är admin tills vidare (beställaren 2026-10-14).
-const BRHFRAN = {ceo:'superadmin', admin:'superadmin', sales_manager:'admin', team_lead:'admin', finance:'admin', project_manager:'admin', delivery:'admin', salesperson:'salesperson'};
+const BRHFRAN = {ceo:'superadmin', admin:'superadmin', sales_manager:'admin', team_lead:'admin', finance:'admin', project_manager:'admin', delivery:'admin', salesperson:'salesperson', meeting_booker:'salesperson'};
 // Vad varje behörighet får göra. `inf` = infört i utkastet, annars ett förslag.
 const BRHMATRIS = [
   ['Sitt eget arbete', 'Stämpla, uppgifter, order, provision, frånvaro, ärenden, utbildning', [1, 1, 1], true],
@@ -26296,7 +26299,7 @@ function brhKort(){
       ${BRHMATRIS.map(([t, h, v, inf]) => `<div role="row" class="brh-tr"><span role="rowheader"><b>${esc(t)}</b><small>${esc(h)}${inf ? '' : ' · <em>förslag</em>'}</small></span>${v.map((x, i) => `<span role="cell" class="brh-c">${x ? `${I('check')}<span class="prf-sr">Ja</span>` : `<i aria-hidden="true"></i><span class="prf-sr">Nej</span>`}</span>`).join('')}</div>`).join('')}
     </div>
     <p class="prf-hj">Admin driver verksamheten. Superadmin äger pengarna, behörigheterna och det som inte går att ångra. Nav prövar varje rad på servern.</p>
-    <details class="brh-fran"><summary>Så blir repots åtta roller tre</summary><ul>${Object.entries(BRHFRAN).map(([r, n]) => `<li><span>${esc(AEROLL[r] || r)}</span>${I('arrow')}<b>${BRHNIVA[n].l}</b></li>`).join('')}</ul><p class="prf-hj">Leverans är admin tills vidare. Ändras per person i Anställda.</p></details>
+    <details class="brh-fran"><summary>Så blir repots nio roller tre</summary><ul>${Object.entries(BRHFRAN).map(([r, n]) => `<li><span>${esc(AEROLL[r] || r)}</span>${I('arrow')}<b>${BRHNIVA[n].l}</b></li>`).join('')}</ul><p class="prf-hj">Leverans är admin tills vidare. Ändras per person i Anställda.</p></details>
   </div>`);
 }
 function satsAdmRad(){
@@ -34770,7 +34773,8 @@ function sbSaljarKort(i){
 
 /* ---------- Testa tavlan ---------- */
 const SBTEST = [['order', 'Ny order', 'mint'], ['stor', 'Stor affär', 'barnsten'], ['forsta', 'Första ordern', 'mint'], ['serie', 'Tre order', 'mint'], ['malet', 'Målet nått', 'mint'],
-  ['tavling', 'Tävlingen', 'barnsten'], ['knuff', 'Knuffen', 'mint'], ['grans', 'Gränsen', 'barnsten']];
+  ['tavling', 'Tävlingen', 'barnsten'], ['knuff', 'Knuffen', 'mint'], ['grans', 'Gränsen', 'barnsten'],
+  ['mote', 'Nytt möte', 'ljung'], ['moteForsta', 'Första mötet', 'ljung'], ['moteFem', 'Fem möten', 'ljung'], ['moteTio', 'Tio möten', 'ljung']];
 function sbTestKort(nu){
   const d = sbOk(), s = sbSt(), anslutna = sbSkarmar().filter(x => sbAnsluten(x, nu)).length;
   const besk = 'Ett påhittat ögonblick på alla skärmar, märkt TEST. Det räknas aldrig.', oppna = `<a class="btn btn-s btn-sm" href="/salesboard" target="_blank" rel="noopener">Öppna tavlan ${I('arrow')}</a>`;
@@ -37751,6 +37755,8 @@ function moFas(k){
   if (f === 'bokat' && !m.bekraftat && k.fonster && ndIdag() >= k.fonster.oppnar) return 'att_bekrafta';
   return f;
 }
+// Bara det första mötet bekräftas (2026-11-13). Ett uppföljningsmöte har inget fönster och står i Bokat till mötet.
+const moUppfMote = k => !!(k && k.mote && k.mote.art === 'uppfoljning');
 const moKr = n => `${Math.round(n || 0).toLocaleString('sv-SE')} kr`;
 const moIni = n => String(n || '').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]).join('').toUpperCase() || '?';
 const moVdag = d => { const n = moDagar(ndIdag(), d); return n <= 0 ? 'i dag' : n === 1 ? 'i morgon' : n < 7 ? FRWD[new Date(d + 'T12:00:00Z').getUTCDay() || 7] : frKort(d); };
@@ -39158,7 +39164,7 @@ function moKnappar(k, alla = false){
   const fraga = S.moBekr === 'avboka|' + k.kedja ? `<small class="mo-fraga">${k.epost ? esc(k.epost) + ' får en avbokning.' : 'Kunden har ingen e-post och får inget besked.'}</small>` : '';
   const flytt = moKnapp('Flytta', 'flyttat', k) + moKnapp('Avboka', 'avboka', k);
   if (f === 'att_bekrafta') return moKnapp('Bekräfta', 'bekrafta', k, {p:true}) + moKnapp('Fick inte tag', 'forsok', k) + (mer ? flytt : '') + merKn + fraga;
-  if (f === 'bokat') return (mer ? moKnapp('Bekräfta', 'bekrafta', k) + moKnapp('Fick inte tag', 'forsok', k) + flytt : '') + merKn + fraga;
+  if (f === 'bokat') return (mer ? (moUppfMote(k) ? '' : moKnapp('Bekräfta', 'bekrafta', k) + moKnapp('Fick inte tag', 'forsok', k)) + flytt : '') + merKn + fraga;
   if (f === 'bekraftat') return (mer ? flytt : '') + merKn + fraga;
   if (f === 'hos_saljaren') return moFarUtfall(k)
     ? `<button class="btn btn-p btn-sm" data-moa="utfall|${k.kedja}">Sätt utfall</button>`
@@ -39196,7 +39202,8 @@ function moPipeKort(k){
   const brad = moBradska(k);
   const hoger = f === 'bekraftat' && m.bekraftatNar ? `<span class="ok">✓ ${esc(moVdag(m.bekraftatNar.slice(0, 10)))}</span>`
     : f === 'hos_saljaren' ? `<span>${esc(moRel(slut - nu))}</span>` : m.flyttningar ? `<span title="Flyttat ${m.flyttningar} ${m.flyttningar === 1 ? 'gång' : 'gånger'}">flyttat</span>` : '';
-  const due = f === 'bokat' && w ? `<span class="mo-due" title="Bekräftas från ${esc(moVdag(w.oppnar))}">${brad === 'idag' ? 'bekräfta i dag' : brad === 'imorgon' ? 'bekräfta i morgon' : 'från ' + esc(moVdag(w.oppnar))}</span>`
+  const due = f === 'bokat' && moUppfMote(k) && !m.bekraftat ? '<span class="mo-due" title="Bara det första mötet bekräftas">uppföljningsmöte</span>'
+    : f === 'bokat' && w ? `<span class="mo-due" title="Bekräftas från ${esc(moVdag(w.oppnar))}">${brad === 'idag' ? 'bekräfta i dag' : brad === 'imorgon' ? 'bekräfta i morgon' : 'från ' + esc(moVdag(w.oppnar))}</span>`
     : f === 'att_bekrafta' ? `<span class="mo-due ${brad === 'idag' ? 'd' : brad === 'imorgon' ? 's' : ''}">${brad === 'idag' ? 'i dag' : brad === 'imorgon' ? 'i morgon' : w ? 'senast ' + esc(moVdag(w.senast)) : ''}</span>` : '';
   // Försöken som text (B15): "2 försök, senast i går 14:10". Står i ringraden, bredvid numret.
   const forsok = k.forsok ? `<span class="mo-fs">${k.forsok} försök${k.senastForsok && moLokal(k.senastForsok) ? ', senast ' + esc(moNar(moLokal(k.senastForsok))) : ''}</span>` : '';
@@ -39444,7 +39451,7 @@ function moInstVy(){
       ${moIfrSek(v, T)}
       <section class="rxsek"><h3>Bekräftelsen</h3>
         <div class="mo-ir"><label for="moi-dagar">Bekräfta</label><input class="uin" id="moi-dagar" type="number" min="0" max="14" step="1" data-moi="bekraftaDagar" value="${v.bekraftaDagar}"><label for="moi-dagar">arbetsdagar före mötet</label>${moInstStatus('bekraftaDagar')}</div>
-        <p class="muted">Kortet hamnar i ${esc(moKolNamn('att_bekrafta'))} så många arbetsdagar före mötesdagen. Senast arbetsdagen före ska mötet vara bekräftat, eller samma dag om det bokades så sent. Helger och röda dagar räknas inte.</p>
+        <p class="muted">Gäller det första mötet med kunden, också när det bokats om. Uppföljningsmöten bekräftas inte och står kvar i ${esc(moKolNamn('bokat'))}. Kortet hamnar i ${esc(moKolNamn('att_bekrafta'))} så många arbetsdagar före mötesdagen. Senast arbetsdagen före ska mötet vara bekräftat, eller samma dag om det bokades så sent. Helger och röda dagar räknas inte.</p>
         <div class="mo-ir"><label><input type="checkbox" data-moi="bekraftaPaminn" ${v.bekraftaPaminn !== false ? 'checked' : ''}> Lägg upp en uppgift och påminn kl.</label><input class="uin" id="moi-btid" type="time" data-moi="bekraftaTid" value="${esc(v.bekraftaTid || '09:00')}" aria-label="Klockslaget för uppgiften och påminnelsen" aria-describedby="moi-btid-h"${v.bekraftaPaminn === false ? ' disabled' : ''}>${moInstStatus('bekraftaPaminn')}${moInstStatus('bekraftaTid')}</div>
         <p class="muted" id="moi-btid-h">${v.bekraftaPaminn === false
           ? 'Av: mötet syns bara i kolumnen. Ingen uppgift och ingen notis.'
@@ -39653,7 +39660,7 @@ function moPanel(k){
     <div class="rxpverk"><span class="pill t-${lage[1]}">${esc(lage[0])}</span><span class="rxpt">${m && moFarMote(k) ? `<button class="btn btn-s btn-sm" data-moa="andra|${k.kedja}">${I('mopenna')}Ändra</button>` : ''}${!m ? `<button class="btn btn-s btn-sm" data-moa="uppf|${k.kedja}">${I('mopenna')}Ändra</button>` : ''}${tel ? `<a class="btn btn-s btn-sm" href="tel:${tel}">${I('phone')}Ring</a>` : ''}${k.epost ? `<a class="btn btn-s btn-sm" href="mailto:${esc(k.epost)}">${I('inbox')}Mejla</a>` : ''}</span></div>
     <div class="rxpb">
       <section class="rxsek"><h3>${m ? 'Mötet' : 'Uppföljning'}</h3>
-        ${m ? `<p class="mo-pt"><b class="num">${moNar(m.tid)}</b> · ${m.langd} min · ${moRel(moMin(m.tid) - moNuMin())}${m.bekraftat ? ' · <span class="pill t-ok">Bekräftat</span>' : ''}${m.flyttningar ? ` · flyttat ${m.flyttningar} ${m.flyttningar === 1 ? 'gång' : 'gånger'}` : ''}${k.forsok ? ` · ${k.forsok} försök utan svar` : ''}${k.fonster && !m.bekraftat && (f === 'bokat' || f === 'att_bekrafta') ? ` · bekräftas senast ${esc(moVdag(k.fonster.senast))}` : ''}</p>${moPlatsRad(k)}<p class="muted">Bokat av ${esc(m.bokatAvNamn)}.</p>${moMedRad(k)}`
+        ${m ? `<p class="mo-pt"><b class="num">${moNar(m.tid)}</b> · ${m.langd} min · ${moRel(moMin(m.tid) - moNuMin())}${m.bekraftat ? ' · <span class="pill t-ok">Bekräftat</span>' : ''}${m.flyttningar ? ` · flyttat ${m.flyttningar} ${m.flyttningar === 1 ? 'gång' : 'gånger'}` : ''}${k.forsok ? ` · ${k.forsok} försök utan svar` : ''}${k.fonster && !m.bekraftat && (f === 'bokat' || f === 'att_bekrafta') ? ` · bekräftas senast ${esc(moVdag(k.fonster.senast))}` : ''}${moUppfMote(k) && !m.bekraftat && f === 'bokat' ? ' · uppföljningsmöte, bekräftas inte' : ''}</p>${moPlatsRad(k)}<p class="muted">Bokat av ${esc(m.bokatAvNamn)}.</p>${moMedRad(k)}`
           : `<p class="mo-pt"><b>${!u.datum ? 'Ingen dag satt' : moDag(u.datum) === 'i dag' ? 'Ring i dag' : 'Ring ' + moDag(u.datum)}</b>${u.offert ? ' · <span class="pill t-signal">Offert ute</span>' : ''}</p>${u.text ? `<p>${esc(u.text)}</p>` : ''}<p class="muted">${u.ingetSvar ? `Inget svar ${u.ingetSvar} ${u.ingetSvar === 1 ? 'gång' : 'gånger'} i rad.` : 'Inget försök utan svar än.'}</p>`}
         <div class="mo-kn pan">${moKnappar(k, true)}</div></section>
       <section class="rxsek"><h3>Bolaget</h3><dl class="ldfakta">${fakta.map(([a, b]) => `<div><dt>${a}</dt><dd>${b}</dd></div>`).join('')}</dl></section>

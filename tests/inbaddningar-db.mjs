@@ -89,10 +89,15 @@ function inbaddningar(kod, fil) {
   while ((m = from.exec(kod)) !== null) {
     const tabell = m[1];
     // Select-anropet som hor till: det forsta efter `.from`, innan nasta
-    // `.from`. Fonstret racker for kedjorna i det har repot.
-    const rest = kod.slice(m.index, from.lastIndex + 1200);
-    const sel = /\.select\(\s*"([^"]+)"/.exec(rest);
-    if (!sel) continue;
+    // `.from`. Fonstret racker for kedjorna i det har repot. Gransen vid nasta
+    // `.from` och kravet att det FORSTA select-anropet tar en strang ar bada
+    // nodvandiga: utan dem parades `.from("employee").update(...)` ihop med
+    // `employee_role`-fragan pa raden under, och `.select(FALT)` hoppades over
+    // till nasta funktions select (2026-11-13, tva falska roda).
+    const nasta = kod.indexOf(".from(", from.lastIndex);
+    const rest = kod.slice(m.index, Math.min(nasta === -1 ? kod.length : nasta, from.lastIndex + 1200));
+    const sel = /\.select\(\s*(?:"([^"]+)")?/.exec(rest);
+    if (!sel || !sel[1]) continue;
     const valet = sel[1];
     if (!valet.includes("(")) continue;
     const rad = kod.slice(0, m.index).split("\n").length;

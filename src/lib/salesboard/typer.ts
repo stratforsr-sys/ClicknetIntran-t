@@ -41,7 +41,19 @@ export type Visning = "namn" | "initialer" | "dold";
 export type Ordning = "varde" | "antal";
 
 /** Testhändelserna admin kan skicka från inställningarna. */
-export type Testtyp = "order" | "stor" | "forsta" | "serie" | "malet" | "tavling" | "knuff" | "grans";
+export type Testtyp =
+  | "order"
+  | "stor"
+  | "forsta"
+  | "serie"
+  | "malet"
+  | "tavling"
+  | "knuff"
+  | "grans"
+  | "mote"
+  | "moteForsta"
+  | "moteFem"
+  | "moteTio";
 
 /**
  * Månadens tävling (spec 2026-10-26). Den som har högst ordervärde i månaden och
@@ -176,6 +188,46 @@ export type TavleManad = {
   mal: number | null;
 };
 
+/**
+ * Ett bokat möte som räknas (`moten.ts`): ett bolag som fått ett möte, inte en
+ * ombokning eller en uppföljning. Inget om kunden: bara vem, när och hur många.
+ */
+export type TavleMote = {
+  /** Hash av mötets id. Tavlan minns vilka nycklar den sett. */
+  nyckel: string;
+  /** Bokarens nyckel i `Ogonblick.personer`. */
+  person: string;
+  /** När mötet bokades, ISO. */
+  tid: string;
+  /** Svensk dag för `tid`. */
+  dag: string;
+  /** Bokarens första möte någonsin. Aldrig för en dold säljare. */
+  forstaNagonsin: boolean;
+  /** Bokarens möten i dag, det här inräknat. 0 för en dold säljare. */
+  bokarensDagsantal: number;
+};
+
+/** En rad bland mötesbokarna: en som inte är dold. */
+export type TavleBokare = {
+  person: string;
+  /** Möten som räknas, bokade i dag. */
+  idag: number;
+  /** Möten som räknas, bokade i månaden. */
+  manad: number;
+};
+
+/** Lagets bokade möten. Ingen kund, inget kronbelopp: möten och order blandas aldrig. */
+export type TavleMoten = {
+  /** Lagets möten i dag (också de dolda säljarnas). */
+  idag: number;
+  /** Lagets möten i månaden. */
+  manad: number;
+  /** Dagens möten, det nyaste först. */
+  lista: TavleMote[];
+  /** Mötesbokarna: rollen och alla som bokat i månaden, utom de dolda. Tavlan rangordnar. */
+  bokare: TavleBokare[];
+};
+
 /** En testhändelse från inställningarna. Spelas med märket TEST och räknas aldrig. */
 export type TavleHandelse = { id: number; typ: Testtyp; tid: string };
 
@@ -240,6 +292,11 @@ export type Ogonblick = {
   tavling: TavleTavling | null;
   /** Förra månadens vinnare, bara första arbetsdagen i månaden och bara om tävlingen var på. */
   vinnare: TavleVinnare | null;
+  /**
+   * Lagets bokade möten, eller null när mötena inte gick att läsa. Valfri: en bild
+   * från ett bygge före mötena saknar fältet, och då visar tavlan inga möten.
+   */
+  moten?: TavleMoten | null;
 };
 
 /** Månadens tävling som tavlan får se den. */

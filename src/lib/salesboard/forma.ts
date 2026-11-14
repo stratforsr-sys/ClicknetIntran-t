@@ -30,9 +30,11 @@ import { dagarBakat, svenskTidpunkt, svensktDatum } from "../klocka.ts";
 import { harGodkants, nettoAntal, raknas, type Order, type Orderstatus } from "../order.ts";
 import { MINSTA_DAGAR_FOR_PROGNOS, arbetsdagarIManad, arbetsdagarTill } from "../saljtakt.ts";
 import { malFor, tavlingFor } from "./installningar.ts";
+import { formaMoten, type RaMote } from "./moten.ts";
 import {
   AKTIVA_STATUSAR,
   MINSTA_UNDERLAG,
+  MOTESBOKARROLL,
   RESERV_TROSKEL,
   SALJANDE_ROLLER,
   arDold,
@@ -44,6 +46,7 @@ import type {
   Ogonblick,
   TavleHandelse,
   TavleManad,
+  TavleMoten,
   TavleOrder,
   TavlePerson,
   TavleSaljare,
@@ -139,6 +142,12 @@ export type TavlansRader = {
    * vinnaren ska visas (`vinnarensManad`). Annars tom eller utelämnad.
    */
   forraManadens?: RaTavleOrder[];
+  /**
+   * De bokade mötena från `motesfonsterFran` (`moten.ts`) och vilka bokare som har
+   * möten före dem, eller null när mötena inte gick att läsa: då visar tavlan inga
+   * möten men allt annat som vanligt. Utelämnad räknas som null.
+   */
+  moten?: { rader: RaMote[]; tidigare: string[] } | null;
   /** Id till nyckel. I servern `nyckelFor`. */
   nyckel: (id: string) => string;
 };
@@ -413,7 +422,26 @@ function nattFor(manadens: RaTavleOrder[], manad: string, mal: number | null, va
 // Testhändelserna
 // -----------------------------------------------------------------------------
 
-const TESTTYPER: readonly Testtyp[] = ["order", "stor", "forsta", "serie", "malet"];
+/**
+ * Alla testtyper som inställningarna kan skicka. Ett uppslag över unionen, så att
+ * typkontrollen säger till när en testtyp läggs till i `typer.ts` utan att läggas
+ * till här (tävlingens tre saknades här en tid, och spelades då aldrig).
+ */
+const TESTTYPER_UPPSLAG: Record<Testtyp, true> = {
+  order: true,
+  stor: true,
+  forsta: true,
+  serie: true,
+  malet: true,
+  tavling: true,
+  knuff: true,
+  grans: true,
+  mote: true,
+  moteForsta: true,
+  moteFem: true,
+  moteTio: true,
+};
+const TESTTYPER = Object.keys(TESTTYPER_UPPSLAG) as Testtyp[];
 
 /**
  * En testhändelse, eller null. Payloaden skrivs av inställningarnas `testa`
@@ -610,6 +638,30 @@ export function formaOgonblick(
     personer[p.nyckel] = p;
   }
 
+  // --- Mötena ------------------------------------------------------------------------------
+  // Mötesbokarna: de aktiva i laget med rollen, och alla som bokat ett möte som räknas.
+  let moten: TavleMoten | null = null;
+  if (rader.moten) {
+    const kandidaterMoten = rader.personer
+      .filter((p) => iLaget(p.id) && aktiva.has(p.status ?? "") && (p.employee_role ?? []).some((r) => r.role === MOTESBOKARROLL))
+      .map((p) => p.id);
+    const m = formaMoten({
+      rader: rader.moten.rader,
+      tidigare: new Set(rader.moten.tidigare),
+      idag,
+      manad: manad.slice(0, 7),
+      iLaget,
+      person,
+      nyckel,
+      kandidater: kandidaterMoten,
+    });
+    moten = m.moten;
+    for (const id of m.personer) {
+      const p = person(id);
+      personer[p.nyckel] = p;
+    }
+  }
+
   // --- Grafen -------------------------------------------------------------------------------
   const perManad = new Map((statistik.manader ?? []).map((m) => [m.manad, m]));
   const historik: TavleManad[] = [];
@@ -703,5 +755,6 @@ export function formaOgonblick(
     handelser,
     tavling,
     vinnare,
+    moten,
   };
 }

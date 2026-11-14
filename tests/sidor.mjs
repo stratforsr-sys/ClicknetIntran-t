@@ -251,8 +251,33 @@ const { rows: ringlistan } = await db.query(
 );
 const ringlistansNamn = ringlistan.map((r) => r.last_name).filter((n) => n.length >= 4);
 
+/**
+ * `/kalender` borjar med "Kalendrar du ser": alla som inte slutat, med for- och
+ * efternamn och den niva de delat (annars "upptagen"). Det ar kalenderns
+ * delning (`hamtaPersoner` i src/lib/leveranskalender-server.ts) och star for
+ * alla roller, sa att man ser vem som ar upptagen och kan boka in kollegan.
+ * Provet var rott av det 2026-11-13 for saljare, teamledare och ekonomi, och
+ * kontrollerat samma dag: svaret bar namnen i listan, inga e-postadresser och
+ * ingen annans poster.
+ *
+ * Samma smala undantag som ringlistan: bara pa `/kalender`, bara EFTERNAMN,
+ * bara de som inte slutat (sidan filtrerar bort `offboarded`, sa en som slutat
+ * ar fortfarande ett lackage dar), aldrig e-post. Och listan provas POSITIVT
+ * nedan, sa att undantaget inte kan tysta sidan.
+ */
+const { rows: kalendern } = await db.query(
+  `select distinct last_name from employee
+    where status <> 'offboarded' and last_name is not null
+      and email not like 'sidprov+%' and email not like 'matning+%'
+      and email not like 'rlstest+%' and email not like 'kolla+%'`,
+);
+const kalenderNamn = kalendern.map((r) => r.last_name).filter((n) => n.length >= 4);
+
 /** Vag -> varden som ar avsiktligt publika just dar. */
-const UNDANTAG = new Map([["/franvaro/sjuk", new Set(ringlistansNamn)]]);
+const UNDANTAG = new Map([
+  ["/franvaro/sjuk", new Set(ringlistansNamn)],
+  ["/kalender", new Set(kalenderNamn)],
+]);
 const TOMT = new Set();
 
 console.log(`\n\x1b[1mVarje sida som varje roll mot ${PROD}\x1b[0m`);
@@ -293,6 +318,8 @@ try {
     const lackage = [];
     /** null = sidan hanns aldrig las; true/false = ringlistan syntes eller inte. */
     let ringlistanSyntes = null;
+    /** Samma sak for "Kalendrar du ser" pa /kalender. */
+    let kalenderlistanSyntes = null;
 
     for (const vag of SIDOR) {
       const svar = await fetch(PROD + vag, {
@@ -318,6 +345,9 @@ try {
       if (vag === "/franvaro/sjuk") {
         ringlistanSyntes = ringlistansNamn.some((n) => kropp.includes(n));
       }
+      if (vag === "/kalender") {
+        kalenderlistanSyntes = kalenderNamn.some((n) => kropp.includes(n));
+      }
 
       // DET SOM FAKTISKT BETYDER NAGOT. Kom nagon annans uppgifter ut?
       const undantagna = UNDANTAG.get(vag) ?? TOMT;
@@ -336,6 +366,13 @@ try {
         "ringlistan star kvar pa /franvaro/sjuk",
         ringlistanSyntes === true,
         ringlistanSyntes === null ? "sidan lastes aldrig" : ringlistanSyntes ? "" : "inget av ringlistans namn i svaret",
+      );
+    }
+    if (kalenderNamn.length > 0 && SIDOR.includes("/kalender")) {
+      ok(
+        "kalendrarna du ser star kvar pa /kalender",
+        kalenderlistanSyntes === true,
+        kalenderlistanSyntes === null ? "sidan lastes aldrig" : kalenderlistanSyntes ? "" : "inget av kollegornas namn i svaret",
       );
     }
 

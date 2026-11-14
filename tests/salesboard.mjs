@@ -659,7 +659,7 @@ console.log("\nplanera");
   };
   /** Bilden med nya order överst (den nyaste först, som servern listar dem) och den kända under. */
   const med = (nya, over = {}) => bild({ order: [...nya, TIDIG], ...over });
-  const minneAv = (over = {}) => ({ kanda: [], dag: DAG, handelse: 0, manad: "2026-10", halvvags: false, malet: false, dagsrekord: null, knuff: [], grans: [], vinnare: false, ...over });
+  const minneAv = (over = {}) => ({ kanda: [], dag: DAG, handelse: 0, manad: "2026-10", halvvags: false, malet: false, dagsrekord: null, knuff: [], grans: [], vinnare: false, moten: [], ...over });
   /** Ett steg i vanlig drift: minnet efter en start på `forra`, om inget annat anges. */
   const steg = (forra, ny, minne = planera(null, forra, null).minne) => planera(forra, ny, minne);
 
@@ -1327,7 +1327,7 @@ console.log("\nplanera");
     const gammaltForsenat = planera(bild({ nu: kl("10:05:00"), order: [T] }), bild({ nu: kl("10:04:00"), order: [T] }), gammaltMinne);
     ok(
       "ett försenat svar lämnar ett minne utan dag som det var, med dagen okänd (null)",
-      gammaltForsenat.firanden.length === 0 && lika(gammaltForsenat.minne, { ...gammaltMinne, dag: null, knuff: [], grans: [], vinnare: false }),
+      gammaltForsenat.firanden.length === 0 && lika(gammaltForsenat.minne, { ...gammaltMinne, dag: null, knuff: [], grans: [], vinnare: false, moten: [] }),
     );
 
     // Minnet bär alltid bildens dag: efter en start, ett vanligt steg och ett dagsbyte.

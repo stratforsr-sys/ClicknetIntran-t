@@ -9,7 +9,7 @@ import {
   INST_FORVAL, PIPE_KOLUMNER, lasInstallningar, lokalDag, bekraftelseFonster, pipelineKolumn,
   bradska, niva, fordela, taptSkal, manadFor, kortFas, ursprungligBokare, sorteraFas, provaInstallning, INST_NYCKLAR,
   sparadeSvar, motesTz, giltigTidszon, MOTES_NULAGE, MOTES_NEJ_SKAL, MOTES_KALLOR, motesVal, omfattas, nivaSvar, raknaRader, andel, omraknadRad, rattelseNot, radernaStammer, harLastBelopp, vemPaminns, utanRedanSkickade, provaAngra,
-  vemBekraftar, foregaendeArbetsdag, nastaArbetsdag,
+  vemBekraftar, foregaendeArbetsdag, nastaArbetsdag, skaBekraftas,
 } from "../src/lib/nav2/motesflode.ts";
 
 let fel = 0;
@@ -150,6 +150,16 @@ lika("efter slutet bekräftat: hos säljaren", pipelineKolumn({ ...mote, bekraft
 lika("utfall: avgjort", pipelineKolumn({ ...mote, utfall: "hallet" }, f, new Date("2026-11-13T10:00:00Z"), tz), "avgjort");
 lika("kortFas utan öppet möte", kortFas({ harOppetMote: false, mote: null, fonster: null }, new Date(), tz), "avgjort");
 lika("kortFas med öppet möte", kortFas({ harOppetMote: true, mote, fonster: f }, new Date("2026-11-11T10:00:00Z"), tz), "bokat");
+// Bara det första mötet bekräftas: ett uppföljningsmöte har inget fönster och står i Bokat till mötet.
+lika("skaBekraftas: nytt möte", skaBekraftas("ny"), true);
+lika("skaBekraftas: ombokning (kunden har inte träffats)", skaBekraftas("ombokning"), true);
+lika("skaBekraftas: uppföljningsmöte", skaBekraftas("uppfoljning"), false);
+lika("skaBekraftas: okänd art bekräftas som förut", skaBekraftas(undefined), true);
+lika("utan fönster: Bokat även dagen före", pipelineKolumn(mote, null, new Date("2026-11-13T10:00:00Z"), tz), "bokat");
+lika("utan fönster: Bokat på mötesdagen", pipelineKolumn(mote, null, new Date("2026-11-16T07:00:00Z"), tz), "bokat");
+lika("utan fönster, bekräftat ändå: Bekräftat", pipelineKolumn({ ...mote, bekraftat: true }, null, new Date("2026-11-13T10:00:00Z"), tz), "bekraftat");
+lika("utan fönster efter slutet: hos säljaren", pipelineKolumn(mote, null, new Date("2026-11-16T08:31:00Z"), tz), "hos_saljaren");
+lika("kortFas, öppet uppföljningsmöte utan fönster: Bokat", kortFas({ harOppetMote: true, mote, fonster: null }, new Date("2026-11-13T10:00:00Z"), tz), "bokat");
 
 console.log("Brådska (i morgon = nästa arbetsdag)");
 lika("i dag", bradska("2026-11-16", "att_bekrafta", new Date("2026-11-16T12:00:00Z"), tz), "idag");
@@ -317,7 +327,7 @@ console.log("Bekräftelsen: vem ska ringa, och när");
   const inst = { ...INST_FORVAL, gallerFran: "2026-11-01T00:00:00Z" };
   const aktiva = new Set(["b1", "h1", "x1"]);
   // Tisdag 17 nov 10:00 i Stockholm (09:00Z), bokat 6 nov. Fönstret: fredag 13 till måndag 16.
-  const m = (o) => ({ id: "m1", moteTid: "2026-11-17T09:00:00Z", senastAndrad: "2026-11-06T10:00:00Z", bokatAv: "b1", hallsAv: "h1", bekraftat: false, utfall: null, uppgift: null, ...o });
+  const m = (o) => ({ id: "m1", moteTid: "2026-11-17T09:00:00Z", senastAndrad: "2026-11-06T10:00:00Z", bokatAv: "b1", hallsAv: "h1", art: "ny", bekraftat: false, utfall: null, uppgift: null, ...o });
   const kor = (moten, nuIso, i = inst, a = aktiva) => vemBekraftar(moten, a, new Date(nuIso), i);
   const svar = (o) => ({ moteId: "m1", till: "b1", slag: "ring", skapaUppgift: true, dag: "2026-11-13", senast: "2026-11-16", ...o });
   lika("torsdag före fönstret: ingenting", kor([m({})], "2026-11-12T10:00:00Z"), []);
@@ -331,6 +341,11 @@ console.log("Bekräftelsen: vem ska ringa, och när");
   lika("mötet 09:00: påminnelsen kommer en timme före (08:00)", kor([m({ moteTid: "2026-11-17T08:00:00Z" })], "2026-11-17T07:00:00Z"), [svar({ slag: "idag", dag: "2026-11-17" })]);
   lika("mötet har börjat: ingenting", kor([m({})], "2026-11-17T09:00:00Z"), []);
   lika("bekräftat: ingenting", kor([m({ bekraftat: true })], "2026-11-13T08:00:00Z"), []);
+  lika("uppföljningsmöte: ingenting, inte ens sista dagen", kor([m({ art: "uppfoljning" })], "2026-11-16T08:00:00Z"), []);
+  lika("uppföljningsmöte på mötesdagen: ingenting", kor([m({ art: "uppfoljning" })], "2026-11-17T08:00:00Z"), []);
+  lika("uppföljningsmöte med en gammal uppgift: ingen notis", kor([m({ art: "uppfoljning", uppgift: { id: "t1", till: "b1", avbruten: false } })], "2026-11-16T08:00:00Z"), []);
+  lika("ombokning: bekräftas som ett nytt möte", kor([m({ art: "ombokning" })], "2026-11-13T08:00:00Z"), [svar({})]);
+  lika("ett första möte och ett uppföljningsmöte: bara det första", kor([m({}), m({ id: "m2", art: "uppfoljning" })], "2026-11-13T08:00:00Z"), [svar({})]);
   lika("utfall satt (avbokat): ingenting", kor([m({ utfall: "avbokat" })], "2026-11-13T08:00:00Z"), []);
   lika("uppgiften finns: ingen ny, notisen till den som har uppgiften", kor([m({ uppgift: { id: "t1", till: "x1", avbruten: false } })], "2026-11-16T08:00:00Z"), [svar({ till: "x1", slag: "sista", skapaUppgift: false, dag: "2026-11-16" })]);
   lika("uppgiften utan ansvarig: bokaren", kor([m({ uppgift: { id: "t1", till: null, avbruten: false } })], "2026-11-13T08:00:00Z"), [svar({ skapaUppgift: false })]);
