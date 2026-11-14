@@ -144,7 +144,7 @@ kvar. `ndKHamta` var redan kalenderns namn: den nya heter `ndKoppHamta`. Prov: 8
 
 **Skarpa provet i produktionen 2026-11-14** (beställaren: "hårdtesta den. Säkerställ att det inte finns ett enda
 fel"): som Zen i Chrome, på en uppgift märkt PROV, varje del av rutan klickad och databasen läst efter varje steg;
-sidprovet mot produktionen (53 sidor × 4 roller) grönt. Åtta fel, alla rättade (`8cea8d2` och commiten efter) och
+sidprovet mot produktionen (53 sidor × 4 roller) grönt. Åtta fel, alla rättade (`8cea8d2`, `7c0dab2`) och
 omprovade i produktionen:
 - *Org.nr utan bindestreck* (5566685052) gav "Ingen träff": alla 35 står som 556668-5052. Ny `orgnrVillkor` provar
   bindestrecket på varje plats (högst tio villkor, bara siffror i följd matchar).

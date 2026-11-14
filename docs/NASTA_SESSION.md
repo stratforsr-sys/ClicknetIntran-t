@@ -83,7 +83,7 @@ De två sakerna som stod som "inte gjort" under SKÄLET TILL EN RÄTTELSE:
 
 ---
 
-## UPPGIFTSRUTAN OMGJORD (2026-11-13/14): på `main` (`36831fb`, beställarens ja 2026-11-14), ingen migration
+## UPPGIFTSRUTAN OMGJORD (2026-11-13/14): på `main` (`36831fb` + `8cea8d2` + `7c0dab2`, beställarens ja 2026-11-14), ingen migration, KLAR
 
 Rutan som öppnas för en uppgift i Nav 2.0 (`upgRutaHtml` i `src/nav2/utkast.html`), byggd efter skissen i artifact
 9tLzSvdWLhYzucsNKJJzDT ("kör bygget"). Bara gränssnittet: servern hade allt.
@@ -125,7 +125,7 @@ filtren, Klar → Öppna igen, dagens tre fram och tillbaka, Nästa arbetsdag, K
 granskare Simon + Ångra (task_member tom efteråt), Avsluta serien (en PROV-serie lagd med appens `skapaSerie`), Stryk
 + Ångra, länken `/uppgifter/<id>`. Databasen kontrollerad efter varje steg. Sidprovet (53 sidor × 4 roller) grönt.
 Svarstider: valen 0,4–2,1 s, en sparning 0,4–1,5 s, omhämtningen 0,5–2,7 s.
-**Åtta fel, rättade (`8cea8d2` + commiten efter) och omprovade i produktionen:** (1) org.nr utan bindestreck gav "Ingen träff" (`src/lib/nav2/orgnrsok.ts`);
+**Åtta fel, rättade (`8cea8d2`, `7c0dab2`; produktionen grön 15:08 och 15:17 UTC) och omprovade i produktionen:** (1) org.nr utan bindestreck gav "Ingen träff" (`src/lib/nav2/orgnrsok.ts`);
 (2) Avsluta serien tog bort förekomsten man stod i fast kvittot lovar "Den här står kvar" (`taBortOrordFramtid` får
 `behall`); (3) i dagväljaren stod I dag som "ledig" när allt i dag var försenat; (4) en klar uppgift visade Dag: I dag
 (`ndDue`); (5) Nästa arbetsdag: bara "Planerad." utan Ångra; (6) kvittot sa "Första steget är sparat."; (7) Koppla:
@@ -134,7 +134,11 @@ listan syntes inte på en låg skärm, kopplingen dröjde 1–3 s och valen häm
 läser `ended_at`: "Avslutad, var varje …", ingen knapp). Upprepas bryter raden. Provet: 143 kontroller.
 **Omprovat i produktionen efter `8cea8d2`:** 5566685052 och 556668 5052 hittar SPM Väst AB; I dag "6 uppgifter";
 Nästa arbetsdag "Flyttad till mån 16 nov." + Ångra (dag, tid och uppskattning tillbaka); "Sparat. Det står på raden i
-listan."; klar visar tors 19 nov; Avsluta serien från 23 nov: 15 borttagna, 23 nov kvar; Upprepas på två rader.
+listan."; klar visar tors 19 nov; Avsluta serien från 23 nov: 15 borttagna, 23 nov kvar; Upprepas på två rader;
+efter `7c0dab2`: "Avslutad, var varje måndag och torsdag", ingen Avsluta serien. Sidprovet grönt igen, inga
+notiser om PROV-uppgifterna, `error_report` tom sedan pushen. PROV-datan borttagen i en transaktion (4 uppgifter,
+2 serier; `audit_log` orörd). **Sidladdningen** /uppgifter som Zen: 3,6–5,6 s med lugn databas (första svaret
+0,3–1,3 s); ett häng på 40 s 15:25 UTC sammanföll med en annan sessions `motesstat-db.mjs` mot databasen.
 **Inte provat i produktionen:** telefonbredden (Chrome-fönstret gick inte att göra smalt; huvudlös Chrome i stället),
 granskarens godkännande (skulle ge Simon en notis), Lämna över på riktigt.
 
