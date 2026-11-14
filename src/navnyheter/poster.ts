@@ -14,6 +14,17 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "orderformularet-ryms-pa-telefonen",
+    rubrik: "Rätta en order i telefonen: formuläret ryms på skärmen",
+    ingress: "När du rättar en godkänd order i appen syns alla fält och Spara rättelsen, utan att du behöver dra sidan åt sidan.",
+    text: `Öppna en order i **Order** och tryck **Rätta**. Formuläret är lika brett som telefonens skärm, både i appen och
+i webbläsaren. Skälet och **Spara rättelsen** står hela längst ned. Raden under kundens namn, med org.nr, kontaktperson,
+telefon och mejl, kortas med … när den inte får plats. Tryck **Ändra** för att se och ändra allt.`,
+    datum: "2026-11-14",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "uppgiftsrutan-omgjord",
     rubrik: "Uppgifter: rutan för en uppgift är omgjord",
     ingress: "Välj vilken dag som helst i en kalender, skriv tider som 1430 eller 1 h 20, och följ kommentarer och historik i en och samma tidslinje.",

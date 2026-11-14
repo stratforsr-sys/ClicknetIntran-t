@@ -5,6 +5,41 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-14 · Order: resterna efter skälet (grenen `rattelse-rester`, ingen migration)
+
+**Vad:** beställaren 2026-11-14: "gör klart arbetet om det finns mer att göra och sen pusha till main och sen hård
+testa den". Kvar efter `be8d894` var två saker jag själv hittat: orderformuläret klipptes på telefonen, och gamla Nav
+krävde skäl av admin trots "för admin och superadmin behövs ingen".
+
+**Formuläret på telefonen.** `rattelse-skal-prov.mjs` hade bara mätt att sidan inte skrollar i sidled och att skälet
+står i linje med anteckningen; båda höll, för `.ordnyg` (overflow:auto) skrollade i sidled INNANFÖR rutan och alla fält
+var lika för breda. Mätt på riktigt: `form.ordnyf` 640 px på 390, Spara rättelsen slutar vid 603 px, i webben och i
+appläget. Orsaken är `grid-template-columns:1fr` i 900 px-regeln: `1fr` har minsta bredden `auto`, alltså innehållets.
+Kundraden (`o7KundSum`, `white-space:nowrap`, org.nr · kontakt · telefon · mejl · ort) är ~570 px. Datorns regel har
+`minmax(0,1fr)` av samma skäl, telefonregeln skrev över den. Med `minmax(0,1fr)` sticker ingenting ut (kundraden har
+redan `overflow:hidden` + ellipsis). En ny order ryms redan på main: kundraden finns bara när kunden är vald. Provet
+(`delar/ordform-bredd/prov.mjs`) väntar ut öppningsanimationen (`felin`, translateX 24 px) innan det mäter; första
+versionen fick ett falskt rött av den.
+
+**Gamla Nav.** `/order` skickas av mellanvaran till `/nav2?till=/order` (`src/lib/nav2/vagar.ts`, bara hela
+sidladdningar, släpps igenom med Referer `/nav2`), och Nav 2.0 länkar aldrig dit: formuläret nås i praktiken inte, men
+ska följa samma regel om någon kommer dit. `redigeraOrder` använder redan `rattelsensSkal`, så det var bara klientens `required`. Nivån räknas på sidan
+(`nivaFor`, samma som servern) och skickas ned som `skalFrivilligt`; inte `hanterare`, som är en annan krets
+(säljchef/VD/ekonomi).
+
+**Sviten.** Under hårdprovet blev `npm run test:rattelse` "rött": skriptet fanns inte. 21 av 125 provfiler stod utanför
+`package.json` (`bro`, `chefsprovision`, `jobb-coachning`, `kalender-andring`, `kalender-push`, `moten-db`,
+`motesstat-db`, nio `nav2-*`, `nyheter-jobb`, `rattelse`, `rekrytering-utskick`, `utkorg-ics`), och `test:rattigheter`
+stod inte i `test`-kedjan. "Hela sviten grön" 2026-11-13 gällde alltså skripten, inte filerna. Alla 22 kördes
+(db-proven läser och rullar tillbaka; moten-db 216/216) och var gröna, utom tidskravet i `motesstat-db`: serverns egen
+körtid (`EXPLAIN ANALYZE`) var 66–1 860 ms första gången och 2,5 ms sedan, med och utan TZ. Kravet gäller om funktionen
+KAN svara under 200 ms (vyn tog ~2 s), så provet tar nu den snabbaste av tre i samma transaktion.
+
+**Prov:** bredden 120/120 (18 röda mot main), datorn identisk med main element för element; `tsc` bara Pling-felen;
+repots svit med nycklarna, se NASTA_SESSION.
+
+---
+
 ## 2026-11-13/14 · Uppgiftsrutan omgjord (på `main` 2026-11-14, ingen migration)
 
 **Vad:** beställaren om rutan för en uppgift: "lite för mycket som händer", funktioner som fattas, "jag förstår inte

@@ -48,6 +48,7 @@ export function Atgarder({
   status,
   hanterare,
   bokforare,
+  skalFrivilligt = false,
   agare,
   upphovsperson,
   order,
@@ -64,6 +65,11 @@ export function Atgarder({
   iInkio?: boolean;
   hanterare: boolean;
   bokforare: boolean;
+  /**
+   * Admin och superadmin (nivan i `nivaFor`) rattar en godkand order utan skal;
+   * `redigeraOrder` skriver da vem som rattade. Saljaren maste skriva ett.
+   */
+  skalFrivilligt?: boolean;
   agare: boolean;
   /**
    * La den har personen upp ordern? Ger ratt att ratta KUNDUPPGIFTERNA pa en
@@ -295,6 +301,7 @@ export function Atgarder({
             paket={paket}
             personer={personer}
             full={hanterare}
+            skalFrivilligt={skalFrivilligt}
             stangdPeriod={stangdPeriod}
             idag={idag}
           />
@@ -580,6 +587,7 @@ function Rattelse({
   paket,
   personer,
   full,
+  skalFrivilligt,
   stangdPeriod,
   idag,
 }: {
@@ -596,6 +604,7 @@ function Rattelse({
    * de skulle skickas.
    */
   full: boolean;
+  skalFrivilligt: boolean;
   stangdPeriod: boolean;
   idag: string;
 }) {
@@ -913,10 +922,12 @@ function Rattelse({
       </label>
 
       <label className="flex flex-col gap-1">
-        <span className="text-micro text-ink-500">Varför rättas ordern?</span>
+        <span className="text-micro text-ink-500">
+          {skalFrivilligt ? "Varför rättas ordern? (valfri)" : "Varför rättas ordern?"}
+        </span>
         <input
           name="reason"
-          required
+          required={!skalFrivilligt}
           placeholder={full ? "Fel paket valt vid inmatningen" : "Fel kontaktperson vid inmatningen"}
           className={KONTROLL}
         />
@@ -924,6 +935,7 @@ function Rattelse({
           {full
             ? "Står i loggen med före- och eftervärde, och följer med rättelseposterna."
             : "Står i loggen med före- och eftervärde."}
+          {skalFrivilligt && " Lämnas det tomt står det vem som rättade."}
         </span>
       </label>
 

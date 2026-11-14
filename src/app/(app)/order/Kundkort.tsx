@@ -97,6 +97,7 @@ export function Kundkort({
   namn,
   hanterare,
   bokforare,
+  skalFrivilligt,
   mig,
   /** Faststallda manader, for `Atgarder`. Se `harStangdPeriod`. */
   stangda,
@@ -113,6 +114,8 @@ export function Kundkort({
   namn: Map<string, string>;
   hanterare: boolean;
   bokforare: boolean;
+  /** Admin och superadmin rattar utan skal. Se `rattelsensSkal`. */
+  skalFrivilligt: boolean;
   mig: string;
   stangda: string[];
   tjanster: Map<string, Tjansterad[]>;
@@ -211,6 +214,7 @@ export function Kundkort({
                   personer={personer}
                   hanterare={hanterare}
                   bokforare={bokforare}
+                  skalFrivilligt={skalFrivilligt}
                   mig={mig}
                   stangda={stangda}
                   idag={idag}
@@ -639,6 +643,7 @@ function Orderpost({
   personer,
   hanterare,
   bokforare,
+  skalFrivilligt,
   mig,
   stangda,
   idag,
@@ -654,6 +659,7 @@ function Orderpost({
   personer: { id: string; namn: string }[];
   hanterare: boolean;
   bokforare: boolean;
+  skalFrivilligt: boolean;
   mig: string;
   stangda: string[];
   idag: string;
@@ -805,6 +811,7 @@ function Orderpost({
               status={o.status}
               hanterare={hanterare}
               bokforare={bokforare}
+              skalFrivilligt={skalFrivilligt}
               agare={o.salesperson_id === mig}
               upphovsperson={o.created_by === mig}
               order={{
