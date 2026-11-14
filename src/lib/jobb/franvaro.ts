@@ -3,6 +3,9 @@ import { svensktDatum, svenskVeckodag, svenskTidpunkt, svenskDygnsslut, dagarBak
 import { gallandeSchema } from "@/lib/raster";
 import { boreskalera, dagarna, sjukfrister, type Regelverk, type Sjukanmalan } from "@/lib/franvaro";
 import { stampelfriaAnstallda } from "@/lib/stampelfri-server";
+import { gallande, type Handelse } from "@/lib/tid";
+import { sjukVidInstampling, type Sjukrad } from "@/lib/sjuk-instampling";
+import { avslutaSjukVidInstampling } from "@/lib/sjuk-instampling-server";
 
 /**
  * Nattjobbets frånvarosteg (E7.8, E7.11, AC-3.17, AC-3.19, AC-3.23).
@@ -21,6 +24,8 @@ export type Franvaroutfall = {
   frister_skapade: number;
   paminnelser: number;
   paminnelser_stangda: number;
+  /** Sjukanmälningar som avslutats för att personen stämplat in. */
+  sjuk_avslutade: number;
   hoppade_over?: string;
 };
 
@@ -36,6 +41,7 @@ export async function korFranvarojobbet(
     frister_skapade: 0,
     paminnelser: 0,
     paminnelser_stangda: 0,
+    sjuk_avslutade: 0,
   };
 
   const { data: policy } = await db.from("absence_policy").select("*").maybeSingle();
@@ -74,6 +80,36 @@ export async function korFranvarojobbet(
   }
 
   // ---------------------------------------------------------------------------
+  // 1b. Den som stämplat in är tillbaka (`lib/sjuk-instampling.ts`).
+  //
+  // Instämplingen avslutar redan anmälan. Steget här är skyddsnätet för det
+  // som kom in på annat sätt — en godkänd rättelse, en kö som tömts i
+  // efterhand, en anmälan som lagts efter att personen redan var tillbaka —
+  // och för anmälningarna som låg öppna innan regeln fanns. Före fristerna i
+  // steg 2, så att en avslutad period inte får nya frister i natt.
+  // ---------------------------------------------------------------------------
+  const { data: oppnaSjuk } = await db
+    .from("sick_report")
+    .select("id, employee_id, first_sick_day, last_sick_day, cancelled_at, extent_percent, registered_at")
+    .is("cancelled_at", null)
+    .or(`last_sick_day.is.null,last_sick_day.gte.${dagarBakat(idag, IKAPP_DAGAR)}`);
+
+  for (const r of (oppnaSjuk ?? []) as (Sjukrad & { id: string; employee_id: string })[]) {
+    if ((r.extent_percent ?? 100) < 100) continue;
+    const { data: stamplar } = await db
+      .from("time_event")
+      .select("id, kind, occurred_at, source, supersedes_id, correction_state")
+      .eq("employee_id", r.employee_id)
+      .gte("occurred_at", svenskTidpunkt(String(r.first_sick_day).slice(0, 10), "00:00").toISOString())
+      .lte("occurred_at", nu.toISOString());
+    const forsta = gallande((stamplar ?? []) as Handelse[]).find(
+      (h) => h.kind === "in" && sjukVidInstampling(r, h.occurred_at) !== null,
+    );
+    if (!forsta) continue;
+    utfall.sjuk_avslutade += await avslutaSjukVidInstampling(db, r.employee_id, forsta.occurred_at);
+  }
+
+  // ---------------------------------------------------------------------------
   // 2. K37: frister för pågående sjukperioder.
   //
   // Handlingen som registrerar en anmälan skapar dem redan. Steget här är ett
@@ -106,6 +142,33 @@ export async function korFranvarojobbet(
     if (nya.length > 0) {
       await db.from("sick_deadline").insert(nya);
       utfall.frister_skapade = nya.length;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2b. Påminnelser som ingen längre kan göra något åt stängs.
+  //
+  // Steg 3 läser bara de senaste 14 dagarna, så en påminnelse som inte
+  // redovisats inom två veckor låg kvar för alltid — 213 av 252 i november
+  // 2026, 147 av dem för personer som slutat. Äldre än fönstret, eller för
+  // någon som slutat: stängd. Raden står kvar att läsa.
+  // ---------------------------------------------------------------------------
+  {
+    const { data: slutat } = await db.from("employee").select("id").eq("status", "offboarded");
+    const slutade = (slutat ?? []).map((p) => p.id as string);
+    const gamla = await db
+      .from("absence_reminder")
+      .update({ resolved_at: nu.toISOString() }, { count: "exact" })
+      .is("resolved_at", null)
+      .lt("work_date", dagarBakat(idag, IKAPP_DAGAR));
+    utfall.paminnelser_stangda += gamla.count ?? 0;
+    if (slutade.length > 0) {
+      const deras = await db
+        .from("absence_reminder")
+        .update({ resolved_at: nu.toISOString() }, { count: "exact" })
+        .is("resolved_at", null)
+        .in("employee_id", slutade);
+      utfall.paminnelser_stangda += deras.count ?? 0;
     }
   }
 

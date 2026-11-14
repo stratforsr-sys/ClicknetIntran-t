@@ -435,3 +435,28 @@ export function helaManaderMellan(fran: string, till: string): number {
   while (manaderFore(till, n + 1) >= fran) n++;
   return n;
 }
+
+/**
+ * Forslag som ingen langre ska behova ta stallning till.
+ *
+ * Fonstret nedan laser bara de senaste 14 dagarna, sa ett forslag som inte
+ * beslutats inom tva veckor lag kvar for alltid. I november 2026 var 173 av
+ * 208 forslag aldre an fonstret och 132 gallde personer som slutat; chefens ko
+ * blev aldrig tom, och det som faktiskt var nytt drunknade (bestallaren
+ * 2026-11-12: "jag vill bara ha det som brinner").
+ *
+ * Ett forslag har ingen konsekvens forran nagon godkant det, sa att dra
+ * tillbaka det andrar ingenting for personen. Det ar samma handling som nar
+ * franvaron kommer in i efterhand, och den star i loggen med sitt skal.
+ */
+export function inaktuelltForslag(
+  occurredOn: string,
+  person: { status: string; end_date: string | null } | undefined,
+  tidigaste: string,
+): string | null {
+  const dag = String(occurredOn).slice(0, 10);
+  if (dag < tidigaste) return "äldre än två veckor";
+  if (!person || person.status === "offboarded") return "personen har slutat";
+  if (person.end_date && dag > String(person.end_date).slice(0, 10)) return "efter anställningens slut";
+  return null;
+}

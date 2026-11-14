@@ -87,7 +87,6 @@ export type NdTid = {
     beslut48: { inom: number; av: number };
     klaraIdag: number;
     senast: { nar: string | null; iso: string | null; nya: number };
-    morgonnotis: string;
     logg: { namn: string; vad: string; nar: string }[];
     nastaVecka: { dag: string; rader: { namn: string; typ: string; vantar: boolean }[] }[];
     ankomster: { start: string; min: number }[];
@@ -184,7 +183,7 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
         supabase.from("time_event").select("created_at, decided_at").not("decided_at", "is", null).not("correction_state", "is", null).order("decided_at", { ascending: false }).limit(10),
         supabase.from("time_event").select("id", { count: "exact", head: false }).eq("decided_by", mig).gte("decided_at", svenskDygnsstart(nu)),
         supabase.from("attendance_incident").select("id").eq("decided_by", mig).gte("decided_at", svenskDygnsstart(nu)),
-        supabase.from("nav_preference").select("key, value").eq("employee_id", mig).in("key", ["tid.senast", "tid.morgonnotis"]),
+        supabase.from("nav_preference").select("key, value").eq("employee_id", mig).in("key", ["tid.senast"]),
         supabase.from("tid_view_log").select("employee_id, what, viewed_at").eq("viewer_id", mig).gte("viewed_at", veckaStart).order("viewed_at", { ascending: false }).limit(20),
         supabase.from("absence_request").select("employee_id, type_id, starts_on, ends_on, status").in("status", ["approved", "submitted"]).lte("starts_on", nastaFredag).gte("ends_on", nastaMandag),
         supabase.from("sick_report").select("employee_id, first_sick_day, last_sick_day").is("cancelled_at", null).lte("first_sick_day", nastaFredag),
@@ -531,7 +530,6 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
     beslut48: { inom: beslutRader.filter((b) => Date.parse(b.decided_at) - Date.parse(b.created_at) <= 48 * 3600000).length, av: beslutRader.length },
     klaraIdag: (minaRattBeslut ?? []).length + (minaOgiltigBeslut ?? []).length,
     senast: { nar: senastIso ? svenskKlocka(senastIso) : null, iso: senastIso, nya: senastIso ? vant.filter((v) => v.created_at > senastIso).length : 0 },
-    morgonnotis: typeof prefMap.get("tid.morgonnotis") === "string" ? (prefMap.get("tid.morgonnotis") as string) : "08:15",
     logg: (minLogg ?? []).map((l) => ({ namn: namn.get(l.employee_id as string) ?? "Okänd", vad: "sena dagar", nar: `${svensktDatum(l.viewed_at as string)} ${svenskKlocka(l.viewed_at as string)}` })),
     nastaVecka,
     ankomster,

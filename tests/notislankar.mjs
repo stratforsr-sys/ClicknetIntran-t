@@ -110,7 +110,7 @@ ok("provision-bonus och provision-mal → månaden", alla("provision-bonus", /^`
 ok("franvaro-havd → månaden där trappan räknas om", alla("franvaro-havd", /^`\/provision\/manad\//));
 ok("tid-rattelse → chefens Att göra med raden", alla("tid-rattelse", /^`\/tid\/gora\/\$\{/));
 ok("tid-rattelse-beslut, tid-be-ratta och tid-avvikelse-avslutad → dagen", ["tid-rattelse-beslut", "tid-be-ratta", "tid-avvikelse-avslutad"].every((k) => alla(k, /^`\/tid\?dag=/)));
-ok("tid-chef-morgon och tid-chef-kvar → Att göra", alla("tid-chef-morgon", /^"\/tid\/gora"$/) && alla("tid-chef-kvar", /^"\/tid\/gora"$/));
+// tid-chef-morgon och tid-chef-kvar skickas inte längre (2026-11-12); gamla poster i klockan behåller sin länk.
 ok("sjukanmälan (bekräftad, avslutad, anteckning) → anmälan", ["sjuk-bekraftad", "sjuk-avslutad", "sjuk-anteckning"].every((k) => alla(k, /^`\/franvaro\/sjuk\/\$\{/)));
 ok("frånvaro (tillbakadragen, registrerad, annan period) → ansökan", ["franvaro-tillbakadragen", "franvaro-registrerad", "franvaro-annan-period"].every((k) => alla(k, /^`\/franvaro\/\$\{/)));
 ok("fel-lagad och fel-meddelande → rapporten", alla("fel-lagad", /^`\/fel\/\$\{/) && alla("fel-meddelande", /^`\/fel\/\$\{/));

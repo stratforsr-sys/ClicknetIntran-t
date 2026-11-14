@@ -199,6 +199,7 @@ async function allaNotiser(user: CurrentUser): Promise<{ kvar: Notis[]; sedd: st
     supabase
       .from("absence_reminder")
       .select("id, employee_id, work_date, created_at")
+      .eq("employee_id", mig)
       .is("resolved_at", null)
       .order("work_date", { ascending: false })
       .limit(MAX_NOTISER),
@@ -783,22 +784,19 @@ async function allaNotiser(user: CurrentUser): Promise<{ kvar: Notis[]; sedd: st
     }
   }
 
-  // AC-3.19. Egna påminnelser formuleras som en påminnelse, andras som en
-  // uppgift — och andras syns bara efter fördröjningen, vilket policyn i 0020
-  // sköter. Den anställda ser alltså sin lucka först och kan rätta den innan
-  // någon annan fått veta att den fanns.
+  // AC-3.19. Påminnelsen är bara den anställdas egen: "registrera din
+  // frånvaro". Chefen får samma uteblivna dag EN gång, som förslaget om
+  // ogiltig frånvaro ovan (beställaren 2026-11-12: påminnelse + förslag + push
+  // var tre saker om samma dag, och ingen av dem lästes). Policyn i 0020 ger
+  // fortfarande chefen raden; det är klockan som låter bli att visa den.
   for (const p of paminnelser ?? []) {
-    const mitt = p.employee_id === mig;
+    if (p.employee_id !== mig) continue;
     notiser.push({
       id: notisId("franvaro-lucka", p.id),
       typ: "franvaro",
-      rubrik: mitt
-        ? `Ingen frånvaro registrerad ${p.work_date}`
-        : `${namn.get(p.employee_id) ?? "En medarbetare"} saknar registrering ${p.work_date}`,
-      detalj: mitt
-        ? "Du var schemalagd men stämplade inte. Registrera din frånvaro."
-        : "Schemalagd dag utan stämpling eller frånvaro",
-      href: mitt ? "/franvaro/ny" : "/franvaro",
+      rubrik: `Ingen frånvaro registrerad ${p.work_date}`,
+      detalj: "Du var schemalagd men stämplade inte. Registrera din frånvaro.",
+      href: "/franvaro/ny",
       tidpunkt: p.created_at,
       olast: arNy(p.created_at),
     });

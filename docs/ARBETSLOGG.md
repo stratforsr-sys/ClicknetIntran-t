@@ -5,6 +5,32 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+<<<<<<< HEAD
+## 2026-11-14 · Bara det som brinner: ärenden, ogiltig frånvaro och sjukanmälan (grenen `arenden-rensa`)
+
+**Varför.** Beställaren hade 208 förslag om ogiltig frånvaro, 252 påminnelser och 10 röda ärenden, nästan inget av
+det aktuellt. Undersökningen (läsning i produktionen 2026-11-12) fann fem fel: (1) instämplingen avslutade aldrig
+sjukanmälan, så chefen ställde in anmälningar för att bli av med dem; (2) förslag och påminnelser äldre än 14 dagar
+eller för personer som slutat stängdes aldrig (173 resp. 213 för gamla, 132 resp. 147 för slutade); (3) samma
+uteblivna instämpling blev påminnelse + förslag + daglig push (51 pushar på 30 dagar, 0 öppnade); (4)
+coachnings- och guideärenden stängde sig aldrig och blev röda efter 72 h; (5) en inställd sjukanmälan gör dagarna
+till förslag på ogiltig frånvaro (Micks 30 okt, 2 och 3 nov kom natten mot 13 nov).
+
+**Vad.** Se NASTA_SESSION. Fel 5 rättas vid källan: när instämplingen avslutar anmälan behöver ingen ställa in den.
+Regeln om inställd anmälan (dagarna räknas inte) står kvar, den är riktig för en anmälan som blev fel.
+
+**Varför ett förslag och inte en påminnelse.** Förslaget har beslut, trappa och Rensa; påminnelsen är personens egen
+uppmaning att registrera frånvaro och har ingen uppgift hos chefen. Två poster om samma dag var dubbelt brus.
+
+**Varför radera och inte avvisa vid städningen.** Ett förslag utan beslut har ingen konsekvens, och nattjobbet
+drar redan tillbaka förslag genom att radera (triggern i 0037 tillåter det bara för `foreslagen`). Ett avvisat förslag
+hade sett ut som ett beslut av en chef. Rensa i gränssnittet avvisar däremot, för där är det en chefs beslut.
+
+**Prov.** `tests/sjuk-instampling.mjs` 27/27; `stampelfri`, `konsekvenser`, `notiser`, `notislankar`, `klockan`,
+`franvaro`, `tid`, `guider`, `coachning`, `navnyheter` gröna. `tsc --noEmit`: inga fel i ändrade filer (två
+kända fel om `Pling`/`pling`, som bara uppstår på macOS eftersom filsystemet inte skiljer på stora och små bokstäver).
+Sidans skript klarar `node --check`.
+=======
 ## 2026-11-13/14 · Uppgifter: lägg till en kollega i min uppgift (0298)
 
 **Läge:** sju lokala commits ihopslagna till en och flyttade ovanpå main `7316300` på beställarens "fixa allt"
@@ -63,6 +89,7 @@ det redan gör med `upgSatt`, så rutans eget prov kör rutan orörd. Servern sk
 till mig själv (`ndMedFolk`). Migrationen bytte nummer: 0291 togs av Mötens bekräftelse, och 0292–0297 är också körda.
 
 **Inte gjort:** steg 4 i prompten ("nytt sedan sist", en läsmarkör per person). Inget är klickat i en webbläsare.
+>>>>>>> origin/main
 
 ---
 

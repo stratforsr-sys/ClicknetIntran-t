@@ -13,6 +13,7 @@ import {
 import { hamtaLage } from "@/lib/sparrar";
 import { svenskKlocka, svensktDatum } from "@/lib/klocka";
 import { medRoll, notifiera, notifieraFlera } from "@/lib/notishandelse-server";
+import { avslutaSjukVidInstampling } from "@/lib/sjuk-instampling-server";
 
 export type TidState = { fel?: string; ok?: string };
 
@@ -109,6 +110,20 @@ export async function stampla(_prev: TidState, form: FormData): Promise<TidState
     kalla,
     i_efterhand: kalla === "offline_queue" ? Math.round((nu.getTime() - skedde.getTime()) / 1000) : 0,
   });
+
+  // Den som stämplar in är tillbaka: en öppen sjukanmälan på heltid avslutas
+  // (sista sjukdagen blir dagen före) eller ställs in om den gjordes i dag.
+  // Regeln står i `lib/sjuk-instampling.ts`. Ett fel här får inte göra en
+  // lyckad stämpling till ett nej, så det sväljs — nattjobbet tar det i natt.
+  if (typ === "in") {
+    try {
+      if (await avslutaSjukVidInstampling(supabaseAdmin(), user.employee.id, skedde.toISOString())) {
+        revalidatePath("/franvaro", "layout");
+      }
+    } catch {
+      /* nattjobbet tar det */
+    }
+  }
 
   revalidatePath("/tid", "layout");
   revalidatePath("/");

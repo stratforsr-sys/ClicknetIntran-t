@@ -9,7 +9,7 @@ import { medRoll, notifiera, notifieraFlera } from "@/lib/notishandelse-server";
 import { begarRattelse, beslutaRattelse, sparaArbetsschema, stampla } from "@/app/(app)/tid/actions";
 import { avvisaHandelse, godkannHandelse, havHandelse, laggUppHandelse } from "@/app/(app)/tid/ogiltig-franvaro/actions";
 import { attestera, generera, laggJustering, skapaPeriod } from "@/app/(app)/tid/lonerapport/actions";
-import { MORGONNOTIS_VAL, PAMINN_MINUTER, SCHEMA_KVITTENS_FRAN } from "@/lib/nav2/tidregler";
+import { PAMINN_MINUTER, SCHEMA_KVITTENS_FRAN } from "@/lib/nav2/tidregler";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 
 export const dynamic = "force-dynamic";
@@ -286,6 +286,22 @@ export async function POST(request: Request) {
         return svar({ fel: "Okänd handling." }, 400);
       }
 
+      case "ogiltig-rensa": {
+        // Rensa (beställaren 2026-11-12: "jag behöver kunna rensa mina ärenden").
+        // Varje förslag avvisas genom samma handling som "var här", med samma
+        // behörighetskontroll per person. Avvisat räknas inte och kommer inte
+        // tillbaka. Det som inte gick (någon annans, redan beslutat) hoppas över.
+        const ids = (Array.isArray(b.ids) ? (b.ids as unknown[]) : []).map(String).filter((x) => UUID.test(x)).slice(0, 100);
+        if (!ids.length) return svar({ fel: "Inget att rensa." }, 400);
+        let n = 0;
+        for (const r of ids) {
+          const s = (await fangad(() => avvisaHandelse({}, form({ id: r, anteckning: "Rensad." })))) as { fel?: string } | undefined;
+          if (!s?.fel) n++;
+        }
+        if (!n) return svar({ fel: "Förslagen är redan beslutade." }, 400);
+        return svar({ ok: n === 1 ? "Ett förslag rensat." : `${n} förslag rensade.` });
+      }
+
       case "ogiltig-ny": {
         // Repots Upplaggning: raden går in som ett förslag, och beslutet tas som vanligt. Rätten prövas i databasen (far_godkanna_franvaro_for).
         const vem = String(b.vem ?? "");
@@ -418,13 +434,6 @@ export async function POST(request: Request) {
         const s = (await fangad(() => sparaArbetsschema({}, form({ scope, scope_id: vem, veckodag: [...new Set(dagar)], start_time: start, end_time: slut, valid_from: galler, tol_late: String(b.tol ?? "") })))) as { fel?: string; ok?: string };
         if (s.fel) return svar({ fel: s.fel }, 400);
         return svar({ ok: s.ok ?? `Sparat. Gäller från ${galler}.` });
-      }
-
-      case "morgonnotis": {
-        const t = String(b.tid ?? "");
-        if (!(MORGONNOTIS_VAL as readonly string[]).includes(t)) return svar({ fel: "Välj en av tiderna." }, 400);
-        await pref("tid.morgonnotis", t);
-        return svar({ ok: `Morgonnotisen kommer ${t}.` });
       }
 
       /* ---------------- Lönerapporten ---------------- */
