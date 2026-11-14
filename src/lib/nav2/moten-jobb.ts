@@ -11,7 +11,7 @@ import {
   type BekraftaMote, type Bekraftelse, type Lage, type MotenInst, type Paminnelse, type PaminnelseMote, type RingIgen,
 } from "./motesflode";
 import { UTFALL_ROLLER } from "./motenforma";
-import { ProvisionKonflikt, lasProvision, reparationsKandidater } from "./motesprovision-server";
+import { ManadenStangs, ProvisionKonflikt, lasProvision, reparationsKandidater } from "./motesprovision-server";
 
 /**
  * Möten, jobbet (pg_cron var kvart, `nav-moten`): bekräftelsen före mötet, påminnelserna efter mötet och
@@ -380,7 +380,8 @@ async function reparera(db: Db, inst: MotenInst, gallerFran: string, nu: Date, k
       const r = await lasProvision(db, m, inst, lage, m.utfall_av, nu);
       if (r.last) kvitto.reparerade++;
     } catch (e) {
-      if (e instanceof ProvisionKonflikt) continue;
+      // En konflikt är redan löst; en månad som fastställs just nu (0300) låses nästa kvart.
+      if (e instanceof ProvisionKonflikt || e instanceof ManadenStangs) continue;
       await skrivFel({ kind: "automatic", path: "/api/jobb/moten", digest: `moten-reparation-${m.id}`, message: `Mötesprovisionen för mötet ${m.id} gick inte att låsa i reparationen: ${e instanceof Error ? e.message : String(e)}`, blocking: false });
     }
   }

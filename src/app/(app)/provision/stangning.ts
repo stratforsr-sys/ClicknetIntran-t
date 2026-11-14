@@ -92,99 +92,119 @@ export async function faststallPeriod(
 
     if (redan) return { fel: `${manadsnamn(manad)} ar redan faststalld.` };
 
-    // LASES MED SERVICE ROLE, inte med attestantens token. Bokforingen maste
-    // vara fullstandig; en RLS-vy som av nagot skal saknar en rad hade gett en
-    // person for lite betalt utan att nagot sag fel ut.
-    // KONSEKVENSERNA MASTE MED I BOKFORINGEN. En bonusforlust verkar genom att
-    // motorn raknar om manaden — utelamnas laget har bokfors en volymbonus som
-    // trappan sagt ska falla, och den posten gar sedan inte att skriva om:
-    // huvudboken ar append-only, sa rattelsen blir en negativ post nagon maste
-    // upptacka och skriva for hand.
-    //
-    // OVERTACKEN MASTE OCKSA MED. `underlagForAlla` bygger sin personlista ur
-    // dem, sa utan raden nedan skulle en saljchef utan egna order inte finnas i
-    // bokforingen alls — hens overtack hade raknats live hela manaden och sedan
-    // tyst uteblivit ur lonekorningen. Samma sorts fel som de tva som ratades
-    // 2026-09-08, och det gar at det hall dar ingen saknar sina pengar.
-    //
-    // OCH MOTESPOSTERNA, av exakt samma skal: en bokare utan en enda order och med
-    // tre moten i manaden finns bara i `underlagForAlla` om raderna ges dit. De
-    // lases med SERVICE ROLE (hela kretsen, inte attestantens RLS-utsnitt) och
-    // raknas bara i sin egen manad. Den har funktionen kor aldrig en manad som
-    // redan ar faststalld (`redan` ovan), sa en andring i efterhand av ett mote i
-    // en stangd manad hamnar aldrig har utan som en `rattelse` i innevarande manad
-    // (0288) — ingen dubbelrakning.
-    const [order, nivaer, kvPerPerson, konsekvensPerPerson, chefsposter, motesposter] = await Promise.all([
-      hamtaAllaOrder(manad),
-      hamtaAllaNivaer(),
-      hamtaKvPerPerson(manad),
-      hamtaKonsekvensPerPerson(manad),
-      hamtaAllaChefsposter(manad),
-      hamtaMotesposter(manad, db),
-    ]);
-
-    const rader = underlagForAlla(
-      order,
-      manad,
-      nivaer,
-      kvPerPerson,
-      konsekvensPerPerson,
-      chefsposter,
-      motesposter,
-    ).flatMap((u) =>
-      bokforingsposter(u).map((p) => ({
-        employee_id: u.employee_id,
-        period_month: manad,
-        amount: p.belopp,
-        deals: p.antal,
-        source: "motor",
-        // DETERMINISTISK REFERENS. Det ar den som gor stangningen idempotent:
-        // samma manad, person och slag kan aldrig bokforas tva ganger.
-        external_ref: `${manad}:${u.employee_id}:${p.slag}`,
-        note: p.text,
-        entered_by: user.employee!.id,
-      })),
-    );
-
-    if (rader.length > 0) {
-      const { error } = await db.from("commission_entry").insert(rader);
-
-      // 23505 = unique_violation. Posterna finns redan, alltsa har ett tidigare
-      // forsok kommit halvvags. Ratt atgard ar att fortsatta och stanga
-      // perioden, inte att avbryta — annars star manaden kvar halvfardig.
-      if (error && error.code !== "23505") {
-        return { fel: `Posterna bokfordes inte: ${error.message}` };
-      }
+    // LÅSET (0300, hårdtestet 2026-11-14): väntar ut varje mötesbedömning som pågår och spärrar nya tills
+    // perioden är skriven. Utan det kunde en bedömning låsas mellan läsningen nedan och perioden, och föll
+    // då utanför både bokföringen och rättelsen. Markeringen tas bort i `finally`, också när något fallerar.
+    const { error: lasfel } = await db.rpc("provision_stangning_borjar", { p_manad: manad, p_av: user.employee!.id });
+    if (lasfel) {
+      return {
+        fel: lasfel.code === "P0409"
+          ? `${manadsnamn(manad)} stangs redan. Vanta en minut och ladda om.`
+          : `Stangningen kunde inte borja: ${lasfel.message}`,
+      };
     }
 
-    const { error: periodfel } = await db.from("commission_period").insert({
-      period_month: manad,
-      closed_by: user.employee!.id,
-    });
+    try {
+      // En stängning som hann klart medan den här väntade på låset (ett dubbelklick): läs om perioden under låset.
+      const { data: hunnen } = await db.from("commission_period").select("period_month").eq("period_month", manad).maybeSingle();
+      if (hunnen) return { fel: `${manadsnamn(manad)} ar redan faststalld.` };
 
-    if (periodfel) return { fel: `Perioden stangdes inte: ${periodfel.message}` };
+      // LASES MED SERVICE ROLE, inte med attestantens token. Bokforingen maste
+      // vara fullstandig; en RLS-vy som av nagot skal saknar en rad hade gett en
+      // person for lite betalt utan att nagot sag fel ut.
+      // KONSEKVENSERNA MASTE MED I BOKFORINGEN. En bonusforlust verkar genom att
+      // motorn raknar om manaden — utelamnas laget har bokfors en volymbonus som
+      // trappan sagt ska falla, och den posten gar sedan inte att skriva om:
+      // huvudboken ar append-only, sa rattelsen blir en negativ post nagon maste
+      // upptacka och skriva for hand.
+      //
+      // OVERTACKEN MASTE OCKSA MED. `underlagForAlla` bygger sin personlista ur
+      // dem, sa utan raden nedan skulle en saljchef utan egna order inte finnas i
+      // bokforingen alls — hens overtack hade raknats live hela manaden och sedan
+      // tyst uteblivit ur lonekorningen. Samma sorts fel som de tva som ratades
+      // 2026-09-08, och det gar at det hall dar ingen saknar sina pengar.
+      //
+      // OCH MOTESPOSTERNA, av exakt samma skal: en bokare utan en enda order och med
+      // tre moten i manaden finns bara i `underlagForAlla` om raderna ges dit. De
+      // lases med SERVICE ROLE (hela kretsen, inte attestantens RLS-utsnitt) och
+      // raknas bara i sin egen manad. Den har funktionen kor aldrig en manad som
+      // redan ar faststalld (`redan` ovan), sa en andring i efterhand av ett mote i
+      // en stangd manad hamnar aldrig har utan som en `rattelse` i innevarande manad
+      // (0288) — ingen dubbelrakning.
+      const [order, nivaer, kvPerPerson, konsekvensPerPerson, chefsposter, motesposter] = await Promise.all([
+        hamtaAllaOrder(manad),
+        hamtaAllaNivaer(),
+        hamtaKvPerPerson(manad),
+        hamtaKonsekvensPerPerson(manad),
+        hamtaAllaChefsposter(manad),
+        hamtaMotesposter(manad, db),
+      ]);
 
-    await db.from("audit_log").insert({
-      actor_id: user.employee!.id,
-      action: "commission_period.closed",
-      object_type: "commission_period",
-      object_id: manad,
-      meta: {
+      const rader = underlagForAlla(
+        order,
+        manad,
+        nivaer,
+        kvPerPerson,
+        konsekvensPerPerson,
+        chefsposter,
+        motesposter,
+      ).flatMap((u) =>
+        bokforingsposter(u).map((p) => ({
+          employee_id: u.employee_id,
+          period_month: manad,
+          amount: p.belopp,
+          deals: p.antal,
+          source: "motor",
+          // DETERMINISTISK REFERENS. Det ar den som gor stangningen idempotent:
+          // samma manad, person och slag kan aldrig bokforas tva ganger.
+          external_ref: `${manad}:${u.employee_id}:${p.slag}`,
+          note: p.text,
+          entered_by: user.employee!.id,
+        })),
+      );
+
+      if (rader.length > 0) {
+        const { error } = await db.from("commission_entry").insert(rader);
+
+        // 23505 = unique_violation. Posterna finns redan, alltsa har ett tidigare
+        // forsok kommit halvvags. Ratt atgard ar att fortsatta och stanga
+        // perioden, inte att avbryta — annars star manaden kvar halvfardig.
+        if (error && error.code !== "23505") {
+          return { fel: `Posterna bokfordes inte: ${error.message}` };
+        }
+      }
+
+      const { error: periodfel } = await db.from("commission_period").insert({
         period_month: manad,
-        poster: rader.length,
-        belopp: rader.reduce((s, r) => s + r.amount, 0),
-      },
-    });
+        closed_by: user.employee!.id,
+      });
 
-    revalidatePath("/provision");
-    revalidatePath("/order");
-    revalidatePath("/");
+      if (periodfel) return { fel: `Perioden stangdes inte: ${periodfel.message}` };
 
-    return {
-      ok: `${manadsnamn(manad)} ar faststalld. ${rader.length} ${
-        rader.length === 1 ? "post" : "poster"
-      } bokförda.`,
-    };
+      await db.from("audit_log").insert({
+        actor_id: user.employee!.id,
+        action: "commission_period.closed",
+        object_type: "commission_period",
+        object_id: manad,
+        meta: {
+          period_month: manad,
+          poster: rader.length,
+          belopp: rader.reduce((s, r) => s + r.amount, 0),
+        },
+      });
+
+      revalidatePath("/provision");
+      revalidatePath("/order");
+      revalidatePath("/");
+
+      return {
+        ok: `${manadsnamn(manad)} ar faststalld. ${rader.length} ${
+          rader.length === 1 ? "post" : "poster"
+        } bokförda.`,
+      };
+    } finally {
+      await db.rpc("provision_stangning_klar", { p_manad: manad });
+    }
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Nagot gick fel." };
   }

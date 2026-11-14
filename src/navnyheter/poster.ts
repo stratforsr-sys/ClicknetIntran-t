@@ -27,6 +27,22 @@ inloggad: det hände i samma ögonblick som din inloggning förnyades i bakgrund
     href: "/moten",
   },
   {
+    slug: "moten-pengarna-skyddade",
+    rubrik: "Möten: mötesprovisionen är bättre skyddad",
+    ingress: "Frågorna efter mötet ändras av samma personer som beloppen, och ett möte som redan varit kan bara avbokas av den som är med på det eller en säljchef.",
+    text: `**Frågorna efter mötet** avgör om ett möte räknas som kvalificerat, så de ändras nu bara av ekonomi, säljchefen,
+VD och admin, precis som beloppen. Andra ser dem låsta i **Möten › Inställningar**.
+
+**Avboka efter mötets tid** låser bokarens mötesprovision på noll, så det får bara de som är med på mötet eller en
+säljchef göra. Före mötet är det som förut.
+
+**När en månad fastställs** väntar Navet ut bedömningar som pågår just då. Bedömer någon ett möte i samma sekund står
+det att månaden fastställs, och mötet låses en stund senare. Ingen mötesprovision faller mellan stolarna.`,
+    datum: "2026-11-14",
+    roller: [],
+    href: "/nav2",
+  },
+  {
     slug: "bara-det-som-brinner",
     rubrik: "Färre ärenden: bara det som brinner, och sjukanmälan försvinner när du stämplar in",
     ingress: "Stämplar du in efter en sjukanmälan avslutas den av sig själv. Chefen får inget ärende om okvitterad coachning, och gamla förslag om ogiltig frånvaro städas bort.",

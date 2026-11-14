@@ -98,6 +98,17 @@ ok("arMedPaMote: bokare, hållare och kollega, inte en chef som inte är med", [
 ok("utan kollegor: kollegan är inte med", M.farSe(kollega, { ...mote, med: [] }) === false && M.farSattaUtfall(kollega, { ...mote, med: [] }) === false);
 ok("hållaren i med ändrar ingenting", M.farSe(annan, { ...mote, med: ["h"] }) === false);
 ok("flera roller: en chefsroll räcker", M.farSe({ id: "q", roller: ["sales", "ceo"] }, mote) === true);
+// Hårdtestet 2026-11-14: Avboka efter mötets tid låser bokarens provision på 0 kr och kräver samma rätt som ett utfall.
+{
+  const nu = new Date("2026-11-14T12:00:00Z");
+  ok("före mötet: teamledaren utanför mötet får avboka", M.farAvboka(tl, mote, "2026-11-14T13:00:00Z", nu) === true);
+  ok("efter mötet: teamledaren utanför mötet får inte avboka", M.farAvboka(tl, mote, "2026-11-14T11:00:00Z", nu) === false);
+  ok("vid mötets start räknas det som efter", M.farAvboka(tl, mote, "2026-11-14T12:00:00Z", nu) === false);
+  ok("efter mötet: de som är med och säljchefen får avboka", [bokare, hallare, kollega, sm].every((u) => M.farAvboka(u, mote, "2026-11-14T11:00:00Z", nu)));
+  ok("en annan säljare får aldrig avboka", !M.farAvboka(annan, mote, "2026-11-14T13:00:00Z", nu) && !M.farAvboka(annan, mote, "2026-11-14T11:00:00Z", nu));
+  ok("utan läsbar tid: den strängare regeln", M.farAvboka(tl, mote, null, nu) === false && M.farAvboka(tl, mote, "inte ett datum", nu) === false && M.farAvboka(sm, mote, null, nu) === true);
+  ok("flytta följer samma regel", M.farFlytta(tl, mote, "2026-11-14T11:00:00Z", nu) === false && M.farFlytta(tl, mote, "2026-11-14T13:00:00Z", nu) === true);
+}
 
 rubrik("motesArt");
 ok("ny", M.motesArt(false, null) === "ny");
@@ -550,6 +561,9 @@ rubrik("0287: vem ändrar Mötens inställningar (farAndraInstallning)");
   ok("en säljare ändrar ingenting", !M.farAndraInstallning(u("salesperson"), "moten.bekrafta-dagar") && !M.farSeInstallningar(u("salesperson")));
   ok("en teamledare (Admin) ändrar dagarna men inte beloppen", M.farAndraInstallning(u("team_lead"), "moten.bekrafta-dagar") && !M.farAndraInstallning(u("team_lead"), "moten.provision"));
   ok("ekonomi, säljchef, VD och admin ändrar beloppen", ["finance", "sales_manager", "ceo", "admin"].every((r) => M.farAndraInstallning(u(r), "moten.provision") && M.farAndraInstallning(u(r), "moten.mottagare") && M.farAndraInstallning(u(r), "moten.ombokning-provision")));
+  // Hårdtestet 2026-11-14: utan frågor blir varje hållet möte kvalificerat, så frågorna räknas som pengar.
+  ok("en teamledare, leverans eller projektledare ändrar inte frågorna", ["team_lead", "delivery", "project_manager"].every((r) => !M.farAndraInstallning(u(r), "moten.fragor")));
+  ok("ekonomi, säljchef, VD och admin ändrar frågorna", ["finance", "sales_manager", "ceo", "admin"].every((r) => M.farAndraInstallning(u(r), "moten.fragor")));
 }
 
 rubrik("Uppgift 6: vem bedömer, och svaren i anropen");

@@ -243,9 +243,10 @@ const harRoll = (u: Aktor, lista: readonly string[]): boolean => u.roller.some((
 /**
  * Mötens inställningar (0287): Admin och Superadmin ser och ändrar dem. Det som rör pengar (beloppen, vilka som får
  * mötesprovision, ombokningsregeln) ändras bara av dem som hanterar provision (som `commission_entry`, 0031) och admin.
+ * Frågorna räknas som pengar: utan frågor blir varje hållet möte kvalificerat (hårdtestet 2026-11-14).
  */
 export const PROVISIONS_ROLLER = ["finance", "ceo", "sales_manager", "admin"] as const;
-const PENGANYCKLAR = ["moten.provision", "moten.mottagare", "moten.ombokning-provision"];
+export const PENGANYCKLAR = ["moten.provision", "moten.mottagare", "moten.ombokning-provision", "moten.fragor"];
 export const farSeInstallningar = (u: Aktor): boolean => nivaFor(u.roller) !== "salesperson";
 export const farAndraInstallning = (u: Aktor, nyckel: string): boolean =>
   farSeInstallningar(u) && (!PENGANYCKLAR.includes(nyckel) || harRoll(u, PROVISIONS_ROLLER));
@@ -260,6 +261,18 @@ export const farSe = (u: Aktor, m: MoteParter): boolean => arMedPaMote(u, m) || 
 /** Samma krets som får se mötet får bekräfta det. */
 export const farBekrafta = (u: Aktor, m: MoteParter): boolean => farSe(u, m);
 export const farSattaUtfall = (u: Aktor, m: MoteParter): boolean => arMedPaMote(u, m) || harRoll(u, UTFALL_ROLLER);
+/**
+ * Avboka före mötets tid: samma krets som ser mötet. Efter mötets tid låser en avbokning bokarens mötesprovision på
+ * 0 kr, så den kräver samma rätt som ett utfall (hårdtestet 2026-11-14: en teamledare utanför mötet kunde annars göra det).
+ * Gränsen är mötets start.
+ */
+export const farAvboka = (u: Aktor, m: MoteParter, moteTid: string | null | undefined, nu: Date = new Date()): boolean => {
+  const t = moteTid ? Date.parse(moteTid) : NaN;
+  // En tid som inte går att läsa räknas som passerad: hellre den strängare regeln.
+  return Number.isFinite(t) && t > nu.getTime() ? farSe(u, m) : farSattaUtfall(u, m);
+};
+/** Flytta ett möte vars tid passerat: samma rätt som Avboka, annars flyttas det framåt och avbokas sedan med `farSe`. */
+export const farFlytta = farAvboka;
 /**
  * Nivån (kvalificeringsfrågorna) sätts av mötets hållare eller av en admin, aldrig av bokaren eller kollegorna:
  * bokaren hade då bedömt sin egen mötesprovision. Sätter någon annan Hållet väntar mötet på bedömning.

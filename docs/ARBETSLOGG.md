@@ -5,7 +5,49 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-<<<<<<< HEAD
+## 2026-11-14 · Möten: hårdtestets tre fynd rättade, ruttprov och ett lås i npm test (0300)
+
+Hårdtestet av Mötens byggsteg 1–4 (main `ce71402`) gav GODKÄND MED ANMÄRKNING och tre behörighetsluckor. Beställaren:
+"Okej fixa det", "Ja", "Okej", och "Okej" på två förbättringar.
+
+- **Frågorna räknas som pengar.** `moten.fragor` står i `PENGANYCKLAR` (`motenforma.ts`). Utan frågor blir varje
+  hållet möte kvalificerat (det högre beloppet), så den som inte får ändra beloppen får inte heller stänga av frågorna.
+  Inställningsvyn låser frågefälten på samma sätt som beloppen (`pg`/`las` i `ndMoInst…`).
+- **Avboka efter mötets tid kräver samma rätt som ett utfall** (`farAvboka`). Förut räckte `farSe`, så en teamledare
+  utanför mötet kunde låsa bokarens mötesprovision på 0 kr i efterhand. Före mötets tid är det som förut.
+- **Stängningen och bedömningen kan inte gå om varandra (0300).** `faststallPeriod` läste mötesposterna och skrev
+  sedan `commission_period`; en bedömning däremellan kom varken med i bokföringen eller fick en rättelse (månaden var
+  öppen när den låstes). Nu: `provision_stangning_borjar` tar ett exklusivt rådgivande lås på månaden (väntar ut
+  pågående skrivningar) och sätter en markering; `mote_provision_vakt`, överst i `mote_bokfor_rattelse` (som båda
+  skrivvägarna anropar per rad), tar låset delat och nekar med P0423 medan markeringen finns; `provision_stangning_klar`
+  i `finally`. En markering äldre än 5 min räknas inte. P0423 blir `ManadenStangs`: utfallet sparas ändå med en
+  varning, ett tappat möte låses av jobbet nästa kvart, ett hållet väntar på bedömning. Ordern har samma lucka sedan
+  tidigare och är inte rörd.
+- **Uppföljningsmötet och kundinbjudan:** beställaren svarade "Ja" — som byggt i steg 4 (bladet fyller i kortets
+  e-post, ombokningen tar bolagets). Ingen ändring.
+- **`tests/moten-rutt-behorighet.mjs`:** POST-rutten med attrapp för inloggningen och supabase-klienten (bokför varje
+  skrivning och dess filter). 15 handlingar som säljare utanför mötet: 403 och ingen skrivning; `ifragasatt` skriver
+  villkorat på den egna raden. På den gamla koden föll avboka-efter och frågorna. Kräver `--experimental-transform-types`
+  (inkio.ts har parameteregenskaper).
+- **`scripts/provlas.mjs`:** `npm test` = `provlas.mjs npm run test:alla`. Låset är katalogen `~/.nav-provlas`
+  (pid, klon, start); en död ägare tas över, väntan högst 45 min, `NAV_PROVLAS=av` hoppar över. Enskilda provfiler
+  (`node tests/rls.mjs`) går fortfarande förbi låset.
+- **`tests/provision-stangning-las-db.mjs`:** 0300 mot produktionen med månaden 2001-01 (18 kontroller, två
+  anslutningar för låset; markeringen städas).
+- **Fable granskade (inga blockerare) och fyra fynd rättades:** Flytta efter mötets tid kräver samma rätt som Avboka
+  (`farFlytta`; annars flyttades mötet framåt och avbokades sedan med `farSe`); `farAvboka` behandlar en oläsbar tid
+  som passerad; stängningen läser om `commission_period` under låset (ett dubbelklick som väntat ut den första);
+  provlåset byggs färdigt bredvid och byts in med `rename`, och ett dött lås flyttas undan i stället för att raderas
+  (två väntare kunde annars båda ta det). Ruttprovet kräver exakt 403 och kör varje handling också som den som får
+  (40 kontroller). Lämnat: `provision_stangning_klar` raderar markeringen oavsett vems (betyder något först om en
+  stängning tar över 5 min); Avboka-knappen syns för teamledaren efter mötets tid (servern svarar 403 med tydlig text);
+  23505-grenen i stängningen tappar ett belopp om perioden föll efter posterna och något låstes före omförsöket.
+- `test:arenden` är RÖTT på main sedan `c2abc9d` ("insättningarna hittas" 4 st, kräver ≥ 6: coachning- och
+  guidejobben raderades). Inte rört här; det hör till den grenen.
+- Konfliktmarkörerna i den här filen (från en annan sessions merge) togs bort; båda avsnitten står kvar.
+
+---
+
 ## 2026-11-14 · Bara det som brinner: ärenden, ogiltig frånvaro och sjukanmälan (grenen `arenden-rensa`)
 
 **Varför.** Beställaren hade 208 förslag om ogiltig frånvaro, 252 påminnelser och 10 röda ärenden, nästan inget av
@@ -30,7 +72,9 @@ hade sett ut som ett beslut av en chef. Rensa i gränssnittet avvisar däremot, 
 `franvaro`, `tid`, `guider`, `coachning`, `navnyheter` gröna. `tsc --noEmit`: inga fel i ändrade filer (två
 kända fel om `Pling`/`pling`, som bara uppstår på macOS eftersom filsystemet inte skiljer på stora och små bokstäver).
 Sidans skript klarar `node --check`.
-=======
+
+---
+
 ## 2026-11-13/14 · Uppgifter: lägg till en kollega i min uppgift (0298)
 
 **Läge:** på `main` som `ce71402` (pushad 19:58 UTC, produktionsbygget grönt 19:59 UTC) efter grön preview (`d71e433`) och
@@ -92,7 +136,6 @@ det redan gör med `upgSatt`, så rutans eget prov kör rutan orörd. Servern sk
 till mig själv (`ndMedFolk`). Migrationen bytte nummer: 0291 togs av Mötens bekräftelse, och 0292–0297 är också körda.
 
 **Inte gjort:** steg 4 i prompten ("nytt sedan sist", en läsmarkör per person). Inget är klickat i en webbläsare.
->>>>>>> origin/main
 
 ---
 
