@@ -5,6 +5,32 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-14 · Order: resterna efter skälet (grenen `rattelse-rester`, ingen migration)
+
+**Vad:** beställaren 2026-11-14: "gör klart arbetet om det finns mer att göra och sen pusha till main och sen hård
+testa den". Kvar efter `be8d894` var två saker jag själv hittat: orderformuläret klipptes på telefonen, och gamla Nav
+krävde skäl av admin trots "för admin och superadmin behövs ingen".
+
+**Formuläret på telefonen.** `rattelse-skal-prov.mjs` hade bara mätt att sidan inte skrollar i sidled och att skälet
+står i linje med anteckningen; båda höll, för `.ordnyg` (overflow:auto) skrollade i sidled INNANFÖR rutan och alla fält
+var lika för breda. Mätt på riktigt: `form.ordnyf` 640 px på 390, Spara rättelsen slutar vid 603 px, i webben och i
+appläget. Orsaken är `grid-template-columns:1fr` i 900 px-regeln: `1fr` har minsta bredden `auto`, alltså innehållets.
+Kundraden (`o7KundSum`, `white-space:nowrap`, org.nr · kontakt · telefon · mejl · ort) är ~570 px. Datorns regel har
+`minmax(0,1fr)` av samma skäl, telefonregeln skrev över den. Med `minmax(0,1fr)` sticker ingenting ut (kundraden har
+redan `overflow:hidden` + ellipsis). En ny order ryms redan på main: kundraden finns bara när kunden är vald. Provet
+(`delar/ordform-bredd/prov.mjs`) väntar ut öppningsanimationen (`felin`, translateX 24 px) innan det mäter; första
+versionen fick ett falskt rött av den.
+
+**Gamla Nav.** `/order` har ingen omdirigering till Nav 2.0 (bara `(app)/page.tsx` har det), så rättelseformuläret går
+att nå. `redigeraOrder` använder redan `rattelsensSkal`, så det var bara klientens `required`. Nivån räknas på sidan
+(`nivaFor`, samma som servern) och skickas ned som `skalFrivilligt`; inte `hanterare`, som är en annan krets
+(säljchef/VD/ekonomi).
+
+**Prov:** bredden 120/120 (18 röda mot main), datorn identisk med main element för element; `tsc` bara Pling-felen;
+repots svit med nycklarna, se NASTA_SESSION.
+
+---
+
 ## 2026-11-13/14 · Uppgiftsrutan omgjord (på `main` 2026-11-14, ingen migration)
 
 **Vad:** beställaren om rutan för en uppgift: "lite för mycket som händer", funktioner som fattas, "jag förstår inte

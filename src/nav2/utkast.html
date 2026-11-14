@@ -3231,7 +3231,9 @@ body.felpekar .felhov{outline:2px solid var(--danger)!important;outline-offset:2
 .onknapp .btn{width:100%}
 .onknapp small{text-align:center;font-size:11.5px}
 @media (max-width:900px){
-  .ordnyg{grid-template-columns:1fr}
+  /* minmax(0,…) som på datorn: med 1fr blev kolumnen minst lika bred som kundraden (nowrap) i en rättelse,
+     och formuläret 640 px på en 390 px telefon. Raden kortas med … i stället. */
+  .ordnyg{grid-template-columns:minmax(0,1fr)}
   .ordnyg{background:none}
   .ordnys{position:static;max-height:none;border-top:1px solid var(--line);background:var(--surface)}
   .ordnyf{padding:4px 18px 24px}

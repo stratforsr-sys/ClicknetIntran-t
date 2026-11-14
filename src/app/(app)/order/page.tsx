@@ -57,6 +57,7 @@ import { Kundkort } from "./Kundkort";
 import { Nyorder } from "./Nyorder";
 import { Orderkort } from "./Orderkort";
 import { Svavruta } from "./Svavruta";
+import { nivaFor } from "@/lib/nav2/forma";
 
 export const dynamic = "force-dynamic";
 
@@ -121,6 +122,9 @@ export default async function Ordersida({
 
   const mig = user.employee.id;
   const hanterare = hasRole(user, "sales_manager", "ceo", "finance");
+  // Skalet till en rattelse av en godkand order: saljaren skriver det, admin och
+  // superadmin behover inget (bestallaren 2026-11-13, se `rattelsensSkal`).
+  const skalFrivilligt = nivaFor(user.roles) !== "salesperson";
 
   // O13. Kretsen som far saga att en order ar BETALD ar smalare an den som
   // godkanner och makulerar: den som ser betalningen komma in ar den som far
@@ -446,6 +450,7 @@ export default async function Ordersida({
             namn={namn}
             hanterare={hanterare}
             bokforare={bokforare}
+            skalFrivilligt={skalFrivilligt}
             mig={mig}
             stangda={stangda}
             tjanster={kundTjanster}
