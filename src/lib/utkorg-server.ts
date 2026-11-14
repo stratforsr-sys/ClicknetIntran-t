@@ -3,10 +3,11 @@ import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { medRoll, notifiera, notifieraFranUtkorgen, type Handelse } from "@/lib/notishandelse-server";
 import { HANDELSEKALLOR, type Handelsekalla } from "@/lib/notiser";
-import { ANGER_SEKUNDER, FORINSTALLNINGAR, arSteg, datumLang, dayLabel, hm, kundbrev, minuter, notistext, type Notisrad } from "@/lib/leveranskalender";
+import { ANGER_SEKUNDER, FORINSTALLNINGAR, KUNDBREV_BOLAG, arSteg, datumLang, dayLabel, hm, kundbrev, minuter, notistext, type Notisrad } from "@/lib/leveranskalender";
 import { andraSchemalagt, avbrytSchemalagt, skickaEpost, type Bilaga } from "@/lib/epost";
 import { inbjudan, type Mote } from "@/lib/ical";
-import { icsGaller } from "@/lib/utkorg-ics";
+import { arMotesRubrik, brevslag, forraNamnet, forraPlatsen, icsGaller, type Brevlogg } from "@/lib/utkorg-ics";
+import { arVideoplats } from "@/lib/nav2/motenforma";
 import { paminnelsebeslut } from "@/lib/paminnelse-tid";
 import { adapter, type Crmstatus } from "@/lib/crm/adapter";
 import { anteckningAndradICrm, anteckningBorttagenICrm, anteckningICrm, crmKundId, leveransICrm, makuleraICrm, navHandelseICrm, skapaICrm } from "@/lib/crm/synk-server";
@@ -667,31 +668,41 @@ async function ics(rad: Utkorgsrad): Promise<boolean> {
   if (!org?.email) throw new Error("Organisatören saknar e-postadress");
 
   const orgNamn = `${org.first_name} ${org.last_name}`.trim();
-  const vad = arSteg(e.step) ? FORINSTALLNINGAR[e.step].lab : e.title;
-  const rubrik = `${vad} med Clicknet`;
+  // Ett kundmöte i Möten (2026-11-13): agendan och gästens namn ur mötet. Bara `mote.agenda` går till kunden;
+  // målet (`mote.mal`, och kalenderns agenda på möten bokade före agendan) är säljarens egen anteckning.
+  const kund = e.order_id ? null : await kundmote(e.id, epost);
+  // Kundens namn på mötet: förinställningens ("Kickoff med Clicknet"), "Möte med Clicknet" för Mötens möten, och
+  // annars kalenderns rubrik. Mötens rubrik ("Clicknet - <bolaget>: Möte") är navets och står aldrig i brevet.
+  const vad = arSteg(e.step) ? FORINSTALLNINGAR[e.step].lab : kund || arMotesRubrik(e.title) ? "Möte" : e.title.trim() || "Möte";
+  // En egen rubrik som redan säger bolaget ("Clicknet demo") får inte "med Clicknet" en gång till.
+  const rubrik = vad.includes(KUNDBREV_BOLAG) ? vad : `${vad} med ${KUNDBREV_BOLAG}`;
   const start = minuter(e.tid) ?? 0;
   const nar = e.tid
     ? `${liten(datumLang(e.dag))} kl ${hm(start)}–${hm(start + (e.minuter ?? 30))}`
     : `${liten(datumLang(e.dag))}${e.slutdag ? ` till ${liten(datumLang(e.slutdag))}` : ""}, hela dagen`;
-  // Ett kundmöte i Möten (2026-11-13): agendan och gästens namn ur mötet. Bara `mote.agenda` går till kunden;
-  // målet (`mote.mal`, och kalenderns agenda på möten bokade före agendan) är säljarens egen anteckning.
-  const kund = e.order_id ? null : await kundmote(e.id, epost);
-  const namn = ((o?.contact_name as string | null | undefined) ?? kund?.namn ?? null) || null;
+  // Det gästen redan fått: avgör vad brevet gäller, och ger namnet när det inte går att slå upp längre (efter
+  // Radera, eller när kontaktens adress tagits bort): gästen hälsas som i förra brevet.
+  const brev = await tidigareBrev(e.id);
+  const namn = ((o?.contact_name as string | null | undefined) ?? kund?.namn ?? null) || forraNamnet(brev, epost);
   const kontakt = namn?.split(" ")[0] ?? null;
   const agenda = metod === "REQUEST" ? kund?.agenda ?? null : null;
 
   const ics = inbjudan(
     somMote(e, rubrik, agenda),
     metod,
-    { namn: `${orgNamn}, Clicknet`, epost: org.email as string },
+    { namn: `${orgNamn}, ${KUNDBREV_BOLAG}`, epost: org.email as string },
     { namn, epost, svara: true },
   );
 
-  const slag = borttagen ? "bort" : metod === "REQUEST" ? await brevslag(e.id, epost, sekvens, nar) : undefined;
-  const { amne, text } = kundbrev({ metod, sekvens, slag, rubrik, nar, kontakt, plats: e.plats, url: e.online_url, avsandare: org.first_name as string, agenda });
+  const slag = borttagen ? "bort" : metod === "REQUEST" ? brevslag(brev, epost, sekvens, nar) : undefined;
+  // Var mötet hålls (2026-11-14): ett videomöte får länken som en egen rad och aldrig "vi ringer dig", och ett brev om
+  // en ändring säger vad som är nytt mot förra brevet (länken eller platsen).
+  const { amne, text } = kundbrev({ metod, sekvens, slag, rubrik, nar, kontakt, plats: e.plats, url: e.online_url, video: arVideoplats(e.plats), fore: forraPlatsen(brev, epost), avsandare: orgNamn || (org.first_name as string), agenda });
   const u = await skickaEpost({ till: epost, amne, text, svaraTill: org.email as string, bilagor: [icsBilaga(ics, metod)], logg: { sort: "utkorg-inbjudan" } });
   // `epost` och `nar` (2026-11-03): nästa brev till samma adress vet då vad gästen redan fått (`brevslag`).
-  await logga("ut", { handling: "ics", event: e.id, metod, sekvens, ok: u.skickat, id: u.skickat ? u.id : null, epost, nar });
+  // `namn` (2026-11-13): och vad gästen hette i det (`forraNamnet`).
+  // `plats` och `lank` (2026-11-14): och var mötet hölls i det (`forraPlatsen`).
+  await logga("ut", { handling: "ics", event: e.id, metod, sekvens, ok: u.skickat, id: u.skickat ? u.id : null, epost, nar, namn, plats: e.plats ?? null, lank: e.online_url ?? null });
   if (!u.skickat) throw new Error(u.orsak);
   return true;
 }
@@ -723,13 +734,10 @@ async function kundmote(eventId: string, epost: string): Promise<{ agenda: strin
 }
 
 /**
- * Vad en inbjudan till en gäst gäller, ur det gästen senast fått (loggen, `ok`). Utkorgens rader duger inte:
- * en överhoppad rad markeras också som klar. Ingenting tidigare, eller en avbokning: en första inbjudan. Samma
- * tid som förra brevet: platsen eller länken har ändrats. Annars en ny tid. Brev från före 2026-11-03 saknar
- * adressen i loggen; finns sådana för mötet blir det "ny tid", som förut.
+ * Breven som gått fram till gäster på händelsen, nyast först (loggen, `ok`). Utkorgens rader duger inte: en
+ * överhoppad rad markeras också som klar. Läses av `brevslag`, `forraNamnet` och `forraPlatsen` (utkorg-ics.ts).
  */
-async function brevslag(eventId: string, epost: string, sekvens: number, nar: string): Promise<"ny" | "tid" | "andrad"> {
-  if (sekvens <= 0) return "ny";
+async function tidigareBrev(eventId: string): Promise<Brevlogg[]> {
   const { data } = await supabaseAdmin()
     .from("integration_log")
     .select("body")
@@ -738,11 +746,7 @@ async function brevslag(eventId: string, epost: string, sekvens: number, nar: st
     .eq("body->>ok", "true")
     .order("id", { ascending: false })
     .limit(200);
-  const brev = ((data ?? []) as { body: Record<string, unknown> }[]).map((x) => x.body);
-  const forra = brev.find((x) => String(x.epost ?? "").toLowerCase() === epost);
-  if (!forra) return brev.some((x) => x.epost === undefined) ? "tid" : "ny";
-  if (forra.metod === "CANCEL") return "ny";
-  return forra.nar === nar ? "andrad" : "tid";
+  return ((data ?? []) as { body: Brevlogg }[]).map((x) => x.body);
 }
 
 // -----------------------------------------------------------------------------

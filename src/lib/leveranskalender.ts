@@ -802,12 +802,22 @@ export const SVARSKALLOR = ["kalender-inbjudan", "kalender-flyttad", "kalender-f
 // Kundens inbjudan (0072)
 // -----------------------------------------------------------------------------
 
-const liten = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+/**
+ * Företaget i kundens brev och kalenderfil: "Möte med Clicknet", signaturen och organisatörens namn. Ett ställe, så
+ * att en inställning kan ersätta det (saljbarhet S31).
+ */
+export const KUNDBREV_BOLAG = "Clicknet";
+
+const stor = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /**
- * Kundens brev med kickoffens `.ics` (pass 4). Kort, på svenska, och utan något
- * internt: rubriken är förinställningens namn och "med Clicknet", aldrig navets
- * egen rubrik med kundens namn i.
+ * Kundens brev med kalenderfilen (0072). Omskrivet 2026-11-13 efter beställarens "det ska vara proffsigt": det
+ * gamla "Välkommen till clicknet - Bolaget: Möte med Clicknet" lät som en inbjudan att registrera sig någonstans.
+ *
+ * Ett affärsbrev i fyra delar: vad som hänt (en mening), mötet som ett block (namnet, dagen och tiden, platsen,
+ * länken, agendan), vad kunden gör härnäst när det finns något att göra, och avsändaren med hela namnet och bolaget. Rubriken är kundens namn på
+ * mötet ("Möte med Clicknet", "Kickoff med Clicknet"), aldrig navets egen rubrik med kundens namn i. Ett svar på
+ * brevet går till organisatören (`svaraTill` i utkorgen), så "svara på det här mejlet" når rätt person.
  */
 export function kundbrev(a: {
   metod: "REQUEST" | "CANCEL";
@@ -818,47 +828,78 @@ export function kundbrev(a: {
    * Utan den räknas den ur sekvensen och metoden, som förut.
    */
   slag?: "ny" | "tid" | "andrad" | "bort";
+  /** Kundens namn på mötet, "Möte med Clicknet". */
   rubrik: string;
+  /** "onsdag 18 november 2026 kl 08:00–08:30" (liten bokstav; blocket gör den stor). */
   nar: string;
+  /** Förnamnet brevet hälsar med, eller null ("Hej,"). */
   kontakt: string | null;
   plats: string | null;
   url: string | null;
+  /**
+   * Platsen är en videotjänst ("Microsoft Teams", "Google Meet", "Zoom", "Videomöte"; `arVideoplats` i Möten).
+   * Utkorgen avgör det, så att den här filen förblir utan importer. Då säger brevet var länken finns.
+   */
+  video?: boolean;
+  /**
+   * Platsen och länken i förra brevet till adressen (2026-11-14), eller null när det brevet är äldre än loggningen
+   * av platsen. Ett brev om en ny tid eller en ändring säger då vad som är nytt: länken, eller var mötet hålls.
+   */
+  fore?: { plats: string | null; url: string | null } | null;
+  /** Organisatörens hela namn, i signaturen. */
   avsandare: string;
-  /** Mötets agenda (Möten, 2026-11-13): under platsen i inbjudan, ny tid och ändrat. Aldrig i en avbokning. */
+  /** Mötets agenda (Möten, 2026-11-13): sist i blocket i inbjudan, ny tid och ändrat. Aldrig i en avbokning. */
   agenda?: string | null;
 }): { amne: string; text: string } {
   const halsning = a.kontakt ? `Hej ${a.kontakt},` : "Hej,";
+  const plats = a.plats?.trim() ?? "";
+  const url = a.url?.trim() ?? "";
+  // Var mötet hålls (2026-11-14). "Telefon" är Mötens platsval för ett telefonmöte (`MOTE_PLATS`): bara då står det
+  // att vi ringer. Ett videomöte utan länk säger att länken kommer, så att kunden inte letar efter den.
+  const telefon = plats === "Telefon";
+  const video = !telefon && (!!a.video || (!plats && !!url));
+  const platsrad = !plats ? "" : telefon ? "Plats: Telefon, vi ringer dig" : video && !url ? `Plats: ${plats}, länken kommer i ett eget mejl` : `Plats: ${plats}`;
+  const var_ = [platsrad, url ? `Länk: ${url}` : ""].filter(Boolean);
+  // Var mötet hålls nu, som en mening, när det har ändrats. "Videomöte" är namnet när tjänsten inte känns igen.
+  const hallsNu = telefon
+    ? "Mötet blir ett telefonmöte."
+    : video
+      ? plats && plats !== "Videomöte" ? `Mötet hålls i ${plats}.` : "Mötet hålls som videomöte."
+      : plats ? "Mötet hålls på en ny plats." : "Vi har ändrat var mötet hålls.";
+  // Vad som är nytt mot förra brevet: null när platsen och länken är desamma, undefined när förra brevet inte sa det.
+  const forePlats = a.fore ? (a.fore.plats ?? "").trim() : null;
+  const foreUrl = (a.fore?.url ?? "").trim();
+  const nytt =
+    forePlats === null ? undefined
+    : forePlats === plats && foreUrl === url ? null
+    : forePlats === plats && url ? (foreUrl ? "Länken till mötet är ny." : "Här kommer länken till mötet.")
+    : hallsNu;
   const agenda = a.agenda?.trim() ? ["", "Agenda:", a.agenda.trim()] : [];
-  const var_ = [...[a.plats?.trim() ? `Plats: ${a.plats.trim()}` : "", a.url?.trim() ? `Länk: ${a.url.trim()}` : ""].filter(Boolean), ...agenda];
-  const slut = ["", "Hälsningar,", `${a.avsandare}, Clicknet`];
+  const mote = [a.rubrik, stor(a.nar)];
+  const helt = [...mote, ...var_, ...agenda];
+  const amne = (vad: string) => `${vad}: ${a.rubrik}, ${a.nar}`;
+  // Inget brev pratar om den bifogade filen (2026-11-14, beställaren): mejlet ÄR en kalenderinbjudan. Outlook och Gmail
+  // visar Ja/Nej och lägger själva in, flyttar och tar bort mötet; "lägg in mötet med den bifogade filen" var en
+  // instruktion till något kunden inte behöver göra. Kvar står bara det kunden gör själv: svarar när tiden inte passar.
+  const brev = (inledning: string, block: string[], sist: string[] = []) =>
+    [halsning, "", inledning, "", ...block, "", ...(sist.length ? [...sist, ""] : []), "Vänliga hälsningar,", a.avsandare, KUNDBREV_BOLAG].join("\n");
+  const passar = "Passar inte tiden? Svara på det här mejlet så hittar vi en ny.";
 
   const slag = a.slag ?? (a.metod === "CANCEL" ? undefined : a.sekvens > 0 ? "tid" : "ny");
   if (a.metod === "CANCEL" && slag === "bort") {
-    return {
-      amne: `Ändrad inbjudan: ${a.rubrik} ${a.nar}`,
-      text: [halsning, "", `Du är inte längre med på ${liten(a.rubrik)} ${a.nar}.`, "Den bifogade filen tar bort mötet ur din kalender.", ...slut].join("\n"),
-    };
+    return { amne: amne("Återkallad inbjudan"), text: brev("Du behöver inte längre vara med på vårt möte.", mote) };
   }
   if (a.metod === "CANCEL") {
-    return {
-      amne: `Inställt: ${a.rubrik} ${a.nar}`,
-      text: [halsning, "", `Vi har ställt in ${liten(a.rubrik)} ${a.nar}.`, "Den bifogade filen tar bort mötet ur din kalender. Vi hör av oss med en ny tid.", ...slut].join("\n"),
-    };
+    return { amne: amne("Inställt"), text: brev("Vi har ställt in vårt möte.", mote, ["Vill du boka en ny tid? Svara på det här mejlet."]) };
   }
   if (slag === "andrad") {
-    return {
-      amne: `Ändrat: ${a.rubrik} ${a.nar}`,
-      text: [halsning, "", `Vi har ändrat ${liten(a.rubrik)} ${a.nar}.`, "Den bifogade inbjudan uppdaterar mötet i din kalender.", ...var_, ...slut].join("\n"),
-    };
+    // Samma tid: det som är nytt, och aldrig "ändrat platsen" när bara länken kommit till.
+    const inledning = nytt === null ? "Vi har uppdaterat vårt möte. Tiden och platsen är desamma." : `${nytt ?? hallsNu} Tiden är densamma.`;
+    return { amne: amne("Ändrat"), text: brev(inledning, helt) };
   }
   if (slag === "tid") {
-    return {
-      amne: `Ny tid: ${a.rubrik} ${a.nar}`,
-      text: [halsning, "", `Vi har flyttat ${liten(a.rubrik)} till ${a.nar}.`, "Den bifogade inbjudan uppdaterar mötet i din kalender.", ...var_, ...slut].join("\n"),
-    };
+    // En ny plats på köpet sägs också, så att kunden inte väntar på ett samtal till ett Teams-möte.
+    return { amne: amne("Ny tid"), text: brev(`Vi har flyttat vårt möte till en ny tid.${nytt ? ` ${nytt}` : ""}`, helt, [passar]) };
   }
-  return {
-    amne: `Inbjudan: ${a.rubrik} ${a.nar}`,
-    text: [halsning, "", `Välkommen till ${liten(a.rubrik)} ${a.nar}.`, "Inbjudan ligger bifogad. Öppna den för att lägga in mötet i din kalender.", ...var_, ...slut].join("\n"),
-  };
+  return { amne: amne("Inbjudan"), text: brev("Här kommer inbjudan till vårt möte.", helt, [passar]) };
 }

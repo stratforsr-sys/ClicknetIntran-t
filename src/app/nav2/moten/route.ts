@@ -1700,7 +1700,8 @@ export async function POST(request: Request) {
       medIn.length ? `${lista(await fornamnFor(medIn))} får en inbjudan i Nav.` : "",
       medUt.length ? `${lista(await fornamnFor(medUt))} får besked om att mötet är inställt.` : "",
       sparat?.skickat?.besked && (nyTid || platsAndras) ? (nyTid ? "Kollegorna på mötet får den nya tiden." : "Kollegorna på mötet får besked om platsen.") : "",
-      ics && kundVem ? `${kundVem} får ${nyTid ? "den nya tiden" : "den nya platsen"} med mejl.` : "",
+      // Bara länken ny (Teams-länken inklistrad efteråt): kunden får länken, inte en ny plats (2026-11-14).
+      ics && kundVem ? `${kundVem} får ${nyTid ? "den nya tiden" : platsNu === platsFore && lankNu ? "länken" : "den nya platsen"} med mejl.` : "",
       inOk.length ? `${lista(inOk)} får en inbjudan med mejl.` : "",
       utOk.length ? `${lista(utOk)} får en avbokning med mejl.` : "",
       gastFel.length ? `${lista(gastFel)} gick inte att ändra. Försök igen, eller ändra i kalendern.` : "",

@@ -119,6 +119,11 @@ const VIDEOTJANST: [RegExp, string][] = [
 ];
 const VIDEONAMN = ["Microsoft Teams", "Google Meet", "Zoom", "Videomöte"];
 
+/** Är platsen ett videomöte (2026-11-14)? Kundens brev säger då var länken finns, och aldrig att vi ringer. */
+export function arVideoplats(plats: string | null | undefined): boolean {
+  return VIDEONAMN.includes((plats ?? "").trim());
+}
+
 /** Platsens namn för en möteslänk: tjänsten ur adressen, "Microsoft Teams" utan länk, annars "Videomöte". */
 export function videoNamn(lank: string | null): string {
   if (!lank) return "Microsoft Teams";
@@ -157,7 +162,7 @@ export function platsIndata(typ: unknown, adress: unknown, lank: unknown): Resul
 
 /** Tillbaka till formuläret: vilken typ kalenderns `plats` och `online_url` är. Tomt och "Telefon" är telefon. */
 export function platsTyp(plats: string | null, lank: string | null): Platstyp {
-  if (lank || VIDEONAMN.includes((plats ?? "").trim())) return "teams";
+  if (lank || arVideoplats(plats)) return "teams";
   const p = (plats ?? "").trim();
   return !p || p.toLowerCase() === MOTE_PLATS.toLowerCase() ? "telefon" : "plats";
 }

@@ -283,6 +283,15 @@ console.log("\n\x1b[1mPass 4: .ics och kundens brev\x1b[0m");
   ok("kunden får svara", rader.some((r) => r.startsWith("ATTENDEE") && r.includes("RSVP=TRUE") && r.endsWith("mailto:mira@kund.se")));
   ok("organisatören står med", rader.some((r) => r.startsWith('ORGANIZER;CN="Zen Saab":mailto:zen@clicknet.se')));
   ok("raderna slutar med CRLF", req.endsWith("END:VCALENDAR\r\n"));
+  ok("utan länk: ingen anslutningsrad", !rader.some((r) => r.includes("Anslut")));
+  // Teams-länken (2026-11-14): Outlook och Gmail visar inte URL-fältet, så länken står också först i beskrivningen,
+  // där kunden hittar den när mötet börjar.
+  const vid = inbjudan({ ...m, plats: "Microsoft Teams", url: "https://teams.microsoft.com/l/meetup-join/abc", beskrivning: "1. Nuläget" }, "REQUEST", { epost: "zen@clicknet.se" }, { epost: "k@x.se", svara: true }, nu).replace(/\r\n /g, "").split("\r\n");
+  ok("länken står först i beskrivningen, före agendan", vid.includes("DESCRIPTION:Anslut till mötet: https://teams.microsoft.com/l/meetup-join/abc\\n\\n1. Nuläget"), vid.find((r) => r.startsWith("DESCRIPTION")));
+  ok("URL-fältet och platsen finns kvar", vid.includes("URL:https://teams.microsoft.com/l/meetup-join/abc") && vid.includes("LOCATION:Microsoft Teams"));
+  const vidC = inbjudan({ ...m, plats: "Microsoft Teams", url: "https://teams.microsoft.com/l/x" }, "CANCEL", { epost: "z@c.se" }, { epost: "k@x.se", svara: false }, nu);
+  ok("ett inställt möte ber ingen ansluta", !vidC.includes("Anslut"));
+  ok("länken utan agenda",inbjudan({ ...m, url: "https://x.se/m" }, "REQUEST", { epost: "z@c.se" }, { epost: "k@x.se", svara: true }, nu).replace(/\r\n /g, "").split("\r\n").includes("DESCRIPTION:Anslut till mötet: https://x.se/m"));
   const can = inbjudan(m, "CANCEL", { epost: "zen@clicknet.se" }, { epost: "k@x.se", svara: false }, nu).replace(/\r\n /g, "").split("\r\n");
   ok("CANCEL har METHOD och STATUS", can.includes("METHOD:CANCEL") && can.includes("STATUS:CANCELLED"));
   ok("kollegan får inga svarsknappar", can.some((r) => r.startsWith("ATTENDEE") && r.includes("RSVP=FALSE")));
@@ -291,27 +300,111 @@ console.log("\n\x1b[1mPass 4: .ics och kundens brev\x1b[0m");
   lika("två händelser i flödet", pub.filter((r) => r === "BEGIN:VEVENT").length, 2);
   ok("långa rader viks vid 75 oktetter", motesflode([{ ...m, rubrik: "Å".repeat(80) }], "x", nu).split("\r\n").every((r) => Buffer.byteLength(r) <= 75));
 
-  const a = { sekvens: 0, rubrik: "Kickoff med Clicknet", nar: "torsdag 8 oktober 2026 kl 09:00–10:00", kontakt: "Mira", plats: null, url: null, avsandare: "Sara" };
+  // Kundens brev, omskrivet 2026-11-13 ("det ska vara proffsigt"): vad som hänt, mötet som ett block, nästa steg,
+  // och hela namnet i signaturen. Inget "Välkommen till", ingen navrubrik, inget "clicknet" med liten bokstav.
+  const a = { sekvens: 0, rubrik: "Kickoff med Clicknet", nar: "torsdag 8 oktober 2026 kl 09:00–10:00", kontakt: "Mira", plats: null, url: null, avsandare: "Sara Lind" };
   const ny = kundbrev({ ...a, metod: "REQUEST" });
-  lika("inbjudans ämne", ny.amne, "Inbjudan: Kickoff med Clicknet torsdag 8 oktober 2026 kl 09:00–10:00");
-  ok("inbjudan hälsar och säger Clicknet med versal", ny.text.startsWith("Hej Mira,") && ny.text.includes("kickoff med Clicknet"));
-  lika("ombokningens ämne", kundbrev({ ...a, metod: "REQUEST", sekvens: 1 }).amne, "Ny tid: Kickoff med Clicknet torsdag 8 oktober 2026 kl 09:00–10:00");
-  lika("det inställdas ämne", kundbrev({ ...a, metod: "CANCEL", sekvens: 2 }).amne, "Inställt: Kickoff med Clicknet torsdag 8 oktober 2026 kl 09:00–10:00");
+  lika("inbjudans ämne", ny.amne, "Inbjudan: Kickoff med Clicknet, torsdag 8 oktober 2026 kl 09:00–10:00");
+  ok("inbjudan hälsar, säger vad den är och har mötet som ett block", ny.text.startsWith("Hej Mira,\n\nHär kommer inbjudan till vårt möte.\n\nKickoff med Clicknet\nTorsdag 8 oktober 2026 kl 09:00–10:00\n"), ny.text);
+  ok("inget Välkommen och inget clicknet med liten bokstav", !/Välkommen/.test(ny.text) && !/clicknet/.test(ny.text) && !/clicknet/.test(ny.amne));
+  ok("signaturen: hela namnet och bolaget", ny.text.endsWith("\n\nVänliga hälsningar,\nSara Lind\nClicknet"), ny.text);
+  ok("inbjudan säger vad kunden gör om tiden inte passar", ny.text.includes("Passar inte tiden? Svara på det här mejlet så hittar vi en ny."));
+  lika("ombokningens ämne", kundbrev({ ...a, metod: "REQUEST", sekvens: 1 }).amne, "Ny tid: Kickoff med Clicknet, torsdag 8 oktober 2026 kl 09:00–10:00");
+  lika("det inställdas ämne", kundbrev({ ...a, metod: "CANCEL", sekvens: 2 }).amne, "Inställt: Kickoff med Clicknet, torsdag 8 oktober 2026 kl 09:00–10:00");
   ok("utan kontakt: bara Hej", kundbrev({ ...a, metod: "REQUEST", kontakt: null }).text.startsWith("Hej,"));
   ok("plats och länk följer med", kundbrev({ ...a, metod: "REQUEST", plats: "Kontoret", url: "https://x.se" }).text.includes("Plats: Kontoret\nLänk: https://x.se"));
+  ok("telefonmöte: kunden vet att vi ringer", kundbrev({ ...a, metod: "REQUEST", plats: "Telefon" }).text.includes("Plats: Telefon, vi ringer dig"));
   // 2026-11-03: brevet säger vad som hänt, inte bara att sekvensen gått upp.
-  lika("en ny gäst på ett flyttat möte får en inbjudan", kundbrev({ ...a, metod: "REQUEST", sekvens: 3, slag: "ny" }).amne, "Inbjudan: Kickoff med Clicknet torsdag 8 oktober 2026 kl 09:00–10:00");
+  lika("en ny gäst på ett flyttat möte får en inbjudan", kundbrev({ ...a, metod: "REQUEST", sekvens: 3, slag: "ny" }).amne, "Inbjudan: Kickoff med Clicknet, torsdag 8 oktober 2026 kl 09:00–10:00");
   const andrad = kundbrev({ ...a, metod: "REQUEST", sekvens: 1, slag: "andrad", plats: "Microsoft Teams", url: "https://teams.microsoft.com/l/x" });
-  lika("samma tid, ny plats: Ändrat", andrad.amne, "Ändrat: Kickoff med Clicknet torsdag 8 oktober 2026 kl 09:00–10:00");
-  ok("Ändrat säger inte att mötet flyttats, och har länken", !/flyttat/.test(andrad.text) && andrad.text.includes("Länk: https://teams.microsoft.com/l/x"));
+  lika("samma tid, ny plats: Ändrat", andrad.amne, "Ändrat: Kickoff med Clicknet, torsdag 8 oktober 2026 kl 09:00–10:00");
+  ok("Ändrat säger inte att mötet flyttats, säger att tiden är densamma, och har länken", !/flyttat/.test(andrad.text) && andrad.text.includes("Tiden är densamma.") && andrad.text.includes("Länk: https://teams.microsoft.com/l/x"));
   const bort = kundbrev({ ...a, metod: "CANCEL", sekvens: 1, slag: "bort" });
-  ok("en borttagen gäst: mötet står kvar, hen är inte med", bort.amne.startsWith("Ändrad inbjudan:") && bort.text.includes("Du är inte längre med på kickoff med Clicknet") && !/ställt in/.test(bort.text));
+  ok("en borttagen gäst: mötet står kvar, hen är inte med", bort.amne.startsWith("Återkallad inbjudan: Kickoff med Clicknet, ") && bort.text.includes("Du behöver inte längre vara med på vårt möte.") && !/ställt in/.test(bort.text), bort.amne);
+  ok("en avbokning har mötet men ingen plats och ingen uppmaning att lägga in det", (() => { const t = kundbrev({ ...a, metod: "CANCEL", sekvens: 2, plats: "Kontoret" }).text; return t.includes("Kickoff med Clicknet\nTorsdag 8 oktober 2026") && !t.includes("Plats:") && !t.includes("Lägg in"); })());
   lika("utan slag: som förut", kundbrev({ ...a, metod: "REQUEST", sekvens: 2 }).amne.slice(0, 7), "Ny tid:");
-  // Möten (2026-11-13): agendan står under platsen i inbjudan, ny tid och ändrat, aldrig i en avbokning.
+  // Möten (2026-11-13): agendan står sist i blocket i inbjudan, ny tid och ändrat, aldrig i en avbokning.
   const ag = kundbrev({ ...a, metod: "REQUEST", plats: "Telefon", agenda: " 1. Hur ni syns i dag\n2. Vad som krävs " });
-  ok("agendan följer med under platsen", ag.text.includes("Plats: Telefon\n\nAgenda:\n1. Hur ni syns i dag\n2. Vad som krävs\n"), ag.text);
+  ok("agendan följer med sist i blocket", ag.text.includes("Plats: Telefon, vi ringer dig\n\nAgenda:\n1. Hur ni syns i dag\n2. Vad som krävs\n\nPassar inte tiden?"), ag.text);
   ok("agendan följer med en ny tid", kundbrev({ ...a, metod: "REQUEST", sekvens: 1, agenda: "X" }).text.includes("Agenda:\nX"));
   ok("ingen agenda i en avbokning, och ingen rubrik utan agenda", !kundbrev({ ...a, metod: "CANCEL", sekvens: 1, agenda: "X" }).text.includes("Agenda") && !kundbrev({ ...a, metod: "REQUEST", agenda: "  " }).text.includes("Agenda"));
+
+  // Var mötet hålls (2026-11-14, "dubbelkolla så att mejlen blir korrekt ifall man t.ex. har Teams-möte"): bara ett
+  // telefonmöte säger att vi ringer, ett videomöte säger var länken finns, en adress står som den är.
+  const teams = { ...a, metod: "REQUEST", plats: "Microsoft Teams", url: "https://teams.microsoft.com/l/x", video: true };
+  const tt = kundbrev(teams).text;
+  ok("Teams med länk: tjänsten och länken", tt.includes("Plats: Microsoft Teams\nLänk: https://teams.microsoft.com/l/x\n"), tt);
+  ok("Teams: inget om telefon, att vi ringer eller en plats att komma till", !/telefon|ringer|på plats|adress/i.test(tt), tt);
+  const tu = kundbrev({ ...teams, url: null }).text;
+  ok("Teams utan länk: kunden vet att länken kommer", tu.includes("Plats: Microsoft Teams, länken kommer i ett eget mejl\n") && !tu.includes("Länk:"), tu);
+  ok("Teams utan länk: inget om telefon", !/telefon|ringer/i.test(tu), tu);
+  ok("Google Meet med länk", kundbrev({ ...teams, plats: "Google Meet", url: "https://meet.google.com/abc" }).text.includes("Plats: Google Meet\nLänk: https://meet.google.com/abc"));
+  ok("en okänd videotjänst heter Videomöte", kundbrev({ ...teams, plats: "Videomöte", url: "https://whereby.com/x" }).text.includes("Plats: Videomöte\nLänk: https://whereby.com/x"));
+  const adr = kundbrev({ ...a, metod: "REQUEST", plats: "Storgatan 1, Göteborg" }).text;
+  ok("en adress står som den är, utan telefon och länk", adr.includes("Plats: Storgatan 1, Göteborg\n") && !/telefon|ringer|Länk:/i.test(adr), adr);
+  ok("Telefon som namn på en adress i texten gör den inte till ett telefonmöte", !kundbrev({ ...a, metod: "REQUEST", plats: "Telefonvägen 3" }).text.includes("vi ringer"));
+
+  // En ändring på samma tid säger vad som är nytt, mot förra brevet till adressen.
+  const fore = (plats, url = null) => ({ fore: { plats, url } });
+  const inl = (b) => b.text.split("\n")[2];
+  lika("länken läggs till i efterhand", inl(kundbrev({ ...teams, sekvens: 1, slag: "andrad", ...fore("Microsoft Teams") })), "Här kommer länken till mötet. Tiden är densamma.");
+  lika("en ny länk", inl(kundbrev({ ...teams, sekvens: 1, slag: "andrad", ...fore("Microsoft Teams", "https://teams.microsoft.com/l/gammal") })), "Länken till mötet är ny. Tiden är densamma.");
+  lika("telefon blir Teams", inl(kundbrev({ ...teams, sekvens: 1, slag: "andrad", ...fore("Telefon") })), "Mötet hålls i Microsoft Teams. Tiden är densamma.");
+  lika("telefon blir Teams utan länk", inl(kundbrev({ ...teams, url: null, sekvens: 1, slag: "andrad", ...fore("Telefon") })), "Mötet hålls i Microsoft Teams. Tiden är densamma.");
+  const tillTel = kundbrev({ ...a, metod: "REQUEST", plats: "Telefon", sekvens: 1, slag: "andrad", ...fore("Microsoft Teams", "https://teams.microsoft.com/l/x") });
+  ok("Teams blir telefon: vi ringer, ingen länk", inl(tillTel) === "Mötet blir ett telefonmöte. Tiden är densamma." && tillTel.text.includes("Plats: Telefon, vi ringer dig") && !tillTel.text.includes("Länk:"), tillTel.text);
+  lika("telefon blir en adress", inl(kundbrev({ ...a, metod: "REQUEST", plats: "Storgatan 1", sekvens: 1, slag: "andrad", ...fore("Telefon") })), "Mötet hålls på en ny plats. Tiden är densamma.");
+  lika("en okänd videotjänst", inl(kundbrev({ ...teams, plats: "Videomöte", sekvens: 1, slag: "andrad", ...fore("Telefon") })), "Mötet hålls som videomöte. Tiden är densamma.");
+  lika("förra brevet sa inte platsen: var mötet hålls nu", inl(kundbrev({ ...teams, sekvens: 1, slag: "andrad" })), "Mötet hålls i Microsoft Teams. Tiden är densamma.");
+  lika("varken plats eller länk är ny", inl(kundbrev({ ...teams, sekvens: 1, slag: "andrad", ...fore("Microsoft Teams", "https://teams.microsoft.com/l/x") })), "Vi har uppdaterat vårt möte. Tiden och platsen är desamma.");
+  ok("ingen ändring säger att platsen ändrats när bara länken är ny", !/ändrat platsen|ny plats/.test(kundbrev({ ...teams, sekvens: 1, slag: "andrad", ...fore("Microsoft Teams") }).text));
+  // En ny tid säger också när platsen är ny, så att kunden inte väntar på ett samtal till ett Teams-möte.
+  lika("ny tid och Teams i stället för telefon", inl(kundbrev({ ...teams, sekvens: 1, slag: "tid", ...fore("Telefon") })), "Vi har flyttat vårt möte till en ny tid. Mötet hålls i Microsoft Teams.");
+  lika("ny tid, samma plats", inl(kundbrev({ ...teams, sekvens: 1, slag: "tid", ...fore("Microsoft Teams", "https://teams.microsoft.com/l/x") })), "Vi har flyttat vårt möte till en ny tid.");
+  lika("ny tid, förra brevet sa inte platsen: som förut", inl(kundbrev({ ...teams, sekvens: 1, slag: "tid" })), "Vi har flyttat vårt möte till en ny tid.");
+  lika(
+    "hela inbjudan till ett Teams-möte",
+    kundbrev({ metod: "REQUEST", sekvens: 0, rubrik: "Möte med Clicknet", nar: "onsdag 18 november 2026 kl 08:00–08:30", kontakt: "Anna", plats: "Microsoft Teams", url: "https://teams.microsoft.com/l/meetup-join/abc", video: true, avsandare: "Zen Saab", agenda: "1. Nuläget" }).text,
+    "Hej Anna,\n\nHär kommer inbjudan till vårt möte.\n\nMöte med Clicknet\nOnsdag 18 november 2026 kl 08:00–08:30\nPlats: Microsoft Teams\nLänk: https://teams.microsoft.com/l/meetup-join/abc\n\nAgenda:\n1. Nuläget\n\nPassar inte tiden? Svara på det här mejlet så hittar vi en ny.\n\nVänliga hälsningar,\nZen Saab\nClicknet",
+  );
+  lika(
+    "hela inbjudan till ett möte på plats",
+    kundbrev({ metod: "REQUEST", sekvens: 0, rubrik: "Möte med Clicknet", nar: "onsdag 18 november 2026 kl 08:00–08:30", kontakt: "Anna", plats: "Storgatan 1, Göteborg", url: null, avsandare: "Zen Saab" }).text,
+    "Hej Anna,\n\nHär kommer inbjudan till vårt möte.\n\nMöte med Clicknet\nOnsdag 18 november 2026 kl 08:00–08:30\nPlats: Storgatan 1, Göteborg\n\nPassar inte tiden? Svara på det här mejlet så hittar vi en ny.\n\nVänliga hälsningar,\nZen Saab\nClicknet",
+  );
+  lika(
+    "hela inbjudan till ett möte i Möten",
+    kundbrev({ metod: "REQUEST", sekvens: 0, rubrik: "Möte med Clicknet", nar: "onsdag 18 november 2026 kl 08:00–08:30", kontakt: "Anna", plats: "Telefon", url: null, avsandare: "Zen Saab", agenda: "1. Nuläget\n2. Förslag" }).text,
+    "Hej Anna,\n\nHär kommer inbjudan till vårt möte.\n\nMöte med Clicknet\nOnsdag 18 november 2026 kl 08:00–08:30\nPlats: Telefon, vi ringer dig\n\nAgenda:\n1. Nuläget\n2. Förslag\n\nPassar inte tiden? Svara på det här mejlet så hittar vi en ny.\n\nVänliga hälsningar,\nZen Saab\nClicknet",
+  );
+  // Inget brev pratar om en bifogad fil (2026-11-14, beställaren): mejlet ÄR en kalenderinbjudan, och Outlook och Gmail
+  // visar Ja/Nej och lägger själva in, flyttar och tar bort mötet. Kvar står bara det kunden gör själv.
+  const zen = { rubrik: "Möte med Clicknet", nar: "onsdag 18 november 2026 kl 08:00–08:30", kontakt: "Anna", plats: "Microsoft Teams", url: "https://teams.microsoft.com/l/meetup-join/abc", video: true, avsandare: "Zen Saab" };
+  const fem = [
+    kundbrev({ ...zen, metod: "REQUEST", sekvens: 0 }),
+    kundbrev({ ...zen, metod: "REQUEST", sekvens: 1, slag: "tid" }),
+    kundbrev({ ...zen, metod: "REQUEST", sekvens: 1, slag: "andrad" }),
+    kundbrev({ ...zen, metod: "CANCEL", sekvens: 2 }),
+    kundbrev({ ...zen, metod: "CANCEL", sekvens: 2, slag: "bort" }),
+  ];
+  ok("inget brev nämner en bifogad fil", fem.every((b) => !/bifogad|filen/.test(b.text)), fem.map((b) => b.text).find((t) => /bifogad|filen/.test(t)));
+  ok("inget brev ber kunden lägga in mötet själv", fem.every((b) => !/Lägg in|i din kalender/.test(b.text)));
+  ok("aldrig två tomma rader i rad", fem.every((b) => !b.text.includes("\n\n\n")));
+  lika(
+    "hela brevet när länken kommer i efterhand",
+    kundbrev({ ...zen, metod: "REQUEST", sekvens: 1, slag: "andrad", fore: { plats: "Microsoft Teams", url: null } }).text,
+    "Hej Anna,\n\nHär kommer länken till mötet. Tiden är densamma.\n\nMöte med Clicknet\nOnsdag 18 november 2026 kl 08:00–08:30\nPlats: Microsoft Teams\nLänk: https://teams.microsoft.com/l/meetup-join/abc\n\nVänliga hälsningar,\nZen Saab\nClicknet",
+  );
+  lika(
+    "hela brevet om ett inställt möte",
+    fem[3].text,
+    "Hej Anna,\n\nVi har ställt in vårt möte.\n\nMöte med Clicknet\nOnsdag 18 november 2026 kl 08:00–08:30\n\nVill du boka en ny tid? Svara på det här mejlet.\n\nVänliga hälsningar,\nZen Saab\nClicknet",
+  );
+  lika(
+    "hela brevet till en borttagen gäst",
+    fem[4].text,
+    "Hej Anna,\n\nDu behöver inte längre vara med på vårt möte.\n\nMöte med Clicknet\nOnsdag 18 november 2026 kl 08:00–08:30\n\nVänliga hälsningar,\nZen Saab\nClicknet",
+  );
 }
 
 console.log("\n\x1b[1mAvatarerna\x1b[0m");

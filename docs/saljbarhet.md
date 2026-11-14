@@ -8,7 +8,7 @@ i samma ändring får det en rad här.
 Lägena: **öppen** (låst i koden), **en plats** (fortfarande en konstant, men på ett ställe som en inställning kan
 ersätta utan att anropen ändras), **löst** (data eller inställning).
 
-Uppdaterad 2026-11-13 (bokningsbladet). Raderna S1–S30 gäller Möten; andra vyer är inte genomgångna.
+Uppdaterad 2026-11-13 (kundens inbjudan). Raderna S1–S31 gäller Möten; andra vyer är inte genomgångna.
 
 ## Möten
 
@@ -44,6 +44,7 @@ Uppdaterad 2026-11-13 (bokningsbladet). Raderna S1–S30 gäller Möten; andra v
 | S28 | Svenska helgdagar 2026–2027 som konstant i klienten; servern har sin egen arbetsdagsräkning, som sedan 2026-11-13 också styr Mötens bekräftelse (arbetsdagar före mötet) | `FRROD` i `utkast.html`, `arArbetsdag` i `src/lib/saljtakt.ts` (via `bekraftelseFonster` i `motesflode.ts`) | öppen | En källa på servern, per land. Skiljer de sig i dag svarar rutten med sitt fel vid tidsfältet. |
 | S29 | Källan föreslås ur uppslaget med två fasta namn: Kallsamtal (numret har ringts upp) och Tidigare kund (bolaget är kund). Finns namnen inte i företagets källor föreslås inget | `MOKALLAUR` i `utkast.html` | en plats | Två nycklar i `moten.kallor` (vilken källa som betyder uppringd och vilken som betyder kund), eller en inställning per signal. |
 | S30 | Frimejlsdomänerna (gmail.com, telia.com …) står två gånger: på servern och i klienten för e-postens domänförslag | `FRIMEJL_DOMANER` i `motenforma.ts`, `MOFRIMEJL` i `utkast.html` | öppen | Listan med i `ND.moten.inst`, en källa. Listan är svensk och internationell; ett annat land behöver sina egna. |
+| S31 | Företagets namn i kundens brev och kalenderfil: "Möte med Clicknet", signaturen och organisatörens namn i `.ics` | `KUNDBREV_BOLAG` i `src/lib/leveranskalender.ts` (läses av `utkorg-server.ts`) | en plats | Inställning med företagets namn, delad med Inställningar. Möten-rubrikens prefix (`moten.rubrik-prefix`) är inte samma sak: den kan vara tom. |
 
 ## Kan kund nummer två använda Möten i morgon?
 
