@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-14 · Order: resterna efter skälet (grenen `rattelse-rester`, ingen migration)
+## 2026-11-14 · Order: resterna efter skälet (på `main` som `73c447c`, ingen migration; produktionen grön 15:36 UTC)
 
 **Vad:** beställaren 2026-11-14: "gör klart arbetet om det finns mer att göra och sen pusha till main och sen hård
 testa den". Kvar efter `be8d894` var två saker jag själv hittat: orderformuläret klipptes på telefonen, och gamla Nav
@@ -36,7 +36,15 @@ körtid (`EXPLAIN ANALYZE`) var 66–1 860 ms första gången och 2,5 ms sedan, 
 KAN svara under 200 ms (vyn tog ~2 s), så provet tar nu den snabbaste av tre i samma transaktion.
 
 **Prov:** bredden 120/120 (18 röda mot main), datorn identisk med main element för element; `tsc` bara Pling-felen;
-repots svit med nycklarna, se NASTA_SESSION.
+`npm test` 125/125 med `rls` 518/518.
+
+**Skarpa provet i produktionen.** Telefonbredd går inte att visa i den riktiga webbläsaren: produktionen svarar
+`frame-ancestors 'none'` + `X-Frame-Options: DENY` (ingen ram), och MCP-fönstret blev kvar på 1440 px. Kedjan bevisades
+i stället: `?v=` och sha256[:12] av det `/nav2/stil.css` och `skript.js` som faktiskt serveras (räknat i sidan) är
+`6063a0f013ab`/`8d9994512af5`, samma som `mall.ts` räknar på grenens `utkast.html`, alltså exakt filen de headless
+proven körde mot. Före mergen serverades `a18fbadc4c6e` = mains, så räkningen stämmer åt båda hållen. I appen som Zen:
+Rätta order #39 utan skälfält; gamla Nav via länk från `/nav2` med skälet valfritt. Inget sparades (`audit_log` tom för
+order under provet).
 
 ---
 
