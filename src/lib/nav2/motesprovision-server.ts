@@ -35,6 +35,8 @@ type Db = SupabaseClient;
 
 /** Mötet har ändrats under tiden, eller är redan låst: rutten svarar 409. */
 export class ProvisionKonflikt extends Error {}
+/** P0423 (0300): mötets månad, eller innevarande månad, fastställs just nu. Inget sparades; försök igen om en minut. */
+export class ManadenStangs extends Error {}
 
 /** Det låsningen behöver av mötesraden. */
 export type MoteForLas = {
@@ -49,8 +51,12 @@ export type MoteForLas = {
 
 const fel = (vad: string, e: { message?: string } | null): Error => new Error(`${vad}: ${e?.message ?? "okänt fel"}`);
 
-/** Ett fel från en av 0288:s funktioner: P0409 är en konflikt (409), P0422 ingen öppen månad, resten ett fel. */
+/**
+ * Ett fel från en av 0288:s funktioner: P0409 är en konflikt (409), P0422 ingen öppen månad, P0423 en månad som
+ * fastställs just nu (0300), resten ett fel.
+ */
 function rpcFel(vad: string, e: { code?: string; message?: string }): Error {
+  if (e.code === "P0423") return new ManadenStangs("Provisionsmånaden fastställs just nu. Försök igen om en minut.");
   if (e.code === "P0409") return new ProvisionKonflikt("Mötet har ändrats under tiden, eller provisionen är redan låst. Ladda om tavlan.");
   if (e.code === "P0422") return new Error(`${vad}: både mötets månad och innevarande månad är fastställda, så rättelsen har ingen öppen månad. Ekonomi bokför den för hand.`);
   return fel(vad, e);

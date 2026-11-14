@@ -30,6 +30,8 @@ import {
   farBekrafta,
   farRadera,
   farSattaUtfall,
+  farAvboka,
+  farFlytta,
   farSe,
   flyttaIndata,
   kedjaFore,
@@ -72,7 +74,7 @@ import {
 } from "@/lib/nav2/motenforma";
 import { lokal } from "@/lib/nav2/leads";
 import { faltFor, lasInstallningar, motesTz, niva, nivaSvar, omfattas, provaAngra, provaInstallning, radernaStammer, type Lage, type MotenInst } from "@/lib/nav2/motesflode";
-import { ProvisionKonflikt, andraProvision, harLastProvision, harOmbokning, ifragasattProvision, latStaProvision, lasProvision, lastaRader, provisionsmottagare } from "@/lib/nav2/motesprovision-server";
+import { ManadenStangs, ProvisionKonflikt, andraProvision, harLastProvision, harOmbokning, ifragasattProvision, latStaProvision, lasProvision, lastaRader, provisionsmottagare } from "@/lib/nav2/motesprovision-server";
 import { medNyckel } from "@/lib/nav2/nyckel";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 
@@ -913,6 +915,8 @@ export async function POST(request: Request) {
     const h = await moteForSe(r.varden.mote);
     if ("res" in h) return h.res;
     const m = h.m;
+    // Efter mötets tid: samma rätt som Avboka (hårdtestet 2026-11-14), annars flyttas mötet framåt och avbokas sedan.
+    if (!farFlytta(aktorn, m, m.mote_tid)) return svar({ fel: "Mötets tid har passerat. Bara de som är med på mötet eller en säljchef flyttar det nu." }, 403);
     if (m.utfall) return svar({ fel: "Mötet har redan fått ett utfall." }, 409);
     const ny = svenskTidpunkt(r.varden.dag, r.varden.start);
     if (!Number.isFinite(ny.getTime())) return svar({ fel: "Välj en starttid." }, 400);
@@ -988,7 +992,8 @@ export async function POST(request: Request) {
     const h = await moteForSe(mote);
     if ("res" in h) return h.res;
     const m = h.m;
-    // Avboka kräver bara `farSe` (prövat ovan); ett utfall, också Avbokat som utfall, kräver `farSattaUtfall`.
+    // Avboka före mötets tid kräver bara `farSe` (prövat ovan). Efter mötets tid, och för ett utfall, krävs `farSattaUtfall`.
+    if (avboka && !farAvboka(aktorn, m, m.mote_tid)) return svar({ fel: "Mötets tid har passerat. Bara de som är med på mötet eller en säljchef avbokar det nu." }, 403);
     if (!avboka && !farSattaUtfall(aktorn, m)) return svar({ fel: "Bara de som är med på mötet eller en säljchef sätter utfallet." }, 403);
     if (m.utfall) return svar({ fel: "Mötet har redan fått ett utfall." }, 409);
 
@@ -1176,6 +1181,10 @@ export async function POST(request: Request) {
       const r = await lasProvision(db, m, inst, lage, mig);
       return { varning: null, bokfort: r.bokfort };
     } catch (e) {
+      // Månaden fastställs just nu (0300): inget låstes. Ett tappat möte låser jobbet om, ett hållet väntar på bedömning.
+      if (e instanceof ManadenStangs) {
+        return { varning: "Utfallet är sparat. Provisionsmånaden fastställs just nu, så mötesprovisionen låses om en stund.", bokfort: [] };
+      }
       await skrivFel({
         kind: "automatic",
         path: "/nav2/moten",
@@ -1190,7 +1199,7 @@ export async function POST(request: Request) {
 
   /** Ett fel i en ändring av mötesprovisionen: 409 vid en konflikt, annars rapporterat och 500. */
   async function provisionsfel(m: MoteRad, e: unknown, vad: string): Promise<Response> {
-    if (e instanceof ProvisionKonflikt) return svar({ fel: e.message }, 409);
+    if (e instanceof ProvisionKonflikt || e instanceof ManadenStangs) return svar({ fel: e.message }, 409);
     await skrivFel({
       kind: "automatic",
       path: "/nav2/moten",
@@ -1252,6 +1261,7 @@ export async function POST(request: Request) {
     try {
       bokfort = (await lasProvision(db, m, inst, lage, mig)).bokfort;
     } catch (e) {
+      if (e instanceof ManadenStangs) return svar({ fel: e.message }, 409);
       if (e instanceof ProvisionKonflikt) return svar({ fel: "Mötet är redan bedömt." }, 409);
       return await provisionsfel(m, e, "Bedömningen kunde inte sparas");
     }

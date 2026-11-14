@@ -39896,9 +39896,9 @@ function moInstVy(){
   const d = ndMo(), v = d.installningar, T = S.moInst, pg = v.farPengar, las = pg ? '' : ' disabled';
   const fr = T.fragor || v.fragor, aktiva = fr.filter(f => f.aktiv).length;
   const fragor = fr.map((f, i) => `<div class="mo-ifr${f.aktiv ? '' : ' av'}">
-      <input type="checkbox" data-moif="aktiv|${i}" ${f.aktiv ? 'checked' : ''} aria-label="Fråga ${i + 1} används">
-      <input class="uin" data-moif="text|${i}" value="${esc(f.text)}" maxlength="120" placeholder="Skriv frågan, till exempel: Var rätt beslutsfattare med?" aria-label="Fråga ${i + 1}">
-      <span class="mo-ifk"><button class="tlink" data-moifq="upp|${i}" aria-label="Flytta upp" ${i === 0 ? 'disabled' : ''}>↑</button><button class="tlink" data-moifq="ner|${i}" aria-label="Flytta ner" ${i === fr.length - 1 ? 'disabled' : ''}>↓</button><button class="tlink" data-moifq="bort|${i}" aria-label="Ta bort frågan">${I('x')}</button></span></div>`).join('');
+      <input type="checkbox" data-moif="aktiv|${i}" ${f.aktiv ? 'checked' : ''}${las} aria-label="Fråga ${i + 1} används">
+      <input class="uin" data-moif="text|${i}" value="${esc(f.text)}" maxlength="120" placeholder="Skriv frågan, till exempel: Var rätt beslutsfattare med?" aria-label="Fråga ${i + 1}"${las}>
+      <span class="mo-ifk"><button class="tlink" data-moifq="upp|${i}" aria-label="Flytta upp" ${i === 0 || !pg ? 'disabled' : ''}>↑</button><button class="tlink" data-moifq="ner|${i}" aria-label="Flytta ner" ${i === fr.length - 1 || !pg ? 'disabled' : ''}>↓</button><button class="tlink" data-moifq="bort|${i}" aria-label="Ta bort frågan"${las}>${I('x')}</button></span></div>`).join('');
   const belopp = aktiva
     ? `<div class="mo-ir"><label for="moi-kv">Kvalificerat</label><span class="mo-kr"><input class="uin" id="moi-kv" type="number" min="0" max="100000" step="1" inputmode="decimal" data-moibelopp="kvalificerat" value="${v.satser.kvalificerat}"${las}></span>
         <label for="moi-ha">Hållet</label><span class="mo-kr"><input class="uin" id="moi-ha" type="number" min="0" max="100000" step="1" inputmode="decimal" data-moibelopp="hallet" value="${v.satser.hallet}"${las}></span>${moInstStatus('satser')}</div>
@@ -39921,8 +39921,9 @@ function moInstVy(){
       </section>
       <section class="rxsek"><h3>Frågorna efter mötet</h3>
         <p class="muted">Säljaren svarar ja eller nej på de frågor som är ikryssade. Högst fem.</p>
+        ${pg ? '' : '<p class="mo-ilas">Frågorna avgör beloppet och ändras av ekonomi, säljchefen eller VD.</p>'}
         ${fragor || '<p class="muted">Inga frågor.</p>'}
-        <div class="mo-ir">${fr.length < 5 ? '<button class="btn btn-s btn-sm" data-moifq="ny">' + I('plus') + 'Lägg till fråga</button>' : ''}${moInstStatus('fragor')}</div>
+        <div class="mo-ir">${fr.length < 5 && pg ? '<button class="btn btn-s btn-sm" data-moifq="ny">' + I('plus') + 'Lägg till fråga</button>' : ''}${moInstStatus('fragor')}</div>
       </section>
       <section class="rxsek"><h3>Mötesprovisionen</h3>
         ${pg ? '' : '<p class="mo-ilas">Beloppen och vilka som får mötesprovision ändras av ekonomi, säljchefen eller VD.</p>'}
