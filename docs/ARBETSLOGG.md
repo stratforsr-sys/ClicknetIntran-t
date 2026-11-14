@@ -5,7 +5,7 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
-## 2026-11-13/14 · Order: provision på tjänsterna (0293) och finans = 12 % av det som blir kvar (hårdtestad, på väg till `main`)
+## 2026-11-13/14 · Order: provision på tjänsterna (0293) och finans = 12 % av det som blir kvar (på `main` som `ceed785`, 0293 körd; bygget grönt 15:43 UTC)
 
 **Vad:** en tjänst på en paketorder gav ingen provision alls (Jämtlandsstäd #40: matrisens 3 500 kr för paketet,
 ingenting för hemsidan och SEO:n, medan övertäcket räknades på hela 55 875 kr), och en finansorder gav matrisens fasta
