@@ -58,6 +58,7 @@ const TABELL: Record<string, string> = {
   task_event: "Händelser på uppgifter",
   task_link: "Kopplingar på uppgifter",
   task_member: "Inbjudna i uppgifter",
+  task_seen: "Senast öppnade uppgifter",
   employee_permission: "Behörigheter",
   employee_role: "Roller",
   error_report: "Felrapporter",

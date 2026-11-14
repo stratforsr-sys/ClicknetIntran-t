@@ -13,7 +13,10 @@
  *   2. varje knapp skickar rätt handling till /nav2/uppgifter,
  *   3. "Sluta följa" skickar `lamna` utan person (H2),
  *   4. beskrivningen skickar texten den utgick från (H15),
- *   5. historiken läser som en mening när någon lades till eller flyttade.
+ *   5. historiken läser som en mening när någon lades till eller flyttade,
+ *   6. (0301) nytt sedan sist: pricken på raden, raden överst i rutan, att
+ *      markeringen skickas en gång och släcker pricken, och att en omläsning
+ *      som startade före markeringen inte tänder den igen.
  */
 import { readFileSync } from "node:fs";
 
@@ -82,14 +85,16 @@ function varld() {
     role: () => "saljare", kIdag: () => "2026-11-13", frKort: (d) => d, frPlus: plus, frDow: dow, isDone: (t) => t.lage === "klar",
     ndMandag: (d) => { let x = d; while (dow(x) !== 1) x = plus(x, -1); return x; },
     toast: () => {}, render: () => {}, esc: (s) => String(s), I: () => "", avatar: (n) => `<span class="av">${String(n)[0]}</span>`,
-    ndSkriv: async (url, data) => { skickat.push({ url, data }); return { ok: true, status: 200, data: { ok: "Sparat." } }; },
+    ndSkriv: async (url, data) => { skickat.push({ url, data }); return { ok: true, status: 200, data: data.handling === "sett" ? { ok: "", sett: "2026-11-13T14:00:00.000Z" } : { ok: "Sparat." } }; },
+    // Rutans rad i listan, så som rutans lager skriver den.
+    trow: (t) => `<li class="trow upg-r " data-tid="${t.id}"><div class="tm" data-open="${t.id}"><div class="tt" title="Dubbelklicka för att byta namn">${t.t}</div>${t.est ? `<div class="td"><span>${t.est} min</span></div>` : ""}</div></li>`,
     ndSvar: (s) => s.data, ndSkrivFel: () => {}, ndOmlas: () => Promise.resolve(true),
     sessionStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
     location: { reload: () => {} },
     document: { addEventListener: (typ, fn) => lyssnare.push([typ, fn]), getElementById: () => null, hidden: false, activeElement: null },
     // Utkastets ruta, så som den ser ut där modulen byter i den.
     upgRutaHtml: (t) =>
-      `<p class="upg-rstatus"><span class="upg-dot ">Ej påbörjad</span></p><ul class="sub upg-sub">${t.delar.map(([x, k]) => `<li><span class="${k ? "st" : ""}">${x}</span></li>`).join("")}</ul>` +
+      `<div class="upg-rmain"></div><p class="upg-rstatus"><span class="upg-dot ">Ej påbörjad</span></p><ul class="sub upg-sub">${t.delar.map(([x, k]) => `<li><span class="${k ? "st" : ""}">${x}</span></li>`).join("")}</ul>` +
       `<ul class="upg-hist"></ul><div class="upg-chat"></div><dl class="upg-props"><div class="upg-prad"><dt>Ansvarig</dt><dd>${t.ansvarig}</dd></div></dl>` +
       `<footer><button type="button" class="btn btn-s btn-sm upg-stryk" data-strike="${t.id}">Stryk</button>` +
       (g.S.overFor === t.id ? `<div class="whenpick upg-val" role="group" aria-label="Lämna över till"><span>Till vem?</span><button type="button" data-overto="${t.id}|Simon Ek">Simon</button></div>` : "") + `</footer>`,
@@ -106,7 +111,7 @@ function varld() {
     get: (t, k) => (k === Symbol.unscopables ? undefined : k in t ? t[k] : attrapp()),
     set: (t, k, v) => { t[k] = v; return true; },
   });
-  new Function("sandlada", `with (sandlada) {\n${block}\n__ut = {ndMedRad, ndMedPop, ndAnsvPop, ndGaMedKnapp};\n}`)(sandlada);
+  new Function("sandlada", `with (sandlada) {\n${block}\n__ut = {ndMedRad, ndMedPop, ndAnsvPop, ndGaMedKnapp, ndUpgStart, ndUpgForutse, ndDagarTill};\n}`)(sandlada);
   Object.assign(g, g.__ut);
   const t = (id) => g.TASKS.find((x) => x.id === id);
   /** Ett tryck på en knapp med de här data-attributen, genom modulens egna lyssnare. */
@@ -179,7 +184,7 @@ rubrik("Rutan: jag är med i Simons uppgift");
 {
   const { g, t } = varld();
   const h = medRad(g, t("simons"));
-  ok("raden säger du", h.includes('<span class="v">du</span>'));
+  ok("raden säger Du, med stor bokstav när det står först (provet 2026-11-14)", h.includes('<span class="v">Du</span>'), h.match(/<span class="v">[^<]*<\/span>/)?.[0]);
   const v = g.upgPopHtml(t("simons"), "med");
   ok("jag är ibockad, och att bocka ur lämnar uppgiften", /aria-checked="true" data-ndlamna="simons">/.test(v) && v.includes("Zen Test (du)"));
   ok("jag får lägga till en kollega (B4)", v.includes('data-ndmedlagg="simons|anna"'));
@@ -233,7 +238,7 @@ rubrik("Historiken läser som en mening");
   const texter = akt.map((x) => x.text);
   ok("la till", texter.includes("Du la till Simon Ek"), JSON.stringify(texter));
   ok("flyttade", texter.includes("Simon flyttade till mån 16 nov"));
-  ok("passade", texter.includes("Simon passade till Zen Test"));
+  ok("passade till mig blir till dig (provet 2026-11-14: Carl passade till Zen)", texter.includes("Simon passade till dig"), JSON.stringify(texter));
   const s = akt.find((x) => x.text === "Skapad");
   ok("det gamla formatet står kvar för resten", !!s && s.vem === "Zen Test" && !s.note);
   ok("en mening har ingen dubblett av vem och anteckningen", akt.filter((x) => x.text.startsWith("Simon ")).every((x) => !x.vem && !x.note));
@@ -320,6 +325,72 @@ rubrik("Beskrivningen och rubriken skickar texten de utgick från (H15)");
   await andra({ upgbesk: "delad" }, "Min text");
   ok("vid 409 läses uppgiften om", omlast === 1, String(omlast));
   ok("och basen står kvar", g.ND.uppgifter.uppgifter.find((x) => x.id === "delad").besk === "Ännu nyare");
+}
+
+rubrik("Nytt sedan sist (0301): pricken, rutan och markeringen");
+{
+  const NYTT = [
+    { vem: "Simon", namn: "Simon Ek", text: "bockade", objekt: "Hitta numret", kommentar: false, at: "2026-11-13T13:02:00.000Z" },
+    { vem: "Simon", namn: "Simon Ek", text: "skrev", objekt: "Jag ringer dem", kommentar: true, at: "2026-11-13T12:40:00.000Z" },
+  ];
+  const { g, skickat, t } = varld();
+  const rad = g.ND.uppgifter.uppgifter.find((x) => x.id === "delad");
+  rad.nytt = NYTT; rad.nyttAntal = 5;
+  g.ndUpgStart();
+  ok("uppgiften bär det nya och antalet", t("delad").ndNytt.length === 2 && t("delad").ndNyttN === 5, JSON.stringify([t("delad").ndNytt?.length, t("delad").ndNyttN]));
+  ok("en uppgift utan nytt bär en tom lista", Array.isArray(t("egen").ndNytt) && t("egen").ndNytt.length === 0);
+
+  const h = g.trow(t("delad"), {});
+  ok("raden får pricken först i rubriken", /<div class="tt"[^>]*><span class="upg-nyprick" role="img" aria-label="Nytt: Simon bockade Hitta numret, och 4 till"/.test(h), h);
+  ok("och vad som hänt i raden under, med hur många till", h.includes('<div class="td"><span class="upg-nyttm" title="Simon bockade Hitta numret">Simon bockade Hitta numret · 4 till</span></div>'), h);
+  t("delad").est = 15;
+  ok("finns raden under redan står det nya först i den", g.trow(t("delad"), {}).includes('<div class="td"><span class="upg-nyttm"') && g.trow(t("delad"), {}).includes("<span>15 min</span>"));
+  ok("en rad utan nytt är orörd", !g.trow(t("egen"), {}).includes("upg-nyprick"));
+  t("delad").lage = "klar";
+  ok("en klar rad får ingen prick", !g.trow(t("delad"), {}).includes("upg-nyprick"));
+  t("delad").lage = "oppen";
+
+  g.S.panel = "delad";
+  const r1 = g.upgRutaHtml(t("delad"));
+  ok("rutan börjar med Nytt sedan du tittade", r1.startsWith('<div class="upg-rmain"><section class="upg-nytt"') && r1.includes("Nytt sedan du tittade"), r1.slice(0, 120));
+  ok("vem, vad och steget", r1.includes("<b>Simon</b> bockade <b>Hitta numret</b>"));
+  ok("kommentaren inom citattecken", r1.includes("<b>Simon</b> skrev ”Jag ringer dem”"));
+  ok("klockslaget i svensk tid, och resten räknas", r1.includes(">14:02<") && r1.includes("och 3 till. Allt står i aktiviteten nedan."));
+  await new Promise((r) => setTimeout(r, 5));
+  const sett = skickat.filter((x) => x.data.handling === "sett");
+  ok("öppnad ruta skickar markeringen en gång", sett.length === 1 && sett[0].data.id === "delad" && sett[0].url === "/nav2/uppgifter", JSON.stringify(sett));
+  ok("pricken släcks när servern svarat", t("delad").ndNytt.length === 0 && !g.trow(t("delad"), {}).includes("upg-nyprick"));
+  ok("men rutan visar fortfarande det som var nytt när den öppnades", g.upgRutaHtml(t("delad")).includes("Nytt sedan du tittade"));
+  await new Promise((r) => setTimeout(r, 5));
+  ok("och skickar ingen andra markering", skickat.filter((x) => x.data.handling === "sett").length === 1);
+
+  // En omläsning som startade före markeringen har kvar det gamla som nytt; det sållas bort. Det som hände efter står kvar.
+  rad.nytt = [{ vem: "Simon", namn: "Simon Ek", text: "flyttade till fre 14 nov", objekt: null, kommentar: false, at: "2026-11-13T14:05:00.000Z" }, ...NYTT];
+  g.ndUpgStart();
+  ok("omläsningen: bara det efter markeringen", t("delad").ndNytt.length === 1 && t("delad").ndNytt[0].text === "flyttade till fre 14 nov", JSON.stringify(t("delad").ndNytt));
+
+  g.S.panel = null; g.render();
+  g.S.panel = "egen";
+  ok("stängd ruta: det som stod överst är glömt", !g.upgRutaHtml(t("egen")).includes("upg-nytt"));
+  ok("en ruta utan nytt skickar ingen markering", (await new Promise((r) => setTimeout(r, 5)), skickat.filter((x) => x.data.handling === "sett").length === 1));
+}
+
+rubrik("Öppna igen visar dagen uppgiften hade (provet 2026-11-14: den sa I dag)");
+{
+  const { g, t } = varld();
+  const x = { ...t("egen"), lage: "klar", d: 0, ndDue: "2026-11-16" };
+  const f = g.ndUpgForutse(x, "ateroppna", { id: x.id });
+  ok("dagen räknas ur uppgiftens egen dag", f && f.lage === "oppen" && f.d === 3, JSON.stringify(f));
+  ok("utan dag: ingen dag", g.ndUpgForutse({ ...x, ndDue: null }, "ateroppna", { id: x.id }).d === null);
+}
+
+rubrik("Lagren står i rätt ordning i utkastet");
+{
+  const sist = (re) => { let m, i = -1; const r = new RegExp(re, "g"); while ((m = r.exec(html))) i = m.index; return i; };
+  ok("pricken på raden är den sista trow", sist("\\ntrow = function") === html.indexOf("trow = function(t, opt = {}){\n  let h = _ndNyTrow(t, opt);") - 1);
+  ok("Hems prick står efter Hems egen renderInbox, som inte anropar den före", html.indexOf("const _ndNyInbox = renderInbox;") > html.indexOf("return _ndHem.renderInbox().replace(/<div class=\"kbdhint\">/"));
+  ok("sidokolumnen säger Ny vecka på måndag på lördagar", html.includes("<h2>${ND && ndTid().dow === 6 ? 'Ny vecka på måndag' : 'Ny vecka i morgon'}</h2>"));
+  ok("rubriken säger lördag på lördagar", html.includes("if (S.mode === 'sondag') return `${ND ? NDVECKODAG[ndTid().dow] || 'Söndag' : 'Söndag'}. Inget planerat i dag.`;"));
 }
 
 console.log(fel === 0 ? "\n\x1b[32mAlla prov gick igenom.\x1b[0m" : `\n\x1b[31m${fel} prov föll.\x1b[0m`);
