@@ -56,6 +56,10 @@ export const dynamic = "force-dynamic";
  * bollen och låter den som hade den vara kvar. Vem som får vad står i
  * regeltabellen i src/lib/uppgifter.ts; rutten avgör ingenting själv.
  *
+ * NYTT SEDAN SIST (0301, beställaren 2026-11-14): `sett` sätter den inloggades
+ * markering i `task_seen` när rutan öppnas. Det någon annan gjort efter den är
+ * nytt (src/lib/nav2/uppgifter.ts räknar, src/lib/uppgifter.ts säger vad).
+ *
  * Det nya (0092): dagens tre (`task_focus`), dagens början och slut
  * (`task_day`), första steget (`task.next_step`) och påminn (en händelse
  * `paminnelse` och en notis till den som har uppgiften). "Dela upp med Nav"
@@ -321,6 +325,16 @@ export async function POST(request: Request) {
         if (finns) await db.from("task_day").update(vad === "planera" ? { planned_at: nu } : { closed_at: nu }).eq("employee_id", mig).eq("dag", idag);
         else await db.from("task_day").insert({ employee_id: mig, dag: idag, ...(vad === "planera" ? { planned_at: nu } : { closed_at: nu }) });
         return svar({ ok: vad === "planera" ? "Dagen är planerad." : "Dagen är avslutad. Ha en bra kväll." });
+      }
+      case "sett": {
+        // 0301, nytt sedan sist: rutan öppnades. Markeringen skrivs bara för en uppgift den inloggade ser
+        // (RLS i uppgiften()); tiden kommer tillbaka, så att klienten kan sålla bort det en omläsning
+        // som startade före markeringen fortfarande kallar nytt.
+        if (!(await uppgiften(id))) return svar({ fel: "Uppgiften finns inte." }, 404);
+        const sett = new Date().toISOString();
+        const { error } = await db.from("task_seen").upsert({ task_id: id, employee_id: mig, seen_at: sett }, { onConflict: "task_id,employee_id" });
+        if (error) return svar({ fel: "Markeringen sparades inte." }, 400);
+        return svar({ ok: "", sett });
       }
       case "forsta-steg":
         // H7: alla som arbetar i uppgiften skriver Börja med, inte bara den som la upp den eller har bollen.

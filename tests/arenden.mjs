@@ -159,7 +159,9 @@ console.log("\n\x1b[1mVarje ärende som läggs får en frist\x1b[0m");
     }
   }
 
-  ok("insättningarna hittas", insattningar.length >= 6, `${insattningar.length} st`);
+  // Sex till 2026-11-14; "bara det som brinner" (c2abc9d) tog med flit bort två (okvitterad coachning och
+  // systemguiderna blir inte längre ärenden). Golvet säger att sökningen fungerar, inte hur många som ska finnas.
+  ok("insättningarna hittas", insattningar.length >= 4, `${insattningar.length} st`);
   for (const { fil, kropp } of insattningar) {
     ok(`${fil} sätter sla_hours och due_at`, /\bsla_hours\b/.test(kropp) && /\bdue_at\b/.test(kropp));
   }

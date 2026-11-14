@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { SKRIVLAGE } from "./skrivlage";
 import { fullName, type CurrentUser } from "@/lib/auth";
 import { svensktDatum } from "@/lib/klocka";
-import { arStangd, farBjudaIn, farLamna, farPassa, farStyra, mittAttGora, type Krets, type Lage } from "@/lib/uppgifter";
+import { arStangd, farBjudaIn, farLamna, farPassa, farStyra, mittAttGora, nyhetstext, nyttSedanSist, type Krets, type Lage } from "@/lib/uppgifter";
 import {
   KOPPLING_ETIKETT,
   attGranska,
@@ -76,6 +76,15 @@ export type NdUppgift = {
   kan: { laggaTill: boolean; styra: boolean; lamna: boolean; passa: boolean };
   /** Förnamnet på den som bockade av uppgiften, när det var någon annan än den inloggade. */
   klarAv: string | null;
+  /**
+   * 0301, nytt sedan sist: det någon annan gjort i uppgiften och dess steg
+   * efter att den inloggade senast öppnade den, nyast först (högst
+   * NYTT_HOGST), som färdiga meningar. Bara i uppgifter där den inloggade är
+   * i kretsen (skapare, bollen, med). `nyttAntal` är alla, också de som inte
+   * fick plats.
+   */
+  nytt: { vem: string; namn: string; text: string; objekt: string | null; kommentar: boolean; at: string }[];
+  nyttAntal: number;
 };
 
 export type NdUppgifter = {
@@ -228,6 +237,9 @@ export async function byggUppgifter(supabase: SupabaseClient, user: CurrentUser)
           return { laggaTill: farBjudaIn(k), styra: farStyra(k), lamna: farLamna(k), passa: farPassa(k) };
         })(),
         klarAv: u.lage === "klar" && klar && klar.avId !== mig ? klar.av.split(" ")[0] : null,
+        // Fylls nedan, när markeringarna för just de här uppgifterna är hämtade.
+        nytt: [],
+        nyttAntal: 0,
       };
     });
 
@@ -250,11 +262,30 @@ export async function byggUppgifter(supabase: SupabaseClient, user: CurrentUser)
 
   // 0092: dagens tre, dagarna och första steget.
   const ids = uppgifter.map((u) => u.id);
-  const [{ data: fokusRader }, { data: dagRader }, { data: stegRader }] = await Promise.all([
+  const [{ data: fokusRader }, { data: dagRader }, { data: stegRader }, { data: settRader }] = await Promise.all([
     supabase.from("task_focus").select("task_id, position").eq("employee_id", mig).eq("dag", idag).order("position"),
     supabase.from("task_day").select("dag, planned_at, closed_at").eq("employee_id", mig).gte("dag", new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10)),
     ids.length ? supabase.from("task").select("id, next_step").in("id", ids).not("next_step", "is", null) : Promise.resolve({ data: [] as { id: string; next_step: string }[] }),
+    // 0301: när jag senast öppnade varje uppgift (RLS: bara mina egna rader).
+    ids.length ? supabase.from("task_seen").select("task_id, seen_at").eq("employee_id", mig).in("task_id", ids) : Promise.resolve({ data: [] as { task_id: string; seen_at: string }[] }),
   ]);
+  // 0301: nytt sedan sist. Bara där jag är i kretsen: en uppgift i inkorgen eller en jag bara får se som chef
+  // har ingen markering, och "allt är nytt" hade tänt varje rad där.
+  const settPer = new Map(((settRader ?? []) as { task_id: string; seen_at: string }[]).map((r) => [r.task_id, r.seen_at]));
+  const mittNamn = fullName(user.employee!);
+  const radAv = new Map(bild.uppgifter.map((x) => [x.id, x]));
+  for (const n of uppgifter) {
+    const u = radAv.get(n.id)!;
+    if (u.created_by !== mig && u.assignee_id !== mig && u.minRoll === null) continue;
+    const { rader, antal } = nyttSedanSist({
+      mig,
+      sett: settPer.get(n.id) ?? null,
+      egna: perUppgift.get(n.id) ?? [],
+      steg: u.delar.map((d) => ({ titel: d.title, handelser: perUppgift.get(d.id) ?? [] })),
+    });
+    n.nytt = rader.map((r) => ({ vem: r.av.split(" ")[0], namn: r.av, ...nyhetstext(r, mittNamn), kommentar: r.typ === "kommentar", at: r.at }));
+    n.nyttAntal = antal;
+  }
   const dagar = (dagRader ?? []) as { dag: string; planned_at: string | null; closed_at: string | null }[];
   const iDag = dagar.find((d) => d.dag === idag);
 

@@ -12,6 +12,9 @@
  */
 import {
   HANDELSETYPER,
+  NYTT_HOGST,
+  nyhetstext,
+  nyttSedanSist,
   LAGEN,
   LAGE_ETIKETT,
   LAGE_TON,
@@ -523,6 +526,50 @@ ok("@ ar fortfarande den som far bollen", t("Ring Nordic @anna +simon").person =
 ok("ett telefonnummer ar ingen kollega", t("Ring +46701234567").med.length === 0 && t("Ring +46701234567").titel === "Ring +46701234567");
 ok("ett plus mitt i en mening ar ingen kollega", t("Rakna 2 + 2").med.length === 0 && t("Rakna 2+2").titel === "Rakna 2+2");
 ok("samma namn tva ganger blir en", t("Ring +simon +Simon").med.length === 1);
+
+rubrik("Nytt sedan sist (0301) — det andra gjort efter min markering");
+
+{
+  const MIG = "m", SIMON = "s";
+  const h = (typ, avId, at, note = null) => ({ typ, avId, av: avId === SIMON ? "Simon Ek" : avId === MIG ? "Zen" : "Okänd", note, at });
+  const egna = [
+    h("skapad", MIG, "2026-11-14T08:00:00.000Z"),
+    h("kommentar", SIMON, "2026-11-14T09:00:00.000Z", "Jag ringer dem"),
+    h("kommentar", MIG, "2026-11-14T10:00:00.000Z", "Bra"),
+    h("andrad", SIMON, "2026-11-14T11:00:00.000Z", "flyttade till mån 16 nov"),
+  ];
+  const steg = [{ titel: "Hitta numret", handelser: [h("skapad", MIG, "2026-11-14T08:01:00.000Z"), h("klar", SIMON, "2026-11-14T14:02:00.000Z")] }];
+  const utan = nyttSedanSist({ mig: MIG, sett: null, egna, steg });
+  ok("utan markering ar allt andra gjort nytt", utan.antal === 3, JSON.stringify(utan));
+  ok("nyast forst, och steget bar sin rubrik", utan.rader[0].typ === "klar" && utan.rader[0].steg === "Hitta numret" && utan.rader[1].typ === "andrad");
+  ok("mina egna handelser ar aldrig nya", !utan.rader.some((r) => r.avId === MIG));
+  const efter = nyttSedanSist({ mig: MIG, sett: "2026-11-14T10:30:00.000Z", egna, steg });
+  ok("bara det efter markeringen", efter.antal === 2 && efter.rader.every((r) => Date.parse(r.at) > Date.parse("2026-11-14T10:30:00.000Z")));
+  ok("lika med markeringen ar inte nytt", nyttSedanSist({ mig: MIG, sett: "2026-11-14T14:02:00.000Z", egna, steg }).antal === 0);
+  ok("Postgres-tid med mikrosekunder jamfors som tid, inte som text", nyttSedanSist({ mig: MIG, sett: "2026-11-14T14:01:59.999999+00:00", egna, steg }).antal === 1);
+  ok("en handelse utan person raknas inte", nyttSedanSist({ mig: MIG, sett: null, egna: [h("skapad", null, "2026-11-14T08:00:00.000Z")], steg: [] }).antal === 0);
+  const manga = Array.from({ length: 9 }, (_, i) => h("kommentar", SIMON, `2026-11-14T1${i}:00:00.000Z`, `nr ${i}`));
+  const m = nyttSedanSist({ mig: MIG, sett: null, egna: manga, steg: [] });
+  ok(`hogst ${NYTT_HOGST} rader, men antalet ar alla`, m.rader.length === NYTT_HOGST && m.antal === 9 && m.rader[0].note === "nr 8");
+}
+
+{
+  const t = (typ, note = null, steg = null, mig = "Zen") => nyhetstext({ typ, note, steg }, mig);
+  ok("bockade ett steg", t("klar", null, "Hitta numret").text === "bockade" && t("klar", null, "Hitta numret").objekt === "Hitta numret");
+  ok("bockade av uppgiften", t("klar").text === "bockade av uppgiften" && t("klar").objekt === null);
+  ok("bockade ur ett steg", t("ateroppnad", null, "Hitta numret").text === "bockade ur");
+  ok("la till ett steg", t("skapad", null, "Ring") .text === "la till steget");
+  ok("kommentaren ar objektet", t("kommentar", "Jag ringer dem").text === "skrev" && t("kommentar", "Jag ringer dem").objekt === "Jag ringer dem");
+  ok("en lang kommentar kortas med en ellips", t("kommentar", "x".repeat(200)).objekt.length === 90 && t("kommentar", "x".repeat(200)).objekt.endsWith("…"));
+  ok("passade till mig blir till dig", t("tilldelad", "passade till Zen").text === "passade till dig", t("tilldelad", "passade till Zen").text);
+  ok("passade till en annan star kvar", t("tilldelad", "passade till Simon Ek").text === "passade till Simon Ek");
+  ok("la till mig blir la till dig", t("krets", "la till Carl Erikson", null, "Carl Erikson").text === "la till dig");
+  ok("som granskare foljer med", t("krets", "la till Carl Erikson som granskare", null, "Carl Erikson").text === "la till dig som granskare");
+  ok("tog bort mig", t("krets", "tog bort Carl Erikson", null, "Carl Erikson").text === "tog bort dig");
+  ok("ett namn som borjar likadant ar inte mitt", t("krets", "la till Carl Eriksonsson", null, "Carl Erikson").text === "la till Carl Eriksonsson");
+  ok("flytten ar historikens mening", t("andrad", "flyttade till mån 16 nov").text === "flyttade till mån 16 nov");
+  ok("tecken i namnet ar inget monster", t("krets", "la till A.B (x)", null, "A.B (x)").text === "la till dig");
+}
 
 console.log(fel === 0 ? "\n\x1b[32mAlla prov gick igenom.\x1b[0m" : `\n\x1b[31m${fel} prov föll.\x1b[0m`);
 process.exit(fel === 0 ? 0 : 1);

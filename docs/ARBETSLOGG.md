@@ -5,6 +5,47 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-14 · Uppgifter: nytt sedan sist (0301), provet med två konton, Carl är Mötesbokare
+
+Beställaren, på frågan om det som återstod: "Kör med Zen och med calle", "Ja han ska vara mötesbokare", "Jag har
+lyssnat och det fungerar" (säljtavlans ljud) och om steg 4: "Ja det är väl bra … Bygg det".
+
+**Carl Erikson = Mötesbokare + Säljare** 21:21 UTC, genom `/nav2/anstallda` (`roll`) som Zen: `andraRoll` skrev
+rollen, `role.granted` i `audit_log` och notisen "Du har fått rollen Mötesbokare". Nav 2.0 har ingen knapp för
+befattning (bara de tre nivåerna), så anropet gjordes från sidan med Zens kaka.
+
+**Provet med två konton.** Zen i Chrome, Carl genom rutten: en modul-krok löser `@/`, stubbar `next/headers` (Carls
+auth-id i identitetsrubriken), `next/cache`, `after()` (ingen push eller mejl från provet) och `supabaseServer`
+(service-nyckeln; RLS provas för sig i SQL som `authenticated` med Carls `sub`). Allt i kedjan gick (se
+NASTA_SESSION). Svarstiderna i Chrome var 4–9 s för en skrivning kring 21:25–21:30 UTC, 0,3–0,5 s strax efter;
+databasen svarade på 48 ms hela tiden, så det var en topp hos Vercel eller Supabase-API:t, inte koden. Carl har ingen
+pushprenumeration.
+
+**Fynden** (alla rättade på grenen):
+1. *Öppna igen* på en klar uppgift visade "I dag" tills servern svarat: en stängd uppgift står på `d = 0` för listan
+   Klart i dag, och förutsägelsen satte bara läget. Nu också `d` ur `ndDue`.
+2. Den som hade bollen och bad att få lämna fick "Du är inte tillagd i den här uppgiften." (bollen har ingen
+   medlemsrad). Bollen frågas först.
+3. Steget Carl lagt till stod kvar på Carl när han lämnat (H6: steget får den som la till det), i hans lista utan
+   föräldern. Öppna steg går nu till den som har bollen när någon lämnar eller tas bort (`flyttaOppnaSteg`); de
+   klara står kvar.
+4. Med sa "du" med liten bokstav, historiken "Carl passade till Zen" för Zen, och Uppgifters rubrik "Söndag" på en
+   lördag. Rättat: "Du", "passade till dig", "Lördag" och "Ny vecka på måndag".
+
+**Nytt sedan sist.** Steg 4 i `~/nav2-utkast/delar/uppgift-kollega/PROMPT.md`. Valen:
+- En tid per person och uppgift (`task_seen`), som `project_message_read` i 0055; det nya räknas ur `task_event`.
+- Bara andras händelser och bara där jag är i kretsen: utan det hade varje rad i inkorgen lyst.
+- Utan markering är allt nytt (en uppgift man fått och aldrig öppnat). Startläget i 0301 och markeringen vid
+  tillägg håller det rimligt: gamla uppgifter lyser inte, och den som läggs till ser "Zen la till dig" i stället för
+  hela historiken (provat mot produktionen: före rättelsen "Zen la upp uppgiften", efter bara "Zen la till dig").
+- Stegens händelser räknas till föräldern ("Carl bockade Hitta numret"), som aktiviteten inte visar.
+- Markeringen skrivs när rutan ritas för en uppgift med nytt; svaret bär serverns tid, och en omläsning som startade
+  före markeringen sållas mot den, så att pricken inte tänds igen.
+- Hems `renderInbox` anropar inte den som stod före, så pricken på Hem står efter den (provet kontrollerar ordningen).
+
+**Mitt misstag:** docs-commiten `c92879a` (kollegan på main) bar konfliktmarkörer i ARBETSLOGG. Session 85 rensade dem
+i `92a6086`; båda avsnitten står kvar hela. Grep efter `<<<<<<<` före varje docs-commit.
+
 ## 2026-11-14 · Möten: hårdtestets tre fynd rättade, ruttprov och ett lås i npm test (0300)
 
 Hårdtestet av Mötens byggsteg 1–4 (main `ce71402`) gav GODKÄND MED ANMÄRKNING och tre behörighetsluckor. Beställaren:

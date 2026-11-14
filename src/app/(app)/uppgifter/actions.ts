@@ -316,6 +316,26 @@ async function slaUppAnstalld(id: string): Promise<{ namn: string; slutat: boole
   return { namn: `${p.first_name} ${p.last_name}`.trim(), slutat: p.status === "offboarded" };
 }
 
+/**
+ * 0301: den som lamnar (eller tas bort ur) en uppgift har kvar sina OPPNA STEG.
+ *
+ * Ett steg far den som la till det som ansvarig (H6). Provet med tva konton
+ * 2026-11-14: Carl la ett steg i Zens uppgift och lamnade. Steget stod kvar pa
+ * honom, i hans lista, under en forelder han inte langre fick se. Stegen hor
+ * till uppgiften (B6), sa de gar till den som har bollen. De klara star kvar:
+ * vem som bockade dem ar historik och inte ett ansvar.
+ */
+async function flyttaOppnaSteg(taskId: string, fran: string, till: string | null): Promise<number> {
+  if (!till || till === fran) return 0;
+  const db = supabaseAdmin();
+  const { data } = await db.from("task").select("id").eq("parent_id", taskId).eq("assignee_id", fran);
+  const oppna: string[] = [];
+  for (const s of (data ?? []) as { id: string }[]) if (!arStangd(await nuvarandeLage(s.id))) oppna.push(s.id);
+  if (!oppna.length) return 0;
+  const { error } = await db.from("task").update({ assignee_id: till }).in("id", oppna).eq("assignee_id", fran);
+  return error ? 0 : oppna.length;
+}
+
 /** H13: har uppgiften en personkoppling till `person` som ar dold for hen? */
 async function doldKopplingTill(taskId: string, person: string): Promise<boolean> {
   const { data } = await supabaseAdmin()
@@ -377,6 +397,10 @@ async function laggTill(a: {
   if (error) return `Personen lades inte till: ${error.message}`;
 
   const som = a.roll === "redigerare" ? "" : a.roll === "granskare" ? " som granskare" : " som kan se";
+  // 0301: nytt sedan sist börjar när man läggs till. Utan markering hade hela uppgiftens historik varit
+  // "ny" för den som kom in i en gammal uppgift; nu är det "Zen la till dig" och det som händer sedan.
+  // Databasens tid (förvalet), före händelsen nedan. Den som haft en markering förut behåller den.
+  await db.from("task_seen").upsert({ task_id: a.rad.id, employee_id: a.person }, { onConflict: "task_id,employee_id", ignoreDuplicates: true });
   // B9: den som la upp uppgiften och går med själv har inte "lagt till" någon.
   await skrivHandelse(a.rad.id, "krets", a.av, a.person === a.av ? "gick med" : `la till ${a.namn}${som}`);
 
@@ -1566,7 +1590,7 @@ export async function bjudIn(_prev: UppgiftState, form: FormData): Promise<Uppgi
 export async function taBortMedlem(_prev: UppgiftState, form: FormData): Promise<UppgiftState> {
   try {
     const id = text(form, "id");
-    const { krets, medlemmar } = await kravKrets(id);
+    const { rad: uppgift, krets, medlemmar } = await kravKrets(id);
     // 0298: att ta bort NAGON ANNAN ligger kvar hos den som la upp uppgiften
     // och den som har bollen. Den som vill ga sjalv anvander `lamnaUppgift()`.
     if (!farStyra(krets)) return { fel: "Bara den som la upp uppgiften eller har bollen kan ta bort någon." };
@@ -1586,9 +1610,17 @@ export async function taBortMedlem(_prev: UppgiftState, form: FormData): Promise
       await slappUrGranskning(id, krets.mig, medlemmar.filter((m) => m.role === "granskare" && m.employee_id !== person).length);
     }
     await supabaseAdmin().from("audit_log").insert({ actor_id: krets.mig, action: "task.member_removed", object_type: "task", object_id: id });
+    // 0301: hens öppna steg går till den som har bollen.
+    const steg = await flyttaOppnaSteg(id, person, uppgift.assignee_id);
+    const till = steg ? await slaUppAnstalld(uppgift.assignee_id!) : null;
 
     uppdatera(id);
-    return { ok: `${anstalld?.namn.split(" ")[0] ?? "Personen"} är borttagen.` };
+    const fornamn = anstalld?.namn.split(" ")[0] ?? "Personen";
+    return {
+      ok: steg
+        ? `${fornamn} är borttagen. ${steg === 1 ? "Ett öppet steg" : `${steg} öppna steg`} står nu på ${uppgift.assignee_id === krets.mig ? "dig" : till?.namn.split(" ")[0] ?? "den som har bollen"}.`
+        : `${fornamn} är borttagen.`,
+    };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }
@@ -1607,6 +1639,9 @@ export async function lamnaUppgift(_prev: UppgiftState, form: FormData): Promise
     const id = text(form, "id");
     const { rad, krets, medlemmar, user } = await kravKrets(id);
 
+    // 0301: bollen först. Den som har bollen har ingen medlemsrad, och svaret blev "Du är inte tillagd"
+    // (provet med två konton 2026-11-14) fast hen är den som har uppgiften.
+    if (rad.assignee_id === krets.mig) return { fel: "Du har bollen. Passa den till någon annan först." };
     if (krets.minRoll === null) return { fel: "Du är inte tillagd i den här uppgiften." };
     if (!farLamna(krets)) return { fel: "Du har bollen. Passa den till någon annan först." };
 
@@ -1631,9 +1666,13 @@ export async function lamnaUppgift(_prev: UppgiftState, form: FormData): Promise
       });
     }
     await supabaseAdmin().from("audit_log").insert({ actor_id: krets.mig, action: "task.member_left", object_type: "task", object_id: id });
+    // 0301: mina öppna steg går till den som har bollen, så att de inte står kvar i min lista utan sin uppgift.
+    const steg = await flyttaOppnaSteg(id, krets.mig, rad.assignee_id);
+    const till = steg ? await slaUppAnstalld(rad.assignee_id!) : null;
 
     uppdatera(id);
-    return { ok: krets.minRoll === "redigerare" ? "Du är inte med i uppgiften längre." : "Du följer inte uppgiften längre." };
+    const ut = krets.minRoll === "redigerare" ? "Du är inte med i uppgiften längre." : "Du följer inte uppgiften längre.";
+    return { ok: steg ? `${ut} ${steg === 1 ? "Ditt öppna steg" : `Dina ${steg} öppna steg`} står nu på ${till?.namn.split(" ")[0] ?? "den som har bollen"}.` : ut };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }

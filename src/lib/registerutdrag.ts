@@ -281,6 +281,9 @@ export const KALLOR: Kalla[] = [
   { tabell: "sick_signal_ack", kolumn: "employee_id", andamal: "Rehabsignaler om dig som chefen kvitterat" },
   { tabell: "task_day", kolumn: "employee_id", andamal: "Dagar du planerat och avslutat i Uppgifter" },
   { tabell: "task_focus", kolumn: "employee_id", andamal: "Dagens tre i Uppgifter" },
+  // 0301. När du senast öppnade varje uppgift. Raden säger att du var där, och
+  // den används bara för att räkna vad kollegorna gjort sedan dess.
+  { tabell: "task_seen", kolumn: "employee_id", andamal: "När du senast öppnade en uppgift" },
   { tabell: "tid_view_log", kolumn: "employee_id", andamal: "Vem som tittat på din tid" },
   { tabell: "time_day_ack", kolumn: "employee_id", andamal: "Dagar du kvitterat i Tid" },
   { tabell: "time_week_check", kolumn: "employee_id", andamal: "Veckor du kollat i Tid" },

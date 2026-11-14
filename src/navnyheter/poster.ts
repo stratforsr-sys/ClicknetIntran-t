@@ -14,6 +14,22 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "uppgifter-nytt-sedan-sist",
+    rubrik: "Se vad kollegan gjort i er uppgift",
+    ingress: "En prick på raden visar att någon annan gjort något i en uppgift ni har ihop sedan du senast öppnade den. Öppna den, så står det överst vad.",
+    text: `I **Uppgifter** får raden en grön prick när en kollega har bockat ett steg, skrivit en kommentar, flyttat dagen
+eller lagt till någon i en uppgift du är med i, sedan du senast tittade. Under rubriken står det senaste, till
+exempel *Carl bockade Ring kunden*. Öppnar du uppgiften står **Nytt sedan du tittade** överst, med vem, vad och när.
+Pricken släcks när du har öppnat den. Samma prick syns i **Att göra i dag** och på startsidan. Det du själv gör
+tänder ingen prick.
+
+Lämnar du en uppgift du är med i går dina obockade steg i den till den som har bollen, så att de inte blir kvar hos
+dig utan sin uppgift.`,
+    datum: "2026-11-14",
+    roller: [],
+    href: "/uppgifter",
+  },
+  {
     slug: "moten-pengarna-skyddade",
     rubrik: "Möten: mötesprovisionen är bättre skyddad",
     ingress: "Frågorna efter mötet ändras av samma personer som beloppen, och ett möte som redan varit kan bara avbokas av den som är med på det eller en säljchef.",

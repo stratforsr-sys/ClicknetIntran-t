@@ -631,6 +631,91 @@ export function andringstext(
   return delar.length ? delar.join(", ") : null;
 }
 
+/**
+ * 0301: NYTT SEDAN SIST — det någon annan gjort i uppgiften och dess steg efter
+ * att jag senast öppnade den (`task_seen.seen_at`), nyast först.
+ *
+ * BARA ANDRAS HÄNDELSER. Det jag själv gjort vet jag om; en prick för min egen
+ * bock hade lärt mig att strunta i pricken. En händelse utan person (ett jobb,
+ * en mall) räknas inte heller: "Okänd la upp uppgiften" säger ingenting.
+ *
+ * UTAN MARKERING ÄR ALLT NYTT. Den som fått en uppgift och aldrig öppnat den
+ * har inte sett någonting. 0301 ger alla som redan var i kretsen en markering
+ * vid körningen, så att gamla uppgifter inte lyser.
+ */
+export type Nyhet = {
+  typ: string;
+  avId: string;
+  av: string;
+  note: string | null;
+  at: string;
+  /** Stegets rubrik när händelsen hände i en deluppgift. */
+  steg: string | null;
+};
+type Handelserad = { typ: string; avId: string | null; av: string; note: string | null; at: string };
+
+export const NYTT_HOGST = 4;
+
+export function nyttSedanSist(a: {
+  mig: string;
+  sett: string | null;
+  egna: readonly Handelserad[];
+  steg: readonly { titel: string; handelser: readonly Handelserad[] }[];
+}): { rader: Nyhet[]; antal: number } {
+  const grans = a.sett ? Date.parse(a.sett) : -Infinity;
+  const alla: Nyhet[] = [
+    ...a.egna.map((h) => ({ ...h, steg: null })),
+    ...a.steg.flatMap((s) => s.handelser.map((h) => ({ ...h, steg: s.titel }))),
+  ]
+    .filter((h): h is Nyhet => !!h.avId && h.avId !== a.mig && Date.parse(h.at) > grans)
+    .sort((x, y) => Date.parse(y.at) - Date.parse(x.at));
+  return { rader: alla.slice(0, NYTT_HOGST), antal: alla.length };
+}
+
+/**
+ * Nyheten som en mening utan subjekt: "bockade" + objektet "Ring kunden".
+ * `mittNamn` gör "passade till Zen" till "passade till dig" för Zen. Raden i
+ * historiken (`krets`, `andrad`, `tilldelad`) är skriven för alla och bär
+ * namnet; i ens egen prick är det man själv.
+ */
+export function nyhetstext(n: Pick<Nyhet, "typ" | "note" | "steg">, mittNamn: string): { text: string; objekt: string | null } {
+  const steg = n.steg;
+  // "la till Zen", "tog bort Zen", "passade till Zen", "la till Zen som granskare".
+  const namn = mittNamn.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const dig = (s: string) => (namn ? s.replace(new RegExp(`(till|bort) ${namn}( som [a-zåäö ]+)?$`), "$1 dig$2") : s);
+  const note = n.note ? dig(n.note) : null;
+  switch (n.typ) {
+    case "kommentar":
+      return { text: "skrev", objekt: n.note ? (n.note.length > 90 ? `${n.note.slice(0, 89).trimEnd()}…` : n.note) : null };
+    case "klar":
+      return steg ? { text: "bockade", objekt: steg } : { text: "bockade av uppgiften", objekt: null };
+    case "ateroppnad":
+      return steg ? { text: "bockade ur", objekt: steg } : { text: "öppnade den igen", objekt: null };
+    case "skapad":
+      return steg ? { text: "la till steget", objekt: steg } : { text: "la upp uppgiften", objekt: null };
+    case "avbruten":
+      return steg ? { text: "strök steget", objekt: steg } : { text: "strök uppgiften", objekt: null };
+    case "paborjad":
+      return steg ? { text: "började på", objekt: steg } : { text: "började på den", objekt: null };
+    case "inlamnad":
+      return { text: "lämnade in den för godkännande", objekt: null };
+    case "godkand":
+      return { text: "godkände den", objekt: null };
+    case "returnerad":
+      return { text: "skickade tillbaka den", objekt: null };
+    case "paminnelse":
+      return { text: "påminde om den", objekt: null };
+    case "tilldelad":
+      return { text: note ?? "gav bollen vidare", objekt: null };
+    case "andrad":
+      return { text: note ?? "ändrade den", objekt: null };
+    case "krets":
+      return { text: note ?? "ändrade vilka som är med", objekt: null };
+    default:
+      return { text: "ändrade den", objekt: null };
+  }
+}
+
 /** "30 min", "1 h", "1 h 30 min". */
 export function tidstext(minuter: number | null): string | null {
   if (!minuter || minuter <= 0) return null;

@@ -65,6 +65,7 @@ export const ORDNING: Record<string, readonly string[]> = {
   task_day: ["employee_id", "dag"],
   task_focus: ["employee_id", "dag", "position"],
   task_member: ["task_id", "employee_id"],
+  task_seen: ["task_id", "employee_id"],
   time_day_ack: ["employee_id", "work_date", "kind"],
   time_week_check: ["employee_id", "week_start"],
   work_schedule_seen: ["employee_id", "valid_from"],

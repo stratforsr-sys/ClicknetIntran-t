@@ -6466,6 +6466,20 @@ html.prf-oppen{overflow:hidden}
 .upg-medst .av+.av{margin-left:-6px;box-shadow:0 0 0 1.5px var(--surface)}
 .upg-opt[disabled]{opacity:.55;cursor:default}
 .upg-medm{display:inline-flex;align-items:center;gap:5px}
+/* 0301 nytt sedan sist: pricken är den enda färgen på raden, och den slår en gång när den kommer. */
+.upg-nyprick{display:inline-block;flex:none;width:7px;height:7px;border-radius:50%;background:var(--brand);margin:0 7px 0 0;vertical-align:2px;animation:upgNyPling 1.4s var(--ease) 1 both}
+@keyframes upgNyPling{0%{transform:scale(.3);box-shadow:0 0 0 0 color-mix(in srgb,var(--brand) 50%,transparent)}30%{transform:scale(1)}100%{transform:scale(1);box-shadow:0 0 0 8px color-mix(in srgb,var(--brand) 0%,transparent)}}
+.upg-nyttm{color:var(--brand-ink);font-weight:550;max-width:34ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.upg-nytt{margin:0;padding:10px 12px 11px;border-radius:10px;background:var(--brand-soft);color:var(--ink);animation:upgNyIn .32s var(--ease) both}
+.upg-nyh{display:flex;align-items:center;margin:0 0 6px;font-size:11.5px;font-weight:650;letter-spacing:.02em;color:var(--brand-ink)}
+.upg-nyl{list-style:none;margin:0;padding:0;display:grid;gap:5px}
+.upg-nyl li{display:flex;align-items:center;gap:8px;font-size:13.5px;line-height:1.35;min-width:0;animation:upgNyIn .32s var(--ease) both}
+.upg-nyl li:nth-child(2){animation-delay:40ms}.upg-nyl li:nth-child(3){animation-delay:80ms}.upg-nyl li:nth-child(4){animation-delay:120ms}
+.upg-nyl li>span:not(.upg-when){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.upg-nyl .upg-when{margin-left:auto;padding-left:8px;flex:none;color:var(--ink-3);font-size:12px}
+.upg-nyfler{margin:6px 0 0;font-size:12px;color:var(--ink-2)}
+@keyframes upgNyIn{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.upg-nyprick,.upg-nytt,.upg-nyl li{animation:none}}
 .upg-medm .av{flex:none}
 .upg-medm .av+.av{margin-left:-9px;box-shadow:0 0 0 1.5px var(--surface)}
 .upg-delav{flex:none;font-size:12px;color:var(--upg-ink-3);white-space:nowrap}
@@ -23635,7 +23649,7 @@ const upgTillVem = t => `<div class="whenpick upg-val" role="group" aria-label="
 
 /* ---------- Sidhuvudet ---------- */
 nuRad = function(){
-  if (S.mode === 'sondag') return 'Söndag. Inget planerat i dag.';
+  if (S.mode === 'sondag') return `${ND ? NDVECKODAG[ndTid().dow] || 'Söndag' : 'Söndag'}. Inget planerat i dag.`;
   const nasta = fokus().filter(t => narMin(t.nar) !== null).sort((a, b) => narMin(a.nar) - narMin(b.nar)).find(t => narMin(t.nar) > now() - 15);
   if (!nasta) return fokus().length ? `Härnäst: <b>${esc(fokus()[0].t)}</b>` : 'Inget klockslag kvar i dag.';
   return `Härnäst ${esc(nasta.nar)}: <b>${esc(nasta.t)}</b> · ${nedrakning(nasta)} <button type="button" class="tlink nustart" data-fstart="${nasta.id}" title="Fokusera på den nu (S)">${I('play')}Starta</button>`;
@@ -23816,7 +23830,7 @@ sidokolumn = function(){
   const proj = PROJEKT[role()], fredag = S.mode === 'dag' || S.mode === 'slut', sondag = S.mode === 'sondag';
   const nasta = n => mine().find(t => t.proj === n && t.lage === 'oppen' && !isDone(t) && t.vy === 'egen');
   return `
-    ${sondag ? `<section class="upg-kort">${note(46)}<div class="upg-kh"><div><h2>Ny vecka i morgon</h2><p>Välj måndagens tre redan nu, så börjar veckan med en plan i stället för en inkorg.</p></div></div><div class="upg-kf upg-kfv"><button type="button" class="btn btn-s btn-sm" data-tab="kommande">Planera måndagen</button></div></section>` : ''}
+    ${sondag ? `<section class="upg-kort">${note(46)}<div class="upg-kh"><div><h2>${ND && ndTid().dow === 6 ? 'Ny vecka på måndag' : 'Ny vecka i morgon'}</h2><p>Välj måndagens tre redan nu, så börjar veckan med en plan i stället för en inkorg.</p></div></div><div class="upg-kf upg-kfv"><button type="button" class="btn btn-s btn-sm" data-tab="kommande">Planera måndagen</button></div></section>` : ''}
     ${(ND ? !!(ND.uppgifter && ND.uppgifter.genomgang.lage.dagsFor) : fredag) ? wrKort() : ''}
     <section class="upg-kort"><div class="upg-kh"><div><h2>Projekt</h2></div>${note(42)}<button type="button" class="tlink" data-act="toast" data-msg="Ett nytt projekt får namn, färg och deadline. Det läggs till i listan.">Nytt projekt</button></div>
       <div class="upg-projs">${proj.map(([n, c, k, a, dl, tidAndel]) => { const andel = a ? k / a : 0, efter = ND ? ndProjEfter(n, andel, tidAndel) : andel + .1 < tidAndel, x = nasta(n), oppna = mine().filter(t => t.proj === n && t.lage === 'oppen' && !isDone(t)).length;
@@ -28102,6 +28116,34 @@ const NDUPGROLL = {redigerare:'Med', visare:'Kan se', granskare:'Granskare'};
 // "3 h", "1 dag", "4 dagar": hur länge något har väntat.
 function ndSedan(iso){ const min = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 6e4)); if (min < 60) return `${min} min`; if (min < 1440) return `${Math.round(min / 60)} h`; const d = Math.round(min / 1440); return `${d} ${d === 1 ? 'dag' : 'dagar'}`; }
 
+/* 0301 nytt sedan sist */
+// Markeringar gjorda i den här sidan: uppgiftens id → serverns tid. En omläsning som startade före markeringen
+// har fortfarande händelserna som nya; de sållas bort här, så att pricken inte tänds igen.
+var NDUPGSETT = new Map();
+function ndNyttAv(x){
+  const s = NDUPGSETT ? NDUPGSETT.get(x.id) : null, r = (x.nytt || []).filter(n => !s || Date.parse(n.at) > Date.parse(s));
+  return {ndNytt:r, ndNyttN:s ? r.length : Math.max(r.length, x.nyttAntal || 0)};
+}
+function ndNyNar(at){ const d = ndDagAv(at), idag = kIdag(); return d === idag ? ndKl(at) : d === frPlus(idag, -1) ? `i går ${ndKl(at)}` : frKort(d); }
+// "Carl bockade Hitta numret": vem, vad och det det gällde. Kommentaren står inom citattecken.
+function ndNyText(n){ return `${n.vem} ${n.text}${n.objekt ? (n.kommentar ? ` ”${n.objekt}”` : ` ${n.objekt}`) : ''}`; }
+function ndNyHtml(n){ return `<b>${esc(n.vem)}</b> ${esc(n.text)}${n.objekt ? (n.kommentar ? ` ”${esc(n.objekt)}”` : ` <b>${esc(n.objekt)}</b>`) : ''}`; }
+function ndNyPrick(t){ const n = t.ndNytt[0], fler = (t.ndNyttN || 1) - 1, txt = `Nytt: ${ndNyText(n)}${fler > 0 ? `, och ${fler} till` : ''}`;
+  return `<span class="upg-nyprick" role="img" aria-label="${esc(txt)}" title="${esc(txt)}"></span>`; }
+// Rutan öppnades: markeringen sparas, och pricken släcks i listan när servern svarat. Tyst: går det inte står
+// pricken kvar till nästa gång, och det är hela följden.
+function ndNyMarkera(t){
+  if (!t.ndNytt || !t.ndNytt.length || ndNyMarkera.pagar.has(t.id) || !ndUp().skriv) return;
+  ndNyMarkera.pagar.add(t.id);
+  setTimeout(async () => {
+    try {
+      const s = ndSvar(await ndSkriv('/nav2/uppgifter', {handling:'sett', id:t.id}, {knapp:null}));
+      if (s && !s.fel && s.sett){ NDUPGSETT.set(t.id, s.sett); const x = ndUpgT(t.id); if (x){ x.ndNytt = []; x.ndNyttN = 0; } render(); }
+    } catch(_){} finally { ndNyMarkera.pagar.delete(t.id); }
+  }, 0);
+}
+ndNyMarkera.pagar = new Set();
+
 function ndUpgStart(){
   const u = ndUp(), r = role(), idag = kIdag();
   TASKS.length = 0;
@@ -28119,7 +28161,7 @@ function ndUpgStart(){
       vantat:inl ? ndSedan(inl.at) : undefined, sammanfattning:(x.besk || '').split('\n')[0], roll:x.minRoll ? NDUPGROLL[x.minRoll] : undefined,
       alder:x.due ? undefined : Math.max(0, -ndDagarTill(ndDagAv(x.skapadAt))), ndHist:h, ndLage:x.lage, nasta:(u.forstaSteg || {})[x.id] || '',
       focus:(u.fokus || []).indexOf(x.id) + 1, ndDelId:x.delar.map(d => d[2]),
-      ndMed:x.med || [], ndBollen:x.bollenId || null, ndSkapare:x.skapareId || null, ndDelad:!!x.delad, ndKan:x.kan || {}, ndKlarAv:x.klarAv || null, ndDelAv:x.delar.map(d => d[3] || null)});
+      ndMed:x.med || [], ndBollen:x.bollenId || null, ndSkapare:x.skapareId || null, ndDelad:!!x.delad, ndKan:x.kan || {}, ndKlarAv:x.klarAv || null, ndDelAv:x.delar.map(d => d[3] || null), ...ndNyttAv(x)});
   });
   // Projekten: navets färg, antal och deadline. Tidsandelen räknas från projektets start.
   const proj = u.projekt.map(p => {
@@ -28166,7 +28208,7 @@ upgAkt = function(t){
   const mig = upgMig();
   return t.ndHist.map(e => { const mening = !!e.note && (e.typ === 'andrad' || e.typ === 'krets' || e.typ === 'tilldelad');
     const vem = !e.av ? '' : e.av === mig ? 'Du' : e.av.split(' ')[0];
-    return {k:e.typ === 'kommentar' ? 'k' : 'h', vem:mening ? '' : e.av || '', text:e.typ === 'kommentar' ? e.note || '' : mening ? `${vem} ${e.note}`.trim() : NDUPGH[e.typ] || e.typ,
+    return {k:e.typ === 'kommentar' ? 'k' : 'h', vem:mening ? '' : e.av || '', text:e.typ === 'kommentar' ? e.note || '' : mening ? `${vem} ${ndNyDig(e.note)}`.trim() : NDUPGH[e.typ] || e.typ,
       note:e.typ === 'kommentar' || mening ? null : e.note, nar:nar(e.at), titel:`${frKort(ndDagAv(e.at))} ${ndKl(e.at)}`}; });
 };
 // Granskare och överlämning: den som la upp uppgiften eller har den (farBjudaIn, som Stryk).
@@ -28229,7 +28271,7 @@ function ndMedRad(t, rad, kan){
   const k = t.ndKan || {}, jag = ND.jag.id, med = ndMedLista(t);
   if (!med.length && !k.laggaTill) return '';
   const v = med.length
-    ? `<span class="upg-medst">${med.slice(0, 3).map(m => avatar(m.namn, 20)).join('')}</span><span class="v">${upgLista(med.map(m => m.id === jag ? 'du' : esc(ndMedNamn(med, m))))}</span>`
+    ? `<span class="upg-medst">${med.slice(0, 3).map(m => avatar(m.namn, 20)).join('')}</span><span class="v">${(l => l.charAt(0).toUpperCase() + l.slice(1))(upgLista(med.map(m => m.id === jag ? 'du' : esc(ndMedNamn(med, m)))))}</span>`
     : `${upgIk('person')}<span class="v upg-mut">Ingen</span>`;
   return rad('med', 'Med', v, med.length ? med.map(m => m.namn).join(', ') : 'Ingen', kan && !!(k.laggaTill || k.styra || k.lamna), 'Lägg till kollegor');
 }
@@ -28327,6 +28369,40 @@ ndUpgFarska.sist = Date.now();
 document.addEventListener('visibilitychange', () => { if (!document.hidden) ndUpgFarska(); });
 document.addEventListener('click', () => setTimeout(() => { if (!S.panel){ ndUpgFarska.ruta = null; return; } if (S.panel !== ndUpgFarska.ruta){ ndUpgFarska.ruta = S.panel; ndUpgFarska(); } }, 0));
 
+/* ---------- 0301 Nytt sedan sist: raden, rutan och Hem ---------- */
+// Historikens rader är skrivna för alla ("passade till Zen"); den det gäller läser "till dig".
+function ndNyDig(note){
+  const namn = String(upgMig() || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return namn ? String(note).replace(new RegExp(`(till|bort) ${namn}( som [a-zåäö ]+)?$`), '$1 dig$2') : note;
+}
+const _ndNyTrow = trow;
+trow = function(t, opt = {}){
+  let h = _ndNyTrow(t, opt);
+  if (!ndUp() || !t.ndNytt || !t.ndNytt.length || isDone(t) || S.editing === t.id) return h;
+  const n = t.ndNytt[0], fler = (t.ndNyttN || 1) - 1;
+  const chip = `<span class="upg-nyttm" title="${esc(ndNyText(n))}">${esc(ndNyText(n))}${fler > 0 ? ` · ${fler} till` : ''}</span>`;
+  h = h.replace(/(<div class="tt"[^>]*>)/, `$1${ndNyPrick(t)}`);
+  return h.includes('<div class="td">') ? h.replace('<div class="td">', `<div class="td">${chip}`) : h.replace(/(<div class="tt"[^>]*>[\s\S]*?<\/div>)/, `$1<div class="td">${chip}</div>`);
+};
+// Rutan börjar med vad som hänt. Det som syntes när den öppnades står kvar tills den stängs, fast pricken släckts.
+const _ndNyRuta = upgRutaHtml;
+upgRutaHtml = function(t){
+  let h = _ndNyRuta(t);
+  if (!ndUp() || !ndUpgNav(t.id)) return h;
+  if (!S.ndNyRuta || S.ndNyRuta.id !== t.id) S.ndNyRuta = {id:t.id, rader:(t.ndNytt || []).slice(), n:t.ndNyttN || 0};
+  ndNyMarkera(t);
+  const R = S.ndNyRuta;
+  if (!R.rader.length) return h;
+  const fler = R.n - R.rader.length;
+  const block = `<section class="upg-nytt" aria-label="Nytt sedan du tittade senast"><p class="upg-nyh"><span class="upg-nyprick" aria-hidden="true"></span>Nytt sedan du tittade</p>
+    <ul class="upg-nyl">${R.rader.map(n => `<li>${avatar(n.namn || n.vem, 20)}<span>${ndNyHtml(n)}</span><span class="upg-when num" title="${esc(frKort(ndDagAv(n.at)))} ${esc(ndKl(n.at))}">${esc(ndNyNar(n.at))}</span></li>`).join('')}</ul>
+    ${fler > 0 ? `<p class="upg-nyfler">och ${fler} till. Allt står i aktiviteten nedan.</p>` : ''}</section>`;
+  return h.replace('<div class="upg-rmain">', '<div class="upg-rmain">' + block);
+};
+// Stängs rutan, eller byts den mot en annan, glöms det som stod överst.
+const _ndNyRender = render;
+render = function(...a){ if (S.ndNyRuta && S.panel !== S.ndNyRuta.id) S.ndNyRuta = null; return _ndNyRender.apply(this, a); };
+
 /* ---------- Skrivningar: /nav2/uppgifter ---------- */
 async function ndUpgPost(handling, data = {}, {ladda = true, tyst = false} = {}){
   // Ett dubbelklick är ett klick: det andra trycket på bocken, eller på raden som flyttat upp under musen, görs inte.
@@ -28370,7 +28446,7 @@ function ndUpgForutse(t, handling, data){
   const f = {};
   // Med granskare avgör servern: inlämnad, eller klar när den som bockar är den enda granskaren.
   if (handling === 'bocka'){ if (t.lage !== 'oppen' || t.granskare) return null; f.lage = 'klar'; f.klarTid = hm(now()); }
-  else if (handling === 'ateroppna'){ if (t.lage !== 'klar') return null; f.lage = 'oppen'; f.klarTid = undefined; }
+  else if (handling === 'ateroppna'){ if (t.lage !== 'klar') return null; f.lage = 'oppen'; f.klarTid = undefined; if (t.ndDue !== undefined) f.d = ndDagarTill(t.ndDue); }
   else if (handling === 'avbryt') f.lage = 'avbruten';
   else if (handling === 'planera'){
     if ('dag' in data) f.d = ndDagarTill(data.dag);
@@ -33686,6 +33762,17 @@ renderInbox = function(){
   if (!ndHemP()) return ND ? '' : _ndHem.renderInbox();
   ndHemSynk();
   return _ndHem.renderInbox().replace(/<div class="kbdhint">/, ndHemRad.length ? '<div class="kbdhint">' : '<div class="kbdhint" hidden>');
+};
+// 0301: samma prick på uppgiftens rad i "Kräver dig". Står efter Hems renderInbox, som inte anropar den som stod före.
+const _ndNyInbox = renderInbox;
+renderInbox = function(){
+  let h = _ndNyInbox();
+  if (!ndUp()) return h;
+  TASKS.forEach(t => { if (!t.ndNytt || !t.ndNytt.length) return;
+    const i = h.indexOf(`data-id="upg-${t.id}"`); if (i < 0) return;
+    const j = h.indexOf('<div class="tt">', i); if (j < 0) return;
+    h = h.slice(0, j + 16) + ndNyPrick(t) + h.slice(j + 16); });
+  return h;
 };
 // Klar, Kvittera, Bekräfta och Bevilja går till vyns rutt. Läsläget svarar där.
 const _ndHemComplete = complete;
