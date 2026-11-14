@@ -14,6 +14,20 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "order-tjanster-provision-finans",
+    rubrik: "Tjänster på en order ger provision, och finans ger 12 % av det som blir kvar",
+    ingress: "Varje tjänst på en paketorder får egen provision, i kronor eller procent. En finansorder ger 12 % av det som blir kvar efter finansavgiften, som ett utköp.",
+    text: `Lägger du en tjänst på en paketorder, till exempel en hemsida eller SEO, får den nu egen provision ovanpå
+matrisen. Säljchefen sätter den per tjänst, i **kronor** eller **procent** av vad tjänsten är värd i ordern, och
+ordern godkänns först när varje tjänst har fått sin (0 kr går, men aldrig mer än tjänsten är värd). På ordern i **Order** står provisionen per tjänst
+i tabellen, och **Sätt provision på tjänsterna** öppnar rutan för den som godkänner. Kryssar du i **Finans** får du
+12 % av det som blir kvar efter finansavgiften, i stället för matrisens belopp, precis som vid ett utköp. Då ingår
+tjänsterna i de 12 procenten.`,
+    datum: "2026-11-14",
+    roller: [],
+    href: "/order",
+  },
+  {
     slug: "orderformularet-ryms-pa-telefonen",
     rubrik: "Rätta en order i telefonen: formuläret ryms på skärmen",
     ingress: "När du rättar en godkänd order i appen syns alla fält och Spara rättelsen, utan att du behöver dra sidan åt sidan.",

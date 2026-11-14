@@ -26,8 +26,8 @@
 
 import {
   beraknatOrdervarde,
-  gallandeSats,
   harGodkants,
+  storreIOren,
   type Orderstatus,
   type Paket,
   type Sats,
@@ -37,11 +37,10 @@ import {
   affarenFor,
   arEgenForsaljning,
   gallandeChefssats,
-  procentProvision,
   type Chefssats,
-  type Saljarkalla,
 } from "../chefsprovision.ts";
-import { gallandeUtkopssats, harUtkop, nettoEfterUtkop, utkopsprovision, type Utkopssats } from "../utkop.ts";
+import { gallandeUtkopssats, harUtkop, nettoEfterUtkop, type Utkopssats } from "../utkop.ts";
+import { saljarensProvision, type Nettoregel } from "../saljarprovision.ts";
 import { finansavgift, gallandeFinanssats, nettoEfterFinans, type Finanssats } from "../finans.ts";
 import { bedomSaljsamtal } from "../samtal-order.ts";
 import { giltigRabatt } from "../orderregler.ts";
@@ -231,6 +230,18 @@ export type NdOrder = {
   /** Vad kunden betalar i manaden: fryst, angivet, eller paketets pris. */
   man: number | null;
   tj: [string, "engang" | "manad", number, boolean, number | null][];
+  /**
+   * 0293: provisionen per tjänst, i samma ordning som `tj`. `f`/`v` är valet
+   * (kronor eller procent), `kr` det fryst (godkänd) eller det godkännandet
+   * skulle frysa. Null när ingen valt.
+   */
+  tjp: ({ id: string | null; f: "kr" | "%"; v: number; kr: number | null } | null)[];
+  /** 0293: tjänsterna får egen provision — matrisen är grunden. Annars ingår de i den. */
+  tjGaller: boolean;
+  /** 0293: tjänster utan val när `tjGaller`. Godkännandet nekar tills listan är tom. */
+  tjSaknas: string[];
+  /** Nettoregeln bakom provisionen: utköp, finans eller båda. Null annars. */
+  provRegel: "utkop" | "finans" | "utkop_finans" | null;
   sign: string;
   start: string;
   slut: string | null;
@@ -301,6 +312,17 @@ export type Forhand = {
   fel: string | null;
   varde: number | null;
   finans: number | null;
+  /**
+   * 0293: tjänsterna med de kronor godkännandet skulle frysa. `provision_kr`
+   * är null när valet saknas eller när matrisen inte är grunden.
+   */
+  tjanster: Tjanst[];
+  /** Tjänster utan val när matrisen är grunden. Godkännandet nekar då; kortet visar rutan. */
+  saknas: string[];
+  /** Nettoregeln (utköp, finans eller båda) när den ger beloppet. */
+  nettoregel: Nettoregel | null;
+  /** Felet sitter i en tjänsts provision (kronspärren): kortet visar tjänsternas rad och rutan. */
+  tjanstFel: boolean;
 };
 
 /**
@@ -336,6 +358,10 @@ export function forhandsprovision(
     fel,
     varde,
     finans,
+    tjanster: tjanster.map((t) => ({ ...t, provision_kr: null })),
+    saknas: [],
+    nettoregel: null,
+    tjanstFel: false,
   });
 
   const chefssats = gallandeChefssats(s.chefssatser, o.signed_on);
@@ -373,65 +399,59 @@ export function forhandsprovision(
   }
   const netto = nettoEfterFinans(nettoEfterUtkop(varde, utkopBelopp), finans);
 
-  if (finans !== null && finans + (utkopBelopp ?? 0) > varde) {
+  if (finans !== null && storreIOren(finans + (utkopBelopp ?? 0), varde)) {
     return fall("Utköpet och finansavgiften är tillsammans större än ordervärdet. Kontrollera talen.", varde, finans);
   }
-  if (utkopBelopp !== null) {
-    if (utkopBelopp > varde) return fall("Utköpet är större än ordervärdet. Kontrollera talen.", varde, finans);
-    if (!utkopssats && !chefenSaljer && !handsatt) {
-      return fall(
-        "Ingen utköpssats gällde på signeringsdagen. Lägg en sats under Provision → Regler, eller sätt beloppet för hand.",
-        varde,
-        finans,
-      );
-    }
+  if (utkopBelopp !== null && storreIOren(utkopBelopp, varde)) {
+    return fall("Utköpet är större än ordervärdet. Kontrollera talen.", varde, finans);
+  }
+  if (procentText !== null && (procentText < 0 || procentText > 100)) {
+    return fall("Procentsatsen ska vara mellan 0 och 100.", varde, finans);
+  }
+  if (manuell !== null && manuell < 0) {
+    return fall("Provisionen kan inte vara negativ. En makulering är vägen ut.", varde, finans);
   }
 
-  // 2. Saljarens provision
-  let saljarprovision: number;
-  let saljarkalla: Saljarkalla;
-  let procent: number | null = null;
+  // 2. Saljarens provision: samma funktion som godkannandet (`saljarensProvision`).
+  const del = saljarensProvision({
+    paket: o.package_id,
+    loptid: o.term_months,
+    signerad: o.signed_on,
+    netto,
+    utkop: utkopBelopp,
+    finans: o.financed === true,
+    friOrder,
+    chefenSaljer,
+    handsatt: { procent: procentText, belopp: manuell },
+    satser: s.satser,
+    nettosats: utkopssats,
+    tjanster,
+  });
+  if (!del.klar) return { ...fall(del.fel, varde, finans), tjanstFel: del.tjanstFel === true };
 
-  if (procentText !== null) {
-    if (procentText < 0 || procentText > 100) return fall("Procentsatsen ska vara mellan 0 och 100.", varde, finans);
-    saljarprovision = procentProvision(netto, procentText);
-    saljarkalla = "manual";
-    procent = procentText;
-  } else if (manuell !== null) {
-    if (manuell < 0) return fall("Provisionen kan inte vara negativ. En makulering är vägen ut.", varde, finans);
-    saljarprovision = manuell;
-    saljarkalla = "manual";
-  } else if (utkopBelopp !== null && !chefenSaljer) {
-    saljarprovision = utkopsprovision(utkopssats!, netto);
-    saljarkalla = "buyout";
-    procent = utkopssats!.percent;
-  } else if (friOrder && !chefenSaljer) {
-    return fall("En order utanför paketreglerna behöver både ett ordervärde och en provision.", varde, finans);
-  } else {
-    const rad = gallandeSats(s.satser, o.package_id, o.term_months, o.signed_on);
-    if (!rad && !chefenSaljer) {
-      return fall(
-        "Ingen provisionssats gällde för den kombinationen på signeringsdagen. Sätt beloppet för hand med en anteckning.",
-        varde,
-        finans,
-      );
-    }
-    saljarprovision = rad?.amount ?? 0;
-    saljarkalla = "matrix";
-  }
-
-  // 3. Affaren
+  // 3. Affaren. En saknad tjanstprovision gor INTE forhandsvisningen till ett fel:
+  // kortet visar det som ar satt och rutan for resten, och godkannandet nekar.
   const affar = affarenFor({
     sats: chefssats,
     saljareId: o.salesperson_id,
     ordervarde: netto,
-    saljarprovision,
-    saljarkalla,
+    saljarprovision: del.provision,
+    saljarkalla: del.kalla,
     handsatt,
   });
-  if (affar.kalla === "manager") procent = chefssats?.own_sale_percent ?? null;
-
-  return { provision: affar.provision, kalla: affar.kalla, procent, fel: null, varde, finans };
+  const matris = affar.kalla === "matrix";
+  return {
+    provision: affar.provision,
+    kalla: affar.kalla,
+    procent: affar.kalla === "manager" ? (chefssats?.own_sale_percent ?? null) : del.procent,
+    fel: null,
+    varde,
+    finans,
+    tjanster: matris ? del.tjanster : del.tjanster.map((t) => ({ ...t, provision_kr: null })),
+    saknas: matris ? del.saknas : [],
+    nettoregel: affar.kalla === "buyout" ? del.nettoregel : null,
+    tjanstFel: false,
+  };
 }
 
 /** Procentsatsen bakom en fryst provision, for texten "40 % av nettot". */
@@ -514,6 +534,33 @@ export function formaOrder(
     lop: o.term_months,
     man,
     tj: ctx.tjanster.map((t): NdOrder["tj"][number] => [t.name, t.billing, t.amount, t.follows_order, t.term_months]),
+    tjp: ctx.tjanster.map((t, i) => {
+      if (!t.provision) return null;
+      // Godkänd: de frysta kronorna på raden. Annars det godkännandet skulle frysa.
+      const kr = fryst ? (t.provision_kr ?? null) : (fh!.tjanster[i]?.provision_kr ?? null);
+      return { id: t.id ?? null, f: t.provision.form === "procent" ? "%" : "kr", v: t.provision.varde, kr };
+    }),
+    // Kronspärren (`tjanstFel`): beloppet ska rättas i rutan, så tjänsterna "gäller" även när förhandsvisningen nekar.
+    tjGaller:
+      ctx.tjanster.length > 0 && (fryst ? o.commission_source === "matrix" && !senare : fh!.kalla === "matrix" || fh!.tjanstFel),
+    tjSaknas:
+      ctx.tjanster.length === 0
+        ? []
+        : fryst
+          ? o.commission_source === "matrix" && !senare
+            ? ctx.tjanster.filter((t) => !t.provision).map((t) => t.name)
+            : []
+          : fh!.saknas,
+    provRegel:
+      (fryst ? o.commission_source : fh!.kalla) === "buyout"
+        ? o.buyout_amount != null && o.financed
+          ? "utkop_finans"
+          : o.buyout_amount != null
+            ? "utkop"
+            : o.financed
+              ? "finans"
+              : null
+        : null,
     sign: o.signed_on,
     start: o.starts_on ?? o.signed_on,
     slut: o.ends_on,

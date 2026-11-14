@@ -5,6 +5,63 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-13/14 · Order: provision på tjänsterna (0293) och finans = 12 % av det som blir kvar (hårdtestad, på väg till `main`)
+
+**Vad:** en tjänst på en paketorder gav ingen provision alls (Jämtlandsstäd #40: matrisens 3 500 kr för paketet,
+ingenting för hemsidan och SEO:n, medan övertäcket räknades på hela 55 875 kr), och en finansorder gav matrisens fasta
+belopp. Se NASTA_SESSION.
+
+**Beslut som inte går att läsa ur koden:**
+
+- **Finansbeslutet 2026-10-09 är ersatt.** Då: "matrisens fasta belopp oförändrat" på en finansorder. Nu: 12 % av det
+  som blir kvar, som utköpet. Satsen är utköpets (`buyout_commission_rate`), eftersom beställaren sa "samma sak".
+  Ska de skiljas åt senare behövs en egen tabell och en egen källa; i dag betyder `buyout` "nettosatsen".
+- **Tjänsterna får provision bara ovanpå matrisen.** 12 %, chefens 40 % och en handsatt provision räknar redan på ett
+  värde där tjänsterna ingår; en tjänsteprovision ovanpå hade betalat samma krona två gånger. Mitt val, inte
+  beställarens.
+- **Null är "inget val", 0 är ett val.** Spärren i godkännandet frågar efter val, inte efter belopp. Den gäller även en
+  rättelse av en godkänd order som saknar val (Jämtlandsstäd), så den ordern får sin provision innan den rättas.
+- **Säljaren ser hela kalkylen** (beställarens svar på "de ska endast se det som provision"): inget döljs.
+- **Regeln står på ett ställe.** `saljarensProvision` ersätter två kopior av samma if-kedja på servern. Klientens
+  `ndSim` kan inte importera TypeScript, så paritetsprovet kör den mot servern i stället.
+- **`redigeraOgodkand` läste aldrig `tjanster`.** En tjänst som lades till eller togs bort i Rätta på en inskickad
+  order försvann tyst. Nu skrivs de, men en oförändrad lista skrivs inte om (en tjänst med egen bindningstid, som Nav
+  2.0 inte kan rita, behåller sin), och säljarens rättelse behåller chefens val (`behallProvision`).
+- **0293, inte 0291/0292:** 0291 är körd av Möten (bekräftelsen), grenen uppgift-kollega har en egen ej körd 0291
+  och säljtavlans gren en ej körd 0292.
+
+**Hårdtestet (beställaren: "hårdtesta allting så att det omöjligt kan finnas något fel någonstans").** Fyra Fable-agenter
+(logik, server, databas, gränssnitt) och en sista granskning av rättelserna. Besluten i rättelserna:
+
+- **Ett belopp i kronor får inte vara större än vad tjänsten är värd i ordern** (`forStorProvision`). Det är en spärr
+  mot felskrivningar (12 000 i stället för 1 200), inte en regel beställaren bett om. Vill någon betala mer än tjänsten
+  är värd tas spärren bort i `src/lib/tjansteprovision.ts`; procent kan redan inte gå över 100. Spärren sitter i
+  regeln (`saljarensProvision`, bara när matrisen är grunden), i rutan (`sattTjansteprovision`) och i formuläret
+  (`ndSim`, före POST), men INTE i tolkningen av formuläret (`tjansterUrFormular`): där vet servern inte om valen
+  används (dolda val postas på finans-, utköps- och fri order) och nekade då en sparning för ett fält ingen såg.
+- **Nekar spärren visar kortet ändå tjänsternas provision och rutan** (`tjanstFel` i regeln och förhandsvisningen).
+  Förut blev en order vars bindningstid kortats efter att chefen satt kronor en återvändsgränd: tjänsterna stod som
+  "ingår", knappen försvann och Godkänn nekades.
+- **Hela kronor avrundas efter att flyttalsbruset tagits bort** (`avrunda` avrundar först till 1e-6): 38,5 räknat som
+  38,4999… gav 38 kr i stället för 39. Samma rad i `ndAvrunda`.
+- **Ordervärdet är exakt i ören** (`affarensVarde`), och utköp/finans jämförs mot det i ören (`storreIOren`), så
+  att ett utköp som är lika stort som ordervärdet inte nekas för en tiondels öre. Produktionsregressionen (35 ordrar,
+  99 vägar genom godkännande och rättelse) gav exakt samma resultat före och efter rättelserna.
+- **Enhet som strider mot valet nekas, var den än står i texten:** "1 200 kr" eller "10kr%" med procent valt, eller
+  "10 %" med kronor valt, läses inte om tyst, utan nekas med en mening som säger vad som är fel. Oläsligt blev förut 0 kr.
+- **Rättelsen av en godkänd orders tjänsteprovision fyller i kundens mejl och tilläggsflaggan** från ordern, annars
+  nekade `redigeraOrder` den (mejlet krävs, och ett tillägg hade blivit en ny order).
+- **`skrivTjanster` lägger tillbaka de gamla raderna** om borttagningen misslyckas efter att de nya skrivits, så att en
+  order aldrig får sina tjänster dubbla. Misslyckas frysningen av kronorna per tjänst säger svaret det.
+- **Listan:** "provision saknas" är ett eget rött märke som bryts till en egen rad under "+N tjänster". Inuti
+  tjänsternas märke gjorde texten kolumnen Affär 56 px bredare och listan rullade i sidled vid 1440 px.
+- **Lämnat som det är, med flit:** en fri order med 0 kr provision går inte att skicka från formuläret (som förut); ett
+  val i procent följer med när bindningstiden ändras; ett val går inte att tömma tillbaka till "inget val"; dolda val
+  som postas på en finansorder ignoreras; finansordrar signerade före 2026-09-01 nekas (finansavgiften fanns inte då);
+  kortets tjänstetabell rullar 16 px i sidled vid 320 px och orderlistan rullar vid 1366 px och smalare, båda exakt
+  som på `main` före ändringen; en tjänst med egen bindningstid räknas på orderns bindningstid i Nav 2.0:s formulär
+  (0 sådana rader i produktionen); ett belopp med ören fryses i hela kronor, så 7 995,50 kr på en tjänst värd
+  7 995,50 kr blir 7 996 kr.
 ## 2026-11-14 · Order: resterna efter skälet (på `main` som `73c447c`, ingen migration; produktionen grön 15:36 UTC)
 
 **Vad:** beställaren 2026-11-14: "gör klart arbetet om det finns mer att göra och sen pusha till main och sen hård

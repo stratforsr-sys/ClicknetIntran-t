@@ -941,7 +941,12 @@ function Affaren({ o, beraknat = null }: { o: Orderrad; beraknat?: number | null
       : o.commission_source === "manager"
         ? "säljchefens egen försäljning"
         : o.commission_source === "buyout"
-          ? "räknad efter utköp"
+          ? // Källan `buyout` är nettosatsen, som sedan 2026-11-13 gäller både utköp och finans.
+            utkop !== null && o.financed === true
+            ? "räknad på det som blev kvar efter utköp och finans"
+            : o.financed === true
+              ? "räknad på det som blev kvar efter finans"
+              : "räknad efter utköp"
           : undefined;
 
   return (

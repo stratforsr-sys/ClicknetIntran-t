@@ -91,11 +91,13 @@ const dir = mkdtempSync(join(tmpdir(), "nav2-order-"));
 writeFileSync(
   join(dir, "rakna.ts"),
   `import { kronor, tolkaBelopp } from "${lib("provision.ts")}";
-import { affarensVarde, gallandeSats } from "${lib("order.ts")}";
+import { affarensVarde, gallandeSats, storreIOren } from "${lib("order.ts")}";
 import { affarenFor, arEgenForsaljning, gallandeChefssats, procentProvision, restpostenAtNoll } from "${lib("chefsprovision.ts")}";
 import { gallandeUtkopssats, harUtkop, nettoEfterUtkop, utkopsprovision } from "${lib("utkop.ts")}";
 import { finansavgift, finansprocent, gallandeFinanssats, nettoEfterFinans } from "${lib("finans.ts")}";
 import * as orderregler from "${lib("orderregler.ts")}";
+import { saljarensProvision } from "${lib("saljarprovision.ts")}";
+import { saknasText } from "${lib("tjansteprovision.ts")}";
 const { paketManadsbelopp } = orderregler as any;
 ${block(/^type Framrakning =/)}
 export ${rakna}
@@ -155,6 +157,21 @@ ok("förhandsvisningen: ordervärdet 31 080 kr med rabatten", fhRabatt.varde ===
 ok("förhandsvisningen: säljarens provision är matrisens", fhRabatt.provision === fhLista.provision && fhRabatt.kalla === "matrix");
 ok("förhandsvisningen: chefens egen 12 432 kr, som godkännandet", fhChef.provision === chefRabatt.satt.commission_amount, String(fhChef.provision));
 ok("förhandsvisningen utan rabatt: som förut", fhLista.varde === 35880 && F.forhandsprovision({ ...inskickad, discounted_monthly_amount: null }, [], satserna).varde === 35880);
+{
+  // Granskningen 2026-11-14: säljaren kortar bindningstiden efter att chefen satt 8 000 kr på SEO (500 kr/mån).
+  const seo = { name: "SEO", billing: "manad", amount: 500, follows_order: true, term_months: null, starts_on: null, provision: { form: "belopp", varde: 8000 } };
+  const satser12 = { ...satserna, satser: [...satserna.satser, { id: "r12", package_id: 2, term_months: 12, amount: 1200, valid_from: "2026-01-01", valid_to: null }] };
+  const fh24 = F.forhandsprovision(inskickad, [seo], satser12);
+  const fh12 = F.forhandsprovision({ ...inskickad, term_months: 12 }, [seo], satser12);
+  ok("24 mån: 8 000 kr på SEO (12 000 kr) går, matrisen är grunden", fh24.fel === null && fh24.kalla === "matrix" && fh24.tjanstFel === false, JSON.stringify({ fel: fh24.fel, kalla: fh24.kalla }));
+  ok("12 mån: kronspärren nekar, och felet sägs sitta i tjänsternas provision", fh12.provision === null && /större än vad tjänsten är värd/.test(fh12.fel) && fh12.tjanstFel === true, JSON.stringify({ fel: fh12.fel, t: fh12.tjanstFel }));
+  const ra = { id: "o1", order_number: 77, company_name: "Prov AB", org_number: "556000-0000", contact_name: "K", contact_phone: "070", contact_email: null, customer_street: null, customer_postal_code: null, customer_city: null, starts_on: null, ends_on: null, period_month: "2026-10-01", cancel_period_month: null, status: "submitted", is_addon: false, commission_amount: null, commission_source: null, order_value: null, order_value_source: null, note: null, created_by: null, created_at: "2026-10-20T10:00:00Z", approved_at: null, cancelled_on: null, cancel_reason: null, renewal_outcome: null, commission_pending: false, ...inskickad, term_months: 12 };
+  const ctx = { satser: satser12, tjanster: [seo], samtal: [], bilagor: [], crm: null, namn: () => "Säljaren" };
+  const kort = F.formaOrder(ra, ctx).order;
+  ok("kortet: tjänsternas provision gäller fortfarande, så rutan att rätta den syns", kort.tjGaller === true && kort.tjp[0]?.v === 8000, JSON.stringify({ g: kort.tjGaller, tjp: kort.tjp }));
+  const fin = F.formaOrder({ ...ra, financed: true }, { ...ctx, satser: { ...satser12, finanssatser: [{ id: "f", percent_per_year: 11, valid_from: "2026-01-01", valid_to: null }], utkopssatser: [{ id: "u", percent: 12, valid_from: "2026-01-01", valid_to: null }] } }).order;
+  ok("finansorder: tjänsterna ingår, ingen ruta (oförändrat)", fin.tjGaller === false, JSON.stringify({ g: fin.tjGaller }));
+}
 
 // ---------------------------------------------------------------------------
 rubrik("Godkännandet en gång (D6)");
@@ -301,6 +318,92 @@ rubrik("Orderns extra kolumner läses för urvalet, inte för alla order (D9a, g
   const rader = kalla.split("\n").filter((r) => /from\("sales_order"\)\.select\("id, order_number, approved_by/.test(r));
   ok("sales_order läses för extra kolumner på ett ställe", rader.length === 1);
   ok("... och bara för urvalets id i omgångar", rader.length === 1 && /\.in\("id", del\)/.test(rader[0]) && /delaUpp\(ids, 100\)/.test(kalla));
+}
+
+// ---------------------------------------------------------------------------
+// 0293 och nettoregeln (beställaren 2026-11-13), genom den riktiga
+// `raknaFramProvision` — inte bara den rena funktionen. Paket 2, 24 mån, 1 495
+// kr: ordervärdet 35 880 kr, matrisen 2 400 kr, nettosatsen 12 %, finans 11 %/år.
+// ---------------------------------------------------------------------------
+rubrik("Tjänsternas provision och finansen genom raknaFramProvision (0293, 2026-11-13)");
+{
+  const UPP = { name: "Uppstartsavgift", billing: "engang", amount: 4000, follows_order: false, term_months: null, starts_on: null };
+  const SEO = { name: "SEO", billing: "manad", amount: 1000, follows_order: true, term_months: null, starts_on: null };
+
+  const utanVal = await berakna(SALJ, { tjanster: [UPP, SEO] });
+  ok("tjänster utan val: godkännandet nekas med namnen", !utanVal.klar && utanVal.fel.includes("Uppstartsavgift och SEO"), utanVal.fel);
+
+  const enSaknas = await berakna(SALJ, { tjanster: [{ ...UPP, provision: { form: "belopp", varde: 0 } }, SEO] });
+  ok("0 kr är ett val; bara SEO nämns", !enSaknas.klar && enSaknas.fel.includes("tjänsten SEO") && !enSaknas.fel.includes("Uppstart"), enSaknas.fel);
+
+  const medVal = await berakna(SALJ, { tjanster: [{ ...UPP, provision: { form: "belopp", varde: 500 } }, { ...SEO, provision: { form: "procent", varde: 10 } }] });
+  // värdet 35 880 + 4 000 + 24 000 = 63 880; SEO 10 % av 24 000 = 2 400; säljaren 2 400 + 500 + 2 400 = 5 300
+  ok("med val: ordervärdet 63 880 kr", medVal.klar && medVal.satt.order_value === 63880, String(medVal.satt?.order_value ?? medVal.fel));
+  ok("med val: säljaren får matrisen plus tjänsterna (2 400 + 500 + 2 400 = 5 300)", medVal.satt?.commission_amount === 5300, String(medVal.satt?.commission_amount));
+  ok("med val: källan är matrisen med sin rad", medVal.satt?.commission_source === "matrix" && medVal.satt?.commission_rate_id === "r24");
+  ok("med val: kronorna per tjänst för frysningen", JSON.stringify(medVal.tjanster.map((t) => t.provision_kr)) === "[500,2400]" && medVal.tjansteprovision === 2900);
+  ok("med val: övertäcket på det som blir kvar efter säljaren (10 % av 58 580 = 5 858)", medVal.overtack?.base === 58580 && medVal.overtack?.amount === 5858, JSON.stringify(medVal.overtack));
+
+  const utanProv = await raknaFramProvision(2, 24, "2026-10-20", SALJ, R.utanProvision(new FormData()), null, { manadsbelopp: null, tjanster: [UPP, SEO], finans: false });
+  ok("utan provision (0275): inga tjänsteval krävs, 0 kr", utanProv.klar && utanProv.satt.commission_amount === 0 && utanProv.tjanster.every((t) => t.provision_kr === null), utanProv.fel ?? "");
+
+  const chefen = await berakna(CHEF, { tjanster: [UPP, SEO] });
+  ok("chefens egen order: ingen spärr, 40 % av hela 63 880 = 25 552, inga tjänstekronor", chefen.klar && chefen.satt.commission_amount === 25552 && chefen.satt.commission_source === "manager" && chefen.tjansteprovision === 0, chefen.fel ?? String(chefen.satt?.commission_amount));
+
+  const fin = await berakna(SALJ, { finans: true });
+  // avgift 22 % av 35 880 = 7 894; kvar 27 986; 12 % = 3 358
+  ok("finans: säljaren får 12 % av det som blir kvar (3 358), inte matrisens 2 400", fin.klar && fin.satt.commission_amount === 3358, String(fin.satt?.commission_amount ?? fin.fel));
+  ok("finans: källan är nettosatsen, utan matrisrad", fin.satt?.commission_source === "buyout" && fin.satt?.commission_rate_id === null);
+  ok("finans: avgiften fryses som förut (7 894)", fin.satt?.finance_amount === 7894 && fin.satt?.financed === true);
+  ok("finans: nettoregeln och nettot står i svaret", fin.nettoregel === "finans" && fin.nettoprocent === 12 && fin.netto === 27986);
+  ok("finans: övertäcket på det som blir kvar efter säljaren (10 % av 24 628 = 2 463)", fin.overtack?.amount === 2463, JSON.stringify(fin.overtack));
+
+  const finTj = await berakna(SALJ, { finans: true, tjanster: [UPP, SEO] });
+  ok("finans med tjänster: ingen spärr, tjänsterna ingår i det som blir kvar", finTj.klar && finTj.tjansteprovision === 0, finTj.fel ?? "");
+
+  const finHand = new FormData();
+  finHand.set("provision_form", "belopp");
+  finHand.set("commission_amount", "3000");
+  const hand = await raknaFramProvision(2, 24, "2026-10-20", SALJ, finHand, null, { manadsbelopp: null, tjanster: [], finans: true });
+  ok("finans med handsatt belopp: beloppet går före nettoregeln", hand.klar && hand.satt.commission_amount === 3000 && hand.satt.commission_source === "manual" && hand.nettoregel === null);
+
+  const utk = await raknaFramProvision(2, 24, "2026-10-20", SALJ, new FormData(), 5880, { manadsbelopp: null, tjanster: [], finans: false });
+  ok("utköp som förut: 12 % av 30 000 = 3 600", utk.klar && utk.satt.commission_amount === 3600 && utk.nettoregel === "utkop");
+}
+
+// Kvittensen och notisen säger varför beloppet blev som det blev.
+{
+  const k = act.slice(act.indexOf("function kvittensAvdrag("), act.indexOf("function provisionsforklaring("));
+  ok("kvittensen förklarar nettoregeln också utan utköp", /som blev kvar, i stället för matrisens belopp/.test(k));
+  ok("kvittensen säger inte 12 % om en handsatt provision på en utköpsaffär", /if \(r\.nettoregel && r\.utkopet\)/.test(k));
+  const gk2 = act.slice(act.indexOf("export async function godkannOrder("), act.indexOf("export async function redigeraOrder("));
+  ok("godkännandet fryser tjänsternas kronor efter att ordern skrivits", gk2.indexOf("frysTjanster(") > gk2.indexOf("godkannandeSkrevs(") && gk2.indexOf("frysTjanster(") > 0);
+  const red2 = act.slice(act.indexOf("export async function redigeraOrder("), act.indexOf("export async function sattTjansteprovision("));
+  ok("rättelsen lägger formulärets val på databasens tjänster", /valUrFormular\(tjansterna, tolkat\.tjanster\)/.test(red2));
+  ok("rättelsen fryser tjänsterna efter ordern", red2.indexOf("frysTjanster(") > red2.indexOf("if (orderfel)"));
+  const st = act.slice(act.indexOf("export async function sattTjansteprovision("), act.indexOf("export async function returneraOrder("));
+  ok("sattTjansteprovision kräver hanterare", /await kravHanterare\(\)/.test(st));
+  ok("sattTjansteprovision: en godkänd order går genom redigeraOrder", /await redigeraOrder\(/.test(st));
+  ok("sattTjansteprovision: bara när matrisen är grunden på en godkänd order", /commission_source !== "matrix"/.test(st));
+  const sk = act.slice(act.indexOf("export async function skapaOrder("), act.indexOf("async function raknaFramProvision("));
+  ok("skapaOrder läser tjänsternas provision bara från hanterare", /tjansterUrFormular\(form, \{ provision: hanterare \}\)/.test(sk));
+  const ro = act.slice(act.indexOf("export async function redigeraOgodkand("));
+  ok("redigeraOgodkand skriver tjänsterna och behåller valen och bindningstiden för båda rollerna (I4, M5)", /behallBindning\(behallProvision\(tjansteval\.tjanster, gamla\), gamla\)/.test(ro.slice(0, 20000)));
+  ok("redigeraOgodkand tolkar tjänsterna före skrivningen av ordern", ro.indexOf("tjansterUrFormular(form") < ro.indexOf(".update(efter)") && ro.indexOf("tjansterUrFormular(form") > 0);
+  ok("redigeraOgodkand prövar statusen igen innan tjänsterna skrivs (M4)", /Ordern hann godkännas\. Tjänsterna ändrades inte/.test(ro.slice(0, 20000)));
+  const tpo = act.slice(act.indexOf("async function tjansterPaOrder("), act.indexOf("async function frysTjanster("));
+  ok("tjansterPaOrder: ett läsfel stoppar, det blir aldrig en tom lista (I2)", /if \(error\) throw new Error/.test(tpo));
+  const skr = act.slice(act.indexOf("async function skrivTjanster("), act.indexOf("async function tjansterPaOrder("));
+  ok("skrivTjanster: de nya raderna in före de gamla ut (I2)", skr.indexOf(".insert(") > 0 && skr.indexOf(".insert(") < skr.indexOf(".delete()"));
+  const gk3 = act.slice(act.indexOf("export async function godkannOrder("), act.indexOf("export async function redigeraOrder("));
+  ok("godkännandet räknar (och spärrar) före undantaget för säljsamtal skrivs (M2)", gk3.indexOf("raknaFramProvision(") < gk3.indexOf('from("saljsamtal_undantag")'));
+  ok("sattTjansteprovision vägrar byta grund på en godkänd matrisorder med finans eller utköp (C1)", /if \(godkand && \(rad\.financed \|\| rad\.buyout_amount != null\)\)/.test(st));
+  ok("sattTjansteprovision svarar med felet när frysningen faller (M1)", /if \(frysfel\.length\) return \{ fel:/.test(st));
+  const sida = las("src/nav2/utkast.html");
+  ok("Godkänn utan säljsamtal öppnar tjänsternas ruta först (M2)", /if \(d\.ndutangodk\)\{ if \(typeof ndTjSaknasOppna === 'function' && ndTjSaknasOppna\(/.test(sida));
+  ok("hamtaTjanster: ett läsfel stoppar vyn (I2)", /if \(error\) throw new Error\(`Tjänsterna gick inte att läsa/.test(las("src/lib/order-server.ts")));
+  ok("rutten tolkar utkastets tjänster med provisionen bara för hanterare", /tjansterUrFormular\(f, \{ provision: hanterare \}\)/.test(rutt));
+  ok("rutten har handlingen tjanst-provision", /case "tjanst-provision":[\s\S]{0,300}sattTjansteprovision/.test(rutt));
 }
 
 console.log(fel ? `\n\x1b[31m${fel} prov föll.\x1b[0m` : "\n\x1b[32mAlla prov gick igenom.\x1b[0m");

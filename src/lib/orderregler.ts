@@ -9,6 +9,7 @@
  */
 import { kronor, tolkaBelopp } from "./provision.ts";
 import { giltigBindningstid, type Tjanst } from "./order.ts";
+import { provisionUrRad } from "./tjansteprovision.ts";
 
 /**
  * Tillaggstjansterna, ur formularet.
@@ -27,7 +28,16 @@ import { giltigBindningstid, type Tjanst } from "./order.ts";
  * anvandaren i stallet for en rad i databasen.
  * ===========================================================================
  */
-export function tjansterUrFormular(form: FormData): { tjanster: Tjanst[] } | { fel: string } {
+export function tjansterUrFormular(
+  form: FormData,
+  /**
+   * `provision`: läs tjänsternas provision (0293). Bara säljchef, VD och ekonomi
+   * sätter den (beställaren 2026-11-13), så anroparen skickar `farHantera(user)`.
+   * För alla andra kastas valen här, en gång — en säljare kan inte sätta sin
+   * egen provision genom att skicka fälten själv.
+   */
+  { provision = false }: { provision?: boolean } = {},
+): { tjanster: Tjanst[] } | { fel: string } {
   const text = String(form.get("tjanster") ?? "").trim();
   if (!text) return { tjanster: [] };
 
@@ -82,14 +92,27 @@ export function tjansterUrFormular(form: FormData): { tjanster: Tjanst[] } | { f
       }
     }
 
-    tjanster.push({
+    const val = provision ? provisionUrRad(rad, namn) : null;
+    if (val && "fel" in val) return { fel: val.fel };
+
+    const tjanst: Tjanst = {
       name: namn,
       billing: fakturering,
       amount: belopp,
       follows_order: fakturering === "manad" && !egenBindning,
       term_months: manader,
       starts_on: start,
-    });
+      provision: val,
+    };
+
+    // INGEN KRONSPÄRR HÄR (granskningen 2026-11-14). Tolkningen vet inte om valen
+    // används: på en finans-, utköps- eller fri order och på chefens egen är de
+    // dolda men postas ändå, och Nav 2.0 postar en tjänst med egen bindningstid som
+    // om den följde ordern. Spärren här nekade då en sparning för ett fält ingen
+    // såg. Spärren sitter i regeln (`saljarensProvision`), som bara prövar den när
+    // matrisen är grunden, och i `sattTjansteprovision`; formuläret nekar före POST.
+
+    tjanster.push(tjanst);
   }
 
   return { tjanster };

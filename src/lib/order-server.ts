@@ -5,6 +5,7 @@ import { AVTALSSLUT_VARSEL_DAGAR, type Order, type Paket, type Sats, type Tjanst
 import type { Chefssats } from "@/lib/chefsprovision";
 import type { Utkopssats } from "@/lib/utkop";
 import type { Finanssats } from "@/lib/finans";
+import { kronorPaRaden, valPaRaden } from "@/lib/tjansteprovision";
 import type { Chefspost } from "@/lib/provision-motor";
 import {
   ORDERTAK,
@@ -437,14 +438,19 @@ export async function hamtaTjanster(orderIds: string[]): Promise<Map<string, Tja
   if (orderIds.length === 0) return ut;
 
   const rls = await supabaseServer();
-  const { data } = await rls
+  const { data, error } = await rls
     .from("sales_order_service")
     .select(
       "id, order_id, name, billing, amount, follows_order, term_months, starts_on, ends_on," +
-        " renewal_outcome, renewal_reason, sort",
+        " renewal_outcome, renewal_reason, sort, commission_form, commission_value, commission_amount",
     )
     .in("order_id", orderIds)
     .order("sort");
+
+  // ETT LÄSFEL ÄR INTE "INGA TJÄNSTER" (granskningen 2026-11-13, I2). En order som
+  // ritas utan sina tjänster skickar en tom lista när den rättas, och den hade då
+  // skrivits över. Hellre en vy som inte laddar än en som visar fel affär.
+  if (error) throw new Error(`Tjänsterna gick inte att läsa: ${error.message}`);
 
   // ===========================================================================
   // CASTEN AR INTE KOSMETISK, och den fallde bygget 2026-09-24.
@@ -472,6 +478,10 @@ export async function hamtaTjanster(orderIds: string[]): Promise<Map<string, Tja
     renewal_outcome: string | null;
     renewal_reason: string | null;
     sort: number;
+    // 0293: tjänstens provision. Kolumnerna måste stå i strängen ovan för hand.
+    commission_form: string | null;
+    commission_value: number | string | null;
+    commission_amount: number | string | null;
   }[];
 
   for (const r of rader) {
@@ -490,6 +500,9 @@ export async function hamtaTjanster(orderIds: string[]): Promise<Map<string, Tja
         ends_on: r.ends_on === null ? null : String(r.ends_on).slice(0, 10),
         renewal_outcome: (r.renewal_outcome as Tjansterad["renewal_outcome"]) ?? null,
         renewal_reason: (r.renewal_reason as string | null) ?? null,
+        // Samma tolkning som skrivvägarna (`tjansterPaOrder`): NaN är inget val.
+        provision: valPaRaden(r.commission_form, r.commission_value),
+        provision_kr: kronorPaRaden(r.commission_amount),
       },
     ]);
   }

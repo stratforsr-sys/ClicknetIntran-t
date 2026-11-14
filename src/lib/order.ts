@@ -18,6 +18,7 @@
  */
 
 import { svensktDatum } from "./klocka.ts";
+import type { Tjanstprovision } from "./tjansteprovision.ts";
 
 // -----------------------------------------------------------------------------
 // Formen pa det databasen bar. Speglar 0034 utan att veta om databasen.
@@ -690,6 +691,15 @@ export type Tjanst = {
   follows_order: boolean;
   term_months: number | null;
   starts_on: string | null;
+  /** Radens id när tjänsten redan står på en order. Saknas i ett formulär. */
+  id?: string;
+  /**
+   * Provisionen hanteraren valt för tjänsten (0293), eller null när ingen valt.
+   * Se `tjansteprovision.ts`: null är "inget val", aldrig "noll kronor".
+   */
+  provision?: Tjanstprovision | null;
+  /** Kronorna valet gav, FRYSTA vid godkännandet. Null före det, och när matrisen inte är grunden. */
+  provision_kr?: number | null;
 };
 
 /**
@@ -776,5 +786,17 @@ export function affarensVarde(
   tjanster: Tjanst[] = [],
 ): number {
   const grund = ordervardeFor(manadsbelopp, loptid);
-  return tjanster.reduce((summa, t) => summa + tjanstensVarde(t, loptid), grund);
+  // I HELA ÖREN (hårdtestet 2026-11-13). Summan av belopp med ören blir annars
+  // 17 940,129999… i stället för 17 940,13, och ett utköp på exakt hela värdet
+  // nekades som "större än ordervärdet" av bruset. Varje del är redan hela ören.
+  return Math.round(tjanster.reduce((summa, t) => summa + tjanstensVarde(t, loptid), grund) * 100) / 100;
+}
+
+/**
+ * Är `a` större än `b`, räknat i hela ören? Utköp och finansavgift mot
+ * ordervärdet jämförs så, i servern och i förhandsvisningen, så att
+ * flyttalsbruset aldrig avgör om en order nekas.
+ */
+export function storreIOren(a: number, b: number): boolean {
+  return Math.round(a * 100) > Math.round(b * 100);
 }

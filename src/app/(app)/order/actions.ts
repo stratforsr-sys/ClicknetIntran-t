@@ -58,6 +58,7 @@ import {
   harStangdPeriod,
   normaliseraOrgnr,
   periodFor,
+  storreIOren,
   tidigasteStart,
   type Orderstatus,
   type Sats,
@@ -88,6 +89,19 @@ import {
   procenttext,
   type Finanssats,
 } from "@/lib/finans";
+import { nettoregeltext, saljarensProvision, type Nettoregel } from "@/lib/saljarprovision";
+import {
+  behallBindning,
+  behallProvision,
+  forStorProvision,
+  forStorText,
+  kronorPaRaden,
+  saknasText,
+  tjanstRad,
+  valPaRaden,
+  valtext,
+  valUrFormular,
+} from "@/lib/tjansteprovision";
 
 /**
  * Finansvalet, ur ett formular (0079).
@@ -171,39 +185,57 @@ export type Orderstate = { fel?: string; ok?: string; orderId?: string; kravSkal
 async function skrivTjanster(orderId: string, tjanster: Tjanst[]): Promise<string | null> {
   const db = supabaseAdmin();
 
-  const { error: raderafel } = await db
+  // DE NYA RADERNA FÖRST, DE GAMLA SEDAN (granskningen 2026-11-13, I2). Förut
+  // raderades de gamla först, och föll insättningen stod ordern utan tjänster —
+  // och utan deras värde i nästa godkännande. Nu tas bara de rader bort som
+  // fanns före, och bara när de nya redan står där.
+  const { data: fore, error: lasfel } = await db
     .from("sales_order_service")
-    .delete()
+    .select("id")
     .eq("order_id", orderId)
     .is("renewal_outcome", null);
+  if (lasfel) return `Tjänsterna kunde inte skrivas: ${lasfel.message}`;
 
-  if (raderafel) return `Tjänsterna kunde inte skrivas: ${raderafel.message}`;
+  let insatta: string[] = [];
+  if (tjanster.length > 0) {
+    const { data, error } = await db
+      .from("sales_order_service")
+      .insert(tjanster.map((t, i) => tjanstRad(orderId, t, i)))
+      .select("id");
+    if (error) return `Tjänsterna kunde inte skrivas: ${error.message}`;
+    insatta = (data ?? []).map((r) => String((r as { id: string }).id));
+  }
 
-  if (tjanster.length === 0) return null;
+  const gamla = (fore ?? []).map((r) => String((r as { id: string }).id));
+  if (gamla.length === 0) return null;
+  const { error: raderafel } = await db.from("sales_order_service").delete().in("id", gamla);
+  if (!raderafel) return null;
 
-  const { error } = await db.from("sales_order_service").insert(
-    tjanster.map((t, i) => ({
-      order_id: orderId,
-      name: t.name,
-      billing: t.billing,
-      amount: t.amount,
-      follows_order: t.follows_order,
-      term_months: t.term_months,
-      starts_on: t.starts_on,
-      sort: i,
-    })),
-  );
-
-  return error ? `Tjänsterna kunde inte skrivas: ${error.message}` : null;
+  // DE GAMLA STÅR KVAR, SÅ DE NYA TAS BORT IGEN (hårdtestet 2026-11-13). Annars
+  // står varje tjänst två gånger på ordern, och nästa godkännande räknar dess
+  // värde och provision dubbelt — utan att någon ser det. Hellre den gamla
+  // listan oförändrad och ett fel på skärmen.
+  if (insatta.length > 0) {
+    const { error: backfel } = await db.from("sales_order_service").delete().in("id", insatta);
+    if (backfel) {
+      return `Tjänsterna står dubbelt på ordern: de gamla raderna gick inte att ta bort (${raderafel.message}), och inte de nya heller (${backfel.message}). Ta bort dubbletterna innan ordern godkänns.`;
+    }
+  }
+  return `Tjänsterna ändrades inte: de gamla raderna gick inte att ta bort (${raderafel.message}).`;
 }
 
 /** Tjansterna som ALREDAN star pa en order, i den form rakningen vill ha dem. */
 async function tjansterPaOrder(orderId: string): Promise<Tjanst[]> {
-  const { data } = await supabaseAdmin()
+  const { data, error } = await supabaseAdmin()
     .from("sales_order_service")
-    .select("name, billing, amount, follows_order, term_months, starts_on")
+    .select("id, name, billing, amount, follows_order, term_months, starts_on, commission_form, commission_value, commission_amount")
     .eq("order_id", orderId)
     .order("sort");
+
+  // ETT LÄSFEL ÄR INTE "INGA TJÄNSTER" (granskningen 2026-11-13, I2). En tom lista
+  // hade godkänt ordern utan tjänsternas värde och provision, och en rättelse hade
+  // bokfört skillnaden som ett avdrag. Anroparna står i try/catch och svarar med felet.
+  if (error) throw new Error(`Orderns tjänster gick inte att läsa: ${error.message}`);
 
   // Casten av samma skal som `hamtaRad` ovan: en select-strang over en viss
   // langd ger `GenericStringError` i stallet for en radtyp. Strangen har ar
@@ -218,20 +250,97 @@ async function tjansterPaOrder(orderId: string): Promise<Tjanst[]> {
     follows_order: Boolean(t.follows_order),
     term_months: t.term_months === null ? null : Number(t.term_months),
     starts_on: t.starts_on === null ? null : String(t.starts_on).slice(0, 10),
+    id: String(t.id),
+    // 0293: valet och de frysta kronorna. Ett val utan form eller tal ar inget val.
+    provision: valPaRaden(t.commission_form, t.commission_value),
+    provision_kr: kronorPaRaden(t.commission_amount),
   }));
 }
 
 /**
- * Meningen som forklarar en utkopsaffar, eller tomt nar det inte ar en.
+ * Fryser tjansternas provision pa raderna (0293), efter att ordern skrivits.
  *
- * STAR I KVITTENSEN OCH I NOTISEN, inte bara i en tabell. Den som godkant en
- * order pa 11 940 kr och far se 1 433 kr i provision ska fa veta VARFOR i samma
- * andetag — annars ar nasta steg ett mejl till saljchefen, och det ar precis
- * den sortens fraga navet finns for att slippa.
+ * KRONORNA STAR REDAN I `commission_amount` PA ORDERN — det ar den summan
+ * huvudboken, overtacket och lonen raknar pa. Raderna bar uppdelningen, sa att
+ * saljaren och chefen ser vad varje tjanst gav. Faller skrivningen ar ordern
+ * anda ratt; det som saknas ar uppdelningen, och det star i loggen.
  */
-function utkopstext(u: { utkop: number; netto: number; procent: number } | null): string {
-  if (!u) return "";
-  return ` Utköpet ${kronor(u.utkop)} är avdraget, så provisionen är ${u.procent} % av ${kronor(u.netto)}.`;
+/**
+ * Raden i svaret när uppdelningen per tjänst inte frös (hårdtestet 2026-11-13).
+ * Summan på ordern är rätt — det är den lönen räknar på — men en tyst miss hade
+ * lämnat tjänsternas kronor tomma utan att någon visste varför.
+ */
+function frysfelText(fel: string[]): string {
+  return fel.length
+    ? " Summan är rätt, men kronorna per tjänst sparades inte. Spara provisionen på tjänsterna igen."
+    : "";
+}
+
+async function frysTjanster(user: CurrentUser, orderId: string, tjanster: Tjanst[]): Promise<string[]> {
+  const db = supabaseAdmin();
+  const fel: string[] = [];
+  for (const t of tjanster) {
+    if (!t.id) continue;
+    const { error } = await db
+      .from("sales_order_service")
+      .update({
+        commission_form: t.provision?.form ?? null,
+        commission_value: t.provision?.varde ?? null,
+        commission_amount: t.provision_kr ?? null,
+      })
+      .eq("id", t.id)
+      .eq("order_id", orderId);
+    if (error) fel.push(`${t.name}: ${error.message}`);
+  }
+  if (fel.length) await logga(user, "sales_order.service_commission_failed", orderId, { fel });
+  return fel;
+}
+
+/**
+ * Kvittensens förklaring av avdragen och tjänsterna, eller tomt.
+ *
+ * Sedan 2026-11-13 ger finansen samma 12 % av det som blir kvar som utköpet
+ * gör. Utköpets mening ("så provisionen är 12 % av …") får därför bara stå när
+ * nettoregeln faktiskt gav beloppet — en handsatt provision eller chefens egen
+ * sats på en utköpsaffär är inte 12 %, och kvittensen sa förut att den var det.
+ */
+function kvittensAvdrag(r: Extract<Framrakning, { klar: true }>): string {
+  let text = finanstext(r.finansen);
+  if (r.nettoregel && r.utkopet) {
+    text += ` Utköpet ${kronor(r.utkopet.utkop)} är avdraget, så provisionen är ${r.nettoprocent} % av ${kronor(r.netto)}.`;
+  } else if (r.nettoregel) {
+    text += ` Provisionen är ${r.nettoprocent} % av ${kronor(r.netto)} som blev kvar, i stället för matrisens belopp.`;
+  } else if (r.utkopet) {
+    text += ` Utköpet ${kronor(r.utkopet.utkop)} är avdraget från ordervärdet.`;
+  }
+  if (r.tjanster.some((t) => t.provision_kr != null)) {
+    text += ` Tjänsterna ger ${kronor(r.tjansteprovision)} i provision ovanpå matrisen.`;
+  }
+  return text;
+}
+
+/**
+ * Notisens rad om provisionen, eller null när ingen förklaring behövs (då
+ * skriver anroparen sin vanliga rad). Samma tre fall som `kvittensAvdrag`.
+ */
+function provisionsforklaring(r: Extract<Framrakning, { klar: true }>): string | null {
+  const p = `Provision ${kronor(r.satt.commission_amount)}`;
+  if (r.nettoregel) {
+    return `${p} · ${nettoregeltext(
+      r.nettoregel,
+      { procent: r.nettoprocent ?? 0, netto: r.netto, utkop: r.satt.buyout_amount, finans: r.satt.finance_amount },
+      kronor,
+    )}`;
+  }
+  if (r.tjanster.some((t) => t.provision_kr != null)) {
+    return `${p} · matrisen ${kronor(r.satt.commission_amount - r.tjansteprovision)} + tjänsterna ${kronor(r.tjansteprovision)}`;
+  }
+  if (r.finansen && r.utkopet) {
+    return `${p} · utköp ${kronor(r.utkopet.utkop)} och finans ${kronor(r.finansen.avgift)} avdragna från ordervärdet`;
+  }
+  if (r.finansen) return `${p} · finans ${kronor(r.finansen.avgift)} avdragen från ordervärdet`;
+  if (r.utkopet) return `${p} · utköp ${kronor(r.utkopet.utkop)} avdraget från ordervärdet`;
+  return null;
 }
 
 /**
@@ -307,6 +416,8 @@ type Orderrad_skrivning = {
   discounted_monthly_amount: number | string | null;
   /** 0275. Ordern lades upp utan provision; den laggs till senare. */
   commission_pending: boolean | null;
+  /** Grunden for en godkand orders provision. `sattTjansteprovision` laser den (0293). */
+  commission_source: string | null;
 };
 
 async function hamtaRad(id: string): Promise<Orderrad_skrivning | null> {
@@ -323,7 +434,7 @@ async function hamtaRad(id: string): Promise<Orderrad_skrivning | null> {
         " monthly_amount, commission_amount, buyout_amount, financed," +
         // 0078. Godkannandet laser dem nar dess eget formular inte bar nagon
         // provision — se `medAngivenProvision`.
-        " proposed_commission_amount, proposed_commission_percent, discounted_monthly_amount, commission_pending",
+        " proposed_commission_amount, proposed_commission_percent, discounted_monthly_amount, commission_pending, commission_source",
     )
     .eq("id", id)
     .maybeSingle();
@@ -342,7 +453,18 @@ async function hamtaRad(id: string): Promise<Orderrad_skrivning | null> {
  * provisionen ar 12 % av nettot, och den ar ingenting an.
  */
 function provisionenVantar(r: Extract<Framrakning, { klar: true }>): Extract<Framrakning, { klar: true }> {
-  return { ...r, overtack: null, utkopet: null, handsattProcent: null, restpostenKlipptes: false };
+  return {
+    ...r,
+    overtack: null,
+    utkopet: null,
+    handsattProcent: null,
+    restpostenKlipptes: false,
+    // 0293 och nettoregeln: ingen provision an, alltsa inga tjanstekronor och ingen 12 %-text.
+    tjanster: r.tjanster.map((t) => ({ ...t, provision_kr: null })),
+    tjansteprovision: 0,
+    nettoregel: null,
+    nettoprocent: null,
+  };
 }
 
 
@@ -648,7 +770,8 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       return { fel: "Avtalet kan börja gälla högst ett år före signeringen." };
     }
 
-    const tjansteval = tjansterUrFormular(form);
+    // Tjansternas provision (0293) lases bara fran hanterare; se `tjansterUrFormular`.
+    const tjansteval = tjansterUrFormular(form, { provision: hanterare });
     if ("fel" in tjansteval) return { fel: tjansteval.fel };
 
     // Rabatten står först i anteckningen, som utkastets ordSkapa skrev den: chefen ser den vid godkännandet.
@@ -850,7 +973,8 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
 
     if (error || !rad) return { fel: `Ordern sparades inte: ${error?.message ?? "okänt fel"}` };
 
-    const tjanstfel = await skrivTjanster(rad.id, tjansteval.tjanster);
+    // Godkand direkt: tjansterna med sina frysta kronor (0293). Annars valen utan kronor.
+    const tjanstfel = await skrivTjanster(rad.id, affar ? affar.tjanster : tjansteval.tjanster);
     if (tjanstfel) {
       return {
         fel: `${tjanstfel} Ordern ligger kvar som utkast på ${bolag} — komplettera den där.`,
@@ -998,7 +1122,7 @@ export async function skapaOrder(_prev: Orderstate, form: FormData): Promise<Ord
       : "";
     // Finansen fore utkopet: utkopstexten namner nettot, och det nettot ar
     // redan efter finansavgiften.
-    const utkopet = finanstext(affar?.finansen ?? null) + utkopstext(affar?.utkopet ?? null);
+    const utkopet = affar ? kvittensAvdrag(affar) : "";
 
     // EN INSKICKAD ORDER MED UTKOP SAGER DET OCKSA, men utan procentsatsen:
     // beloppen raknas forst vid godkannandet, och ett tal i kvittensen som
@@ -1111,6 +1235,19 @@ type Framrakning =
       handsattProcent: number | null;
       /** Sant nar godkannaren skrev in ett belopp sjalv och ordervardet ar lagre. */
       restpostenKlipptes: boolean;
+      /**
+       * Tjanserna med de kronor som ska FRYSAS pa raderna (0293). `provision_kr`
+       * ar null nar matrisen inte ar grunden — tjansterna ingar da i den.
+       */
+      tjanster: Tjanst[];
+      /** Summan av tjansternas provision, redan inraknad i `commission_amount`. */
+      tjansteprovision: number;
+      /** Utkop, finans eller bada nar nettoregeln gav beloppet (2026-11-13). Annars null. */
+      nettoregel: Nettoregel | null;
+      /** Nettosatsen bakom beloppet nar nettoregeln galler. */
+      nettoprocent: number | null;
+      /** Det som blev kvar av affaren: ordervarde minus utkop minus finansavgift. */
+      netto: number;
     }
   | { klar: false; fel: string };
 
@@ -1319,9 +1456,13 @@ async function raknaFramProvision(
   // ordervardet ar HELA vardet — tjansterna inraknade, fore utkopet. Avgiften
   // ar sedan pengar bolaget aldrig far, precis som utkopet, sa den dras fran
   // samma netto: chefens sats, overtacket, utkopssatsen och en handsatt procent
-  // raknas alla pa det som blir kvar. Paketmatrisens FASTA belopp rors inte —
-  // det ar ocksa bestallarens svar, och det foljer av att matrisgrenen nedan
-  // aldrig laser nettot.
+  // raknas alla pa det som blir kvar.
+  //
+  // SEDAN 2026-11-13 GER FINANSEN OCKSA 12 % AV DET SOM BLIR KVAR, i stallet for
+  // matrisen ("Ifall det bockas i finans sa ska provisionen raknas pa 12% av
+  // det som finns kvar till foretaget. Samma sak med utkop."). Det ersatter
+  // svaret 2026-10-09 att matrisens fasta belopp stod kvar. Se
+  // `saljarensProvision`.
   // ===========================================================================
   let finansen: { avgift: number; procent: number; procentPerAr: number; loptid: number } | null =
     null;
@@ -1359,7 +1500,7 @@ async function raknaFramProvision(
   // UTKOP OCH FINANS MASTE RYMMAS TILLSAMMANS. Var for sig kan de vara rimliga
   // och anda ata upp mer an hela affaren — `sales_order_finans_ryms` i 0079
   // nekar det i databasen, men beskedet ska komma har, med talen i.
-  if (finansen && finansen.avgift + (utkopBelopp ?? 0) > ordervarde) {
+  if (finansen && storreIOren(finansen.avgift + (utkopBelopp ?? 0), ordervarde)) {
     return {
       klar: false,
       fel: `Utköpet (${kronor(utkopBelopp ?? 0)}) och finansavgiften (${kronor(finansen.avgift)}) är tillsammans större än ordervärdet (${kronor(ordervarde)}). Kontrollera talen.`,
@@ -1367,21 +1508,10 @@ async function raknaFramProvision(
   }
 
   if (utkopBelopp !== null) {
-    if (utkopBelopp > ordervarde) {
+    if (storreIOren(utkopBelopp, ordervarde)) {
       return {
         klar: false,
         fel: `Utköpet (${kronor(utkopBelopp)}) är större än ordervärdet (${kronor(ordervarde)}). Kontrollera talen.`,
-      };
-    }
-    // EN SAKNAD SATS BLIR INTE NOLL. En nolla hade sett ut som "utkopsaffarer ger
-    // ingen provision" i stallet for "ingen sats ar satt" — samma resonemang som
-    // `gallandeSats` for om matrisen.
-    // Ett handsatt belopp behover ingen sats — det ar ju det felmeddelandet
-    // nedan foreslar. Fram till 2026-10-09 nekades det anda.
-    if (!utkopssats && !chefenSaljer && !manuellText && !procentText) {
-      return {
-        klar: false,
-        fel: "Ingen utköpssats gällde på signeringsdagen. Lägg en sats under Provision → Regler, eller sätt beloppet för hand.",
       };
     }
   }
@@ -1389,20 +1519,19 @@ async function raknaFramProvision(
   // ---------------------------------------------------------------------------
   // 2. Saljarens provision — den som gallt UTAN chefsregeln
   //
-  // Raknas fram aven nar chefen ar saljaren, eftersom den da inte anvands: valet
-  // ligger i `affarenFor`. Undantaget ar en fri order som chefen tecknat, dar
-  // godkannaren inte behover skriva nagot belopp alls — 40 % av ordervardet ar
-  // hela svaret. Kravet pa ett handsatt belopp galler darfor bara ANDRAS order.
+  // ===========================================================================
+  // VALET AV GRUND GORS I `saljarensProvision` (lib/saljarprovision.ts), samma
+  // funktion som Nav 2.0:s forhandsvisning anropar. Fram till 2026-11-13 stod
+  // if-kedjan har och en gang till i `forhandsprovision`; tva kopior av en
+  // pengaregel ar tva tillfallen att andra den ena.
+  //
+  // Har tolkas bara formularets text till tal. Ordningen, nettoregeln (utkop
+  // ELLER finans, 12 % av det som blir kvar — bestallaren 2026-11-13), matrisen
+  // och tjansternas provision ovanpa den ligger i funktionen och i dess prov.
+  // ===========================================================================
   // ---------------------------------------------------------------------------
-  let saljarprovision: number;
-  let saljarkalla: Saljarkalla;
-
-  // MATRISRADEN SPARAS, inte bara dess belopp. `commission_rate_id` ar det som
-  // gor att en utbetalning gar att harleda till raden den kom ur; villkoret
-  // `sales_order_satskoppling` i 0050 kraver den for `matrix` och forbjuder den
-  // for allt annat.
-  let matrisrad: Sats | null = null;
   let handsattProcent: number | null = null;
+  let handsattBelopp: number | null = null;
 
   if (procentText) {
     // PROCENTEN RAKNAS PA NETTOT, samma bas som chefssatsen och utkopssatsen.
@@ -1412,8 +1541,6 @@ async function raknaFramProvision(
     if (procent < 0 || procent > 100) {
       return { klar: false, fel: "Procentsatsen ska vara mellan 0 och 100." };
     }
-    saljarprovision = procentProvision(netto, procent);
-    saljarkalla = "manual";
     handsattProcent = procent;
   } else if (manuellText) {
     const belopp = tolkaBelopp(manuellText);
@@ -1421,44 +1548,38 @@ async function raknaFramProvision(
     if (belopp < 0) {
       return { klar: false, fel: "Provisionen kan inte vara negativ. En makulering är vägen ut." };
     }
-    saljarprovision = belopp;
-    saljarkalla = "manual";
-  } else if (utkopBelopp !== null && !chefenSaljer) {
-    // ===========================================================================
-    // UTKOPSSATSEN ERSATTER MATRISEN, den kommer inte utover den.
-    //
-    // Bestallarens beslut 2026-09-15, och skalet ar att de tva annars hade
-    // dubbelraknat samma pengar: matrisens 1 500 kr ar redan bolagets andel av
-    // ett FULLT ordervarde, och pa en affar dar en del av vardet gick till att
-    // kopa ut kunden finns inte den marginalen.
-    //
-    // ORDNINGEN AR MEDVETEN. Ett HANDSATT belopp star fore utkopssatsen i
-    // if-kedjan: skriver godkannaren in ett tal har hen sett bada uppgifterna
-    // och tagit ett beslut, och da ska inte en procentsats overprova det.
-    // ===========================================================================
-    saljarprovision = utkopsprovision(utkopssats!, netto);
-    saljarkalla = "buyout";
-  } else if (friOrder && !chefenSaljer) {
-    return {
-      klar: false,
-      fel: "En order utanför paketreglerna behöver både ett ordervärde och en provision.",
-    };
-  } else {
-    const satser: Sats[] = (satsrader ?? []).map((s) => ({ ...s, amount: Number(s.amount) }));
-    matrisrad = gallandeSats(satser, paket, loptid, signerad);
-
-    // Chefen behover ingen matrisrad: hens belopp kommer ur ordervardet. En
-    // saknad sats far darfor bara falla for de andra.
-    if (!matrisrad && !chefenSaljer) {
-      return {
-        klar: false,
-        fel: "Ingen provisionssats gällde för den kombinationen på signeringsdagen. Sätt beloppet för hand med en anteckning.",
-      };
-    }
-
-    saljarprovision = matrisrad?.amount ?? 0;
-    saljarkalla = "matrix";
+    handsattBelopp = belopp;
   }
+
+  const del = saljarensProvision({
+    paket,
+    loptid,
+    signerad,
+    netto,
+    utkop: utkopBelopp,
+    finans: affaren.finans,
+    friOrder,
+    chefenSaljer,
+    handsatt: { procent: handsattProcent, belopp: handsattBelopp },
+    satser: (satsrader ?? []).map((s) => ({ ...s, amount: Number(s.amount) })) as Sats[],
+    nettosats: utkopssats,
+    tjanster: affaren.tjanster,
+  });
+  if (!del.klar) return { klar: false, fel: del.fel };
+
+  // TJANSTERNA UTAN VAL STOPPAR GODKANNANDET (bestallaren 2026-11-13). Spärren
+  // kan bara sla till nar matrisen ar grunden — annars ingar tjansterna i den.
+  // Den galler aven en rattelse: en godkand order med tjanster utan provision
+  // (Jamtlandsstad #40) far sin provision forst, och rattas sedan.
+  if (del.saknas.length > 0) return { klar: false, fel: saknasText(del.saknas) };
+
+  const saljarprovision = del.provision;
+  const saljarkalla: Saljarkalla = del.kalla;
+  // MATRISRADEN SPARAS, inte bara dess belopp. `commission_rate_id` ar det som
+  // gor att en utbetalning gar att harleda till raden den kom ur; villkoret
+  // `sales_order_satskoppling` i 0050 kraver den for `matrix` och forbjuder den
+  // for allt annat.
+  const matrisrad: Sats | null = del.matrisrad;
 
   // ---------------------------------------------------------------------------
   // 3. Affaren. Valet mellan de tva satserna sker HAR och ingen annanstans.
@@ -1510,6 +1631,14 @@ async function raknaFramProvision(
       utkopBelopp === null
         ? null
         : { utkop: utkopBelopp, netto, procent: utkopssats?.percent ?? 0 },
+    // TJANSTERNAS KRONOR (0293) bara nar matrisen blev grunden. Blev det chefens
+    // egen sats ingar tjansterna i hens procent, och ingen krona per tjanst
+    // betalas ut — da star de tomma pa raderna.
+    tjanster: affar.kalla === "matrix" ? del.tjanster : del.tjanster.map((t) => ({ ...t, provision_kr: null })),
+    tjansteprovision: affar.kalla === "matrix" ? del.tjansteprovision : 0,
+    nettoregel: affar.kalla === "buyout" ? del.nettoregel : null,
+    nettoprocent: affar.kalla === "buyout" ? del.procent : null,
+    netto,
   };
 }
 
@@ -1698,37 +1827,6 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
     // Spärren en gång till, här också: en order som skickades in före
     // 2026-10-08 har aldrig passerat den, och ett godkännande är sista steget
     // innan provisionen fryses och ordern går till Inkio.
-    const saljsamtal = await provaSaljsamtal(id);
-    // UTAN SÄLJSAMTAL AVGÖR SUPERADMIN (beställaren 2026-11-03). Skälet står i
-    // `saljsamtal_undantag` (0280): säljarens, eller det superadmin skriver
-    // här. Godkännandet av ordern är godkännandet av undantaget.
-    let undantag = saljsamtal.ok ? null : await hamtaUndantag(id);
-    if (!saljsamtal.ok) {
-      if (!arSuperadmin(user)) return { fel: `${saljsamtal.skal} En order utan säljsamtal godkänns av superadmin.` };
-      if (!undantag) {
-        const skal = String(form.get("utan_skal") ?? "").trim();
-        if (skal.length < 3) return { fel: "Skriv varför ordern godkänns utan säljsamtal." };
-        if (skal.length > 500) return { fel: "Skälet är för långt. Håll det under 500 tecken." };
-        const { error: undantagsfel } = await supabaseAdmin()
-          .from("saljsamtal_undantag")
-          .upsert(
-            { order_id: id, skal, begart_av: user.employee!.id, begart_at: new Date().toISOString(), godkant_av: null, godkant_at: null },
-            { onConflict: "order_id" },
-          );
-        if (undantagsfel) return { fel: `Skälet sparades inte: ${undantagsfel.message}` };
-        undantag = { skal, begart_av: user.employee!.id, godkant_av: null };
-      }
-    }
-
-    // SALJAREN KOMMER UR ORDERN, inte ur formularet. Det ar hen som avgor om
-    // chefsregeln galler, och en order som saljaren skickat in bar redan sitt
-    // `salesperson_id` — godkannaren byter inte saljare, och triggern i 0034
-    // hade nekat det anda.
-    // UTKOPET KOMMER UR ORDERN, inte ur godkannandeformularet. Saljaren angav
-    // det nar hen skickade in; godkannaren ska inte behova upprepa en uppgift
-    // som redan star pa raden — och en tom ruta i formularet hade tyst nollat
-    // den. Ska utkopet andras ar vagen rattelsen, dar bade talet och skalet
-    // hamnar i loggen.
     const utkopPaOrdern = rad.buyout_amount == null ? null : Number(rad.buyout_amount);
 
     // ===========================================================================
@@ -1772,6 +1870,41 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
     if (!raknat.klar) return { fel: raknat.fel };
     const provision = senare ? provisionenVantar(raknat) : raknat;
 
+    // SÄLJSAMTALET EFTER BERÄKNINGEN (granskningen 2026-11-13, M2): en order som nekas
+    // (till exempel för att tjänsterna saknar provision) ska inte lämna ett skrivet
+    // undantag efter sig.
+    const saljsamtal = await provaSaljsamtal(id);
+    // UTAN SÄLJSAMTAL AVGÖR SUPERADMIN (beställaren 2026-11-03). Skälet står i
+    // `saljsamtal_undantag` (0280): säljarens, eller det superadmin skriver
+    // här. Godkännandet av ordern är godkännandet av undantaget.
+    let undantag = saljsamtal.ok ? null : await hamtaUndantag(id);
+    if (!saljsamtal.ok) {
+      if (!arSuperadmin(user)) return { fel: `${saljsamtal.skal} En order utan säljsamtal godkänns av superadmin.` };
+      if (!undantag) {
+        const skal = String(form.get("utan_skal") ?? "").trim();
+        if (skal.length < 3) return { fel: "Skriv varför ordern godkänns utan säljsamtal." };
+        if (skal.length > 500) return { fel: "Skälet är för långt. Håll det under 500 tecken." };
+        const { error: undantagsfel } = await supabaseAdmin()
+          .from("saljsamtal_undantag")
+          .upsert(
+            { order_id: id, skal, begart_av: user.employee!.id, begart_at: new Date().toISOString(), godkant_av: null, godkant_at: null },
+            { onConflict: "order_id" },
+          );
+        if (undantagsfel) return { fel: `Skälet sparades inte: ${undantagsfel.message}` };
+        undantag = { skal, begart_av: user.employee!.id, godkant_av: null };
+      }
+    }
+
+    // SALJAREN KOMMER UR ORDERN, inte ur formularet. Det ar hen som avgor om
+    // chefsregeln galler, och en order som saljaren skickat in bar redan sitt
+    // `salesperson_id` — godkannaren byter inte saljare, och triggern i 0034
+    // hade nekat det anda.
+    // UTKOPET KOMMER UR ORDERN, inte ur godkannandeformularet. Saljaren angav
+    // det nar hen skickade in; godkannaren ska inte behova upprepa en uppgift
+    // som redan star pa raden — och en tom ruta i formularet hade tyst nollat
+    // den. Ska utkopet andras ar vagen rattelsen, dar bade talet och skalet
+    // hamnar i loggen.
+
     // Anteckningskravet ar borta sedan 0060 — se `skapaOrder` for resonemanget.
     const note = String(form.get("note") ?? "").trim() || null;
 
@@ -1804,6 +1937,9 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
       .select("id");
     if (error) return { fel: error.message };
     if (!godkannandeSkrevs(skrivet)) return { fel: "Ordern är redan godkänd eller hann ändras. Ladda om sidan." };
+
+    // 0293: tjansternas kronor fryses pa raderna, nu nar ordern bar summan.
+    const frysfel = await frysTjanster(user, id, provision.tjanster);
 
     if (undantag && !undantag.godkant_av) {
       await supabaseAdmin()
@@ -1863,11 +1999,8 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
         ? `Provisionen läggs till senare · räknas från ${rad.signed_on}`
         : efterslapning
         ? `Provision ${kronor(provision.satt.commission_amount)} · ${manadsnamn(periodFor(rad.signed_on))} var redan fastställd, så beloppet bokförs på ${manadsnamn(efterslapning)}`
-        : provision.utkopet
-          ? `Provision ${kronor(provision.satt.commission_amount)} · ${provision.utkopet.procent} % av ${kronor(provision.utkopet.netto)} efter utköp ${kronor(provision.utkopet.utkop)}${provision.finansen ? ` och finans ${kronor(provision.finansen.avgift)}` : ""}`
-          : provision.finansen
-            ? `Provision ${kronor(provision.satt.commission_amount)} · finans ${kronor(provision.finansen.avgift)} avdragen från ordervärdet`
-            : `Provision ${Number(provision.satt.commission_amount).toLocaleString("sv-SE")} kr · räknas från ${rad.signed_on}`,
+        : (provisionsforklaring(provision) ??
+          `Provision ${Number(provision.satt.commission_amount).toLocaleString("sv-SE")} kr · räknas från ${rad.signed_on}`),
       href: `/order/${id}`,
       objekt: { typ: "sales_order", id },
     });
@@ -1879,14 +2012,15 @@ export async function godkannOrder(_prev: Orderstate, form: FormData): Promise<O
     const klippt = provision.restpostenKlipptes
       ? " Provisionen översteg det som blev kvar av affären, så övertäcket till säljchefen blev noll."
       : "";
-    const utkopet = finanstext(provision.finansen) + utkopstext(provision.utkopet);
+    const utkopet = kvittensAvdrag(provision);
 
     return {
-      ok: senare
-        ? `Ordern är godkänd utan provision. Lägg till provisionen med Rätta när den är bestämd.${utkopet}`
-        : efterslapning
-          ? `Ordern är godkänd. ${manadsnamn(periodFor(rad.signed_on))} var fastställd, så ${kronor(provision.satt.commission_amount)} bokfördes på ${manadsnamn(efterslapning)} med en anteckning om varför.${utkopet}${klippt}`
-          : `Ordern är godkänd och räknas från och med nu.${utkopet}${klippt}`,
+      ok:
+        (senare
+          ? `Ordern är godkänd utan provision. Lägg till provisionen med Rätta när den är bestämd.${utkopet}`
+          : efterslapning
+            ? `Ordern är godkänd. ${manadsnamn(periodFor(rad.signed_on))} var fastställd, så ${kronor(provision.satt.commission_amount)} bokfördes på ${manadsnamn(efterslapning)} med en anteckning om varför.${utkopet}${klippt}`
+            : `Ordern är godkänd och räknas från och med nu.${utkopet}${klippt}`) + frysfelText(frysfel),
     };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
@@ -2215,9 +2349,19 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
             proposed_commission_percent: rad.proposed_commission_percent as number | string | null,
           });
 
+    // TJANSTERNAS PROVISION (0293) far komma ur formularet, men bara valet: en
+    // godkand order far inte nya eller farre tjanster har. `valUrFormular` lagger
+    // formularets val pa databasens rader med samma namn, typ och belopp.
+    let tjansterna = await tjansterPaOrder(id);
+    if (form.has("tjanster")) {
+      const tolkat = tjansterUrFormular(form, { provision: true });
+      if ("fel" in tolkat) return { fel: tolkat.fel };
+      tjansterna = valUrFormular(tjansterna, tolkat.tjanster);
+    }
+
     const raknat = await raknaFramProvision(paket, loptid, signerad, saljare, provisionsformular, utkopet, {
       manadsbelopp: friOrder ? manadsbelopp : null,
-      tjanster: await tjansterPaOrder(id),
+      tjanster: tjansterna,
       finans,
       rabatt,
       fryst,
@@ -2346,6 +2490,9 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
 
     if (orderfel) return { fel: `Ordern rättades inte: ${orderfel.message}` };
 
+    // 0293: tjansternas val och kronor foljer rattelsen, som ordersumman gor.
+    const frysfel = await frysTjanster(user, id, nya.tjanster);
+
     // OVERTACKET FOLJER MED. Raden ar skrivbar sedan 0051 — den beskriver
     // affaren som den ar, till skillnad fran huvudboken som beskriver vad som
     // bokforts. Tre fall: den fanns och ska bort, den ska finnas, eller ingetdera.
@@ -2386,6 +2533,10 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
       efter: {
         salesperson_id: efter.saljare,
         commission_amount: efter.provision,
+        // 0293: vad tjansterna gav, sa att en okning av provisionen gar att harleda.
+        ...(nya.tjanster.length
+          ? { tjanster: nya.tjanster.map((t) => ({ namn: t.name, val: t.provision ?? null, kr: t.provision_kr ?? null })) }
+          : {}),
         ...(senare ? { commission_pending: true } : {}),
         order_value: nya.satt.order_value,
         buyout_amount: nya.satt.buyout_amount,
@@ -2439,9 +2590,140 @@ export async function redigeraOrder(_prev: Orderstate, form: FormData): Promise<
     const vad = tillagd ? `Provisionen är tillagd: ${kronor(efter.provision)}.` : "Ordern är rättad.";
     return {
       ok:
-        rattelser.length > 0
+        (rattelser.length > 0
           ? `${vad} ${manadsnamn(String(rad.period_month))} står orörd — skillnaden är bokförd i ${manadsnamn(bokforingsmanad)} som ${rattelser.length} ${rattelser.length === 1 ? "post" : "poster"}.`
-          : vad,
+          : vad) + frysfelText(frysfel),
+    };
+  } catch (e) {
+    return { fel: e instanceof Error ? e.message : "Något gick fel." };
+  }
+}
+
+/**
+ * Provisionen på en orders tjänster, satt från kortet (0293).
+ *
+ * ===========================================================================
+ * BESTÄLLAREN 2026-11-13: säljchef, VD och ekonomi ska kunna "gå in och sätta
+ * provision när det finns extra tjänster", i kronor eller procent per tjänst.
+ *
+ * TVÅ LÄGEN, SAMMA RUTA:
+ *
+ *   OGODKÄND ORDER   valen sparas på raderna. Inga kronor fryses — det gör
+ *                    godkännandet, som nu kräver ett val per tjänst.
+ *   GODKÄND ORDER    valen går genom `redigeraOrder`, alltså exakt samma väg
+ *                    som Rätta: provisionen räknas om, övertäcket följer med,
+ *                    en fastställd månad får rättelseposter i innevarande, och
+ *                    säljaren får notisen. Ingen andra väg att ändra pengar på
+ *                    en godkänd order — det är så Jämtlandsstäd #40 rättas.
+ * ===========================================================================
+ *
+ * Tjänstens provision betalas bara ovanpå MATRISEN. På en godkänd order med en
+ * annan grund (nettoregeln, chefens egen sats, en handsatt provision) ingår
+ * tjänsterna redan, och då säger funktionen det i stället för att spara ett val
+ * som aldrig blir pengar.
+ */
+export async function sattTjansteprovision(_prev: Orderstate, form: FormData): Promise<Orderstate> {
+  try {
+    const user = await kravHanterare();
+    const id = String(form.get("id") ?? "");
+    const rad = await hamtaRad(id);
+    if (!rad) return { fel: "Ordern finns inte." };
+    if (rad.status === "makulerad") return { fel: "En makulerad order rättas inte." };
+
+    const godkand = rad.status === "signerad" || rad.status === "betald";
+    if (godkand && rad.commission_source !== "matrix") {
+      return {
+        fel:
+          rad.commission_source === "buyout"
+            ? "Tjänsterna ingår redan: provisionen är 12 % av det som blev kvar av hela affären."
+            : rad.commission_source === "manager"
+              ? "Tjänsterna ingår redan: chefens egen sats räknas på hela affären."
+              : "Provisionen på den här ordern är satt för hand för hela affären. Ändra den med Rätta.",
+      };
+    }
+    // EN GODKÄND MATRISORDER MED FINANS ELLER UTKÖP (granskningen 2026-11-13, C1).
+    // Den godkändes före nettoregeln och står på matrisen. Rättelsen räknar om från
+    // början och hade bytt grund till 12 % av det som blir kvar — en ändring av
+    // lönen som ingen bett om, under rubriken "provision på tjänsterna". 0 sådana
+    // order i produktionen 2026-11-13; vakten står för den som dyker upp.
+    if (godkand && (rad.financed || rad.buyout_amount != null)) {
+      return {
+        fel: "Ordern godkändes på matrisen fast den har finans eller utköp. En rättelse räknar den i dag på 12 % av det som blir kvar, och då ingår tjänsterna. Använd Rätta om det är meningen.",
+      };
+    }
+
+    const tolkat = tjansterUrFormular(form, { provision: true });
+    if ("fel" in tolkat) return { fel: tolkat.fel };
+
+    const fore = await tjansterPaOrder(id);
+    if (fore.length === 0) return { fel: "Ordern har inga tjänster." };
+    const nya = valUrFormular(fore, tolkat.tjanster);
+    const sammaVal = (a: Tjanst, b: Tjanst) =>
+      (a.provision?.form ?? null) === (b.provision?.form ?? null) && (a.provision?.varde ?? null) === (b.provision?.varde ?? null);
+    // Ett val som står kvar men saknar sina frysta kronor på en godkänd order
+    // (frysningen föll förra gången) räknas som en ändring, så att den görs om.
+    const andrade = nya.filter((t, i) => !sammaVal(t, fore[i]) || (godkand && t.provision && fore[i].provision_kr == null));
+    if (andrade.length === 0) return { ok: "Ingenting ändrades." };
+
+    // Taket för skrivfel redan här: på en ogodkänd order sparas bara valen, och
+    // godkännandet hade sagt nej först senare (`forStorProvision`).
+    const lop = Number(rad.term_months);
+    const forStor = lop > 0 ? forStorProvision(nya, lop) : null;
+    if (forStor) return { fel: forStorText(forStor) };
+
+    const vad = andrade.map((t) => `${t.name} ${t.provision ? valtext(t.provision) : "–"}`).join(", ");
+
+    if (godkand) {
+      // Hela formulärets tjänster, med valen, till rättelsen. Allt annat på
+      // ordern faller tillbaka på det som står, eftersom fälten saknas.
+      //
+      // UTOM MEJLEN OCH TILLÄGGSKRYSSET (hårdtestet 2026-11-13). `redigeraOrder`
+      // läser dem som formulärets sanning: ett tomt mejlfält betyder "ta bort
+      // adressen", och ett kryss som inte skickas betyder "inget tillägg". Utan
+      // raderna nedan hade en provision på tjänsterna tömt kundens mejl och tagit
+      // bort tilläggsmärket på Jämtlandsstäd — under rubriken "provision".
+      const { data: kvar, error: kvarfel } = await supabaseAdmin()
+        .from("sales_order")
+        .select("contact_email, is_addon")
+        .eq("id", id)
+        .maybeSingle();
+      if (kvarfel || !kvar) return { fel: `Ordern gick inte att läsa: ${kvarfel?.message ?? "den finns inte"}` };
+      const fakta = kvar as unknown as { contact_email: string | null; is_addon: boolean | null };
+      const f = new FormData();
+      f.set("id", id);
+      if (fakta.contact_email) f.set("contact_email", String(fakta.contact_email));
+      if (fakta.is_addon === true) f.set("is_addon", "on");
+      f.set("reason", `Provision på tjänsterna: ${vad}`);
+      f.set(
+        "tjanster",
+        JSON.stringify(
+          nya.map((t) => ({
+            name: t.name,
+            billing: t.billing,
+            amount: t.amount,
+            follows_order: t.follows_order,
+            term_months: t.term_months,
+            starts_on: t.starts_on,
+            provision_form: t.provision?.form ?? "",
+            provision: t.provision?.varde ?? "",
+          })),
+        ),
+      );
+      const svaret = await redigeraOrder(_prev, f);
+      return svaret.fel ? svaret : { ok: `Provisionen på tjänsterna är satt. ${svaret.ok ?? ""}`.trim() };
+    }
+
+    const frysfel = await frysTjanster(user, id, nya);
+    if (frysfel.length) return { fel: `Provisionen på tjänsterna sparades inte: ${frysfel.join("; ")}` };
+    await logga(user, "sales_order.service_commission", id, {
+      tjanster: andrade.map((t) => ({ namn: t.name, val: t.provision ?? null })),
+    });
+    revalidatePath("/order");
+    const kvar = nya.filter((t) => !t.provision).map((t) => t.name);
+    return {
+      ok: kvar.length
+        ? `Sparat. ${saknasText(kvar)}`
+        : "Provisionen på tjänsterna är sparad. Kronorna fryses när ordern godkänns.",
     };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
@@ -3004,6 +3286,11 @@ export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promi
 
     // STATUSEN I VILLKORET: hann ordern godkännas medan formuläret stod öppet
     // ska redigeringen inte skriva över en fryst order.
+    // Tjänsterna tolkas FÖRE skrivningen: en lista som inte går att läsa stoppar
+    // hela rättelsen, i stället för att ordern sparas och tjänsterna inte.
+    const tjansteval = form.has("tjanster") ? tjansterUrFormular(form, { provision: hanterare }) : null;
+    if (tjansteval && "fel" in tjansteval) return { fel: tjansteval.fel };
+
     const { data: skrivet, error } = await db
       .from("sales_order")
       .update(efter)
@@ -3012,6 +3299,46 @@ export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promi
       .select("id");
     if (error) return { fel: `Ordern sparades inte: ${error.message}` };
     if (!skrivet || skrivet.length === 0) return { fel: "Ordern hann ändra status. Ladda om sidan." };
+
+    // ===========================================================================
+    // TJANSTERNA (rattat 2026-11-13). Fram till dess lastes `tjanster` aldrig har,
+    // fast Nav 2.0:s Ratta ritar dem och skickar dem: en tjanst som lades till
+    // eller togs bort pa en inskickad order forsvann tyst. Nu galler de, med tva
+    // forsiktigheter:
+    //
+    //   SAMMA TJANSTER SKRIVS INTE OM. Ar listan densamma (namn, typ, belopp)
+    //   andras bara provisionsvalen — en tjanst med egen bindningstid, som Nav 2.0
+    //   inte kan rita, behaller sin.
+    //
+    //   SALJAREN TAPPAR INGET VAL. Saljaren far inte satta tjansternas provision
+    //   (0293), sa hens formular bar inga val; `behallProvision` lagger tillbaka
+    //   det chefen redan satt pa tjanster som star kvar.
+    // ===========================================================================
+    let tjanstandring: { fore: number; efter: number } | null = null;
+    if (tjansteval) {
+      // Hann ordern godkännas mellan skrivningen ovan och den här raden står dess
+      // tjänster kvar som godkännandet frös dem (granskningen M4).
+      const { data: nu } = await db.from("sales_order").select("status").eq("id", id).maybeSingle();
+      if (!nu || (nu.status !== "utkast" && nu.status !== "inskickad")) {
+        return { fel: "Ordern hann godkännas. Tjänsterna ändrades inte; rätta dem på den godkända ordern." };
+      }
+      const gamla = await tjansterPaOrder(id);
+      const nyckel = (l: Tjanst[]) => l.map((t) => `${t.name.trim().toLowerCase()}|${t.billing}|${Number(t.amount)}`).sort().join("§");
+      if (nyckel(gamla) === nyckel(tjansteval.tjanster)) {
+        if (hanterare) {
+          const frysfel = await frysTjanster(user, id, valUrFormular(gamla, tjansteval.tjanster));
+          if (frysfel.length) return { fel: `Ordern är sparad, men inte tjänsternas provision: ${frysfel.join("; ")}` };
+        }
+      } else {
+        // Båda rollerna behåller det som redan valts på tjänster som står kvar
+        // (granskningen I4: chefens eget formulär bär inga val när "Utan provision"
+        // är valt), och en månadstjänst behåller sin egna bindningstid (M5).
+        const nyaTjanster = behallBindning(behallProvision(tjansteval.tjanster, gamla), gamla);
+        const tjanstfel = await skrivTjanster(id, nyaTjanster);
+        if (tjanstfel) return { fel: `Ordern är sparad. ${tjanstfel}` };
+        tjanstandring = { fore: gamla.length, efter: tjansteval.tjanster.length };
+      }
+    }
 
     // Numret är sömmen till säljsamtalet. Rättas det ska samtalen hittas nu.
     await svepKoppling({ orderId: id }).catch(() => undefined);
@@ -3034,10 +3361,11 @@ export async function redigeraOgodkand(_prev: Orderstate, form: FormData): Promi
       status: rad.status,
       fore: Object.fromEntries(Object.keys(andrat).map((k) => [k, rad[k] ?? null])),
       efter: andrat,
+      ...(tjanstandring ? { tjanster: tjanstandring } : {}),
     });
 
     revalidatePath("/order");
-    return { ok: Object.keys(andrat).length === 0 ? "Inget var ändrat." : "Ordern är sparad." };
+    return { ok: Object.keys(andrat).length === 0 && !tjanstandring ? "Inget var ändrat." : "Ordern är sparad." };
   } catch (e) {
     return { fel: e instanceof Error ? e.message : "Något gick fel." };
   }

@@ -8803,6 +8803,36 @@ button.itf-seg::after{content:"";position:absolute;inset:-12px 0}
 .ndprovsen{color:var(--warn-ink);font-weight:550}
 td .ndprovsen{font-size:12.5px}
 .kkb-b.ndprovsen small{color:var(--warn-ink);font-weight:550}
+/* Provision på tjänsterna (0293): raden i formuläret, kolumnen på kortet och rutan för säljchefen. */
+.ndtjp{grid-column:1/-1;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-top:6px;margin-top:1px;border-top:1px dashed var(--line)}
+.ndtjp>label{font-size:12px;color:var(--ink-3);min-width:62px}
+.ndtjp .uin{width:92px;padding:6px 9px;font-size:13px}
+.ndtjp .ndtjkr{font-size:12.5px;font-weight:550;font-variant-numeric:tabular-nums;color:var(--ink-2)}
+.ndtjp.saknas .ndtjkr{color:var(--warn-ink)}
+.ndtjhint{font-size:12px;color:var(--ink-3);margin:6px 0 0}
+.kktj .ndtjc{padding-left:14px;white-space:nowrap}
+.kktj .ndtjmob{display:none}
+@media (max-width:640px){ .kktj .ndtjc{display:none} .kktj .ndtjmob{display:block} }
+/* Tjänsteraden på telefonen: 1fr fick aldrig bli smalare än två fält bredvid varandra, så raden rullade i sidled och
+   klippte provisionens fält (hårdtestet, UI-P1). .ordnyg har samma rättelse i grundregeln sedan 73c447c. */
+@media (max-width:900px){ .ontjr{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 34px} }
+/* Listan: "provision saknas" är ett eget märke som bryts till en egen rad hellre än att göra kolumnen Affär bredare.
+   Inuti tjänsternas märke blev kolumnen 56 px bredare och listan rullade i sidled vid 1440 px (verifieringen 2026-11-14). */
+.ordaff small.ndtjsakr{flex-wrap:wrap;row-gap:3px}
+.ordaff small i.ndtjsak{color:var(--danger-ink);background:var(--danger-soft)}
+.kktj td.ndtjing{color:var(--ink-3)}
+.kktj td .ndprovsen{font-size:12px}
+.ndtjpanel{flex-basis:100%;border:1px solid var(--line);border-radius:12px;padding:12px 14px;gap:10px;background:var(--card,transparent)}
+.ndtjpanel>b{font-size:13.5px}
+.ndtjprad{display:grid;grid-template-columns:minmax(0,1fr) 92px auto 96px;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
+.ndtjprad>span b{display:block;font-size:13px;font-weight:550}
+.ndtjprad>span small{font-size:11.5px}
+.ndtjprad .uin{padding:6px 9px;font-size:13px}
+.ndtjprad>output{text-align:right;font-variant-numeric:tabular-nums;font-size:13px;font-weight:550}
+.ndtjprad.saknas>output{color:var(--warn-ink);font-weight:500}
+.ndtjpsum{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;padding-top:8px;border-top:1px solid var(--line);font-size:13px}
+.ndtjpsum output{font-variant-numeric:tabular-nums;font-weight:600}
+@media (max-width:560px){.ndtjprad{grid-template-columns:minmax(0,1fr) 92px auto}.ndtjprad>output{grid-column:1/-1;text-align:left}}
 </style>
 
 <div class="proto" role="region" aria-label="Prototypinställningar">
@@ -15637,7 +15667,7 @@ function ordFormular(){
           ${falt('man', 'Kunden betalar per månad', `<div class="onrad">${inp('man', String(OPAKET[n.p].pris), 'text', 'inputmode="numeric"')}<span class="onsuf">kr/mån</span>${String(n.man) !== String(OPAKET[n.p].pris) ? `<button type="button" class="chip" data-onlist>Listpris ${OPAKET[n.p].pris.toLocaleString('sv-SE')} kr</button>` : ''}</div>`, +n.man && +n.man < OPAKET[n.p].pris ? `<span class="frwarn">${OPAKET[n.p].pris - +n.man} kr under listpris. ${ND ? 'Säljchefen ser det när ordern godkänns.' : 'Johanna ser det när hon godkänner.'}</span>${o7RabattVal(n)}` : 'Fryses på ordern när den godkänns.')}`}
         ${n.p === null ? '' : `
         <div class="ontj"><span class="onl">Tjänster på ordern <small class="muted">valfritt</small></span>
-          ${n.tj.map((t, i) => `<div class="ontjr ${visa('tj' + i) ? 'err' : ''}"><input class="uin" id="ontj-${i}-namn" data-ontj="${i}|namn" value="${esc(t.namn)}" placeholder="Tjänst, till exempel Uppstartsavgift" aria-label="Tjänstens namn"><div class="segs"><button type="button" data-ontjtyp="${i}|engang" aria-pressed="${t.typ === 'engang'}">Engång</button><button type="button" data-ontjtyp="${i}|manad" aria-pressed="${t.typ === 'manad'}">Per månad</button></div><input class="uin num" id="ontj-${i}-belopp" data-ontj="${i}|belopp" value="${esc(t.belopp)}" placeholder="4 000" inputmode="numeric" aria-label="Belopp i kronor"><button type="button" class="ibtn" data-ontjbort="${i}" aria-label="Ta bort tjänsten">${I('x')}</button>${visa('tj' + i) ? `<p class="onfel">${I('fel')}${esc(e['tj' + i])}</p>` : ''}${+t.belopp > 0 && t.typ ? `<small class="o7tjs">= ${oKr(t.typ === 'manad' ? +t.belopp * (sim.lop || 0) : +t.belopp)} i ordervärdet${t.typ === 'manad' && !sim.lop ? ', när bindningstiden är vald' : ''}</small>` : ''}</div>`).join('')}
+          ${n.tj.map((t, i) => `<div class="ontjr ${visa('tj' + i) ? 'err' : ''}"><input class="uin" id="ontj-${i}-namn" data-ontj="${i}|namn" value="${esc(t.namn)}" placeholder="Tjänst, till exempel Uppstartsavgift" aria-label="Tjänstens namn"><div class="segs"><button type="button" data-ontjtyp="${i}|engang" aria-pressed="${t.typ === 'engang'}">Engång</button><button type="button" data-ontjtyp="${i}|manad" aria-pressed="${t.typ === 'manad'}">Per månad</button></div><input class="uin num" id="ontj-${i}-belopp" data-ontj="${i}|belopp" value="${esc(t.belopp)}" placeholder="4 000" inputmode="numeric" aria-label="Belopp i kronor"><button type="button" class="ibtn" data-ontjbort="${i}" aria-label="Ta bort tjänsten">${I('x')}</button>${visa('tj' + i) ? `<p class="onfel">${I('fel')}${esc(e['tj' + i])}</p>` : ''}${+t.belopp > 0 && t.typ ? `<small class="o7tjs">= ${oKr(ndFormTjVarde(t, sim.lop || 0))} i ordervärdet${t.typ === 'manad' && !sim.lop ? ', när bindningstiden är vald' : ''}</small>` : ''}</div>`).join('')}
           <div class="qchips ontjf"><button type="button" class="chip" data-ontjny="">${I('plus')}Lägg till tjänst</button><button type="button" class="chip" data-ontjny="Uppstartsavgift|engang|4000">Uppstartsavgift</button><button type="button" class="chip" data-ontjny="Annonsering, Google|manad|1000">Annonsering</button></div></div>
         <div class="onpar onval"><button type="button" class="tiswitch" data-onutkop aria-pressed="${n.utkopOn}"><span><b>Utköp</b><small class="muted">Kunden löses ur ett gammalt avtal</small></span><i></i></button><button type="button" class="tiswitch" data-onfinans aria-pressed="${n.finans}"><span><b>Finans</b><small class="muted">${n.finans && finans ? `− ${oKr(finans)} över ${sim.lop} mån` : `${OFINANS} % per år dras från nettot`}</small></span><i></i></button></div>
         ${n.utkopOn ? falt('utkop', 'Utköp i kronor', inp('utkop', '5 000', 'text', 'inputmode="numeric"'), 'Dras från ordervärdet innan provisionen räknas.') : ''}`}
@@ -17319,7 +17349,7 @@ function pvReglerVy(){
   return `<div class="pv-regler">${note(328)}
     <section class="card"><div class="chead"><h2>Grundprovisionen</h2><span class="meta">engångsbelopp per order, fryst vid godkännandet</span></div>
       <table class="pv-tab pv-matris"><thead><tr><th>Paket</th><th class="num">12 mån</th><th class="num">24 mån</th><th class="num">36 mån</th></tr></thead><tbody>${ndPaketIds().map(p => `<tr><td>${OPAKET[p].l} <small class="muted">${OPAKET[p].pris.toLocaleString('sv-SE')} kr/mån</small></td>${[12, 24, 36].map(l => `<td class="num"><b>${kr(OMATRIS[p][l])}</b><small class="muted">värde ${kr(OPAKET[p].pris * l)}</small></td>`).join('')}</tr>`).join('')}</tbody></table>
-      <ul class="pv-regl"><li><b>Fri order:</b> provisionen sätts för hand och står på ordern.</li><li><b>Utköp:</b> ${PVUTKOP} % av nettot efter utköpet, i stället för matrisen.</li><li><b>Finans:</b> ${PVFINANS} % per år dras från ordervärdet. Matrisens belopp ändras inte.</li><li><b>Makulering:</b> avdraget sker i den månad ordern makuleras, inte i den månad den tecknades.</li></ul></section>
+      <ul class="pv-regl"><li><b>Fri order:</b> provisionen sätts för hand och står på ordern.</li><li><b>Utköp och finans:</b> ${PVUTKOP} % av det som blir kvar efter utköpet och finansavgiften, i stället för matrisen. Finanspartnern tar ${PVFINANS} % per år av ordervärdet.</li><li><b>Tjänster:</b> på en paketorder får varje tjänst egen provision, i kronor eller procent av tjänstens värde, satt av säljchefen innan ordern godkänns. På utköp, finans och fri order ingår tjänsterna.</li><li><b>Makulering:</b> avdraget sker i den månad ordern makuleras, inte i den månad den tecknades.</li></ul></section>
     <section class="card" id="pvTrappRegel"><div class="chead"><h2>Volymbonusen</h2><span class="meta">${ND && pvVersion(PVMAN) ? `från ${oDat(pvVersion(PVMAN).fran)}` : 'från 1 september'} · retroaktiv på alla månadens order</span>${chef && !a ? '<span class="end"><button class="btn btn-s btn-sm" data-pvregelandra>Ändra trappan</button></span>' : ''}</div>
       ${PVTRAPPA.filter(x => x.fran > PVIDAG).map(x => `<p class="frb info">${I('kal')}<span><b>En ny trappa gäller från ${oDat(x.fran)}:</b> ${x.nivaer.map(n => `${n.t} order ${kr(n.a)}`).join(' · ')} per order.${chef ? ` <button class="tlink inl" data-pvregelangra="${x.id}">Ta tillbaka</button>` : ''}</span></p>`).join('')}
       ${a ? pvTrappForm(tr) : `<ol class="pv-trlista">${tr.map(x => `<li><b class="num">${x.t} order</b><span class="num">${kr(x.a)} per order</span><small class="muted">${kr(x.a * x.t)} vid exakt ${x.t}</small></li>`).join('')}</ol>`}
@@ -28785,36 +28815,46 @@ OVYER = () => {
 
 /* Provisionen i formuläret: raknaFramProvision med repots satser, på signeringsdagen. */
 function ndGaller(rader, datum){ return rader.filter(s => s.valid_from <= datum && (s.valid_to === null || s.valid_to > datum)).sort((a, b) => a.valid_from < b.valid_from ? 1 : -1)[0] || null; }
-const ndAvrunda = b => b < 0 ? -Math.round(-b) : Math.round(b);
+const ndAvrunda = b => { const x = Math.round(b * 1e6) / 1e6; return x < 0 ? -Math.round(-x) : Math.round(x); }; // 38,4999… är 38,50 (hårdtestet F2)
 function ndVemId(namn){ const d = ndO(); const s = d.saljare.find(x => x.namn === namn); return s ? s.id : namn === ND.jag.namn ? ND.jag.id : null; }
 function ndSim(o){
-  const d = ndO(), sign = o.sign || kIdag(), lop = +o.lop || 0, varde = _ndOVarde(o);
+  const d = ndO(), sign = o.sign || kIdag(), lop = +o.lop || 0, varde = Math.round(_ndOVarde(o) * 100) / 100;
   const chef = ndGaller(d.chefssatser, sign), vemId = ndVemId(o.vem), egen = !!(chef && vemId && chef.employee_id === vemId);
   const fs = o.finans ? ndGaller(d.finanssatser, sign) : null;
   const finans = fs ? ndAvrunda(varde * (fs.percent_per_year * lop / 12) / 100) : 0;
   const utkop = o.utkop > 0 ? +o.utkop : null, netto = Math.max(0, Math.max(0, varde - (utkop || 0)) - finans);
-  const ut = (prov, kalla, procent, fel) => ({varde, finans, netto, prov, kalla, procent, fel});
+  // regel: vilket avdrag som gav nettoregeln. tjKr/saknas/grund: tjänsterna ovanpå matrisen (0293), som saljarensProvision.
+  const ut = (prov, kalla, procent, fel, x = {}) => ({varde, finans, netto, prov, kalla, procent, fel, tjKr:(o.tj || []).map(() => null), saknas:[], grund:prov,
+    regel:kalla === 'buyout' ? (utkop !== null && o.finans ? 'utkop_finans' : utkop !== null ? 'utkop' : 'finans') : null, ...x});
   if (o.finans && !fs) return ut(null, null, null, 'Ingen finanssats gäller på signeringsdagen.');
-  if (fs && finans + (utkop || 0) > varde) return ut(null, null, null, 'Utköpet och finansavgiften är större än ordervärdet.');
-  if (utkop !== null && utkop > varde) return ut(null, null, null, 'Utköpet är större än ordervärdet.');
+  if (fs && Math.round((finans + (utkop || 0)) * 100) > Math.round(varde * 100)) return ut(null, null, null, 'Utköpet och finansavgiften är större än ordervärdet.');
+  if (utkop !== null && Math.round(utkop * 100) > Math.round(varde * 100)) return ut(null, null, null, 'Utköpet är större än ordervärdet.');
   const fri = o.p === 0 && o.fri;
   const handsatt = fri && +o.fri.prov > 0;
   if (handsatt && o.fri.typ === '%') return ut(ndAvrunda(netto * +o.fri.prov / 100), 'manual', +o.fri.prov, null);
   if (handsatt) return ut(+o.fri.prov, 'manual', null, null);
   if (egen){ const p = chef.own_sale_percent; return ut(ndAvrunda(netto * p / 100), 'manager', p, null); }
-  if (utkop !== null){ const us = ndGaller(d.utkopssatser, sign); if (!us) return ut(null, null, null, 'Ingen utköpssats gäller på signeringsdagen.'); return ut(ndAvrunda(netto * us.percent / 100), 'buyout', us.percent, null); }
+  // Nettoregeln (beställaren 2026-11-13): utköp ELLER finans ger utköpssatsen på det som blir kvar, i stället för matrisen.
+  if (utkop !== null || o.finans){ const us = ndGaller(d.utkopssatser, sign); if (!us) return ut(null, null, null, utkop !== null ? 'Ingen utköpssats gäller på signeringsdagen.' : 'Ingen sats för finansaffärer gäller på signeringsdagen.'); return ut(ndAvrunda(netto * us.percent / 100), 'buyout', us.percent, null); }
   if (o.p === 0) return ut(null, null, null, 'En fri order behöver en provision.');
   const rad = ndGaller(d.satser.filter(s => s.package_id === o.p && s.term_months === lop), sign);
   if (!rad) return ut(null, null, null, 'Ingen provisionssats gäller för paketet och bindningstiden på signeringsdagen.');
-  return ut(rad.amount, 'matrix', null, null);
+  // 0293: varje tjänst med sitt val, i kronor eller procent av tjänstens värde. Utan val: null, och namnet i saknas.
+  const tjKr = (o.tj || []).map((t, i) => { const v = (o.tjp || [])[i]; return v ? ndAvrunda(v.f === '%' ? oTjVarde(t, lop) * v.v / 100 : v.v) : null; });
+  const tjSum = tjKr.reduce((a, k) => a + (k || 0), 0);
+  // Taket (hårdtestet F6): ett fast belopp över vad tjänsten är värd i ordern är ett skrivfel. Servern nekar likadant.
+  const tjFor = (o.tj || []).findIndex((t, i) => { const v = (o.tjp || [])[i]; return !!v && v.f !== '%' && Math.round(v.v * 100) > Math.round(oTjVarde(t, lop) * 100); });
+  if (tjFor >= 0) return ut(null, null, null, `Provisionen på ${o.tj[tjFor][0]} är större än vad tjänsten är värd i ordern (${oKr(oTjVarde(o.tj[tjFor], lop))}). Rätta beloppet.`, {tjKr, grund:rad.amount, tjFor});
+  return ut(rad.amount + tjSum, 'matrix', null, null, {tjKr, grund:rad.amount, saknas:(o.tj || []).filter((_, i) => tjKr[i] === null).map(t => t[0])});
 }
 function ndProvSimText(sim){
   const s = ndSim(sim);
   if (s.fel) return s.fel;
   if (s.kalla === 'manager') return `${s.procent} % av nettot, egen försäljning`;
-  if (s.kalla === 'buyout') return `${s.procent} % av nettot efter utköp`;
+  if (s.kalla === 'buyout') return `${s.procent} % av det som blir kvar ${ndRegelText(s.regel)}`;
   if (s.kalla === 'manual') return s.procent !== null ? `${s.procent} % av nettot, angiven` : 'angiven för hand';
-  return `ur matrisen, ${OPAKET[sim.p] ? OPAKET[sim.p].l : ''} ${sim.lop || '–'} mån`;
+  const tjs = s.tjKr.reduce((a, k) => a + (k || 0), 0);
+  return `ur matrisen, ${OPAKET[sim.p] ? OPAKET[sim.p].l : ''} ${sim.lop || '–'} mån${tjs ? ` + tjänster ${oKr(tjs)}` : ''}${s.saknas.length ? (S.role === 'chef' && ndO().hanterare ? ', tjänsterna saknar provision' : ', säljchefen sätter tjänsternas provision') : ''}`;
 }
 // Var provisionen kommer ifrån, för kundkortet och provisionsvyn.
 const _ndPvKalla = pvKalla;
@@ -28822,9 +28862,10 @@ pvKalla = function(o){
   if (!ndO() || !o.id) return _ndPvKalla(o);
   if (o.prov === null) return o.provFel || 'går inte att räkna än';
   if (o.provKalla === 'manager') return `${o.provProcent ?? '–'} % av nettot, egen försäljning`;
-  if (o.provKalla === 'buyout') return `${o.provProcent ?? '–'} % av nettot efter utköp`;
+  if (o.provKalla === 'buyout') return `${o.provProcent ?? '–'} % av det som blir kvar ${ndRegelText(o.provRegel || (o.utkop ? 'utkop' : 'finans'))}`;
   if (o.provKalla === 'manual') return o.provProcent !== null ? `${o.provProcent} %, angiven` : 'angiven för hand';
-  return 'ur matrisen';
+  const tjs = (o.tjp || []).reduce((a, p) => a + ((p && p.kr) || 0), 0);
+  return `ur matrisen${tjs ? ` + tjänster ${oKr(tjs)}` : ''}${o.tjSaknas && o.tjSaknas.length ? ', tjänsterna saknar provision' : ''}`;
 };
 
 /* ---------- Listan: nyckeltalen är sidans egna ---------- */
@@ -29799,7 +29840,7 @@ document.addEventListener('click', e => {
   if (!b || !ndO() || S.view !== 'order') return;
   e.preventDefault(); e.stopPropagation();
   const d = b.dataset;
-  if (d.ndutangodk){ S.ndUtanGodk = +d.ndutangodk; render(); setTimeout(() => document.getElementById('ndUtanSkal')?.focus(), 20); return; }
+  if (d.ndutangodk){ if (typeof ndTjSaknasOppna === 'function' && ndTjSaknasOppna(ORDER.find(x => x.nr === +d.ndutangodk))) return; S.ndUtanGodk = +d.ndutangodk; render(); setTimeout(() => document.getElementById('ndUtanSkal')?.focus(), 20); return; }
   if (d.ndutanavbryt !== undefined){ S.ndUtanGodk = null; render(); return; }
   const o = ORDER.find(x => x.nr === +d.ndutanskicka), t = (document.getElementById('ndUtanSkal')?.value || '').trim();
   if (!o) return;
@@ -29871,6 +29912,249 @@ ordRad = function(o, chef){
   const h = _ndUpOrdRad(o, chef); if (!ndProvSenare(o) || o.st === 'makulerad') return h;
   return h.replace(/(<td class="num"><b>[^<]*<\/b><\/td>\s*)<td class="num">[^<]*<\/td>/, '$1<td class="num"><span class="ndprovsen" title="Provisionen läggs till senare">senare</span></td>');
 };
+/* ---------- Provision på tjänsterna (0293) och finansen (2026-11-13) ---------- */
+/* Rättat efter hårdtestet 2026-11-13, UI-I4 m.fl.: se patch-hardtest.py och docs/ARBETSLOGG.md. */
+/* Beställaren 2026-11-13: "när vi lägger till en till tjänst i order så måste vi sätta provision på det också", av säljchef,
+   VD eller ekonomi, i kronor eller procent. Godkännandet kräver ett val per tjänst (0 kr är ett val). Tjänstens provision
+   betalas bara ovanpå matrisen; på utköp, finans, chefens egen order och en handsatt provision ingår tjänsterna redan.
+   Servern avgör (saljarensProvision); allt här är formuläret, kortet och knapparna. */
+const ndTjHant = () => !!(ndO() && S.role === 'chef' && ndO().hanterare);
+function ndRegelText(r){ return r === 'utkop_finans' ? 'efter utköp och finans' : r === 'finans' ? 'efter finans' : 'efter utköp'; }
+function ndUppr(l){ return l.length <= 1 ? (l[0] || '') : `${l.slice(0, -1).join(', ')} och ${l[l.length - 1]}`; }
+// Ett tal ur fältet: null när det är tomt, NaN när det inte går att läsa — aldrig 0 för något som inte är en nolla.
+// Samma tolkning som servern (provisionUrRad och tolkaBelopp): mellanslag bort, "kr" bara i kronor och "%" bara i procent,
+// komma eller punkt med högst två decimaler. Förut blev "abc", "800:-" och "10%" i kronor 0 kr eller 10 kr, och 0 kr är
+// valet som släpper igenom godkännandet (hårdtestet 2026-11-13, UI-I1).
+function ndTjTal(v, f){ let t = String(v ?? '').replace(/[\s  ]/g, ''); if (t === '') return null; t = f === '%' ? t.replace(/%$/, '') : t.replace(/kr$/i, ''); t = t.replace('−', '-').replace(',', '.'); return /^-?\d+(\.\d{1,2})?$/.test(t) ? +t : NaN; }
+// Felet i ett ifyllt fält som [kort, mening], eller null. Tomt är inget fel här: det säger spärren. varde = tjänstens värde, för taket.
+function ndTjFel(v, f, varde){
+  const r = String(v ?? '').trim(), x = ndTjTal(v, f); if (x === null) return null;
+  if (f !== '%' && /%$/.test(r)) return ['skriven i procent', 'är skriven i procent. Välj % i stället för kr, eller ta bort procenttecknet'];
+  if (f === '%' && /kr$/i.test(r)) return ['skriven i kronor', 'är skriven i kronor. Välj kr i stället för %, eller ta bort "kr"'];
+  if (isNaN(x)) return ['går inte att läsa', 'går inte att läsa. Skriv bara siffror, till exempel 1 200 eller 12,5'];
+  if (x < 0) return ['kan inte vara negativ', 'kan inte vara negativ'];
+  if (f === '%' && x > 100) return ['över 100 %', 'ska vara en procent mellan 0 och 100'];
+  if (f !== '%' && varde != null && Math.round(x * 100) > Math.round(varde * 100)) return ['över tjänstens värde', `är större än vad tjänsten är värd i ordern (${oKr(varde)})`];
+  return null;
+}
+// Egen bindningstid på en rad i formuläret (F4): bara så länge det är samma tjänst (namn, typ, belopp), som servern.
+function ndTjNyckel(t){ return `${String(t.namn || '').trim().toLowerCase()}|${t.typ}|${ndTal(t.belopp)}`; }
+function ndTjEgen(t){ return t && t.egen && t.typ === 'manad' && t.egen.nyckel === ndTjNyckel(t) ? t.egen.lop : null; }
+function ndFormTjVarde(t, lop){ const egen = ndTjEgen(t); return t.typ === 'manad' ? +t.belopp * (egen === null ? lop : egen) : +t.belopp; }
+// "Jonas provision", inte "Jonass" (UI-M3).
+function ndGen(n){ return /[sxz]$/i.test(n) ? n : n + 's'; }
+// Formulärets tjänst gäller för simuleringen och för servern, med samma filter som respektive anropare har.
+const ndTjGiltigSim = t => t.namn && +t.belopp > 0 && t.typ;
+const ndTjGiltigFalt = t => t.namn && ndTal(t.belopp) > 0 && t.typ;
+const ndTjVal = t => { const f = t.pf === '%' ? '%' : 'kr', v = ndTjTal(t.pv, f); return v === null || isNaN(v) || v < 0 || (f === '%' && v > 100) ? null : {f, v}; };
+
+// Simuleringen bär valen, i samma ordning som tjänsterna den räknar på.
+const _ndTjOnSom = onSomOrder;
+onSomOrder = function(n){ const sim = _ndTjOnSom(n); if (!ndO()) return sim; const rader = n.tj.filter(ndTjGiltigSim); sim.tjp = rader.map(ndTjVal);
+  sim.tj = sim.tj.map((x, i) => { const l = ndTjEgen(rader[i]); return l === null ? x : [x[0], x[1], x[2], false, l]; }); return sim; };
+
+// Formulärets fält: valen följer med i tjänsternas JSON, bara från en hanterare (servern läser dem bara därifrån).
+const _ndTjOrdFalt = ndOrdFalt;
+ndOrdFalt = function(n){
+  const f = _ndTjOrdFalt(n); if (!ndTjHant() || n.utanProv) return f;
+  const rader = n.tj.filter(ndTjGiltigFalt);
+  try { f.tjanster = JSON.stringify(JSON.parse(f.tjanster).map((r, k) => { const v = rader[k] && ndTjVal(rader[k]); return v ? {...r, provision_form:v.f === '%' ? 'procent' : 'belopp', provision:String(v.v)} : r; })); } catch(_){}
+  return f;
+};
+
+// Rätta och Fortsätt: valen följer med in i formuläret.
+const _ndTjOrdNyStart = ordNyStart;
+ordNyStart = function(fran){
+  const r = _ndTjOrdNyStart(fran), n = S.ordNy;
+  const o = ndO() && n && fran && fran.ratta ? ORDER.find(x => x.nr === fran.ratta) : null;
+  if (!o) return r;
+  n.tj.forEach((t, i) => { const p = (o.tjp || [])[i], k = o.tj[i];
+    if (p){ t.pf = p.f; t.pv = String(p.v).replace('.', ','); }
+    if (k && k[1] === 'manad' && k[3] === false) t.egen = {lop:+k[4] || 0, nyckel:ndTjNyckel(t)}; });
+  // Formuläret ritades innan valen fanns i det (UI-I3): rita om, så att fälten och säljarens provision stämmer direkt.
+  render();
+  return r;
+};
+
+// Formuläret: kräver ett val per tjänst av den som godkänner (chefens order läggs in godkänd).
+function ndTjSimNu(n){ const sim = onSomOrder(n); return sim.lop ? ndSim(sim) : null; }
+const _ndTjOnFel = onFel;
+onFel = function(n){
+  const e = _ndTjOnFel(n); if (!ndTjHant() || !n || n.utanProv || n.p === null || !n.tj.length) return e;
+  const s = ndTjSimNu(n); if (!s || (s.kalla !== 'matrix' && s.tjFor === undefined)) return e;
+  const lop = onSomOrder(n).lop || 0;
+  n.tj.forEach((t, i) => { if (!ndTjGiltigSim(t)) return; const f = t.pf === '%' ? '%' : 'kr', fel = ndTjFel(t.pv, f, ndFormTjVarde(t, lop));
+    if (fel) e['tjp' + i] = `Provisionen på ${t.namn.trim()} ${fel[1]}.`;
+    else if (!ndTjVal(t)) e['tjp' + i] = `Sätt provision på ${t.namn.trim()}: kronor eller procent. 0 kr går också.`; });
+  return e;
+};
+const _ndTjOrdFormular = ordFormular;
+ordFormular = function(){
+  const h = _ndTjOrdFormular(), n = S.ordNy; if (!ndO() || !n || n.p === null || !n.tj.length) return h;
+  const s = ndTjSimNu(n), matris = s && (s.kalla === 'matrix' || s.tjFor !== undefined) && !n.utanProv;
+  if (!ndTjHant()){
+    if (!matris) return h;
+    return h.replace(/(<div class="qchips ontjf">[\s\S]*?<\/div>)(<\/div>)/, `$1<p class="ndtjhint">Säljchefen sätter provisionen på tjänsterna när ordern godkänns.</p>$2`);
+  }
+  if (!matris){
+    const varfor = !s ? '' : s.kalla === 'buyout' ? `Tjänsterna ingår: provisionen är ${s.procent} % av det som blir kvar ${ndRegelText(s.regel)}.` : s.kalla === 'manager' ? (n.vem && ND.jag && n.vem !== ND.jag.namn ? `Tjänsterna ingår i ${ndGen(fornamn(n.vem))} egen sats på hela affären.` : 'Tjänsterna ingår i din egen sats på hela affären.') : n.utanProv ? '' : 'Tjänsterna ingår i provisionen för hela affären.';
+    return varfor ? h.replace(/(<div class="qchips ontjf">[\s\S]*?<\/div>)(<\/div>)/, `$1<p class="ndtjhint">${esc(varfor)}</p>$2`) : h;
+  }
+  const e = onFel(n), visa = k => S.ordRor.has(k) && e[k], idx = n.tj.map((t, i) => ndTjGiltigSim(t) ? i : -1).filter(i => i >= 0);
+  return h.replace(/(<button type="button" class="ibtn" data-ontjbort="(\d+)"[^>]*>[\s\S]*?<\/button>(?:<p class="onfel">[\s\S]*?<\/p>)?(?:<small class="o7tjs">[\s\S]*?<\/small>)?)/g, (m, knapp, nr) => {
+    const i = +nr, t = n.tj[i]; if (!t || !ndTjGiltigSim(t)) return m;
+    const kr = s.tjKr[idx.indexOf(i)], pf = t.pf === '%' ? '%' : 'kr', fel = visa('tjp' + i);
+    return `${knapp}<div class="ndtjp ${kr === null ? 'saknas' : ''}" data-onf="tjp${i}"><label for="on-tjp${i}">Provision</label><input class="uin num" id="on-tjp${i}" data-ndtjprov="${i}" value="${esc(t.pv ?? '')}" placeholder="${pf === '%' ? '10' : '0'}" inputmode="decimal" ${fel ? 'aria-invalid="true"' : ''}><div class="segs" role="radiogroup" aria-label="Provisionen på tjänsten i"><button type="button" data-ndtjprovf="${i}|kr" aria-pressed="${pf === 'kr'}">kr</button><button type="button" data-ndtjprovf="${i}|%" aria-pressed="${pf === '%'}">%</button></div><span class="ndtjkr">${kr === null ? 'saknas' : '= ' + oKr(kr)}</span>${fel ? `<p class="onfel">${I('fel')}${esc(e['tjp' + i])}</p>` : ''}</div>`;
+  });
+};
+document.addEventListener('input', e => {
+  const el = e.target, n = S.ordNy; if (!ndO() || !n || !el.dataset || el.dataset.ndtjprov === undefined) return;
+  const t = n.tj[+el.dataset.ndtjprov]; if (!t) return; t.pv = el.value; clearTimeout(S._ndTjT); S._ndTjT = setTimeout(ordUppdatera, 300);
+});
+document.addEventListener('click', e => {
+  const b = ndO() && e.target.closest && e.target.closest('[data-ndtjprovf]'), n = S.ordNy; if (!b || !n) return;
+  e.preventDefault(); e.stopPropagation(); const [i, f] = b.dataset.ndtjprovf.split('|'); if (n.tj[+i]){ n.tj[+i].pf = f; ordUppdatera(); setTimeout(() => document.getElementById('on-tjp' + i)?.focus(), 0); }
+}, true);
+
+/* ---------- Kortet: kolumnen Provision, rutan och knapparna ---------- */
+const ndTjOrdervarde = (t, x) => oTjVarde(t, x.lop);
+function ndTjMob(x, i){ const p = x.tjGaller && (x.tjp || [])[i]; return `<small class="ndtjmob muted">${!x.tjGaller ? 'provisionen ingår' : !p ? '<span class="ndprovsen">provision saknas</span>' : `provision ${p.kr === null ? '–' : oKr(p.kr)}${p.f === '%' ? ', ' + String(p.v).replace('.', ',') + ' %' : ''}`}</small>`; }
+function ndTjCell(x, i){
+  if (!x.tjGaller) return `<td class="num ndtjc ndtjing" title="Tjänsterna ingår i orderns provision">ingår</td>`;
+  const p = (x.tjp || [])[i];
+  if (!p) return `<td class="num ndtjc"><span class="ndprovsen">saknas</span></td>`;
+  return `<td class="num ndtjc">${p.kr === null ? '–' : oKr(p.kr)}<small class="muted">${p.f === '%' ? String(p.v).replace('.', ',') + ' %' : 'fast belopp'}</small></td>`;
+}
+const _ndTjKkTjTabell = kkTjTabell;
+kkTjTabell = function(rader){
+  const h = _ndTjKkTjTabell(rader); if (!ndO() || !rader.length) return h;
+  const [huvud, resten] = h.split('<tbody>'); if (resten === undefined) return h;
+  const [kropp, fot] = resten.split('</tbody>');
+  let k = -1;
+  const ny = kropp.replace(/(<td class="num">[^<]*<\/td>)(<\/tr>)/g, (m, a, b) => { const r = rader[++k]; if (!r) return m; const i = r.x.tj.indexOf(r.t);
+    return `${a.replace('</td>', ndTjMob(r.x, i) + '</td>')}${ndTjCell(r.x, i)}${b}`; });
+  const sum = rader.reduce((a, {t, x}) => { const p = x.tjGaller && (x.tjp || [])[x.tj.indexOf(t)]; return a + ((p && p.kr) || 0); }, 0);
+  return huvud.replace('<th class="num">I ordervärde</th></tr>', '<th class="num">I ordervärde</th><th class="num ndtjc">Provision</th></tr>') + '<tbody>' + ny + '</tbody>' +
+    (fot || '').replace(/(<td colspan="3">Tjänsterna sammanlagt<\/td><td class="num">[^<]*<\/td>)/, `$1<td class="num ndtjc">${sum ? oKr(sum) : ''}</td>`);
+};
+
+// Rutan. S.ndTjp = {nr, godkann, rader:[{f, v}]}: det som skrivs, tills det sparas.
+function ndTjpOppna(o, godkann){
+  // Öppen redan för samma order (Godkänn eller G medan rutan står öppen): det som skrivits står kvar (UI-M1).
+  const forr = S.ndTjp && S.ndTjp.nr === o.nr && S.ndTjp.rader.length === o.tj.length ? S.ndTjp.rader : null;
+  S.ndTjp = {nr:o.nr, godkann:!!godkann, rader:forr || ndTjpRader(o)};
+  S.ordOpen = o.nr; S.ordSel = o.nr; S.kkFlik = 'order'; S.kkOppna.add(o.nr); S.kkStangda.delete(o.nr);
+  if (S.view !== 'order') ordGa(o.nr); else render();
+  setTimeout(() => { const f = S.ndTjp && S.ndTjp.rader.findIndex(r => r.v.trim() === ''); const el = document.getElementById(`ndtjp-${o.nr}-${f >= 0 ? f : 0}`); el?.scrollIntoView({block:'center', behavior:'smooth'}); el?.focus(); }, 60);
+}
+function ndTjpRader(o){ return o.tj.map((_, i) => { const p = (o.tjp || [])[i]; return p ? {f:p.f, v:String(p.v).replace('.', ',')} : {f:'kr', v:''}; }); }
+function ndTjpRakna(o){
+  // Fick ordern fler eller färre tjänster medan rutan var öppen följer rutan ordern (UI-M2, kastade förut TypeError).
+  if (S.ndTjp.rader.length !== o.tj.length) S.ndTjp.rader = ndTjpRader(o);
+  const r = S.ndTjp.rader, fel = o.tj.map((t, i) => ndTjFel(r[i].v, r[i].f, ndTjOrdervarde(t, o)));
+  const kr = o.tj.map((t, i) => { const v = ndTjTal(r[i].v, r[i].f); return v === null || fel[i] ? null : ndAvrunda(r[i].f === '%' ? ndTjOrdervarde(t, o) * v / 100 : v); });
+  const fore = (o.tjp || []).reduce((a, p) => a + ((p && p.kr) || 0), 0), grund = (o.prov || 0) - fore, tjs = kr.reduce((a, k) => a + (k || 0), 0);
+  return {kr, fel, grund, tjs, total:grund + tjs, saknas:o.tj.filter((_, i) => kr[i] === null).map(t => t[0])};
+}
+function ndTjpRuta(o){
+  const P = S.ndTjp, R = ndTjpRakna(o), godk = ['signerad', 'betald'].includes(o.st);
+  const rad = (t, i) => { const v = P.rader[i]; return `<div class="ndtjprad ${R.kr[i] === null ? 'saknas' : ''}"><span><b>${esc(t[0])}</b><small class="muted">${oKr(ndTjOrdervarde(t, o))} i ordervärdet${t[1] === 'manad' ? `, ${oKr(t[2])}/mån` : ', engång'}</small></span><input id="ndtjp-${o.nr}-${i}" class="uin num" data-ndtjpv="${o.nr}|${i}" value="${esc(v.v)}" placeholder="${v.f === '%' ? '10' : '0'}" inputmode="decimal" aria-label="Provision på ${esc(t[0])}"><div class="segs" role="radiogroup" aria-label="I kronor eller procent"><button type="button" data-ndtjpf="${o.nr}|${i}|kr" aria-pressed="${v.f === 'kr'}">kr</button><button type="button" data-ndtjpf="${o.nr}|${i}|%" aria-pressed="${v.f === '%'}">%</button></div><output id="ndtjpk-${o.nr}-${i}">${R.fel[i] ? R.fel[i][0] : R.kr[i] === null ? 'saknas' : '= ' + oKr(R.kr[i])}</output></div>`; };
+  return `<div class="frmotiv kkform ndtjpanel" role="group" aria-labelledby="ndtjph-${o.nr}"><b id="ndtjph-${o.nr}">Provision på tjänsterna</b>
+    <small class="muted">Matrisen betalar paketet med ${oKr(R.grund)}. Varje tjänst får egen provision: kronor, eller procent av vad tjänsten är värd i ordern. 0 kr går också.${godk ? ' Ordern är godkänd, så provisionen rättas och säljaren får en notis.' : ''}</small>
+    <div>${o.tj.map(rad).join('')}</div>
+    <div class="ndtjpsum"><span>${o.vem === ME.chef.namn ? 'Din provision' : `${esc(ndGen(fornamn(o.vem)))} provision`}</span><output id="ndtjps-${o.nr}">${oKr(R.grund)} + ${oKr(R.tjs)} = <b>${oKr(R.total)}</b></output></div>
+    <div class="pacts"><button class="btn btn-p btn-sm" data-ndtjpspara="${o.nr}">${P.godkann && o.st === 'inskickad' ? `${I('check')}Spara och godkänn` : 'Spara'}</button><button class="tlink" data-ndtjpavbryt>Avbryt</button></div></div>`;
+}
+const _ndTjKkAtg = kkAtg;
+kkAtg = function(o){
+  const a = _ndTjKkAtg(o); if (!ndTjHant() || !o.tjGaller || !o.tj.length || o.st === 'makulerad') return a;
+  if (S.ndTjp && S.ndTjp.nr === o.nr){ a.unshift(ndTjpRuta(o)); return a; }
+  const saknas = o.tjSaknas && o.tjSaknas.length;
+  a.unshift(`<button class="btn ${saknas ? 'btn-p' : 'btn-s'} btn-sm" data-ndtjpopen="${o.nr}">${saknas ? 'Sätt provision på tjänsterna' : 'Ändra tjänsternas provision'}</button>`);
+  // Godkänn finns kvar, men öppnar rutan först (o7Godkann nedan).
+  return a;
+};
+// Nästa steg på kortet: tjänsterna först, både före godkännandet och på en godkänd order som saknar dem (Jämtlandsstäd #40).
+const _ndTjKkNasta = kkNasta;
+kkNasta = function(o, d){
+  const r = _ndTjKkNasta(o, d); if (!ndO() || !o || !o.tjSaknas || !o.tjSaknas.length || o.st === 'makulerad' || oStatus(o) === 'stoppad') return r;
+  const namn = ndUppr(o.tjSaknas.map(x => `”${x}”`)), fler = o.tjSaknas.length > 1;
+  // Före godkännandet är det nästa steg (som Godkänn); på en godkänd order är det något som saknas.
+  if (ndTjHant()) return {ton:o.st === 'inskickad' ? 'signal' : 'warn', ik:o.st === 'inskickad' ? 'check' : 'fel', t:o.st === 'inskickad' ? 'Sätt provision på tjänsterna, sedan godkänner du.' : `Tjänste${fler ? 'rna' : 'n'} saknar provision.`,
+    sub:`${namn} saknar provision. Matrisen betalar bara paketet.`, knapp:`<button class="btn btn-p btn-sm" data-ndtjpopen="${o.nr}">Sätt provision</button>`};
+  if (o.vem === ME.saljare.namn) return r || {ton:'neutral', ik:'tid', t:'Säljchefen sätter provisionen på tjänsterna.', sub:`${namn} får egen provision ovanpå matrisen.`, knapp:''};
+  return r;
+};
+// Listan: "provision saknas" bredvid tjänsterna, för den som kan sätta den.
+const _ndTjOrdRad = ordRad;
+ordRad = function(o, chef){
+  const h = _ndTjOrdRad(o, chef); if (!ndTjHant() || !o.tjSaknas || !o.tjSaknas.length || o.st === 'makulerad') return h;
+  // Ett eget märke efter tjänsternas: inuti deras märke gjorde texten kolumnen Affär 56 px bredare (verifieringen 2026-11-14).
+  return h.replace(/(<td class="ordaff"><span>[^<]*<\/span>)<small>((?:<i>[^<]*<\/i>)*<i>\+\d+ tjänst(?:er)?<\/i>)/, '$1<small class="ndtjsakr">$2<i class="ndtjsak" title="Sätt provision på tjänsterna innan ordern godkänns">provision saknas</i>');
+};
+// Godkänn: saknas tjänsternas provision öppnas rutan i stället, och "Spara och godkänn" gör båda.
+const _ndTjO7Godkann = o7Godkann;
+o7Godkann = function(nr){
+  const o = ndO() && ORDER.find(x => x.nr === nr);
+  if (ndTjSaknasOppna(o)) return;
+  return _ndTjO7Godkann(nr);
+};
+// Provisionsvyns Godkänn skrivs om längre ner i filen (ndP); den raden frågar ndTjSaknasOppna först.
+function ndTjSaknasOppna(o){ if (!o || !o.tjSaknas || !o.tjSaknas.length || !ndTjHant()) return false; ndTjpOppna(o, true); toast(`Sätt provision på ${ndUppr(o.tjSaknas)} först. Sedan godkänns ordern.`); return true; }
+document.addEventListener('input', e => {
+  const el = e.target; if (!ndO() || !S.ndTjp || !el.dataset || !el.dataset.ndtjpv) return;
+  const [nr, i] = el.dataset.ndtjpv.split('|').map(Number), o = ORDER.find(x => x.nr === nr); if (!o || S.ndTjp.nr !== nr) return;
+  S.ndTjp.rader[i].v = el.value;
+  // Bara talen ritas om, så att markören står kvar där den står.
+  const R = ndTjpRakna(o), k = document.getElementById(`ndtjpk-${nr}-${i}`), sm = document.getElementById(`ndtjps-${nr}`);
+  if (k){ k.textContent = R.fel[i] ? R.fel[i][0] : R.kr[i] === null ? 'saknas' : '= ' + oKr(R.kr[i]); k.parentElement.classList.toggle('saknas', R.kr[i] === null); }
+  if (sm) sm.innerHTML = `${oKr(R.grund)} + ${oKr(R.tjs)} = <b>${oKr(R.total)}</b>`;
+});
+document.addEventListener('click', e => {
+  const b = ndO() && e.target.closest && e.target.closest('[data-ndtjpopen],[data-ndtjpf],[data-ndtjpspara],[data-ndtjpavbryt]'); if (!b) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  const d = b.dataset;
+  if (d.ndtjpopen){ const o = ORDER.find(x => x.nr === +d.ndtjpopen); if (o) ndTjpOppna(o, false); return; }
+  if (d.ndtjpavbryt !== undefined){ S.ndTjp = null; render(); return; }
+  if (d.ndtjpf){ const [nr, i, f] = d.ndtjpf.split('|'); if (S.ndTjp && S.ndTjp.nr === +nr){ S.ndTjp.rader[+i].f = f; render(); setTimeout(() => document.getElementById(`ndtjp-${nr}-${i}`)?.focus(), 0); } return; }
+  const o = ORDER.find(x => x.nr === +d.ndtjpspara); if (!o || !S.ndTjp) return;
+  const P = S.ndTjp, R = ndTjpRakna(o);
+  for (let i = 0; i < o.tj.length; i++){ if (R.fel[i]){ toast(`Provisionen på ${o.tj[i][0]} ${R.fel[i][1]}.`); document.getElementById(`ndtjp-${o.nr}-${i}`)?.focus(); return; } }
+  if (P.godkann && R.saknas.length){ toast(`Sätt provision på ${ndUppr(R.saknas)} också. 0 kr går.`); document.getElementById(`ndtjp-${o.nr}-${R.kr.findIndex(k => k === null)}`)?.focus(); return; }
+  // Servern lägger bara valen på sina egna rader (namn, typ, belopp); bindningstiden kommer därifrån, inte härifrån.
+  const tjanster = o.tj.map((t, i) => { const v = ndTjTal(P.rader[i].v, P.rader[i].f); return {name:t[0], billing:t[1], amount:t[2], follows_order:true, term_months:null, starts_on:null, ...(v === null ? {} : {provision_form:P.rader[i].f === '%' ? 'procent' : 'belopp', provision:String(v)})}; });
+  b.disabled = true;
+  ndOrdPost('tjanst-provision', {id:o.id, tjanster}, {ladda:false, tyst:true}).then(s => {
+    b.disabled = false;
+    if (!s.ok){ ndSkrivFel(s); return; }
+    // Rutan stängs direkt; omladdningen ritar sedan orderns nya tal.
+    // Kortet visar valen direkt; omladdningen ersätter dem med serverns. Ett tomt fält ändrade ingenting (valUrFormular).
+    o.tjp = o.tj.map((_, i) => { const v = ndTjTal(P.rader[i].v, P.rader[i].f); return v === null ? ((o.tjp || [])[i] || null) : {f:P.rader[i].f, v, kr:R.kr[i]}; });
+    o.tjSaknas = o.tj.filter((_, i) => !o.tjp[i]).map(t => t[0]);
+    S.ndTjp = null; render();
+    if (!(P.godkann && o.st === 'inskickad')){ toast(s.ok); ndOmlas('ord'); return; }
+    // Utan säljsamtal godkänner superadmin med ett skäl (hårdtestet 2026-11-13, UI-I4). Valen är sparade; nu skälet, i
+    // stället för ett godkännande utan skäl som servern nekar och en ruta som öppnas tom igen.
+    if (oStatus(o) === 'stoppad'){ toast('Provisionen på tjänsterna är sparad. Skriv varför ordern godkänns utan säljsamtal.'); S.ndUtanGodk = o.nr; render();
+      setTimeout(() => document.getElementById('ndUtanSkal')?.focus(), 20); ndOmlas('ord'); return; }
+    // Nekas godkännandet laddas ordern ändå om, så att kortet visar valen som nu är sparade.
+    ndOrdPost('godkann', {id:o.id}, {ladda:false, tyst:true}).then(g => { if (g.ok) toast(g.ok); else ndSkrivFel(g); ndOmlas('ord'); });
+  });
+}, true);
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || !ndO() || !S.ndTjp || !e.target || !e.target.dataset || !e.target.dataset.ndtjpv) return;
+  e.preventDefault(); document.querySelector(`[data-ndtjpspara="${S.ndTjp.nr}"]`)?.click();
+});
+// Massgodkännandet räknar som det godkänner (UI-I6): samtal, avtal och tjänsternas provision.
+function ndBulkKlar(o){ return !!(o.samtal && !o.samtal.utan && o.avtal && !(o.tjSaknas && o.tjSaknas.length)); }
+const _ndTjO7Bulk = o7Bulk;
+o7Bulk = function(){
+  if (!ndO()) return _ndTjO7Bulk();
+  const val = ORDER.filter(o => S.ordVal.has(o.nr) && o.st === 'inskickad'), ok = val.filter(ndBulkKlar), inte = val.length - ok.length;
+  return `<span class="ordbulk"><b>${S.ordVal.size} markerade</b><span class="muted">${ok.length} kompletta, ${oKr(ok.reduce((s, o) => s + oVarde(o), 0))}${inte ? ` · ${inte} saknar samtal, avtal eller tjänsternas provision och hoppas över` : ''}</span><button class="btn btn-p btn-sm" data-ordbulkgodkann ${ok.length ? '' : 'disabled'}>${I('check')}Godkänn ${ok.length}</button><button class="tlink" data-ordvalrensa>Avmarkera</button></span>`;
+};
+
 // "Ny sedan du tittade": navet minns när listan senast öppnades (0083).
 function ndOrdNy(o){ const s = ndO().sett; return !!(s && o.skapad && o.skapad > s && o.vem !== ME[S.role === 'chef' ? 'chef' : 'saljare'].namn); }
 let ndOrdSett = false;
@@ -29891,8 +30175,9 @@ document.addEventListener('click', e => {
   const oppen = () => ORDER.find(x => x.nr === S.ordOpen);
   // Chefens beslut och säljarens order, med repots actions.
   if (ds.ordgodkann){ stopp(); o7Godkann(+ds.ordgodkann); return; }
-  if (ds.ordbulkgodkann !== undefined){ stopp(); const val = ORDER.filter(o => S.ordVal.has(o.nr) && o.st === 'inskickad'), ok = val.filter(o => o.samtal && !o.samtal.utan && o.avtal);
-    (async () => { let n = 0; for (const o of ok){ const s = await ndOrdPost('godkann', {id:o.id}, {ladda:false, tyst:true}); if (s.ok) n++; else toast(`#${o.nr}: ${s.fel}`); } if (n){ toast(`${n} godkända${val.length - ok.length ? `, ${val.length - ok.length} hoppades över eftersom samtal eller avtal saknas` : ''}. Provisionen är fryst.`); ndOmlas('ord'); } })(); return; }
+  if (ds.ordbulkgodkann !== undefined){ stopp(); const val = ORDER.filter(o => S.ordVal.has(o.nr) && o.st === 'inskickad'), ok = val.filter(ndBulkKlar);
+    if (!ok.length){ toast('Ingen av de markerade ordrarna kan godkännas här: samtal, avtal eller tjänsternas provision saknas. Öppna ordern och godkänn den därifrån.'); return; }
+    (async () => { let n = 0; for (const o of ok){ const s = await ndOrdPost('godkann', {id:o.id}, {ladda:false, tyst:true}); if (s.ok) n++; else toast(`#${o.nr}: ${s.fel}`); } if (n){ toast(`${n} godkända${val.length - ok.length ? `, ${val.length - ok.length} hoppades över eftersom samtal, avtal eller tjänsternas provision saknas` : ''}. Provisionen är fryst.`); ndOmlas('ord'); } })(); return; }
   if (ds.ordavskicka){ stopp(); const t = text('ordAv'); if (!t){ toast('Skriv vad som behöver rättas.'); return; } ndOrdPost('tillbaka', {id:nr('ordavskicka').id, reason:t}); return; }
   if (ds.ordbetald){ stopp(); ndOrdPost('betald', {id:nr('ordbetald').id}); return; }
   if (ds.ordmakskicka){ stopp(); const t = text('ordMk'); if (!t){ toast('Skriv varför ordern makuleras.'); return; } ndOrdPost('makulera', {id:nr('ordmakskicka').id, reason:t, inkio:true}); return; }
@@ -30209,7 +30494,7 @@ pvBonusLagg = function(){
   ndPvPost('bonus', {vem:id, manad:PVMAN, belopp:bel, skal:pvSkal(skal)});
 };
 const _ndPvGodkannHar = pvGodkannHar;
-pvGodkannHar = function(nr){ if (!ndP()) return _ndPvGodkannHar(nr); const o = ORDER.find(x => x.nr === nr); if (o && typeof ndOrdPost === 'function') ndOrdPost('godkann', {id:o.id}); };
+pvGodkannHar = function(nr){ if (!ndP()) return _ndPvGodkannHar(nr); const o = ORDER.find(x => x.nr === nr); if (typeof ndTjSaknasOppna === 'function' && ndTjSaknasOppna(o)) return; if (o && typeof ndOrdPost === 'function') ndOrdPost('godkann', {id:o.id}); };
 // Enheten för en tröskel: den nivån har i dag, annars den trappan mest använder.
 function ndPvEnhet(t){ const tr = ndP().trappor[PVMAN] || [], x = tr.find(n => n.t === t); if (x && x.enhet) return x.enhet; const r = {}; tr.forEach(n => { r[n.enhet] = (r[n.enhet] || 0) + 1; }); return Object.keys(r).sort((a, b) => r[b] - r[a])[0] || 'amount_fixed'; }
 document.addEventListener('click', e => {

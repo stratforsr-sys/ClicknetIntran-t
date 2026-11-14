@@ -250,7 +250,12 @@ export type Underlagskonsekvens = {
  * kronors avvikelse mot samma tal avrundat till sist.
  */
 export function avrunda(belopp: number): number {
-  return belopp < 0 ? -Math.round(-belopp) : Math.round(belopp);
+  // FLYTTALSBRUSET FÖRST (hårdtestet 2026-11-13). 840 kr × 11 % × 5/12 är exakt
+  // 38,50 kr, men flyttalet blir 38,4999… och avrundades till 38. Talet rundas
+  // först till en miljondels krona: långt under ett öre, långt över bruset. Inget
+  // tal som inte ligger inom en halv miljondel från en halv krona påverkas.
+  const b = Math.round(belopp * 1e6) / 1e6;
+  return b < 0 ? -Math.round(-b) : Math.round(b);
 }
 
 /**
