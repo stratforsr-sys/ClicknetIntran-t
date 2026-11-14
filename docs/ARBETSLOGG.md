@@ -10,6 +10,9 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 Beställaren, på frågan om det som återstod: "Kör med Zen och med calle", "Ja han ska vara mötesbokare", "Jag har
 lyssnat och det fungerar" (säljtavlans ljud) och om steg 4: "Ja det är väl bra … Bygg det".
 
+**På `main` som `04442d9`** efter beställarens "ja" (de tre stegcommitarna ihopslagna, samma träd som previewn
+`d260cb2`), produktionsbygget grönt 22:38:57 UTC.
+
 **Carl Erikson = Mötesbokare + Säljare** 21:21 UTC, genom `/nav2/anstallda` (`roll`) som Zen: `andraRoll` skrev
 rollen, `role.granted` i `audit_log` och notisen "Du har fått rollen Mötesbokare". Nav 2.0 har ingen knapp för
 befattning (bara de tre nivåerna), så anropet gjordes från sidan med Zens kaka.
