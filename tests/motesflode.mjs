@@ -9,7 +9,7 @@ import {
   INST_FORVAL, PIPE_KOLUMNER, lasInstallningar, lokalDag, bekraftelseFonster, pipelineKolumn,
   bradska, niva, fordela, taptSkal, manadFor, kortFas, ursprungligBokare, sorteraFas, provaInstallning, INST_NYCKLAR,
   sparadeSvar, motesTz, giltigTidszon, MOTES_NULAGE, MOTES_NEJ_SKAL, MOTES_KALLOR, motesVal, omfattas, nivaSvar, raknaRader, andel, omraknadRad, rattelseNot, radernaStammer, harLastBelopp, vemPaminns, utanRedanSkickade, provaAngra,
-  vemBekraftar, foregaendeArbetsdag, nastaArbetsdag, skaBekraftas,
+  vemBekraftar, foregaendeArbetsdag, nastaArbetsdag, skaBekraftas, ringIgenTid, vemRingerIgen, utanRingIgenSkickade, RING_IGEN_TIMMAR, RING_IGEN_SENAST,
 } from "../src/lib/nav2/motesflode.ts";
 
 let fel = 0;
@@ -327,7 +327,7 @@ console.log("Bekräftelsen: vem ska ringa, och när");
   const inst = { ...INST_FORVAL, gallerFran: "2026-11-01T00:00:00Z" };
   const aktiva = new Set(["b1", "h1", "x1"]);
   // Tisdag 17 nov 10:00 i Stockholm (09:00Z), bokat 6 nov. Fönstret: fredag 13 till måndag 16.
-  const m = (o) => ({ id: "m1", moteTid: "2026-11-17T09:00:00Z", senastAndrad: "2026-11-06T10:00:00Z", bokatAv: "b1", hallsAv: "h1", art: "ny", bekraftat: false, utfall: null, uppgift: null, ...o });
+  const m = (o) => ({ id: "m1", moteTid: "2026-11-17T09:00:00Z", senastAndrad: "2026-11-06T10:00:00Z", bokatAv: "b1", hallsAv: "h1", art: "ny", bekraftat: false, utfall: null, uppgift: null, senastForsok: null, ...o });
   const kor = (moten, nuIso, i = inst, a = aktiva) => vemBekraftar(moten, a, new Date(nuIso), i);
   const svar = (o) => ({ moteId: "m1", till: "b1", slag: "ring", skapaUppgift: true, dag: "2026-11-13", senast: "2026-11-16", ...o });
   lika("torsdag före fönstret: ingenting", kor([m({})], "2026-11-12T10:00:00Z"), []);
@@ -381,6 +381,59 @@ console.log("Påminnelserna: redan skickade");
   lika("skickad igår: ingen utesluts", utanRedanSkickade(att, { data: [sk({ created_at: "2026-11-09T17:00:00Z" })], error: null }, "2026-11-10", tz, nyckel), att);
   lika("dagen räknas i tidszonen: 23:30 lokal är samma dag", utanRedanSkickade(att, { data: [sk({ created_at: "2026-11-10T22:30:00Z" })], error: null }, "2026-11-10", tz, nyckel), [att[1]]);
   lika("annan källa utesluter inte", utanRedanSkickade(att, { data: [sk({ kalla: "mote-bedomning-saknas" })], error: null }, "2026-11-10", tz, nyckel), att);
+}
+
+console.log("Ring igen efter Fick inte tag: när");
+{
+  // Stockholm i november är UTC+1. Mötet tisdag 17 nov 10:00 lokal (09:00Z).
+  const T = "2026-11-17T09:00:00Z";
+  lika("fyra timmar och 17:00 är förvalen", [RING_IGEN_TIMMAR, RING_IGEN_SENAST], [4, "17:00"]);
+  lika("fredag 09:30: ring igen 13:30", ringIgenTid("2026-11-13T08:30:00Z", T, tz), "2026-11-13T12:30:00.000Z");
+  lika("fredag 13:00: ring igen 17:00 (precis)", ringIgenTid("2026-11-13T12:00:00Z", T, tz), "2026-11-13T16:00:00.000Z");
+  lika("fredag 13:01: efter 17:00, nästa arbetsdags påminnelse tar över", ringIgenTid("2026-11-13T12:01:00Z", T, tz), null);
+  lika("lördag 10:00: helg", ringIgenTid("2026-11-14T09:00:00Z", T, tz), null);
+  lika("torsdag 22:00: blir nästa dag", ringIgenTid("2026-11-12T21:00:00Z", T, tz), null);
+  lika("inget försök", ringIgenTid(null, T, tz), null);
+  lika("mötesdagen (mötet 14:00), 11:00: senast en timme före, 13:00", ringIgenTid("2026-11-17T10:00:00Z", "2026-11-17T13:00:00Z", tz), "2026-11-17T12:00:00.000Z");
+  lika("mötesdagen 13:30 (mötet 14:00): en timme före har passerat", ringIgenTid("2026-11-17T12:30:00Z", "2026-11-17T13:00:00Z", tz), null);
+  lika("julafton är ingen arbetsdag", ringIgenTid("2026-12-24T08:00:00Z", "2026-12-28T09:00:00Z", tz), null);
+  lika("sommartid: 09:30 lokal (07:30Z) ger 13:30 lokal", ringIgenTid("2026-06-10T07:30:00Z", "2026-06-12T08:00:00Z", tz), "2026-06-10T11:30:00.000Z");
+  lika("trasig tid", ringIgenTid("nej", T, tz), null);
+}
+
+console.log("Ring igen efter Fick inte tag: vem, och en gång per försök");
+{
+  const inst = { ...INST_FORVAL, gallerFran: "2026-11-01T00:00:00Z" };
+  const aktiva = new Set(["b1", "h1", "x1"]);
+  const F = "2026-11-13T08:30:00Z";   // fredag 09:30 lokal
+  const m = (o) => ({ id: "m1", moteTid: "2026-11-17T09:00:00Z", senastAndrad: "2026-11-06T10:00:00Z", bokatAv: "b1", hallsAv: "h1", art: "ny", bekraftat: false, utfall: null, uppgift: null, senastForsok: F, ...o });
+  const kor = (moten, nuIso, i = inst, a = aktiva) => vemRingerIgen(moten, a, new Date(nuIso), i);
+  const svar = (o) => ({ moteId: "m1", till: "b1", nar: "2026-11-13T12:30:00.000Z", forsok: F, ...o });
+  lika("13:29: inte än", kor([m({})], "2026-11-13T12:29:00Z"), []);
+  lika("13:30: bokaren ska ringa igen", kor([m({})], "2026-11-13T12:30:00Z"), [svar({})]);
+  lika("16:45: fortfarande (en per försök sköts av utanRingIgenSkickade)", kor([m({})], "2026-11-13T15:45:00Z"), [svar({})]);
+  lika("dagen efter: inte (den dagens vanliga påminnelse tar över)", kor([m({})], "2026-11-16T08:00:00Z"), []);
+  lika("inget försök: ingenting", kor([m({ senastForsok: null })], "2026-11-13T12:30:00Z"), []);
+  lika("bekräftat: ingenting", kor([m({ bekraftat: true })], "2026-11-13T12:30:00Z"), []);
+  lika("uppföljningsmöte: ingenting", kor([m({ art: "uppfoljning" })], "2026-11-13T12:30:00Z"), []);
+  lika("utfall satt: ingenting", kor([m({ utfall: "avbokat" })], "2026-11-13T12:30:00Z"), []);
+  lika("uppgiften struken: ingenting", kor([m({ uppgift: { id: "t1", till: "b1", avbruten: true } })], "2026-11-13T12:30:00Z"), []);
+  lika("påminnelsen avstängd: ingenting", kor([m({})], "2026-11-13T12:30:00Z", { ...inst, bekraftaPaminn: false }), []);
+  lika("galler-fran saknas: ingenting", kor([m({})], "2026-11-13T12:30:00Z", { ...inst, gallerFran: null }), []);
+  lika("uppgiften hos en kollega: till kollegan", kor([m({ uppgift: { id: "t1", till: "x1", avbruten: false } })], "2026-11-13T12:30:00Z"), [svar({ till: "x1" })]);
+  lika("bokaren har slutat: hållaren", kor([m({ bokatAv: "borta" })], "2026-11-13T12:30:00Z"), [svar({ till: "h1" })]);
+  lika("båda har slutat: ingenting", kor([m({ bokatAv: "borta", hallsAv: "borta2" })], "2026-11-13T12:30:00Z"), []);
+  lika("försöket efter 13:00: ingen ring igen samma dag", kor([m({ senastForsok: "2026-11-13T12:15:00Z" })], "2026-11-13T16:00:00Z"), []);
+  lika("Ångra lägger tillbaka ett tidigare försök: det gäller", kor([m({ senastForsok: "2026-11-13T07:00:00Z" })], "2026-11-13T11:00:00Z"), [svar({ nar: "2026-11-13T11:00:00.000Z", forsok: "2026-11-13T07:00:00Z" })]);
+
+  const att = [svar({}), svar({ moteId: "m2" })];
+  const g = (o = {}) => ({ employee_id: "b1", object_id: "m1", created_at: "2026-11-13T12:30:05Z", ...o });
+  lika("läsfel: null, inget skickas", utanRingIgenSkickade(att, { data: null, error: { message: "x" } }), null);
+  lika("utan data och fel: null", utanRingIgenSkickade(att, { data: null, error: null }), null);
+  lika("inget skickat: båda", utanRingIgenSkickade(att, { data: [], error: null }), att);
+  lika("skickat efter försöket: det mötet utesluts", utanRingIgenSkickade(att, { data: [g()], error: null }), [att[1]]);
+  lika("skickat om ett tidigare försök: ett nytt försök påminns igen", utanRingIgenSkickade(att, { data: [g({ created_at: "2026-11-13T08:00:00Z" })], error: null }), att);
+  lika("skickat till någon annan: utesluter inte", utanRingIgenSkickade(att, { data: [g({ employee_id: "x1" })], error: null }), att);
 }
 
 console.log("Radering med låst provision (slutfix 2)");

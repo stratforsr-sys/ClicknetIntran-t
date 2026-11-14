@@ -14,6 +14,18 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten-ring-igen",
+    rubrik: "Möten: Fick inte tag påminner dig att ringa igen",
+    ingress: "Svarar inte kunden när du ringer för att bekräfta, tryck Fick inte tag. Fyra timmar senare får du en notis i klockan och telefonen: Ring kunden igen.",
+    text: `Tryck **Fick inte tag** på mötet i **Möten** när kunden inte svarar. Kortet står kvar i **Att bekräfta** och visar
+när Nav påminner dig, till exempel "1 försök · ring igen 14:30". Då kommer en notis i klockan och en push i telefonen.
+Nav påminner aldrig efter 17.00 eller på en helg, och på mötesdagen senast en timme före mötet. Trycker du sent på
+dagen kommer nästa arbetsdags vanliga påminnelse i stället. Ångrar du trycket försvinner påminnelsen.`,
+    datum: "2026-11-14",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "moten-uppfoljning-kanns-igen",
     rubrik: "Möten: Nav ser när kunden redan träffats",
     ingress: "Ett möte med en kund som redan haft ett hållet möte är ett uppföljningsmöte, också när det bokats med ett annat nummer eller innan det förra mötet fick sitt utfall.",

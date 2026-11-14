@@ -551,6 +551,8 @@ export type BekraftaMote = {
   utfall: string | null;
   /** `avbruten`: den som har uppgiften har strukit den. Då kommer inga fler notiser; mötet står kvar på tavlan. */
   uppgift: { id: string; till: string | null; avbruten: boolean } | null;
+  /** Senaste Fick inte tag (`mote.senast_forsok`): Ring igen fyra timmar efter (`ringIgenTid`). */
+  senastForsok: string | null;
 };
 /** Vad som ska hända med mötet just nu: en notis till `till`, och en ny uppgift om `skapaUppgift`. */
 export type Bekraftelse = {
@@ -611,6 +613,67 @@ export function vemBekraftar(moten: readonly BekraftaMote[], aktiva: ReadonlySet
     ut.push({ moteId: m.id, till, slag, skapaUppgift: !m.uppgift, dag: idag, senast: f.senast });
   }
   return ut;
+}
+
+/** Fick inte tag: så många timmar efter trycket påminner Nav om att ringa igen, och aldrig efter klockslaget. */
+export const RING_IGEN_TIMMAR = 4;
+export const RING_IGEN_SENAST = "17:00";
+
+/**
+ * När Nav påminner om att ringa igen efter Fick inte tag (beställaren 2026-11-13: "lägg bara svarade inte ... flytta
+ * påminnelsen fram 4 timmar ... behåll kortet på att bekräfta"). Fyra timmar efter trycket, och senast en timme före
+ * mötet. Null när det inte går samma arbetsdag före 17:00, eller inte efter trycket (en timme före mötet har redan
+ * passerat): då tar nästa arbetsdags vanliga påminnelse (`vemBekraftar`) över. Tiden i tidszonen.
+ */
+export function ringIgenTid(senastForsok: string | null, moteTid: string, tz: string): string | null {
+  if (!senastForsok) return null;
+  const tryck = Date.parse(senastForsok);
+  const start = Date.parse(moteTid);
+  if (!Number.isFinite(tryck) || !Number.isFinite(start)) return null;
+  const t = new Date(Math.min(tryck + RING_IGEN_TIMMAR * 3600_000, start - 3600_000));
+  if (t.getTime() <= tryck) return null;
+  const dag = lokalDag(t, tz);
+  if (dag !== lokalDag(new Date(tryck), tz) || !arArbetsdag(dag) || lokalKlockan(t, tz) > RING_IGEN_SENAST) return null;
+  return t.toISOString();
+}
+
+/** En Ring igen-notis: till vem, om vilket möte, och vilket försök den gäller (en notis per försök). */
+export type RingIgen = { moteId: string; till: string; nar: string; forsok: string };
+
+/**
+ * Ring igen, ren: vilka möten där det är dags att ringa igen just nu. Samma möten och samma mottagare som
+ * bekräftelsen (`vemBekraftar`): bara ett första möte, obekräftat, utan utfall och före start, med påminnelsen på
+ * och uppgiften inte struken. Tiden är `ringIgenTid`; en påminnelse som inte hann gå samma dag skickas inte dagen
+ * efter (då har den dagens vanliga påminnelse kommit). Ångras försöket står det förra försöket kvar, och Ring igen
+ * gäller det. Att samma försök inte påminns två gånger sköter jobbet (`utanRingIgenSkickade`).
+ */
+export function vemRingerIgen(moten: readonly BekraftaMote[], aktiva: ReadonlySet<string>, nu: Date, inst: MotenInst): RingIgen[] {
+  if (!inst.bekraftaPaminn) return [];
+  const tz = inst.tidszon;
+  const idag = lokalDag(nu, tz);
+  const ut: RingIgen[] = [];
+  for (const m of moten) {
+    if (!m.senastForsok || !omfattas(m.moteTid, inst.gallerFran) || !skaBekraftas(m.art)) continue;
+    if (m.bekraftat || m.utfall || m.uppgift?.avbruten) continue;
+    if (Date.parse(m.moteTid) <= nu.getTime()) continue;
+    const nar = ringIgenTid(m.senastForsok, m.moteTid, tz);
+    if (!nar || Date.parse(nar) > nu.getTime() || lokalDag(nar, tz) !== idag) continue;
+    const harUppgift = m.uppgift?.till && aktiva.has(m.uppgift.till) ? m.uppgift.till : null;
+    const till = harUppgift ?? (aktiva.has(m.bokatAv) ? m.bokatAv : aktiva.has(m.hallsAv) ? m.hallsAv : null);
+    if (!till) continue;
+    ut.push({ moteId: m.id, till, nar, forsok: m.senastForsok });
+  }
+  return ut;
+}
+
+/**
+ * Ring igen-notiserna som inte redan skickats: en per försök, alltså ingen `mote-ring-igen` till samma person om
+ * samma möte sedan trycket. Null när det som skickats inte gick att läsa (då skickas ingenting den körningen).
+ */
+export function utanRingIgenSkickade(att: readonly RingIgen[], gamla: { data: unknown; error: unknown }): RingIgen[] | null {
+  if (gamla.error || !Array.isArray(gamla.data)) return null;
+  const rader = gamla.data as { employee_id: string; object_id: string; created_at: string }[];
+  return att.filter((r) => !rader.some((g) => g.employee_id === r.till && g.object_id === r.moteId && Date.parse(g.created_at) >= Date.parse(r.forsok)));
 }
 
 /**

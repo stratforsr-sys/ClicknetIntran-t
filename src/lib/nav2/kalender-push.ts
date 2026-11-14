@@ -51,8 +51,9 @@ export const PUSHKALLOR = new Set<string>([
   "leverans-frist",
   "leverans-studs",
   // Möten (2026-11-13): "Bekräfta mötet med …". Beställaren: viktigt att man inte tappar det, så telefonen är
-  // standardläget också för den som inte slagit på allt.
+  // standardläget också för den som inte slagit på allt. Ring igen efter Fick inte tag (2026-11-14) av samma skäl.
   "mote-bekrafta",
+  "mote-ring-igen",
 ]);
 
 /**

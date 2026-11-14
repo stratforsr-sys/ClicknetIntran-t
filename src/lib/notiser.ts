@@ -605,6 +605,12 @@ export const NOTIS_KALLOR = [
    * uppgiften. Händelse, en per möte och dag: att mötet fortfarande väntar syns i Möten och i Uppgifter.
    */
   "mote-bekrafta",
+  /**
+   * Nav 2.0, Möten (2026-11-14): Fick inte tag på kunden, ring igen. Jobbet skickar den fyra timmar efter trycket
+   * (senast 17:00, på mötesdagen senast en timme före mötet; `ringIgenTid`) till samma person som bekräftelsen.
+   * Händelse, en per försök.
+   */
+  "mote-ring-igen",
   /** Nav 2.0, Möten (2026-11-11): bokaren ifrågasätter nivån på ett möte. Går till alla admins, som avgör. */
   "mote-ifragasatt",
 
@@ -816,6 +822,7 @@ export const HANDELSEKALLOR = [
   "mote-utfall-saknas",
   "mote-bedomning-saknas",
   "mote-bekrafta",
+  "mote-ring-igen",
   "mote-ifragasatt",
   "fel-meddelande",
   "fel-lagad",

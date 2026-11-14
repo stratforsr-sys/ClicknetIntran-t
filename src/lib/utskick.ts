@@ -320,6 +320,7 @@ export const SORT_NAMN: Record<string, string> = {
   "mote-utfall-saknas": "Utfall saknas på ett möte",
   "mote-bedomning-saknas": "Möte som väntar på bedömning",
   "mote-bekrafta": "Möte att bekräfta",
+  "mote-ring-igen": "Ring kunden igen om ett möte",
   "mote-ifragasatt": "Nivån på ett möte ifrågasatt",
   kvallsnotis: "Kvällsnotisen om morgondagen",
 };

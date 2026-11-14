@@ -7,7 +7,7 @@ import { dagarBakat, svenskTidpunkt, svenskVeckodag, svensktDatum } from "@/lib/
 import { lokal } from "./leads";
 import { arHallare, arKapad, nejSkal, saljarePerKedja, skivor, slaIhopAvgjorda, sorteraAvgjorda, farAndraInstallning, farRattaUtfall, farSeInstallningar, KOLUMNER, MOTE_PLATS, platsTyp, type Kolumn, type Platstyp } from "./motenforma";
 import {
-  bekraftelseFonster, bradska, fordela, kortFas, lasInstallningar, manadFor, motesVal, PIPE_KOLUMNER, skaBekraftas, sorteraFas, sparadeSvar, ursprungligBokare,
+  bekraftelseFonster, bradska, fordela, kortFas, lasInstallningar, manadFor, motesVal, PIPE_KOLUMNER, ringIgenTid, skaBekraftas, sorteraFas, sparadeSvar, ursprungligBokare,
   type MotenInst, type MotesVal, type PipeKolumn,
 } from "./motesflode";
 
@@ -60,6 +60,9 @@ export type NdMoteKort = {
   /** Försöken att nå kunden sedan mötet bokades eller senast flyttades. */
   forsok: number;
   senastForsok: string | null;
+  /** När Nav påminner om att ringa igen efter senaste Fick inte tag (`ringIgenTid`). Null utan försök, för ett
+   *  bekräftat möte och för ett uppföljningsmöte, och när påminnelsen inte går samma dag (nästa dags tar över). */
+  ringIgen: string | null;
   deltagare: string[];
   mote: {
     id: string;
@@ -414,6 +417,7 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
     bradska: fonster ? bradska(fonster.senast, fas, nu, tz) : null,
     forsok: f?.forsok ?? 0,
     senastForsok: f?.senast_forsok ?? null,
+    ringIgen: fonster && r.bekraftat !== true ? ringIgenTid(f?.senast_forsok ?? null, r.mote_tid as string, tz) : null,
     deltagare: r.deltagare ?? [],
     mote:
       r.mote_id && r.mote_tid

@@ -5,6 +5,31 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-14 · Möten: samma kund känns igen, och Fick inte tag påminner om att ringa igen (grenen `moten-samma-kund`)
+
+**Varför.** Beställaren såg Bekräfta på ORION CAR AB:s andra möte, dagen efter att bara det första mötet skulle
+bekräftas (0295). Felet låg inte i 0295 utan i vad Nav kallar ett första möte: arten sattes vid bokningen ur kortets
+egen kedja, och bokningen känner igen ett bolag bara på telefonnumret. Orion Car bokades andra gången med ett annat
+nummer: nytt bolag, nytt kort, `art = 'ny'`. Och mötet bokades 08:29 medan det första pågick (utfall 08:48), så även
+på samma kort hade arten blivit fel. Säljtavlan hade redan mött samma Orion Car (2026-11-13) och känner igen samma
+bolag på namn, telefon och domän; den regeln återanvänds här, i SQL, med e-post som beställarens tillägg.
+
+**Vad.** 0296: `mote_kundens_bolag`, `mote_kunden_traffad`, `mote_art_ratta` och fyra nyckelfunktioner. Bokningen
+frågar `mote_kunden_traffad`, jobbet kör `mote_art_ratta` före städningen var kvart, så ett möte blir uppföljningsmöte
+också när det förra mötet får sitt utfall efter bokningen. Arten ändras bara mot uppföljning och bara på kommande möten
+utan utfall: ingen låst provision rörs. Orion Car slogs ihop med ett engångsskript (inte i migrationen: kunddata hör
+inte hemma i produktens migrationer).
+
+Ring igen: beställaren ville inte ha en knapp "flytta 4 timmar" utan att Fick inte tag flyttar påminnelsen fram fyra
+timmar och att kortet står kvar i Att bekräfta. Regeln (`ringIgenTid`): fyra timmar efter trycket, aldrig efter 17:00
+eller på en helg, på mötesdagen senast en timme före mötet; annars tar nästa arbetsdags vanliga påminnelse över. En
+egen notiskälla (`mote-ring-igen`) i stället för `mote-bekrafta`, för att bekräftelsens nyckel är (källa, möte, dag):
+en andra notis samma dag hade krockat med dagens påminnelse. Nyckeln för Ring igen är "efter försöket".
+
+**Avvägt bort.** Att slå ihop kort automatiskt när bokningen känner igen kunden på namn eller e-post: ett kort per
+bolag spärras av `mote_ett_oppet`, så ett möte bokat medan det förra pågår hade nekats. Arten räcker för att
+bekräftelsen, statistiken och provisionen ska bli rätt. Ett dubblettkort rättas som Orion Car, med ett engångsskript.
+
 ## 2026-11-13/14 · Order: provision på tjänsterna (0293) och finans = 12 % av det som blir kvar (på `main` som `ceed785`, 0293 körd; bygget grönt 15:43 UTC)
 
 **Vad:** en tjänst på en paketorder gav ingen provision alls (Jämtlandsstäd #40: matrisens 3 500 kr för paketet,

@@ -7,8 +7,8 @@ import { notifiera } from "@/lib/notishandelse-server";
 import { notisId } from "@/lib/notiser";
 import { lokal } from "./leads";
 import {
-  lasInstallningar, lokalDag, lokalKlockan, utanRedanSkickade, vemBekraftar, vemPaminns,
-  type BekraftaMote, type Bekraftelse, type Lage, type MotenInst, type Paminnelse, type PaminnelseMote,
+  lasInstallningar, lokalDag, lokalKlockan, utanRedanSkickade, utanRingIgenSkickade, vemBekraftar, vemPaminns, vemRingerIgen,
+  type BekraftaMote, type Bekraftelse, type Lage, type MotenInst, type Paminnelse, type PaminnelseMote, type RingIgen,
 } from "./motesflode";
 import { UTFALL_ROLLER } from "./motenforma";
 import { ProvisionKonflikt, lasProvision, reparationsKandidater } from "./motesprovision-server";
@@ -39,10 +39,10 @@ const DYGN = 24 * 3600 * 1000;
 const MAX_REPARATIONER = 50;
 
 type MoteRad = { id: string; kedja_id: string; mote_tid: string; langd_min: number | null; utfall: string | null; niva: string | null; utfall_nar: string | null; halls_av: string };
-export type MotenJobbKvitto = { utfallSaknas: number; bedomningSaknas: number; reparerade: number; hoppade: number; uppgifter: number; bekrafta: number; stadade: number; uppfoljning: number; hoppade_over?: string };
+export type MotenJobbKvitto = { utfallSaknas: number; bedomningSaknas: number; reparerade: number; hoppade: number; uppgifter: number; bekrafta: number; ringIgen: number; stadade: number; uppfoljning: number; hoppade_over?: string };
 
 export async function korMotenJobb(db: Db, nu: Date = new Date()): Promise<MotenJobbKvitto> {
-  const kvitto: MotenJobbKvitto = { utfallSaknas: 0, bedomningSaknas: 0, reparerade: 0, hoppade: 0, uppgifter: 0, bekrafta: 0, stadade: 0, uppfoljning: 0 };
+  const kvitto: MotenJobbKvitto = { utfallSaknas: 0, bedomningSaknas: 0, reparerade: 0, hoppade: 0, uppgifter: 0, bekrafta: 0, ringIgen: 0, stadade: 0, uppfoljning: 0 };
   const { data: iRader } = await db.from("nav_setting").select("key, value").like("key", "moten.%").limit(100);
   const inst = lasInstallningar((iRader ?? []) as { key: string; value: unknown }[]);
   if (!inst.gallerFran) return { ...kvitto, hoppade_over: "moten.galler-fran saknas" };
@@ -100,7 +100,7 @@ export async function korMotenJobb(db: Db, nu: Date = new Date()): Promise<Moten
 /** Upp till 14 arbetsdagar före mötet, plus helger och röda dagar emellan. */
 const BEKRAFTA_FRAMAT = 30 * DYGN;
 
-type ObekraftatRad = { id: string; kedja_id: string; mote_tid: string; bokat_av: string; halls_av: string; bokat_nar: string; flyttad_nar: string | null; art: string };
+type ObekraftatRad = { id: string; kedja_id: string; mote_tid: string; bokat_av: string; halls_av: string; bokat_nar: string; flyttad_nar: string | null; art: string; senast_forsok: string | null };
 type KortRad = { kedja_id: string; namn: string | null; kontakt: string | null; telefon: string | null };
 
 /** "tis 17 nov 10:00" i tidszonen. */
@@ -132,6 +132,8 @@ function ringText(k: KortRad | undefined): string {
  * skickas inga notiser den körningen (annars hade varje kvart gett en ny), men uppgifterna läggs ändå upp.
  * Bara det första mötet bekräftas: ett uppföljningsmöte får ingen uppgift (`vemBekraftar`, och databasen nekar),
  * och städningen tar bort en öppen uppgift som redan lagts upp på ett (0295).
+ * Ring igen: fyra timmar efter Fick inte tag (`vemRingerIgen`, senast 17:00) får samma person en notis `mote-ring-igen`,
+ * en per försök.
  * Först gör `mote_art_ratta` (0296) ett kommande möte till ett uppföljningsmöte när kunden redan har träffats, också
  * på ett annat kort för samma kund (namn, telefon, domän eller e-post): ett möte som bokades innan det förra fick sitt
  * utfall, eller med ett annat nummer, slutar då att bekräftas inom en kvart, och städningen tar dess uppgift.
@@ -150,7 +152,7 @@ async function bekraftelser(db: Db, inst: MotenInst, gallerFran: string, nu: Dat
   const fran = new Date(Math.max(Date.parse(gallerFran), nu.getTime())).toISOString();
   const { data: mr, error: mfel } = await db
     .from("mote")
-    .select("id, kedja_id, mote_tid, bokat_av, halls_av, bokat_nar, flyttad_nar, art")
+    .select("id, kedja_id, mote_tid, bokat_av, halls_av, bokat_nar, flyttad_nar, art, senast_forsok")
     .is("utfall", null)
     .is("bekraftat_nar", null)
     .gt("mote_tid", fran)
@@ -191,14 +193,16 @@ async function bekraftelser(db: Db, inst: MotenInst, gallerFran: string, nu: Dat
       bekraftat: false,
       utfall: null,
       uppgift: t ? { id: t, till: task.get(t)?.assignee_id ?? null, avbruten: sistaTyp.get(t) === "avbruten" } : null,
+      senastForsok: r.senast_forsok,
     };
   });
   const att = vemBekraftar(fraga, aktiva, nu, inst);
-  if (!att.length) return;
+  const ring = vemRingerIgen(fraga, aktiva, nu, inst);
+  if (!att.length && !ring.length) return;
 
   // Bolaget och vem som ska ringas, ur tavlans vy.
   const motesRad = new Map(rader.map((r) => [r.id, r]));
-  const kedjor = [...new Set(att.map((b) => motesRad.get(b.moteId)!.kedja_id))];
+  const kedjor = [...new Set([...att, ...ring].map((b) => motesRad.get(b.moteId)!.kedja_id))];
   const { data: kr } = await db.from("mote_kort").select("kedja_id, namn, kontakt, telefon").in("kedja_id", kedjor).limit(kedjor.length);
   const kort = new Map(((kr ?? []) as unknown as KortRad[]).map((k) => [k.kedja_id, k]));
 
@@ -218,7 +222,46 @@ async function bekraftelser(db: Db, inst: MotenInst, gallerFran: string, nu: Dat
     }
   }
 
-  await skickaBekraftelser(db, att, motesRad, kort, tz, nu, kvitto);
+  if (att.length) await skickaBekraftelser(db, att, motesRad, kort, tz, nu, kvitto);
+  if (ring.length) await skickaRingIgen(db, ring, motesRad, kort, tz, nu, kvitto);
+}
+
+/**
+ * Ring igen efter Fick inte tag (`vemRingerIgen`): en notis per försök, med push. Går det inte att läsa vad som redan
+ * skickats skickas ingenting den körningen (annars hade varje kvart gett en ny).
+ */
+async function skickaRingIgen(db: Db, ring: RingIgen[], motesRad: Map<string, ObekraftatRad>, kort: Map<string, KortRad>, tz: string, nu: Date, kvitto: MotenJobbKvitto): Promise<void> {
+  const fran = Math.min(...ring.map((r) => Date.parse(r.forsok)));
+  const gamla = await db
+    .from("notification_event")
+    .select("employee_id, object_id, created_at")
+    .eq("kalla", "mote-ring-igen")
+    .in("object_id", [...new Set(ring.map((r) => r.moteId))])
+    .gte("created_at", new Date(fran).toISOString())
+    .limit(5000);
+  const nya = utanRingIgenSkickade(ring, { data: gamla.data, error: gamla.error });
+  if (!nya) {
+    kvitto.hoppade_over = "Redan skickade Ring igen-notiser gick inte att läsa";
+    await skrivFel({ kind: "automatic", path: "/api/jobb/moten", digest: "moten-jobb-ring-igen-skickade", message: `Möten-jobbet kunde inte läsa redan skickade Ring igen-notiser och skickade inga: ${gamla.error?.message ?? "okänt fel"}`, blocking: false });
+    return;
+  }
+  for (const r of nya) {
+    const m = motesRad.get(r.moteId);
+    if (!m) continue;
+    const k = kort.get(m.kedja_id);
+    const bolag = k?.namn?.trim() || "kunden";
+    const ok = await notifiera({
+      till: r.till,
+      av: null,
+      kalla: "mote-ring-igen",
+      typ: "kalender",
+      rubrik: `Ring ${bolag} igen`,
+      detalj: `Fick inte tag ${lokalKlockan(new Date(r.forsok), tz)} · mötet ${motesText(m.mote_tid, tz)} · ring ${ringText(k)}`,
+      href: `/moten/${m.id}`,
+      objekt: { typ: "mote", id: m.id },
+    });
+    if (ok) kvitto.ringIgen++;
+  }
 }
 
 async function skickaBekraftelser(db: Db, att: Bekraftelse[], motesRad: Map<string, ObekraftatRad>, kort: Map<string, KortRad>, tz: string, nu: Date, kvitto: MotenJobbKvitto): Promise<void> {

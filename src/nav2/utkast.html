@@ -38069,6 +38069,8 @@ function moFas(k){
 }
 // Bara det första mötet bekräftas (2026-11-13). Ett uppföljningsmöte har inget fönster och står i Bokat till mötet.
 const moUppfMote = k => !!(k && k.mote && k.mote.art === 'uppfoljning');
+// Ring igen efter Fick inte tag: klockslaget när Nav påminner, så länge det inte passerat (servern räknar, ringIgenTid).
+const moRingIgen = k => { const t = k && k.ringIgen && moLokal(k.ringIgen); return t && moMin(t) > moNuMin() ? moKl(t) : null; };
 const moKr = n => `${Math.round(n || 0).toLocaleString('sv-SE')} kr`;
 const moIni = n => String(n || '').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0]).join('').toUpperCase() || '?';
 const moVdag = d => { const n = moDagar(ndIdag(), d); return n <= 0 ? 'i dag' : n === 1 ? 'i morgon' : n < 7 ? FRWD[new Date(d + 'T12:00:00Z').getUTCDay() || 7] : frKort(d); };
@@ -39518,7 +39520,8 @@ function moPipeKort(k){
     : f === 'bokat' && w ? `<span class="mo-due" title="Bekräftas från ${esc(moVdag(w.oppnar))}">${brad === 'idag' ? 'bekräfta i dag' : brad === 'imorgon' ? 'bekräfta i morgon' : 'från ' + esc(moVdag(w.oppnar))}</span>`
     : f === 'att_bekrafta' ? `<span class="mo-due ${brad === 'idag' ? 'd' : brad === 'imorgon' ? 's' : ''}">${brad === 'idag' ? 'i dag' : brad === 'imorgon' ? 'i morgon' : w ? 'senast ' + esc(moVdag(w.senast)) : ''}</span>` : '';
   // Försöken som text (B15): "2 försök, senast i går 14:10". Står i ringraden, bredvid numret.
-  const forsok = k.forsok ? `<span class="mo-fs">${k.forsok} försök${k.senastForsok && moLokal(k.senastForsok) ? ', senast ' + esc(moNar(moLokal(k.senastForsok))) : ''}</span>` : '';
+  const ri = moRingIgen(k);
+  const forsok = k.forsok ? `<span class="mo-fs">${k.forsok} försök${ri ? ` · <b title="Nav påminner dig då">ring igen ${ri}</b>` : k.senastForsok && moLokal(k.senastForsok) ? ', senast ' + esc(moNar(moLokal(k.senastForsok))) : ''}</span>` : '';
   const vem = f === 'hos_saljaren' ? `<span>${esc(moFor(m.hallsAvNamn))} väntar på utfall</span>` : `<span>${esc(moFor(m.hallsAvNamn))}${moFler(k) ? ` +${moFler(k)}` : ''}</span>`;
   // Numret står på kortet när det är dags att ringa (Att bekräfta) och när utfallet väntar (Hos säljaren), så att
   // panelen inte behöver öppnas (F6.3). Ett klick kopierar numret; på en telefon ringer länken.
@@ -39767,7 +39770,7 @@ function moInstVy(){
         <div class="mo-ir"><label><input type="checkbox" data-moi="bekraftaPaminn" ${v.bekraftaPaminn !== false ? 'checked' : ''}> Lägg upp en uppgift och påminn kl.</label><input class="uin" id="moi-btid" type="time" data-moi="bekraftaTid" value="${esc(v.bekraftaTid || '09:00')}" aria-label="Klockslaget för uppgiften och påminnelsen" aria-describedby="moi-btid-h"${v.bekraftaPaminn === false ? ' disabled' : ''}>${moInstStatus('bekraftaPaminn')}${moInstStatus('bekraftaTid')}</div>
         <p class="muted" id="moi-btid-h">${v.bekraftaPaminn === false
           ? 'Av: mötet syns bara i kolumnen. Ingen uppgift och ingen notis.'
-          : `Kl. ${esc(v.bekraftaTid || '09:00')} den första dagen får den som bokade mötet uppgiften Bekräfta mötet, och en notis i klockan och telefonen. Notisen kommer igen varje arbetsdag tills mötet är bekräftat. Bockas uppgiften av blir mötet bekräftat, och tvärtom.`}</p>
+          : `Kl. ${esc(v.bekraftaTid || '09:00')} den första dagen får den som bokade mötet uppgiften Bekräfta mötet, och en notis i klockan och telefonen. Notisen kommer igen varje arbetsdag tills mötet är bekräftat. Bockas uppgiften av blir mötet bekräftat, och tvärtom. Trycker du Fick inte tag påminner Nav dig att ringa igen fyra timmar senare, aldrig efter 17.00 och på mötesdagen senast en timme före mötet. Blir det för sent tar nästa arbetsdags påminnelse över.`}</p>
       </section>
       <section class="rxsek"><h3>Frågorna efter mötet</h3>
         <p class="muted">Säljaren svarar ja eller nej på de frågor som är ikryssade. Högst fem.</p>
@@ -39972,7 +39975,7 @@ function moPanel(k){
     <div class="rxpverk"><span class="pill t-${lage[1]}">${esc(lage[0])}</span><span class="rxpt">${m && moFarMote(k) ? `<button class="btn btn-s btn-sm" data-moa="andra|${k.kedja}">${I('mopenna')}Ändra</button>` : ''}${!m ? `<button class="btn btn-s btn-sm" data-moa="uppf|${k.kedja}">${I('mopenna')}Ändra</button>` : ''}${tel ? `<a class="btn btn-s btn-sm" href="tel:${tel}">${I('phone')}Ring</a>` : ''}${k.epost ? `<a class="btn btn-s btn-sm" href="mailto:${esc(k.epost)}">${I('inbox')}Mejla</a>` : ''}</span></div>
     <div class="rxpb">
       <section class="rxsek"><h3>${m ? 'Mötet' : 'Uppföljning'}</h3>
-        ${m ? `<p class="mo-pt"><b class="num">${moNar(m.tid)}</b> · ${m.langd} min · ${moRel(moMin(m.tid) - moNuMin())}${m.bekraftat ? ' · <span class="pill t-ok">Bekräftat</span>' : ''}${m.flyttningar ? ` · flyttat ${m.flyttningar} ${m.flyttningar === 1 ? 'gång' : 'gånger'}` : ''}${k.forsok ? ` · ${k.forsok} försök utan svar` : ''}${k.fonster && !m.bekraftat && (f === 'bokat' || f === 'att_bekrafta') ? ` · bekräftas senast ${esc(moVdag(k.fonster.senast))}` : ''}${moUppfMote(k) && !m.bekraftat && f === 'bokat' ? ' · uppföljningsmöte, bekräftas inte' : ''}</p>${moPlatsRad(k)}<p class="muted">Bokat av ${esc(m.bokatAvNamn)}.</p>${moMedRad(k)}`
+        ${m ? `<p class="mo-pt"><b class="num">${moNar(m.tid)}</b> · ${m.langd} min · ${moRel(moMin(m.tid) - moNuMin())}${m.bekraftat ? ' · <span class="pill t-ok">Bekräftat</span>' : ''}${m.flyttningar ? ` · flyttat ${m.flyttningar} ${m.flyttningar === 1 ? 'gång' : 'gånger'}` : ''}${k.forsok ? ` · ${k.forsok} försök utan svar${moRingIgen(k) ? `, Nav påminner dig ${moRingIgen(k)}` : ''}` : ''}${k.fonster && !m.bekraftat && (f === 'bokat' || f === 'att_bekrafta') ? ` · bekräftas senast ${esc(moVdag(k.fonster.senast))}` : ''}${moUppfMote(k) && !m.bekraftat && f === 'bokat' ? ' · uppföljningsmöte, bekräftas inte' : ''}</p>${moPlatsRad(k)}<p class="muted">Bokat av ${esc(m.bokatAvNamn)}.</p>${moMedRad(k)}`
           : `<p class="mo-pt"><b>${!u.datum ? 'Ingen dag satt' : moDag(u.datum) === 'i dag' ? 'Ring i dag' : 'Ring ' + moDag(u.datum)}</b>${u.offert ? ' · <span class="pill t-signal">Offert ute</span>' : ''}</p>${u.text ? `<p>${esc(u.text)}</p>` : ''}<p class="muted">${u.ingetSvar ? `Inget svar ${u.ingetSvar} ${u.ingetSvar === 1 ? 'gång' : 'gånger'} i rad.` : 'Inget försök utan svar än.'}</p>`}
         <div class="mo-kn pan">${moKnappar(k, true)}</div></section>
       <section class="rxsek"><h3>Bolaget</h3><dl class="ldfakta">${fakta.map(([a, b]) => `<div><dt>${a}</dt><dd>${b}</dd></div>`).join('')}</dl></section>
@@ -40031,7 +40034,7 @@ const moKapa = (t, n = 30) => t.length > n ? t.slice(0, n - 1).trimEnd() + '…'
 function moEnvagSatt(k, v, fram){
   const m = k.mote, f = v.fore;
   if (v.a === 'bekrafta'){ k.fas = fram ? 'bekraftat' : f.fas; m.bekraftat = fram ? true : f.bekraftat; m.bekraftatNar = fram ? v.nar : f.bekraftatNar; }
-  else { k.forsok = fram ? f.forsok + 1 : f.forsok; k.senastForsok = fram ? v.iso : f.senastForsok; }
+  else { k.forsok = fram ? f.forsok + 1 : f.forsok; k.senastForsok = fram ? v.iso : f.senastForsok; k.ringIgen = fram ? null : f.ringIgen; }
 }
 function moEnvagIgen(){
   MOVAG.forEach((v, kedja) => { const k = ndMo().kort.find(x => x.kedja === kedja); if (k && k.mote && k.mote.id === v.mote) moEnvagSatt(k, v, !v.angrat); });
@@ -40065,7 +40068,7 @@ function moEnvag(a, k, {glid = true} = {}){
   const kedja = k.kedja, m = k.mote;
   if (MOVAG.has(kedja)) return;   // ett svar väntas redan för kortet
   const iso = new Date().toISOString();
-  const v = {a, mote:m.id, iso, nar:moLokal(iso), angrat:false, fore:{fas:k.fas, bekraftat:m.bekraftat, bekraftatNar:m.bekraftatNar, forsok:k.forsok || 0, senastForsok:k.senastForsok || null}};
+  const v = {a, mote:m.id, iso, nar:moLokal(iso), angrat:false, fore:{fas:k.fas, bekraftat:m.bekraftat, bekraftatNar:m.bekraftatNar, forsok:k.forsok || 0, senastForsok:k.senastForsok || null, ringIgen:k.ringIgen || null}};
   MOVAG.set(kedja, v);
   const nasta = moNastaKort(kedja);
   moEnvagSatt(k, v, true); MOL.flytt = Date.now();
