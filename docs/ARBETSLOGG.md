@@ -33,7 +33,10 @@ Sidans skript klarar `node --check`.
 =======
 ## 2026-11-13/14 · Uppgifter: lägg till en kollega i min uppgift (0298)
 
-**Läge:** sju lokala commits ihopslagna till en och flyttade ovanpå main `7316300` på beställarens "fixa allt"
+**Läge:** på `main` som `ce71402` (pushad 19:58 UTC, produktionsbygget grönt 19:59 UTC) efter grön preview (`d71e433`) och
+hela sviten på grenen (två fynd rättade före mergen: rubriker i händelseloggen för `task.member_*`, och `nav2-fart` provar
+`farStryk` mot `farStyra`); session 85 körde sviten på main `ce71402` grön, 10 318 kontroller. Skarpa provet som Zen grönt
+20:20–20:23 UTC (se NASTA_SESSION). Före det: sju lokala commits ihopslagna till en och flyttade ovanpå main `7316300` på beställarens "fixa allt"
 2026-11-14. **0298 KÖRD 19:30 UTC och 0299 KÖRD 19:37 UTC.**
 
 **0299, hittat när 0298:s prov kördes om efter körningen:** "Två som bockar samtidigt" föll en gång av tre.
