@@ -6,6 +6,32 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 ---
 
 
+## 2026-11-16 · Bakgrundsjobben glesare efter Supabases Disk IO-varning (0308 KÖRD)
+
+**Varför.** Supabase mejlade 2026-11-15 att projektets Disk IO-budget håller på att ta slut. Metrics
+(`/customer/v1/privileged/metrics`): 428 MB minne (Nano), MemFree 8–17 MB, MemAvailable ~140 MB, swap halvfull.
+Servern har läst 17,8 TB från disk på 90 dagar för en databas på 150 MB, varav ~1 TB swap; resten är
+filbaserade sidor (pgmajfault 830 miljoner) som läses in igen när en process vaknar. `pg_stat_statements` visar
+att Postgres egna frågor nästan inte läser från disk (`shared_blks_read` högst några hundra block). Lördag i vila:
+5,4 MB/s, ~460 GB per dygn.
+
+**Hypotesen.** `nav-utkorg` och `nav-inkio` körde varje minut dygnet runt (2 880 av ~3 100 körningar per dygn) och
+väckte kedjan pg_cron → pg_net → Vercel → PostgREST. Att pausa dem som prov nekades av behörighetsklassaren;
+beställaren sa sedan "gör jobbet mer sällan".
+
+**0308.** `nav-utkorg` `*/2 4-20 * * *` + ny `nav-utkorg-natt` `*/10 0-3,21-23 * * *`; `nav-inkio` `*/5 * * * *`;
+ny `nav-cronlogg` (03:17 UTC) tar bort `cron.job_run_details` äldre än sju dagar. Loggen gick från 86 000 till
+21 800 rader. Tiderna är valda efter fönstren: uppgiftspåminnelsen har 15 min (10 före, 5 efter), mötespåminnelsen
+från påminnelsetiden till starten (+2 min för "när mötet börjar"), och Inkio-larmet (`STILLA_MS` 15 min) tål två
+missade varv på 5 min. Kalla Inkio-kunder läses nu ungefär var 20:e minut (`attLasa` tar en fjärdedel av de förfallna
+per varv); det finns ingen webhook för anteckningar. Ingen appkod ändrad.
+
+**Mätningen efteråt (23:00–23:24 UTC, ingen inloggad, alla körningar lyckade):** snitt **8,0 MB/s**, alltså inte
+lägre än lördagens 5,4. Lugna intervall 1,6–2,8 MB/s, toppar 16–19 MB/s (23:12–23:16 och 23:20–23:24) som inte
+följer jobbens minuter. Hypotesen håller inte: läsningen kommer från minnesbristen i sig, inte från hur ofta jobben
+körs. Ändringen ligger kvar eftersom den minskar lasten utan att något går förlorat, men den löser inte varningen.
+Kvar: uppgradera compute (beställarens beslut, kostar pengar).
+
 ## 2026-11-15 · Möten: statistiken som instrumentpanel (på `main` `112f8ce`)
 
 **Mergad** 2026-11-15 på beställarens "merga till main men endast det från den här sessionen": grenens tre
