@@ -9,7 +9,7 @@
  *   TZ=UTC node --experimental-strip-types tests/hemtext.mjs
  */
 import {
-  KALLRAD, textObekraftat, textKortObekraftade, textKvitto, textFacit, textFacitKort, textTakt, textTaktFacit,
+  KALLRAD, textObekraftat, textKortObekraftade, textKvitto, textFacit, textFacitKort, textTakt, textTaktFacit, textTaktKort,
   textAndringDom, textTrendSaknas, textTrodde, textAndel, textDom, narText, manadsnamn, gangerText,
 } from "../src/lib/nav2/hemtext.ts";
 
@@ -90,10 +90,15 @@ const TR = [
   { manad: "2026-10", gatt: 10, sa: 2, blev: 3, efterhand: true },
   { manad: "2026-09", gatt: 10, sa: 11, blev: 24, efterhand: true },
 ];
-lika("taktens facit, alla månader", textTaktFacit(TR), "Efter 10 dagar sa takten 2 i oktober (det blev 3) och 11 i september (det blev 24). Räknat i efterhand ur orderna.");
+lika("på kortet: bara den senaste månaden, så att kortet ryms", textTaktFacit(TR), "Efter 10 dagar sa takten 2 i oktober (det blev 3). Räknat i efterhand ur orderna.");
+lika("taktens facit, flera månader", textTaktFacit(TR, 3), "Efter 10 dagar sa takten 2 i oktober (det blev 3) och 11 i september (det blev 24). Räknat i efterhand ur orderna.");
 lika("ur det som visades", textTaktFacit([{ ...TR[0], efterhand: false }]), "Efter 10 dagar sa takten 2 i oktober (det blev 3).");
 lika("efter en dag", textTaktFacit([{ manad: "2026-10", gatt: 1, sa: 0, blev: 3, efterhand: false }]), "Efter 1 dag sa takten 0 i oktober (det blev 3).");
-lika("högst tre månader på kortet", textTaktFacit([TR[0], TR[1], { manad: "2026-08", gatt: 10, sa: 5, blev: 3, efterhand: true }, { manad: "2026-07", gatt: 10, sa: 9, blev: 9, efterhand: true }]).includes("juli"), false);
+lika("högst tre månader när fler begärs", textTaktFacit([TR[0], TR[1], { manad: "2026-08", gatt: 10, sa: 5, blev: 3, efterhand: true }, { manad: "2026-07", gatt: 10, sa: 9, blev: 9, efterhand: true }], 3).includes("juli"), false);
+lika("kortets rad: takten och förra månadens facit i en mening", textTaktKort(40, [{ manad: "2026-10", gatt: 10, sa: 38, blev: 44, efterhand: false }]), "I samma takt blir det ungefär 40. I oktober sa takten 38, det blev 44.");
+lika("kortets rad: räknat i efterhand sägs som det var", textTaktKort(4, TR), "I samma takt blir det ungefär 4. I oktober hade takten sagt 2, det blev 3.");
+lika("kortets rad utan facit", textTaktKort(4, []), "I samma takt blir det ungefär 4.");
+lika("kortets rad för tidigt", textTaktKort(null, TR), "För tidigt för en takt. Den kommer när månadens första arbetsdag har gått.");
 lika("inget facit än", textTaktFacit([]), "Takten har inget facit än. Det kommer när en månad är avslutad.");
 lika("månader utan värde hoppas över", textTaktFacit([{ manad: "2026-10", gatt: 10, sa: null, blev: 3, efterhand: true }]), "Takten har inget facit än. Det kommer när en månad är avslutad.");
 

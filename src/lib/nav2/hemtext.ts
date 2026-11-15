@@ -223,14 +223,27 @@ const och = (l: string[]): string => (l.length <= 1 ? l.join("") : `${l.slice(0,
 /**
  * Taktens facit, bredvid prognosen: vad takten sa vid samma antal gångna
  * arbetsdagar varje avslutad månad, och vad det blev. Också månaderna där den
- * missade. Högst `max` månader på kortet; genomgången visar alla.
+ * missade. Kortet visar den senaste månaden, så att det ryms; genomgången
+ * visar alla.
  */
-export function textTaktFacit(traffar: readonly TaktTraff[], max = 3): string {
+export function textTaktFacit(traffar: readonly TaktTraff[], max = 1): string {
   const med = traffar.filter((t) => t.sa !== null).slice(0, max);
   if (!med.length) return "Takten har inget facit än. Det kommer när en månad är avslutad.";
   const g = med[0].gatt;
   const rad = `Efter ${g} ${g === 1 ? "dag" : "dagar"} sa takten ${och(med.map((t) => `${t.sa} i ${manadsnamn(t.manad)} (det blev ${t.blev})`))}.`;
   return med.some((t) => t.efterhand) ? `${rad} Räknat i efterhand ur orderna.` : rad;
+}
+
+/**
+ * Kortets rad (skiss 9): takten och förra månadens facit i en mening.
+ * En månad räknad i efterhand sägs som det var: takten "hade sagt" det.
+ * Uträkningen och alla månader står i genomgången.
+ */
+export function textTaktKort(prognos: number | null, traffar: readonly TaktTraff[]): string {
+  if (prognos === null) return "För tidigt för en takt. Den kommer när månadens första arbetsdag har gått.";
+  const f = traffar.find((t) => t.sa !== null);
+  const facit = f ? ` I ${manadsnamn(f.manad)} ${f.efterhand ? "hade takten sagt" : "sa takten"} ${f.sa}, det blev ${f.blev}.` : "";
+  return `I samma takt blir det ungefär ${prognos}.${facit}`;
 }
 
 /* ------------------------------------------------------------------------ */

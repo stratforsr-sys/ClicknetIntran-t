@@ -5,6 +5,27 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-15 · Hemvyn: rättad efter beställarens skärmbild, som skiss 9
+
+Beställaren såg previewen (eb30d54) och skrev "jätte buggit". Chrome-tillägget nådde inte sessionen
+(kopplingen startar Claude Code 2.1.322, VS Code kör 2.1.325), så skiss 9 fotades i Chrome utan fönster
+och jämfördes med skärmbilden. Rättat:
+
+- Genvägarna låg under skrivrutan när sidan var högre än skärmen. De står nu i samma grupp som rutan (`.hv-botten`).
+- Nästa att göra stod utfälld över skrivrutan. I det nya hemmet är den ihopfälld med en ring, som i skissen
+  (`pillHv`, `S.hvPillUt`). Utfälld lyfts den över rutan.
+- Teamet: rubriken bröts på två rader och texten var ett helt stycke. Nu "dag 10 av 21" och skissens rad
+  "I samma takt blir det ungefär 40. I oktober sa takten 38, det blev 44." (`textTaktKort`). En månad räknad i
+  efterhand sägs "hade takten sagt". Uträkningen och alla månader står i genomgången.
+- Väntar på dig: tre rader (det som brinner och det senare i dag), foten "N till som kan vänta".
+- Överraden fick veckonumret, hälsningen Lyssna (det gamla hemmets uppläsning).
+- Genvägarna som i skissen: Förbered (bara när chatten är på), Min dag, Veckan som kommer, Möten, Min statistik
+  (chefen, Mötens statistik), Mer (Golvet, Coachning, Personalen, Nyheter).
+- Inte som i skissen, med flit: skrivrutans text säger att svaren kommer ur sökrutan så länge chatten är av,
+  och knapparna Bifoga och Tala finns inte (de gör ingenting än). Tonknappen i överraden är kvar.
+
+Klickprovet i Chrome återstår. `hem.nytt` står fortfarande på Zen i produktionen för det provet.
+
 ## 2026-11-15 · Chatten: provet av modellerna och rättelserna efter det (0307), på grenen `hemvy-chatt`
 
 - **Provet kört fyra gånger** (beställarens ja, "kör bara på haiku och sonnet"), 30 frågor × 3 varv mot fixturen i

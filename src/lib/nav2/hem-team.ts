@@ -9,7 +9,7 @@ import { lasSidvis } from "@/lib/sidvis";
 import { LAGE_KOL, REGEL_OBEKRAFTAT, arChefFor, lasInst, lasKrets, motesInfo, type LageRad } from "./forslag";
 import { nyckelDelar, oppetLage } from "./forslagforma";
 import { blevPerManad, dagstalPerManad, taktKrets, teamPersoner, teamTal, type TeamOrder, type TeamPerson } from "./hemforma";
-import { KALLRAD, dagText, manadsnamn, textLagetsOppna, textTakt, textTaktFacit } from "./hemtext";
+import { KALLRAD, dagText, manadsnamn, textLagetsOppna, textTakt, textTaktKort, textTaktFacit } from "./hemtext";
 import { lokalDag } from "./motesflode";
 import { inomKrets, type StatMote } from "./motesstatforma";
 import { arbetsdagarIManad, taktFacit, taktFacitVid, taktLage, type TaktManad, type TaktTraff } from "./takt";
@@ -48,7 +48,7 @@ export type NdTeam = {
   /** Taktens facit vid samma antal gångna arbetsdagar, nyast först. */
   facit: TaktTraff[];
   /** Kortets färdiga rader (hemtext.ts). Samma data ger samma text. */
-  text: { stort: string; rad: string; malrad: string | null; facit: string };
+  text: { stort: string; rad: string; malrad: string | null; facit: string; kort: string };
   kalla: string;
 };
 
@@ -125,7 +125,7 @@ export async function byggTeam(user: CurrentUser, krets: string[] | null | undef
     const manader = avslutade(dagstal, manad, 3);
     const facit = taktFacitVid(takt.gatt, sparade, blevPerManad(order, krets, manader), dagstal);
     const t = textTakt({ netto: tal.netto, mal: tal.mal, prognos: takt.prognos, utanMal: tal.utanMal, manad });
-    return { manad, manadsnamn: manadsnamn(manad), ...tal, takt, facit, text: { ...t, facit: textTaktFacit(facit) }, kalla: KALLRAD.regler };
+    return { manad, manadsnamn: manadsnamn(manad), ...tal, takt, facit, text: { ...t, facit: textTaktFacit(facit), kort: textTaktKort(takt.prognos, facit) }, kalla: KALLRAD.regler };
   } catch (e) {
     console.error(`hem: teamet i månaden föll: ${e instanceof Error ? e.message : String(e)}`);
     return null;
