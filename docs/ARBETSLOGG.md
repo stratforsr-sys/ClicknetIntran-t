@@ -5,6 +5,60 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+
+## 2026-11-15 · Möten: statistiken som instrumentpanel (grenen `moten-statistik`)
+
+**Varför.** Beställaren öppnade inte statistiken: en tabell med 8 personer × 7 kolumner för en vecka, där 10–15
+möten gör procenten till brus. Fyra förhandsvisningar senare (artifact v9) blev det rutor med ett tal var: en mening
+om fyndet, Show rate som nav, fyra rutor, Efter första mötet och Att göra nu. Besluten står i designdokumentet.
+
+**Hur.** Talen räknas i `motespanel.ts` och översattes rad för rad från förlagans `renderVals()`; fixturen är
+förlagans "Era siffror" (produktionen 2026-11-14) utan kundnamn, och proven kräver förlagans tal (55 %, 2 av 6,
+[2,2,2,0], [7,5,1,2]). Servern räknar alla perioder och personer, så att klienten bara ritar och byte är
+omedelbart. Tiden räknas som lokala strängar i Mötens tidszon, så ett möte 23:30 svensk tid den sista dagen hör till
+rätt period. Bekräftelsefönstret följer tavlans regel (röda dagar räknas bort) i stället för förlagans helgregel.
+Kvalificeringens frågor i bladet är företagets egna (`inst.fragor`), inte förlagans fasta texter.
+
+**Storleken.** Första versionen skickade uuid i varje lista: 55 kB med 32 möten. Med korta nycklar och riktiga id
+en gång i kartan blev det 25 kB. Plan B (personerna räknas när de väljs) behövs inte vid den här storleken.
+
+**Prov.** Databasprovet läser produktionen i `begin read only` och jämför avgjorda, hållna, uteblivna, svarade,
+ringdes aldrig, kvalificerade, obedömda och bokade framåt med SQL: alla lika. `byggMotesstat` kan inte köras utanför
+Next, så provet kör samma rena funktion på samma kolumner; hopkopplingen i `motesstat.ts` är typkontrollerad och
+klickprovad i previewen.
+
+**Klickprovet i previewen (som Zen, produktionens data).** Alla 13 listor bakom talen har lika många rader som talet,
+perioderna, personerna, Mer, Esc, mörkt läge och valet efter omladdning fungerar, konsolen är ren. Tre fel hittades
+och rättades, vart och ett med ett prov som föll först:
+
+- **Målen tappades vid snabb inmatning.** "80 Tab 15 Tab" sparade bara `{"noshow": 15}`: `moInstSpara` ritade om
+  panelen före svaret, från det gamla sparade värdet, så Show rate tömdes och nästa fält skickade ett mål utan 80.
+  Nu gäller det skrivna direkt (och går tillbaka om servern säger nej, också om panelen hunnit stängas), sparningarna
+  av en nyckel går i tur och ordning, och omräkningen vid stängning väntar tills sparningen är klar.
+- **Kortet ledde bort från statistiken.** En rad i en lista öppnar kortet, men ✕ och Esc landade på Pipeline. Nu går
+  de tillbaka till statistiken med samma lista öppen (`S.moTillbaka`). Gammalt beteende, men den nya panelen leder
+  till kort från varje tal.
+- **"Välj en längre period för att se mer"** stod också när ingen längre period hade möten (Carl, vecka). Nu bara när
+  en längre period faktiskt har det (`byggPanelSvar`).
+
+- **Kortets rubrik visade bokaren som hållare** (main-kod, rättad här på beställarens "fixa det"). Utan öppet möte
+  föll `moNamn` tillbaka på kedjans första deltagare, oftast bokaren: Hjärtatsflytt stod "Mick håller" fast Zen höll
+  mötet. Nu läser servern vem som höll kedjans senaste hållna eller uteblivna möte ur historikens rader
+  (`senastAvgjorda`, ingen extra fråga), och rubriken säger "Zen håller", "Zen höll mötet" eller "Carl skulle ha
+  hållit mötet". Utan något avgjort möte står ingen hållare alls i stället för en gissning.
+
+Målet sattes och togs bort igen i gränssnittet: `moten.mal` står nu `{}` i produktionen (inga mål), samma som utan rad.
+
+**Behörigheten för målen.** Beställaren: "bara admin och superadmin". Det är Navs två nivåer över säljare (`forma.ts`:
+superadmin = VD och admin, admin = säljchef, teamledare, ekonomi, projektledare, leverans), och det är vad
+`farAndraInstallning` redan släpper igenom. Säljare och mötesbokare kan inte ändra målen. Ingen kodändring.
+
+**`test:handelselogg` blev rött av klickprovet, inte av grenen.** Triggern `nav_setting_historik` (0303, grenen
+`hemvy-chatt`, körd i produktionen men inte mergad) skriver action `installning` i `audit_log` vid varje ändrad
+inställning. Den finns inte i `MODUL` i `src/lib/handelselogg.ts`, varken på main eller på `hemvy-chatt`. Målprovet
+var den första ändringen av `nav_setting` sedan 0303 kördes, så nu har loggen tre sådana rader och provet faller på
+alla grenar. Rättas där 0303 hör hemma: `installning` in i `MODUL` och typindelningen.
+
 ## 2026-11-14 · Provisionslåset: resterna efter hårdtestet (0302)
 
 Beställaren: "fixa allting" om de fyra resterna.

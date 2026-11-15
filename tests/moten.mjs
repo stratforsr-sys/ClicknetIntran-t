@@ -563,6 +563,7 @@ rubrik("0287: vem ändrar Mötens inställningar (farAndraInstallning)");
   ok("ekonomi, säljchef, VD och admin ändrar beloppen", ["finance", "sales_manager", "ceo", "admin"].every((r) => M.farAndraInstallning(u(r), "moten.provision") && M.farAndraInstallning(u(r), "moten.mottagare") && M.farAndraInstallning(u(r), "moten.ombokning-provision")));
   // Hårdtestet 2026-11-14: utan frågor blir varje hållet möte kvalificerat, så frågorna räknas som pengar.
   ok("en teamledare, leverans eller projektledare ändrar inte frågorna", ["team_lead", "delivery", "project_manager"].every((r) => !M.farAndraInstallning(u(r), "moten.fragor")));
+  ok("admin ändrar statistikens mål och gränser, en säljare inte", ["moten.mal", "moten.dod-dagar", "moten.dod-tysta"].every((n) => M.farAndraInstallning(u("admin"), n) && !M.farAndraInstallning(u("salesperson"), n)));
   ok("ekonomi, säljchef, VD och admin ändrar frågorna", ["finance", "sales_manager", "ceo", "admin"].every((r) => M.farAndraInstallning(u(r), "moten.fragor")));
 }
 
@@ -723,6 +724,42 @@ rubrik("Läsläget: varje gren i ruttens växel har en plats (G1)");
   const utanGren = [...M.SKRIVANDE_HANDLINGAR, ...LASANDE].filter((h) => !grenar.includes(h));
   ok("listorna nämner ingen handling som rutten saknar", utanGren.length === 0, utanGren.join(", "));
   ok("arSkrivning('uppfoljning_andra'): spärras i läsläge", M.arSkrivning("uppfoljning_andra") === true);
+}
+
+rubrik("senastAvgjorda: vem som höll kedjans senaste möte (kortets rubrik utan öppet möte)");
+{
+  const r = (kedja_id, mote_tid, utfall, halls_av) => ({ kedja_id, mote_tid, utfall, halls_av });
+  const s = M.senastAvgjorda([
+    r("k1", "2026-11-05T09:00:00Z", "uteblev", "mick"),
+    r("k1", "2026-11-12T14:00:00Z", "hallet", "zen"),
+    r("k2", "2026-11-10T09:00:00Z", "hallet", "carl"),
+    r("k2", "2026-11-11T09:00:00Z", "avbokat", "mick"),
+    r("k3", "2026-11-11T09:00:00Z", "avbokat", "mick"),
+  ]);
+  ok("det senaste hållna eller uteblivna mötet gäller, inte bokaren", JSON.stringify(s.get("k1")) === JSON.stringify({ hallsAv: "zen", utfall: "hallet" }));
+  ok("ett avbokat möte efteråt ändrar inte vem som höll", JSON.stringify(s.get("k2")) === JSON.stringify({ hallsAv: "carl", utfall: "hallet" }));
+  ok("bara avbokade: ingen", !s.has("k3"));
+  ok("ordningen i indata spelar ingen roll", JSON.stringify(M.senastAvgjorda([r("k", "2026-11-12T14:00:00Z", "hallet", "zen"), r("k", "2026-11-05T09:00:00Z", "uteblev", "mick")]).get("k")) === JSON.stringify({ hallsAv: "zen", utfall: "hallet" }));
+}
+
+rubrik("Kortets rubrik: vem håller, höll eller skulle ha hållit mötet");
+{
+  const { readFileSync } = await import("node:fs");
+  const vm = await import("node:vm");
+  const html = readFileSync(join(rot, "src", "nav2", "utkast.html"), "utf8");
+  const f = /const moVemText = [^\n]*\n/.exec(html);
+  ok("moVemText finns", !!f);
+  if (f) {
+    const ctx = { moFor: (n) => n.split(" ")[0], moSaljare: () => "Mick Corneliusson" };
+    vm.createContext(ctx); vm.runInContext(f[0].replace("const moVemText", "globalThis.moVemText"), ctx);
+    const t = ctx.moVemText;
+    ok("öppet möte: håller", t({ mote: { hallsAvNamn: "Zen Abc" }, senast: null, deltagare: ["mick"] }) === "Zen håller");
+    ok("hållet, utan öppet möte: höll mötet (inte bokaren)", t({ mote: null, senast: { hallsAvNamn: "Zen Abc", utfall: "hallet" }, deltagare: ["mick"] }) === "Zen höll mötet");
+    ok("uteblev: skulle ha hållit mötet", t({ mote: null, senast: { hallsAvNamn: "Carl Def", utfall: "uteblev" }, deltagare: ["mick"] }) === "Carl skulle ha hållit mötet");
+    ok("inget avgjort möte: ingen gissning om vem som håller", t({ mote: null, senast: null, deltagare: ["mick"] }) === "");
+  }
+  ok("rubriken använder moVemText", /<small>\$\{k\.kontakt[^\n]*moVemText\(k\)/.test(html) && !/moFor\(moNamn\(k\)\) \+ ' håller'/.test(html));
+  ok("tavlans kort utan öppet möte visar den som höll det senaste", /const moNamn = k => k\.mote \? k\.mote\.hallsAvNamn : k\.senast \? k\.senast\.hallsAvNamn :/.test(html));
 }
 
 console.log(fel ? `\n\x1b[31m${fel} fel\x1b[0m` : "\n\x1b[32mAlla ✓\x1b[0m");

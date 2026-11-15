@@ -17,11 +17,18 @@ export type StatMote = {
   resultat: string | null; kalla: string;
   /** När bokaren bekräftade mötet med kunden (0260). Saknas fältet räknas mötet som obekräftat. */
   bekraftatNar?: string | null;
+  /** Panelen (motespanel.ts): försök att nå kunden före mötet, bedömningen och svaren på frågorna. */
+  forsok?: number;
+  niva?: "kvalificerat" | "hallet" | null;
+  nivaSvar?: { id: string; ja: boolean }[] | null;
 };
 export type StatKedja = {
   id: string; forstaBokatAv: string; forstaBokatNar: string; forstaMoteTid: string | null;
   forstaHallnaHallsAv: string | null; avslut: "affar" | "nej" | "avbokat" | null; avslutNar: string | null;
   affarForstaMote: boolean; offertNar: string | null; kolumn: string | null; kalla: string;
+  /** Panelen: uppföljningsdagen och hur många "inget svar" i rad (mote_kedja). */
+  uppfoljningDatum?: string | null;
+  ingetSvarIRad?: number;
 };
 export type Kvot = { andel: number | null; n: number; av: number };
 export type Veckotal = {

@@ -465,5 +465,20 @@ console.log("Ångra Bekräfta och Fick inte tag (F6.1)");
   ok("försöket: tiden före får inte vara samma som eller nyare än försöket, 400", provaAngra(fors, f({ fore: T })).status === 400 && provaAngra(fors, f({ fore: "2026-11-13T09:00:00Z" })).status === 400);
 }
 
+console.log("\nStatistikens mål och dödsgränser (2026-11-15)");
+{
+  const f = lasInstallningar([]);
+  lika("förval: inga mål, 21 dagar, 3 tysta", [f.mal, f.dodDagar, f.dodTysta], [{}, 21, 3]);
+  lika("målen läses", lasInstallningar([{ key: "moten.mal", value: { show: 80, noshow: 15 } }]).mal, { show: 80, noshow: 15 });
+  lika("ett trasigt mål ger förvalet", lasInstallningar([{ key: "moten.mal", value: { show: 180 } }]).mal, {});
+  lika("gränserna läses", (() => { const i = lasInstallningar([{ key: "moten.dod-dagar", value: 30 }, { key: "moten.dod-tysta", value: 5 }]); return [i.dodDagar, i.dodTysta]; })(), [30, 5]);
+  ok("mål 101, -1, 7,5, okänt tal och en lista nekas", [{ show: 101 }, { show: -1 }, { show: 7.5 }, { okand: 5 }, []].every((v) => !provaInstallning("moten.mal", v).ok));
+  lika("inga mål går (alla tas bort)", provaInstallning("moten.mal", {}), { ok: true, varde: {} });
+  lika("mål 0 och 100 går", provaInstallning("moten.mal", { kval: 0, closing: 100 }), { ok: true, varde: { kval: 0, closing: 100 } });
+  ok("dödsdagar 0 och 366 nekas, 1 och 365 går", !provaInstallning("moten.dod-dagar", 0).ok && !provaInstallning("moten.dod-dagar", 366).ok && provaInstallning("moten.dod-dagar", 1).ok && provaInstallning("moten.dod-dagar", 365).ok);
+  ok("tysta 21 nekas, 20 går", !provaInstallning("moten.dod-tysta", 21).ok && provaInstallning("moten.dod-tysta", 20).ok);
+  lika("nycklarna", [INST_NYCKLAR.mal, INST_NYCKLAR.dodDagar, INST_NYCKLAR.dodTysta], ["moten.mal", "moten.dod-dagar", "moten.dod-tysta"]);
+}
+
 console.log(fel ? `\n${fel} fel` : "\nAllt grönt");
 process.exit(fel ? 1 : 0);
