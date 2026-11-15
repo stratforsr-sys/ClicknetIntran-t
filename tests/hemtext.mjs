@@ -127,5 +127,15 @@ console.log("\n\x1b[1mInga orsaker och inga utrop\x1b[0m");
   ok("aldrig procent", !alla.includes("%") && !/procent/i.test(alla));
 }
 
+console.log("\n\x1b[1mLagets öppna rader, hos chefen\x1b[0m");
+{
+  const { textLagetsOppna } = await import("../src/lib/nav2/hemtext.ts");
+  lika("tre i morgon, en utan val", textLagetsOppna(3, 1, "i morgon"), "Obekräftade möten i morgon: 3, varav 1 utan val.");
+  lika("alla har ett val", textLagetsOppna(2, 0, "i morgon"), "Obekräftade möten i morgon: 2. Alla har fått ett val.");
+  lika("ett möte utan val", textLagetsOppna(1, 1, "i dag"), "Obekräftade möten i dag: 1, utan val.");
+  lika("ett möte med val", textLagetsOppna(1, 0, "i dag"), "Obekräftade möten i dag: 1. Valet är gjort.");
+  lika("olika dagar: ingen dag i raden", textLagetsOppna(4, 4, null), "Obekräftade möten: 4, alla utan val.");
+}
+
 console.log(fel ? `\n\x1b[31m${fel} fel\x1b[0m\n` : "\n\x1b[32mAllt stämmer\x1b[0m\n");
 process.exit(fel ? 1 : 0);

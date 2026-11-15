@@ -14,6 +14,32 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "nya-hemmet-fyra-kort",
+    rubrik: "Nya hemmet: fyra kort och Nav föreslår",
+    ingress: "Ett nytt hem är byggt. Det är avstängt för alla och slås på per person i Inställningar, så att ni kan prova det själva först.",
+    text: `**Slå på det** i **Inställningar**, under **Administration**, i rutan **Nya hemmet**. Välj vilka som ska ha det,
+eller alla. Ingen annan märker något, och det gamla hemmet finns kvar tills ni säger till.
+
+Det nya hemmet har fyra kort:
+
+- **Väntar på dig.** Samma lista som förut, det som brinner först.
+- **Nav föreslår.** Ett första möte som är obekräftat sin sista dag blir ett förslag till den som håller mötet, med
+  tre val: Jag ringer själv, Flytta mötet eller Låt stå. Dagen efter mötet säger Nav hur det gick.
+- **Teamet i månaden** för den som leder ett lag, och **Din månad** för säljaren. Det stora talet är det som är
+  klart. Takten står som en uträkning, med sitt eget facit bredvid.
+- **Det som ändrats.** Berätta om en ändring, så följer Nav måttet och säger om det blev bättre, sämre eller om det
+  är för tidigt att säga.
+
+**Nav föreslår är avstängt** tills ni slår på det i samma ruta. Fram till dess räknar jobben bara och skriver ingenting.
+Nav ringer eller skriver aldrig till en kund, och gör inget utan att någon har valt det.
+
+Allt som stod på det gamla hemmet har en plats i det nya. Genvägarna **Veckan** och **Golvet** längst ned leder till
+nästa arbetsdag och till dagens order med Grattis. Skrivrutan svarar som sökrutan gör i dag, inte med AI.`,
+    datum: "2026-11-15",
+    roller: ["ceo", "admin"],
+    href: "/nav2",
+  },
+  {
     slug: "moten-offertens-belopp",
     rubrik: "Offerten får ett belopp",
     ingress: "När du sätter Offert skickad på ett möte skriver du nu vad offerten är på. Då syns det hur mycket som ligger ute hos kunderna.",

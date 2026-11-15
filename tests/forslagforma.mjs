@@ -252,7 +252,10 @@ console.log("\n\x1b[1mInställningarna\x1b[0m");
   lika("följda inställningar är nycklar", [provaForslagInst("forslag.foljda-installningar", ["moten.bekrafta-dagar"]).ok, provaForslagInst("forslag.foljda-installningar", ["DROP TABLE"]).ok], [true, false]);
   // Brytarna (på/av, vilka som har nya hemmet) ändras bara av superadmin. Gränserna av admin och uppåt.
   lika("en säljare ändrar ingenting", farAndraForslagInst(["salesperson"], "forslag.grans-facit"), false);
-  lika("en teamledare ändrar en gräns", farAndraForslagInst(["team_lead"], "forslag.grans-facit"), true);
+  lika("en teamledare ändrar ingen gräns: den som döms ska inte kunna flytta ribban", ["forslag.grans-facit", "forslag.grans-dom", "forslag.grans-person", "forslag.grans-motvikt"].map((k) => farAndraForslagInst(["team_lead"], k)), [false, false, false, false]);
+  lika("en säljchef ändrar ingen gräns heller", farAndraForslagInst(["sales_manager"], "forslag.grans-dom"), false);
+  lika("en teamledare ändrar klockslaget för obekräftade möten", farAndraForslagInst(["team_lead"], "forslag.obekraftat-tid"), true);
+  lika("vd och admin ändrar gränserna", [farAndraForslagInst(["ceo"], "forslag.grans-dom"), farAndraForslagInst(["admin"], "forslag.grans-motvikt")], [true, true]);
   lika("en teamledare slår inte på förslagen", farAndraForslagInst(["team_lead"], "forslag.pa"), false);
   lika("en säljchef väljer inte vilka som har nya hemmet", farAndraForslagInst(["sales_manager"], "hem.nytt"), false);
   lika("en admin slår på förslagen", [farAndraForslagInst(["admin"], "forslag.pa"), farAndraForslagInst(["ceo"], "hem.nytt")], [true, true]);

@@ -32,6 +32,8 @@ registerHooks({
     if (spec === "@/lib/supabase/server") {
       return stubb("export const supabaseServer = async () => globalThis.__rutt.db; export const supabaseAdmin = () => globalThis.__rutt.db;");
     }
+    if (spec === "@/lib/fel-server") return stubb("export const skrivFel = async (f) => { (globalThis.__fel ??= []).push(f); return true; };");
+    if (spec === "@/lib/notishandelse-server") return stubb("export const notifiera = async () => {};");
     if (spec === "@/lib/auth") {
       const aktaAuth = pathToFileURL(join(rot, "src", "lib", "auth.ts")).href;
       return stubb(`export * from ${JSON.stringify(aktaAuth)}; export const getCurrentUser = async () => globalThis.__rutt.user;`);
@@ -70,7 +72,8 @@ const LAG = "a1000000-0000-4000-8000-000000000001";
 
 /**
  * En attrapp av supabase-js. Läsningar svarar ur `tabeller` med de filter rutten sätter (eq, in, is, gte, lte, gt,
- * lt). Skrivningar bokförs med raden, och rpc-anrop svaras av `rpc` (ett okänt anrop ger fel, så att inget går
+ * lt). Som REST-lagret kapar den ett svar vid 1000 rader utan att säga det: bara `range` ger resten.
+ * Skrivningar bokförs med raden, och rpc-anrop svaras av `rpc` (ett okänt anrop ger fel, så att inget går
  * igenom av en slump).
  */
 function attrapp(tabeller, rpc = {}) {
@@ -79,11 +82,13 @@ function attrapp(tabeller, rpc = {}) {
   const fraga = (tabell) => {
     let skriver = null;
     let en = false;
+    let omfang = null;
     const filter = [];
     const svaret = () => {
       if (skriver) return { data: skriver.rad ? [{ id: "ny", ...skriver.rad }] : null, error: skriver.fel ?? null };
       const rader = (tabeller[tabell] ?? []).filter((r) => filter.every((f) => f(r)));
-      return en ? { data: rader[0] ?? null, error: null } : { data: rader, error: null, count: rader.length };
+      const sida = omfang ? rader.slice(omfang[0], Math.min(omfang[1] + 1, omfang[0] + 1000)) : rader.slice(0, 1000);
+      return en ? { data: rader[0] ?? null, error: null } : { data: sida, error: null, count: rader.length };
     };
     const jamfor = (test) => (kol, varde) => {
       if (!skriver) filter.push((r) => test(r[kol], varde));
@@ -109,6 +114,7 @@ function attrapp(tabeller, rpc = {}) {
           if (namn === "lte") return jamfor((a, b) => a <= b);
           if (namn === "gt") return jamfor((a, b) => a > b);
           if (namn === "lt") return jamfor((a, b) => a < b);
+          if (namn === "range") return (fran, till) => { omfang = [fran, till]; return kedja; };
           if (namn === "maybeSingle" || namn === "single") {
             return () => {
               en = true;
@@ -140,7 +146,7 @@ const NYCKEL = `${M}@${dag(I_MORGON)}@${H}`;
 const forslag = (o = {}) => ({
   id: F, sort: "forslag", regel: "moten.obekraftat", nyckel: NYCKEL, kalla: "regel", om: H, lag: null, skapad: new Date().toISOString(),
   belagg: { mote: M, forsok: 2 }, trodde: { n: 1, av: 4 }, val: ["ringer-sjalv", "flytta", "lat-sta"], doms_dag: "2026-11-18", utgar: I_MORGON,
-  text: null, prov: true, beslut_id: null, beslut: null, beslut_av: null, atgard: null, kommentar: null, matning: null, dom: null, ...o,
+  text: null, prov: false, beslut_id: null, beslut: null, beslut_av: null, atgard: null, kommentar: null, matning: null, dom: null, ...o,
 });
 const tabeller = (o = {}) => ({
   nav_forslag_lage: [forslag(o.forslag)],
@@ -313,8 +319,12 @@ rubrik("Inställningarna");
   ok("en säljare ändrar inga inställningar", salj.status === 403 && salj.skrivningar.length === 0, visa(salj));
   const utanfor = await anropa(["admin"], ADM, { handling: "installningar", nyckel: "forslag.grans-facit", varde: 0.5 });
   ok("gränsen för facit utanför 0,001–0,1: 400", utanfor.status === 400 && utanfor.skrivningar.length === 0, visa(utanfor));
-  const inom = await anropa(["team_lead"], TL, { handling: "installningar", nyckel: "forslag.grans-facit", varde: 0.02 });
-  ok("en teamledare ändrar en gräns", inom.status === 200 && inom.lista === "upsert nav_setting" && inom.skrivningar[0].rad.key === "forslag.grans-facit" && inom.skrivningar[0].rad.value === 0.02 && inom.skrivningar[0].rad.updated_by === TL, visa(inom));
+  const inom = await anropa(["admin"], ADM, { handling: "installningar", nyckel: "forslag.grans-facit", varde: 0.02 });
+  ok("en admin ändrar en gräns", inom.status === 200 && inom.lista === "upsert nav_setting" && inom.skrivningar[0].rad.key === "forslag.grans-facit" && inom.skrivningar[0].rad.value === 0.02 && inom.skrivningar[0].rad.updated_by === ADM, visa(inom));
+  const ribba = await anropa(["team_lead"], TL, { handling: "installningar", nyckel: "forslag.grans-dom", varde: 0.2 });
+  ok("en teamledare flyttar inte ribban för domen", ribba.status === 403 && ribba.skrivningar.length === 0, visa(ribba));
+  const tid = await anropa(["team_lead"], TL, { handling: "installningar", nyckel: "forslag.obekraftat-tid", varde: "13:30" });
+  ok("en teamledare ändrar klockslaget", tid.status === 200 && tid.skrivningar[0]?.rad?.key === "forslag.obekraftat-tid", visa(tid));
   const brytare = await anropa(["team_lead"], TL, { handling: "installningar", nyckel: "forslag.pa", varde: true });
   ok("en teamledare slår inte på förslagen", brytare.status === 403 && brytare.skrivningar.length === 0, visa(brytare));
   const pa = await anropa(["admin"], ADM, { handling: "installningar", nyckel: "forslag.pa", varde: true });
@@ -339,6 +349,97 @@ rubrik("Läsningarna");
   ok("andra raden är det Nav trodde när raden skapades", ett.data?.forslag?.rader?.[1]?.startsWith("Hittills har 1 av 4 obekräftade möten hållits."), ett.data?.forslag?.rader?.[1]);
   ok("källraden säger hur texten kom till", ett.data?.forslag?.kalla === "Räknat av regler", ett.data?.forslag?.kalla);
   ok("läsningen skriver ingenting", ett.skrivningar.length === 0, ett.lista);
+}
+
+rubrik("Teamet i månaden");
+{
+  const idag = new Date(), manad = dag(idag.toISOString()).slice(0, 7), forra = new Date(Date.UTC(idag.getUTCFullYear(), idag.getUTCMonth() - 1, 15)).toISOString().slice(0, 7);
+  const o = (id, salj, d, x = {}) => ({ id, salesperson_id: salj, status: "signerad", signed_on: d, period_month: `${d.slice(0, 7)}-01`, cancelled_on: null, cancel_period_month: null, ...x });
+  const extra = {
+    sales_order: [o("o1", H, `${manad}-02`), o("o2", H, `${manad}-03`), o("o3", B, `${manad}-03`, { status: "inskickad" }), o("o4", H, `${forra}-05`), o("o5", B, `${forra}-20`)],
+    sales_target: [{ employee_id: H, target_orders: 8, period_month: `${manad}-01` }],
+    nav_takt_dag: [],
+  };
+  const salj = await anropa(["salesperson"], X, null, { fraga: "las=team", extra });
+  ok("en säljare får inte lagets tal", salj.status === 403, visa(salj));
+  const tl = await anropa(["team_lead"], TL, null, { fraga: "las=team", extra });
+  const t = tl.data?.team;
+  ok("teamledaren får genomgången", tl.status === 200 && !!t, visa(tl));
+  ok("kortets tal: netto, väntande och målet", t?.kort?.netto === 2 && t.kort.vantar === 1 && t.kort.mal === 8 && t.kort.manad === manad, String(JSON.stringify(t?.kort)).slice(0, 300));
+  ok("det stora talet är order av målet", t?.kort?.text?.stort === "2 av 8 order", t?.kort?.text?.stort);
+  ok("den som har order men inget mål nämns", t?.kort?.utanMal === 0 || t?.kort?.text?.malrad?.startsWith("Mål saknas"), JSON.stringify(t?.kort?.text));
+  ok("en rad per person som har något att visa", Array.isArray(t?.personer) && t.personer.some((p) => p.namn.startsWith("Hanna") && p.order === 2), JSON.stringify(t?.personer));
+  ok("uträkningen står i klartext, eller säger att ingen arbetsdag har gått", typeof t?.utrakning === "string" && (/gånger månadens \d+ arbetsdagar/.test(t.utrakning) || /ingen arbetsdag/i.test(t.utrakning)), t?.utrakning);
+  ok("förra månaden står i taktens facit, räknad i efterhand", Array.isArray(t?.takten) && t.takten[0]?.manad === forra && t.takten[0].blev === 2 && t.takten[0].efterhand === true, JSON.stringify(t?.takten));
+  ok("lagets öppna rad om obekräftade möten står överst", /^Obekräftade möten .*: 1, utan val\.$/.test(t?.oppna ?? ""), t?.oppna);
+  ok("källraden och det Nav inte ser", t?.kalla === "Räknat av regler" && t?.serInte?.startsWith("Det här ser jag inte:"), JSON.stringify([t?.kalla, t?.serInte]));
+  ok("läsningen skriver ingenting", tl.skrivningar.length === 0, tl.lista);
+  // REST-lagret kapar ett svar vid 1000 rader utan att säga det. Lagets tal läses därför sida för sida.
+  const hanna = (r) => r.data?.team?.personer?.find((p) => p.namn.startsWith("Hanna"));
+  const manga = Array.from({ length: 1200 }, (_x, i) => o(`fler${i}`, H, `${manad}-02`));
+  const stor = await anropa(["team_lead"], TL, null, { fraga: "las=team", extra: { ...extra, sales_order: [...extra.sales_order, ...manga] } });
+  ok("fler än tusen order: alla räknas, inte bara första sidan", stor.data?.team?.kort?.netto === 1202 && hanna(stor)?.order === 1202, `${stor.status} netto ${stor.data?.team?.kort?.netto}, Hanna ${hanna(stor)?.order}`);
+  const moten = Array.from({ length: 1100 }, (_x, i) => ({ id: `mm${i}`, kedja_id: `kk${i}`, bokat_av: B, halls_av: H, bokat_nar: `${manad}-01T08:00:00Z`, mote_tid: `${manad}-01T10:00:00Z`, art: "ny", utfall: "hallet", resultat: null, kalla: null, bekraftat_nar: null }));
+  const mm = await anropa(["team_lead"], TL, null, { fraga: "las=team", extra: { ...extra, mote: moten } });
+  ok("fler än tusen möten: alla räknas", hanna(mm)?.hallna === 1100 && mm.data?.team?.personer?.find((p) => p.namn.startsWith("Mick"))?.bokade === 1100, `${mm.status} ${JSON.stringify(mm.data?.team?.personer)}`.slice(0, 300));
+}
+
+rubrik("Det som ändrats, och hemmets lilla läsning");
+{
+  const rader = [
+    forslag({ id: "e0000000-0000-4000-8000-0000000000a1", beslut_id: "b1", beslut: { val: "lat-sta" }, beslut_av: H, beslut_nar: "2026-11-13T09:00:00Z", dom: { utfall: "hallet", bekraftat: false, matt: "moten.hallna-av-alla", version: 1 }, dom_nar: "2026-11-14T02:00:00Z" }),
+    forslag({ id: "e0000000-0000-4000-8000-0000000000a2", sort: "andring", regel: "moten.uteblivna", nyckel: "andring-1", kalla: "person", om: H, text: "Jag ringer kunden dagen före.", foljer: { matt: "moten.uteblivna", motvikt: "moten.hallna-av-alla", fran: "2026-10-21" },
+      dom: { dom: { sort: "ser-bra-ut", stangd: true, restenOcksa: false, helaLaget: true }, tal: "0 av 20 uteblev. Bokade per vecka: 6 före, 7 efter." }, dom_nar: "2026-11-15T02:00:00Z" }),
+    forslag({ id: "e0000000-0000-4000-8000-0000000000a3", sort: "andring", regel: "moten.uteblivna", nyckel: "andring-2", kalla: "installning", om: null, text: "Bekräftelsen öppnar 1 arbetsdag före mötet i stället för 2.", foljer: { matt: "moten.uteblivna", motvikt: "moten.hallna-av-alla", fran: "2026-11-13" },
+      matning: { dom: { sort: "inget-fore", stangd: false, restenOcksa: false, helaLaget: true }, tal: "1 av 3 uteblev. Bokade per vecka: 4 före, 5 efter." }, matning_nar: "2026-11-15T02:00:00Z", skapad: "2026-11-13T10:00:00Z" }),
+  ];
+  const r = await anropa(["salesperson"], H, null, { fraga: "las=andrat", extra: { nav_forslag_lage: rader } });
+  const a = r.data?.andrat ?? [];
+  const hitta = (id) => a.find((x) => x.id.endsWith(id)) ?? {};
+  ok("läsningen ger tre rader och skriver ingenting", r.status === 200 && a.length === 3 && r.skrivningar.length === 0, visa(r));
+  ok("ett dömt förslag: vad som valdes och hur det gick, aldrig en dom över mötet", hitta("a1").text === "PROV Hagby Glas: du valde att låta mötet stå. Mötet hölls. Mötet blev aldrig bekräftat." && hitta("a1").dom === null && hitta("a1").ton === "vet", JSON.stringify(hitta("a1")));
+  ok("en ändring som ser bra ut: domen i ord, talen bredvid och en pil upp", hitta("a2").dom === "Ser bra ut. Hela laget ändrade sig samtidigt, så jag har inget att jämföra med." && hitta("a2").tal === "0 av 20 uteblev. Bokade per vecka: 6 före, 7 efter." && hitta("a2").ton === "upp" && hitta("a2").stangd === true, JSON.stringify(hitta("a2")));
+  ok("en ändring utan före att jämföra med: Nav säger det, och visar antal", hitta("a3").dom === "Inget före att jämföra med." && hitta("a3").tal?.startsWith("1 av 3 uteblev.") && hitta("a3").ton === "vet" && hitta("a3").stangd === false && hitta("a3").fran === "installning", JSON.stringify(hitta("a3")));
+  ok("nyast först", a[0].id.endsWith("a2") && a[2].id.endsWith("a1"), a.map((x) => x.id.slice(-2)).join(" "));
+  ok("raden säger vem den gäller: läsaren själv, eller alla när det är en inställning", hitta("a1").galler === "dig" && hitta("a2").galler === "dig" && hitta("a3").galler === "alla", a.map((x) => x.galler).join(" "));
+  ok("måtten som går att följa är andelar", Array.isArray(r.data?.matt) && r.data.matt.length === 3 && r.data.matt.every((m) => m.nyckel.startsWith("moten.")), JSON.stringify(r.data?.matt?.map((m) => m.nyckel)));
+  ok("säljaren får inte berätta för laget", r.data?.farLaget === false);
+  ok("säljarens krets är hen själv", JSON.stringify(r.data?.krets) === JSON.stringify([H]), JSON.stringify(r.data?.krets));
+  const chef = await anropa(["team_lead"], TL, null, { fraga: "las=andrat", extra: { nav_forslag_lage: rader } });
+  ok("hos chefen gäller raden en person, och en ändring för laget gäller laget", chef.data?.andrat.find((x) => x.id.endsWith("a1"))?.galler === "person" && (await anropa(["team_lead"], TL, null, { fraga: "las=andrat", extra: { nav_forslag_lage: [{ ...rader[1], om: null, lag: "l1" }] } })).data?.andrat[0]?.galler === "laget", JSON.stringify(chef.data?.andrat?.map((x) => x.galler)));
+  ok("chefen får sin krets, så att formuläret bara listar dem hen får berätta om", JSON.stringify([...(chef.data?.krets ?? [])].sort()) === JSON.stringify([H, B, TL].sort()), JSON.stringify(chef.data?.krets));
+  ok("den som ser alla får null i stället för en lista", (await anropa(["sales_manager"], ADM, null, { fraga: "las=andrat", extra: { nav_forslag_lage: rader } })).data?.krets === null);
+  ok("hos chefen står personens namn på raden", chef.data?.farLaget === true && chef.data.andrat.find((x) => x.id.endsWith("a1"))?.text === "PROV Hagby Glas: Hanna valde att låta mötet stå. Mötet hölls. Mötet blev aldrig bekräftat." && chef.data.andrat.find((x) => x.id.endsWith("a1"))?.vem === "Hanna", JSON.stringify(chef.data?.andrat?.[0]));
+
+  const { byggForslag } = await import("../src/lib/nav2/forslag.ts");
+  const db = attrapp(tabeller(), { mote_statkrets: () => [H] });
+  globalThis.__rutt = { db, user: null };
+  const f = await byggForslag(db, { employee: { id: H, first_name: "Hanna", last_name: "Prov" }, roles: ["salesperson"], permissions: [] });
+  ok("hemmets läsning: ett öppet förslag med Navs tre rader", f.oppna.length === 1 && f.oppna[0].id === F && f.oppna[0].rader.length === 3 && f.oppna[0].mote === M, JSON.stringify(f).slice(0, 300));
+  ok("kortets rad leder med antalet", /^1 möte (i dag|i morgon) är obekräftat$/.test(f.kortrad ?? ""), f.kortrad);
+  ok("trendregeln säger hur långt den har kvar", f.trendrad === "För att jämföra laget med sig självt behöver jag 60 avgjorda möten. Jag har 0." && f.trend.behover === 60, f.trendrad);
+  ok("förslagen står av från början", f.pa === false);
+  ok("läsningen skriver ingenting", db.skrivningar.length === 0, JSON.stringify(db.skrivningar));
+  const annan = await byggForslag(db, { employee: { id: X, first_name: "X", last_name: "Y" }, roles: ["salesperson"], permissions: [] });
+  ok("den som inte håller mötet får inget förslag", annan.oppna.length === 0 && annan.kortrad === null);
+}
+
+rubrik("Din månad: Fråga om raden");
+{
+  const { POST: hemPost } = await import("../src/app/nav2/hem/route.ts");
+  const kor = async (kropp) => {
+    const db = attrapp({ nav_preference: [] });
+    globalThis.__fel = [];
+    globalThis.__rutt = { db, user: { employee: { id: H, first_name: "Hanna", last_name: "Prov", team_id: null }, roles: ["salesperson"], permissions: [] } };
+    const res = await hemPost(new Request("https://nav.test/nav2/hem", { method: "POST", headers: { origin: "https://nav.test", "content-type": "application/json", "user-agent": "prov" }, body: JSON.stringify(kropp) }));
+    return { status: res.status, data: await res.json(), fel: globalThis.__fel, skrivningar: db.skrivningar };
+  };
+  const r = await kor({ handling: "flagga", var: "manad", rad: "manad-0", text: "#11 Hagmans Rör · Stor, 36 månader · 6 500 kr" });
+  ok("frågan blir en rad i kön för fel, med provisionsraden i klartext", r.status === 200 && r.fel.length === 1 && r.fel[0].body.includes("Din månad") && r.fel[0].body.includes("#11 Hagmans Rör · Stor, 36 månader · 6 500 kr") && r.fel[0].reporterId === H, JSON.stringify(r.fel));
+  ok("svaret säger vart frågan gick", /provision/i.test(r.data.ok ?? ""), r.data.ok);
+  ok("raden göms inte i någon sammanfattning", !r.skrivningar.some((s) => s.text.includes("nav_preference")), r.skrivningar.map((s) => s.text).join(", "));
+  const gammal = await kor({ handling: "flagga", rad: "upg-1", text: "En uppgift är försenad." });
+  ok("Stämmer inte i sammanfattningen fungerar som förut", gammal.status === 200 && gammal.fel[0].body.includes("Din dag i korthet") && gammal.skrivningar.some((s) => s.text === "upsert nav_preference"), JSON.stringify([gammal.fel, gammal.skrivningar.map((s) => s.text)]));
 }
 
 rubrik("Mötet flyttas av den som håller det");

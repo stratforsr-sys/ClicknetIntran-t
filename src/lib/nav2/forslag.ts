@@ -3,12 +3,13 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CurrentUser } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
+import { lasSidvis } from "@/lib/sidvis";
 import {
   FORSLAG_NYCKLAR, TREND_BEHOVER, facitPerVal, lasForslagInst, nyckelDelar, oppetLage, troddeAvstamning,
   type Beslut, type FacitRad, type ForslagInst, type ForslagMote, type MotesUtfall, type Val,
 } from "./forslagforma";
 import {
-  KALLRAD, dagText, narText, textAndringDom, textDom, textFacit, textKortObekraftade, textObekraftat, textTrodde,
+  KALLRAD, dagText, narText, textAndringDom, textDom, textFacit, textKortObekraftade, textObekraftat, textTrendSaknas, textTrodde,
 } from "./hemtext";
 import { MATT, type MattNyckel } from "./matt";
 import { lasInstallningar, lokalDag, type MotenInst } from "./motesflode";
@@ -96,10 +97,16 @@ export type NdAndring = {
   dom: string | null;
   /** Talen bakom domen, när de finns: "3 av 22 uteblev. Bokade per vecka: …". */
   tal: string | null;
-  /** När raden fick sin dom, annars när den skapades. */
+  /** Åt vilket håll det gick: "upp" = bättre, "ned" = sämre, "vet" = inget att säga än, eller ett förslag (ett möte döms aldrig). */
+  ton: "upp" | "ned" | "vet";
+  /** Har ändringen fått sin slutliga dom? false = den följs fortfarande. */
+  stangd: boolean;
+  /** När raden senast fick en dom eller en mätning, annars när den skapades. */
   nar: string;
   /** Förnamnet på den raden gäller. null = läsaren själv, laget eller hela företaget. */
   vem: string | null;
+  /** Vem raden gäller: läsaren själv, en annan person, ett lag eller alla (en inställning, eller en ändring för hela företaget). */
+  galler: "dig" | "person" | "laget" | "alla";
   /** Personens egen rad om sina tal. Personens ord, inte Navs. */
   kommentar: string | null;
   /** "regel", "person" eller "installning": var raden kom ifrån. */
@@ -116,9 +123,11 @@ export type NdForslag = {
   andrat: NdAndring[];
   /** Hur långt trendregeln har kvar: avgjorda möten mot de 60 den behöver. */
   trend: { har: number; behover: number };
+  /** Samma sak i ord, medan regeln är tyst. null när den har det den behöver. */
+  trendrad: string | null;
 };
 
-export const TOMT_FORSLAG: NdForslag = { pa: false, oppna: [], kortrad: null, andrat: [], trend: { har: 0, behover: TREND_BEHOVER } };
+export const TOMT_FORSLAG: NdForslag = { pa: false, oppna: [], kortrad: null, andrat: [], trend: { har: 0, behover: TREND_BEHOVER }, trendrad: null };
 
 /* ------------------------------------------------------------------------ */
 /* Inställningarna och kretsen                                               */
@@ -230,21 +239,29 @@ const arUtfall = (x: unknown): x is MotesUtfall => x === "hallet" || x === "uteb
 /** En rad i Det som ändrats: ett dömt förslag, eller en ändring som följs eller har fått sin dom. */
 export function somAndring(rad: LageRad, info: MotesInfo | undefined, namn: Map<string, string>, mig: string): NdAndring {
   const vem = rad.om && rad.om !== mig ? namn.get(rad.om) || null : null;
-  const bas = { id: rad.id, sort: rad.sort, vem, kommentar: typeof rad.kommentar?.text === "string" ? rad.kommentar.text : null, fran: rad.kalla, kalla: KALLRAD.regler };
+  const galler: NdAndring["galler"] = rad.om === mig ? "dig" : rad.om ? "person" : rad.lag ? "laget" : "alla";
+  const bas = { id: rad.id, sort: rad.sort, vem, galler, kommentar: typeof rad.kommentar?.text === "string" ? rad.kommentar.text : null, fran: rad.kalla, kalla: KALLRAD.regler };
   if (rad.sort === "forslag") {
     const v = rad.beslut?.val;
     const val: Val | "ingen" = v === "ringer-sjalv" || v === "flytta" || v === "lat-sta" ? v : "ingen";
     const utfall = rad.dom ? (arUtfall(rad.dom.utfall) ? rad.dom.utfall : "okant") : null;
     const text = textDom({ kund: info?.kund ?? "Ett möte", val, utfall, bekraftat: rad.dom?.bekraftat === true, ...(vem ? { vem } : {}) });
-    return { ...bas, text, dom: null, tal: null, nar: rad.dom_nar ?? rad.beslut_nar ?? rad.skapad };
+    return { ...bas, text, dom: null, tal: null, ton: "vet", stangd: !!rad.dom, nar: senastNar(rad) };
   }
-  const d = rad.dom as { dom?: AndringDom; tal?: string } | null;
+  // Slutdomen går före. Finns ingen än gäller nattens senaste mätning.
+  const senaste = (rad.dom ?? rad.matning) as { dom?: AndringDom; tal?: unknown } | null;
   const matt = MATT[(rad.foljer?.matt ?? rad.regel) as MattNyckel];
   const motvikt = matt?.motvikt ? MATT[matt.motvikt] : undefined;
-  const dom = d?.dom ? textAndringDom(d.dom, motvikt?.samre ?? "motvikten har blivit sämre") : null;
-  const senaste = (rad.dom ?? rad.matning) as { tal?: unknown } | null;
-  return { ...bas, text: rad.text ?? "En ändring", dom, tal: typeof senaste?.tal === "string" ? senaste.tal : null, nar: rad.dom_nar ?? rad.skapad };
+  const d = senaste?.dom;
+  const dom = d ? textAndringDom(d, motvikt?.samre ?? "motvikten har blivit sämre") : null;
+  const ton = d?.sort === "ser-bra-ut" || d?.sort === "battre-men" ? "upp" : d?.sort === "ser-samre-ut" ? "ned" : "vet";
+  const stangd = (rad.dom as { dom?: AndringDom } | null)?.dom?.stangd === true;
+  return { ...bas, text: rad.text ?? "En ändring", dom, tal: typeof senaste?.tal === "string" ? senaste.tal : null, ton, stangd, nar: senastNar(rad) };
 }
+
+/** När raden senast hände något: domen, annars mätningen, annars valet, annars när den skapades. */
+const senastNar = (r: LageRad): string => r.dom_nar ?? r.matning_nar ?? r.beslut_nar ?? r.skapad;
+const nyastForst = (x: LageRad, y: LageRad): number => Date.parse(senastNar(y)) - Date.parse(senastNar(x));
 
 /* ------------------------------------------------------------------------ */
 /* Startladdningen: den lilla läsningen                                      */
@@ -270,10 +287,11 @@ export async function byggForslag(supabase: Db, user: CurrentUser, inst?: { f: F
     ]);
     const o = (oppna.data ?? []) as unknown as LageRad[];
     const a = ((andrade.data ?? []) as unknown as LageRad[])
-      .sort((x, y) => Date.parse(y.dom_nar ?? y.skapad) - Date.parse(x.dom_nar ?? x.skapad))
+      .sort(nyastForst)
       .slice(0, 3);
     const trend = { har: avgjorda.count ?? 0, behover: TREND_BEHOVER };
-    if (!o.length && !a.length) return { pa: i.f.pa, oppna: [], kortrad: null, andrat: [], trend };
+    const trendrad = trend.har < trend.behover ? textTrendSaknas(trend.har, trend.behover) : null;
+    if (!o.length && !a.length) return { pa: i.f.pa, oppna: [], kortrad: null, andrat: [], trend, trendrad };
 
     const [info, namn] = await Promise.all([
       motesInfo(admin, [...o, ...a].map(moteFor).filter((x): x is string => !!x)),
@@ -289,6 +307,7 @@ export async function byggForslag(supabase: Db, user: CurrentUser, inst?: { f: F
       kortrad: kvar.length ? textKortObekraftade(kvar.length, dagar.length === 1 ? dagText(dagar[0], lokalDag(nu, tz)) : null) : null,
       andrat: a.map((r) => somAndring(r, info.get(moteFor(r) ?? ""), namn, mig)),
       trend,
+      trendrad,
     };
   } catch (e) {
     console.error(`forslag: startläsningen föll: ${e instanceof Error ? e.message : String(e)}`);
@@ -351,7 +370,7 @@ export async function lasGenomgang(user: CurrentUser, vad: string, id?: string |
 
   if (vad === "andrat") {
     const { data } = await supabase.from("nav_forslag_lage").select(LAGE_KOL).eq("prov", false).or("sort.eq.andring,dom.not.is.null,matning.not.is.null").order("skapad", { ascending: false }).limit(200);
-    const rader = ((data ?? []) as unknown as LageRad[]).sort((x, y) => Date.parse(y.dom_nar ?? y.skapad) - Date.parse(x.dom_nar ?? x.skapad));
+    const rader = ((data ?? []) as unknown as LageRad[]).sort(nyastForst);
     const [info, namn, krets] = await Promise.all([
       motesInfo(admin, rader.map(moteFor).filter((x): x is string => !!x)),
       fornamn(admin, rader.map((r) => r.om)),
@@ -361,8 +380,10 @@ export async function lasGenomgang(user: CurrentUser, vad: string, id?: string |
       status: 200,
       data: {
         andrat: rader.map((r) => ({ ...somAndring(r, info.get(moteFor(r) ?? ""), namn, mig), mitt: r.om === mig })),
-        // Vad läsaren får berätta om: sig själv alltid, kretsen och laget när hen har en.
+        // Vad läsaren får berätta om: sig själv alltid, kretsen och laget när hen har en. `krets` är listan som
+        // formuläret får erbjuda (null = alla), så att ingen väljs som servern sedan nekar.
         farLaget: arChefFor(krets, mig),
+        krets: krets === undefined ? [mig] : krets,
         matt: (Object.values(MATT) as (typeof MATT)[MattNyckel][]).filter((m) => m.sort === "andel").map((m) => ({ nyckel: m.nyckel, text: m.text, serInte: m.serInte })),
         kalla: KALLRAD.regler,
       },
@@ -372,8 +393,11 @@ export async function lasGenomgang(user: CurrentUser, vad: string, id?: string |
   if (vad === "facit") {
     const krets = await lasKrets(supabase, user);
     if (!arChefFor(krets, mig)) return nej(403, "Lagets facit visas för den som leder ett lag.");
-    const { data } = await supabase.from("nav_forslag_lage").select(LAGE_KOL).eq("regel", REGEL_OBEKRAFTAT).eq("prov", false).not("dom", "is", null).order("skapad", { ascending: true }).limit(2000);
-    const rader = (data ?? []) as unknown as LageRad[];
+    // Alla dömda förslag, sida för sida: REST-lagret kapar ett svar vid 1000 rader utan att säga det, och ett facit
+    // på en del av raderna vore ett fel tal som ser rätt ut.
+    const rader = await lasSidvis<LageRad>((a, b) =>
+      supabase.from("nav_forslag_lage").select(LAGE_KOL).eq("regel", REGEL_OBEKRAFTAT).eq("prov", false).not("dom", "is", null).order("skapad", { ascending: true }).order("id").range(a, b) as unknown as PromiseLike<{ data: LageRad[] | null; error: { message: string } | null }>,
+    );
     const facit = facitPerVal(facitRader(rader), inst.f.gransFacit);
     const trodde = troddeAvstamning(
       rader.filter((r) => r.trodde && r.dom && arUtfall(r.dom.utfall)).map((r) => ({ trodde: r.trodde as NAv, utfall: r.dom!.utfall as MotesUtfall })),

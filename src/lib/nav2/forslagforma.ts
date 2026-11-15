@@ -440,8 +440,12 @@ export const FORSLAG_NYCKLAR: Record<keyof ForslagInst, string> = {
   hemNytt: "hem.nytt",
 };
 
-/** Brytarna: bara superadmin. Gränserna och klockslaget: admin och uppåt, som Mötens inställningar. */
-const BRYTARE: readonly string[] = [FORSLAG_NYCKLAR.pa, FORSLAG_NYCKLAR.hemNytt];
+/**
+ * Det enda admin-nivån (säljchef, teamledare och de andra) får ändra: klockslaget, som Mötens inställningar.
+ * Brytarna och gränserna är superadmins. Gränserna avgör när Nav fäller en dom, och den som blir dömd ska inte
+ * kunna flytta ribban för sin egen dom.
+ */
+const ADMIN_FAR: readonly string[] = [FORSLAG_NYCKLAR.obekraftatTid];
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const INST_NYCKEL_RE = /^[a-z0-9]+\.[a-z0-9-]{1,40}$/;
@@ -494,5 +498,5 @@ export function provaForslagInst(nyckel: string, varde: unknown): { ok: true; va
 export function farAndraForslagInst(roller: readonly string[], nyckel: string): boolean {
   const niva = nivaFor([...roller]);
   if (niva === "salesperson" || !faltForNyckel(nyckel)) return false;
-  return !BRYTARE.includes(nyckel) || niva === "superadmin";
+  return niva === "superadmin" || ADMIN_FAR.includes(nyckel);
 }

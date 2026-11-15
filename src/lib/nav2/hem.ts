@@ -7,6 +7,10 @@ import { svensktDatum } from "@/lib/klocka";
 import { harGodkants, nettoAntal, ordervarde, type Order } from "@/lib/order";
 import { SKRIVLAGE } from "./skrivlage";
 import { vapidPublik } from "./push";
+import { byggForslag, harNyttHem, lasInst, lasKrets, type NdForslag } from "./forslag";
+import type { ForslagInst } from "./forslagforma";
+import { nivaFor } from "./forma";
+import { byggTeam, type NdTeam } from "./hem-team";
 
 /**
  * Nav 2.0: startsidan.
@@ -87,6 +91,14 @@ export type NdHem = {
   /** Kvällsnotisen i mobilen (0121). Null när VAPID-nycklarna saknas i miljön. */
   push: { nyckel: string; enheter: number; ledare: boolean } | null;
   golvet: NdGolvet | null;
+  /** Har läsaren det nya hemmet (`hem.nytt`: en lista personer, eller alla)? Annars ritas hemmet som förut. */
+  nytt: boolean;
+  /** Nav föreslår och Det som ändrats. Null för den som inte har det nya hemmet: då läses ingenting. */
+  forslag: NdForslag | null;
+  /** Teamet i månaden. Null för den som inte har det nya hemmet, och för den som bara har sig själv i sin krets. */
+  team: NdTeam | null;
+  /** Rutan Nya hemmet i Inställningar: värdena, för admin och uppåt. `farBrytare`: får slå på och av och ändra gränserna (superadmin). */
+  inst: (ForslagInst & { farBrytare: boolean }) | null;
 };
 
 const KL = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
@@ -188,11 +200,21 @@ export async function byggGolvet(user: CurrentUser, nu: Date = new Date()): Prom
 export async function byggHem(supabase: SupabaseClient, user: CurrentUser): Promise<NdHem | null> {
   if (!user.employee) return null;
   const mig = user.employee.id;
-  const [{ data: val }, golvet, { count: enheter }] = await Promise.all([
+  const [{ data: val }, golvet, { count: enheter }, inst] = await Promise.all([
     supabase.from("nav_preference").select("key, value").eq("employee_id", mig).in("key", ["hem.sett", "hem.dolda", "hem.flaggade", "hem.golvet"]),
     byggGolvet(user),
     supabase.from("push_subscription").select("id", { count: "exact", head: true }).eq("employee_id", mig),
+    // Nya hemmet (0303): en läsning av inställningarna. Resten läses bara för den som har det påslaget.
+    lasInst(supabaseAdmin()).catch(() => null),
   ]);
+  const nytt = !!inst && harNyttHem(inst.f, mig);
+  let forslag: NdForslag | null = null;
+  let team: NdTeam | null = null;
+  if (nytt && inst) {
+    const krets = await lasKrets(supabase, user);
+    [forslag, team] = await Promise.all([byggForslag(supabase, user, inst), byggTeam(user, krets)]);
+  }
+  const niva = nivaFor(user.roles as string[]);
   const nyckel = vapidPublik();
   const v = new Map(((val ?? []) as { key: string; value: unknown }[]).map((x) => [x.key, x.value]));
   const lista = (k: string): string[] => {
@@ -210,5 +232,9 @@ export async function byggHem(supabase: SupabaseClient, user: CurrentUser): Prom
     malchef: hasRole(user, "sales_manager", "ceo"),
     push: nyckel ? { nyckel, enheter: enheter ?? 0, ledare: hasRole(user, "sales_manager", "ceo", "team_lead") } : null,
     golvet,
+    nytt,
+    forslag,
+    team,
+    inst: inst && niva !== "salesperson" ? { ...inst.f, farBrytare: niva === "superadmin" } : null,
   };
 }

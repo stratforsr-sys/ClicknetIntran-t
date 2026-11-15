@@ -23,6 +23,9 @@ export const dynamic = "force-dynamic";
  *   flagga   "Stämmer inte" i Din dag i korthet: raden döljs för dig
  *            (`hem.flaggade`) och blir en felrapport i kön på /fel, med raden i
  *            klartext, så att den som förvaltar Nav kan rätta sammanfattningen.
+ *            Med `var: "manad"` är det "Fråga om raden" i Din månad: en
+ *            provisionsrad som ser fel ut. Den går till samma kö, men raden
+ *            göms aldrig, för den är pengar och inte en sammanfattning.
  *   dolj     "Visa inte X här": sorten döljs i din sammanfattning (`hem.dolda`).
  *            `visa` tar tillbaka den.
  *   sett     När du senast tittade på startsidan (`hem.sett`), för "Sedan du tittade".
@@ -119,18 +122,22 @@ export async function POST(request: Request) {
         const rad = String(b.rad ?? "").trim().slice(0, 80);
         const text = String(b.text ?? "").trim().slice(0, 300);
         if (!rad || !text) return svar({ fel: "Raden saknas." }, 400);
+        // Din månad: en fråga om en provisionsrad. Samma kö, men raden står kvar.
+        const manad = b.var === "manad";
+        const plats = manad ? "Din månad" : "Din dag i korthet";
         const ok = await skrivFel({
           kind: "manual",
           path: "/nav2",
           digest: null,
-          body: `Startsidan, Din dag i korthet: raden stämmer inte. ”${text}”`,
+          body: manad ? `Startsidan, Din månad: en fråga om provisionsraden. ”${text}”` : `Startsidan, Din dag i korthet: raden stämmer inte. ”${text}”`,
           blocking: false,
           reporterId: mig,
           userAgent: request.headers.get("user-agent"),
           // Var raden stod, i ord. Radens id står kvar i `hem.flaggade` för den som flaggade.
-          pointedAt: `Startsidan · Din dag i korthet · ${text}`.slice(0, 300),
+          pointedAt: `Startsidan · ${plats} · ${text}`.slice(0, 300),
         });
         if (!ok) return svar({ fel: "Det gick inte att spara." }, 500);
+        if (manad) return svar({ ok: "Frågan är skickad till den som förvaltar Nav, med provisionsraden bifogad." });
         const l = await lasVal("hem.flaggade");
         if (!l.includes(rad)) await sparaVal("hem.flaggade", [...l, rad].slice(-50));
         return svar({ ok: "Markerad som fel. Raden blir underlag för att rätta sammanfattningen." });

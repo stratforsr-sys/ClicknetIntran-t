@@ -98,6 +98,18 @@ export function textKortObekraftade(antal: number, dag: string | null): string {
   return antal === 1 ? `1 möte${nar} är obekräftat` : `${antal} möten${nar} är obekräftade`;
 }
 
+/**
+ * Lagets öppna rader, hos den som leder laget: hur många möten som står
+ * obekräftade och hur många av dem som saknar ett val. `dag` null när mötena
+ * ligger på olika dagar.
+ */
+export function textLagetsOppna(antal: number, utanVal: number, dag: string | null): string {
+  const start = `Obekräftade möten${dag ? ` ${dag}` : ""}: ${antal}`;
+  if (utanVal === 0) return `${start}. ${antal === 1 ? "Valet är gjort." : "Alla har fått ett val."}`;
+  if (antal === 1) return `${start}, utan val.`;
+  return utanVal === antal ? `${start}, alla utan val.` : `${start}, varav ${utanVal} utan val.`;
+}
+
 /** Kvittot efter ett val. `dom` är när domen kommer, i ord ("på onsdag"). */
 export function textKvitto(val: Val, dom: string): string {
   switch (val) {

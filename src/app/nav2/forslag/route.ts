@@ -5,6 +5,7 @@ import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { LAGE_KOL, REGEL_OBEKRAFTAT, arChefFor, lasGenomgang, lasInst, lasKrets, motesInfo, type LageRad } from "@/lib/nav2/forslag";
 import { farAndraForslagInst, nyckelDelar, oppetLage, provaForslagInst, FORSLAG_NYCKLAR, type Val } from "@/lib/nav2/forslagforma";
 import { dagText, textKvitto } from "@/lib/nav2/hemtext";
+import { teamGenomgang } from "@/lib/nav2/hem-team";
 import { MATT, type MattNyckel } from "@/lib/nav2/matt";
 import { lokalDag } from "@/lib/nav2/motesflode";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
@@ -51,7 +52,7 @@ export async function GET(request: Request) {
   const vad = url.searchParams.get("las") ?? "";
   if (!LASNINGAR.includes(vad)) return svar({ fel: "Okänd läsning." }, 400);
   try {
-    const g = await lasGenomgang(user, vad, url.searchParams.get("id"));
+    const g = vad === "team" ? await teamGenomgang(user) : await lasGenomgang(user, vad, url.searchParams.get("id"));
     return svar(g.data, g.status);
   } catch (e) {
     return svar({ fel: e instanceof Error ? e.message : "Något gick fel." }, 500);

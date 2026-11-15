@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { skrivFel } from "@/lib/fel-server";
 import { nettoAntal, type Order } from "@/lib/order";
+import { lasSidvis } from "@/lib/sidvis";
 import { arArbetsdag, veckodag } from "@/lib/saljtakt";
 import { LAGE_KOL, REGEL_OBEKRAFTAT, facitRader, lasInst, motesInfo, somForslagMote, type LageRad } from "./forslag";
 import {
@@ -341,8 +342,7 @@ export async function korForslagNatt(db: Db, nu: Date = new Date()): Promise<Nat
 
   // 1 och 2. Stäng det som ingen valde i, och döm det vars domsdag har kommit.
   await steg("dom", async () => {
-    const { data } = await db.from("nav_forslag_lage").select(LAGE_KOL).eq("regel", REGEL_OBEKRAFTAT).eq("sort", "forslag").is("dom", null).limit(2000);
-    const rader = (data ?? []) as unknown as LageRad[];
+    const rader = await lasSidvis<LageRad>((a, b) => db.from("nav_forslag_lage").select(LAGE_KOL).eq("regel", REGEL_OBEKRAFTAT).eq("sort", "forslag").is("dom", null).order("id").range(a, b) as unknown as PromiseLike<{ data: LageRad[] | null; error: { message: string } | null }>);
     if (!rader.length) return;
     const info = await motesInfo(db, rader.map((r) => r.nyckel.split("@")[0]));
     for (const r of rader) {
@@ -375,10 +375,10 @@ export async function korForslagNatt(db: Db, nu: Date = new Date()): Promise<Nat
 
   // 3. Utfallet har rättats efter domen: en ny dom, och den gamla står kvar i loggen.
   await steg("omdom", async () => {
-    const { data } = await db
-      .from("nav_forslag_lage").select(LAGE_KOL).eq("regel", REGEL_OBEKRAFTAT).eq("sort", "forslag").not("dom", "is", null)
-      .gte("dom_nar", new Date(nu.getTime() - OMDOM_BAKAT).toISOString()).limit(2000);
-    const rader = (data ?? []) as unknown as LageRad[];
+    const sedan = new Date(nu.getTime() - OMDOM_BAKAT).toISOString();
+    const rader = await lasSidvis<LageRad>((a, b) =>
+      db.from("nav_forslag_lage").select(LAGE_KOL).eq("regel", REGEL_OBEKRAFTAT).eq("sort", "forslag").not("dom", "is", null).gte("dom_nar", sedan).order("id").range(a, b) as unknown as PromiseLike<{ data: LageRad[] | null; error: { message: string } | null }>,
+    );
     if (!rader.length) return;
     const info = await motesInfo(db, rader.map((r) => r.nyckel.split("@")[0]));
     for (const r of rader) {
@@ -438,9 +438,9 @@ export async function korForslagNatt(db: Db, nu: Date = new Date()): Promise<Nat
     const oppna = ((data ?? []) as unknown as LageRad[]).filter((r) => (r.dom as { dom?: AndringDom } | null)?.dom?.stangd !== true);
     if (!oppna.length) return;
     const lagIds = [...new Set(oppna.map((r) => r.lag).filter((x): x is string => !!x))];
-    const { data: er } = lagIds.length ? await db.from("employee").select("id, team_id").in("team_id", lagIds).limit(2000) : { data: [] };
+    const er = lagIds.length ? await lasSidvis<{ id: string; team_id: string | null }>((a, b) => db.from("employee").select("id, team_id").in("team_id", lagIds).order("id").range(a, b) as unknown as PromiseLike<{ data: { id: string; team_id: string | null }[] | null; error: { message: string } | null }>) : [];
     const iLag = new Map<string, string[]>();
-    for (const e of (er ?? []) as unknown as { id: string; team_id: string | null }[]) if (e.team_id) iLag.set(e.team_id, [...(iLag.get(e.team_id) ?? []), e.id]);
+    for (const e of er) if (e.team_id) iLag.set(e.team_id, [...(iLag.get(e.team_id) ?? []), e.id]);
     const alla = await moten();
     for (const r of oppna) {
       const matt = MATT[(r.foljer?.matt ?? r.regel) as MattNyckel];
@@ -462,8 +462,8 @@ export async function korForslagNatt(db: Db, nu: Date = new Date()): Promise<Nat
 
   // 6. Navs facit, sparat vid vart tionde avgjort möte. Talen på raden är de som domen räknades på.
   await steg("facit", async () => {
-    const { data } = await db.from("nav_forslag_lage").select(LAGE_KOL).eq("regel", REGEL_OBEKRAFTAT).eq("sort", "forslag").eq("prov", false).not("dom", "is", null).limit(5000);
-    const rader = facitRader((data ?? []) as unknown as LageRad[]);
+    const domda = await lasSidvis<LageRad>((a, b) => db.from("nav_forslag_lage").select(LAGE_KOL).eq("regel", REGEL_OBEKRAFTAT).eq("sort", "forslag").eq("prov", false).not("dom", "is", null).order("id").range(a, b) as unknown as PromiseLike<{ data: LageRad[] | null; error: { message: string } | null }>);
+    const rader = facitRader(domda);
     const f = facitPerVal(rader, inst.f.gransFacit);
     if (f.dom.vid < 10) return;
     const { data: sr } = await db.from("nav_facit_dom").select("vid").eq("regel", REGEL_OBEKRAFTAT).eq("krets", "alla").order("vid", { ascending: false }).limit(1);
@@ -492,13 +492,13 @@ export async function korForslagNatt(db: Db, nu: Date = new Date()): Promise<Nat
   await steg("takt", async () => {
     if (!pa || !arArbetsdag(idag)) return;
     const manad = `${idag.slice(0, 7)}-01`;
-    const [{ data: or }, { data: er }, { data: tr }] = await Promise.all([
-      db.from("sales_order").select("id, salesperson_id, status, period_month, cancel_period_month").or(`period_month.eq.${manad},cancel_period_month.eq.${manad}`).limit(5000),
-      db.from("employee").select("id, team_id").limit(5000),
+    // Order och anställda läses sida för sida: REST-lagret kapar ett svar vid 1000 rader utan att säga det.
+    const [order, er, { data: tr }] = await Promise.all([
+      lasSidvis<Order>((a, b) => db.from("sales_order").select("id, salesperson_id, status, period_month, cancel_period_month").or(`period_month.eq.${manad},cancel_period_month.eq.${manad}`).order("id").range(a, b) as unknown as PromiseLike<{ data: Order[] | null; error: { message: string } | null }>),
+      lasSidvis<{ id: string; team_id: string | null }>((a, b) => db.from("employee").select("id, team_id").order("id").range(a, b) as unknown as PromiseLike<{ data: { id: string; team_id: string | null }[] | null; error: { message: string } | null }>),
       db.from("team").select("id").limit(500),
     ]);
-    const order = (or ?? []) as unknown as Order[];
-    const lagFor = new Map(((er ?? []) as unknown as { id: string; team_id: string | null }[]).map((e) => [e.id, e.team_id]));
+    const lagFor = new Map(er.map((e) => [e.id, e.team_id]));
     const kretsar: [string, Order[]][] = [
       ["alla", order],
       ...((tr ?? []) as unknown as { id: string }[]).map((t): [string, Order[]] => [t.id, order.filter((o) => lagFor.get(o.salesperson_id) === t.id)]),

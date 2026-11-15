@@ -95,6 +95,7 @@ function minne(start) {
     let skrivet = null;
     let en = false;
     let antal = null;
+    let omfang = null;
     const filter = [];
     const ordning = [];
     const svaret = () => {
@@ -102,7 +103,9 @@ function minne(start) {
       let ut = rader(tabell).filter((r) => filter.every((f) => f(r)));
       for (const [kol, stigande] of [...ordning].reverse()) ut = [...ut].sort((a, b) => (a[kol] < b[kol] ? -1 : a[kol] > b[kol] ? 1 : 0) * (stigande ? 1 : -1));
       if (antal !== null) ut = ut.slice(0, antal);
-      return en ? { data: ut[0] ?? null, error: null } : { data: ut, error: null, count: ut.length };
+      // Som REST-lagret: högst 1000 rader per svar, utan att säga till. Bara range ger resten.
+      const sida = omfang ? ut.slice(omfang[0], Math.min(omfang[1] + 1, omfang[0] + 1000)) : ut.slice(0, 1000);
+      return en ? { data: ut[0] ?? null, error: null } : { data: sida, error: null, count: ut.length };
     };
     const jamfor = (test) => (kol, varde) => {
       filter.push((r) => test(r[kol], varde));
@@ -154,6 +157,7 @@ function minne(start) {
             antal = n;
             return kedja;
           };
+          if (namn === "range") return (fran, till) => { omfang = [fran, till]; return kedja; };
           if (namn === "maybeSingle" || namn === "single") return () => {
             en = true;
             return Promise.resolve(svaret());
@@ -430,6 +434,9 @@ rubrik("Nattjobbet: takten sparas varje arbetsmorgon");
   ok("en gång per morgon", igen.takt === 0 && db.t.nav_takt_dag.length === 2, j(igen));
   const lordag = await natt(db, "2026-11-20T23:30:00.000Z"); // lördag morgon
   ok("på helgen sparas ingenting", lordag.takt === 0, j(lordag));
+  const stor = minne(bas(true, { extra: { sales_order: Array.from({ length: 1200 }, (_x, i) => order(`s${i}`, "2026-11-03")) } }));
+  await natt(stor, "2026-11-16T23:30:00.000Z");
+  ok("fler än tusen order i månaden: takten räknar alla", stor.t.nav_takt_dag.find((r) => r.krets === "alla")?.netto === 1200, j(stor.t.nav_takt_dag));
 }
 
 rubrik("Nattjobbet: en följd inställning som ändras blir en rad i loggen");

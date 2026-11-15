@@ -5,6 +5,61 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-15 · Hemvyn, steg 2: det nya hemmet i utkastet, på grenen `hemvy-chatt`
+
+Fortsättning på steg 1 här under. Ingen migration. Inget är påslaget: ingen ser det nya hemmet förrän någon står i
+`hem.nytt`.
+
+- **Hemmets data** (`hem.ts`, `hem-team.ts`, `hemforma.ts`): `byggHem` läser inställningarna en gång och hämtar
+  förslagen och lagets månad bara för den som har nya hemmet. För alla andra tillkommer en läsning. Teamet i månaden
+  är nettoorder mot summan av säljarnas mål, takten som en uträkning och taktens eget facit vid samma antal gångna
+  arbetsdagar. Genomgången (`las=team`) har en rad per person med antal, ingen dom.
+- **Det nya hemmet** (`utkast.html`, prefix `hv`): ett glasfönster kant i kant, mörkt eller ljust, med överraden
+  (på plats, datum, Stämpla in), hälsningen, fyra kort och skrivrutan. Ett öppnat kort tar ytan, genomgången hämtas
+  när kortet öppnas, och kvittot med Ångra står i ytans fot. `render()` väljer: det gamla hemmets funktioner är inte
+  ändrade.
+- **Första kedjan i gränssnittet:** förslaget med Navs tre rader (servern skickar dem färdiga), tre lika val, Flytta
+  öppnar Mötens vanliga flytta, personens egen rad, och domen dagen efter i Det som ändrats.
+- **Det som ändrats:** servern skickar åt vilket håll det gick, om raden är stängd, vem den gäller och trendregelns
+  rad. Kortet gissar ingenting. En ändring utan slutdom visar nattens senaste mätning.
+- **Din månad:** det stora talet är det motorn redan har räknat. Väntande order står som antal i kortet och med
+  ungefärligt belopp först i uträkningen. "Fråga om raden" går till kön för fel (`flagga` med `var: "manad"`) och
+  raden göms aldrig.
+- **Inställningarna:** rutan Nya hemmet i Inställningar, Administration. Brytarna (vilka som har hemmet, och om Nav
+  skapar förslag) och gränserna för Navs domar är bara för superadmin. Admin-nivån ändrar klockslaget för
+  obekräftade möten. Den som blir dömd ska inte kunna flytta ribban för sin egen dom.
+- **Det gamla hemmets saker** (`docs/hemvy-gamla-hemmet.md`): allt har en plats. Tre fick byggas, eftersom de bara
+  fanns på det gamla hemmet: hela listan bakom Väntar på dig (Sedan du tittade, Lyssna, källan, Stämmer inte, Visa
+  inte här, pricken nytt sedan sist, tangenterna J K E Enter), genvägen **Veckan** (nästa arbetsdag, veckan, dagens
+  slut, kvällsnotisen) och genvägen **Golvet** (dagens order och Grattis).
+- **Varför Golvet fick en genväg** trots att beställaren bestämt att Golvet bor på Säljtavlan: tavlan går inte att
+  gratulera på. Utan genvägen hade Grattis försvunnit för den som har nya hemmet. Den är en knapp som går att ta bort.
+- **Misstag på vägen:** kortet Det som ändrats skrev "hos dig" på en inställning som gäller hela företaget. Servern
+  skickar nu vem raden gäller (`galler`). Kvällsnotisens förhandsvisning ritades först under fönstret, där klicket
+  inte ledde någonstans; den bor nu i Veckan.
+- **Rådgivarens genomgång av steg 2** hittade åtta saker. Alla är rättade, var och en med ett prov som föll först:
+  1. *Klicken svaldes.* Fönstrets rot bar `data-hvton`, som klicklyssnaren lyssnar efter. Varje klick utan egen
+     väljare (Min dag, Stämpla in, Lyssna, Skicka, Öppna kalendern) fångades av roten. Tonen står nu i
+     `data-hvtema`, och provet läser väljarlistan ur koden och nekar varje annat element än en knapp att bära den.
+  2. *En efterhämtning kastade ett annat arks svar.* Varje ark har nu sin egen hämtning (`hvHamta`), ett fel
+     visas bara i arket det hör till, och ett ark som lämnats hämtas inte om. Kvittot kommer då som en rad med Ångra.
+  3. *Ett Escape stängde både paletten och arket under.* `hvTangent` lyssnar före Navs vanliga lyssnare och gör
+     ingenting när paletten, en panel, Att göra, klockan eller Inställningar är öppet.
+  4. *"De slås på i Inställningar"* visades för den som inte har brytaren. Nu står bara att förslagen är avstängda.
+  5. *En teamledare kunde ändra gränserna för Navs domar,* också för sitt eget lag. Gränserna är nu superadmins.
+  6. *Din månad kunde visa utkastets exempeltal* när provisionens data saknas. Nu står "Provisionen går inte att
+     läsa just nu." och inga tal, som det gamla hemmet som döljer kortet.
+  7. *Tysta tak på tusen rader.* REST-lagret kapar ett svar vid 1000 rader utan att säga det, och `.limit(5000)`
+     hjälper inte. Lagets order och möten, månadens order i nattjobbet och alla dömda förslag läses nu sida för sida
+     (`lasSidvis`). Produktionen har 35 order och 32 möten (2026-11-15), så inget tal har varit fel. Provens
+     attrapper kapar nu vid 1000 som REST-lagret, så att samma misstag faller nästa gång.
+  8. *Formuläret Berätta om en ändring listade alla kollegor,* fast servern nekar den som står utanför kretsen.
+     `las=andrat` skickar nu kretsen, och formuläret listar bara den.
+- **Inte rättat här:** `moten-jobb.ts` har fyra läsningar med `.limit(5000)` som fanns före grenen. De har samma
+  tysta tak. De rörs inte i den här ändringen.
+
+---
+
 ## 2026-11-15 · Hemvyn, steg 1: underlaget (0303), på grenen `hemvy-chatt`
 
 Beställaren godkände designdokumentet v3 ("Bygg allting … gör det 100% nu", provet av Claude-modellerna väntar).
