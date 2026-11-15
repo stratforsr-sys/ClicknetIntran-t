@@ -6,7 +6,11 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 ---
 
 
-## 2026-11-15 · Möten: statistiken som instrumentpanel (grenen `moten-statistik`)
+## 2026-11-15 · Möten: statistiken som instrumentpanel (på `main` `112f8ce`)
+
+**Mergad** 2026-11-15 på beställarens "merga till main men endast det från den här sessionen": grenens tre
+commitar (`e5379db`, `dbf587e`, `8dbac65`) som en commit ovanpå `d4a026d` (main hade inte rört sig), trädet
+identiskt med den klickprovade previewen. Produktionsbygget grönt 20:45 UTC. Grenen `hemvy-chatt` är inte med.
 
 **Varför.** Beställaren öppnade inte statistiken: en tabell med 8 personer × 7 kolumner för en vecka, där 10–15
 möten gör procenten till brus. Fyra förhandsvisningar senare (artifact v9) blev det rutor med ett tal var: en mening
