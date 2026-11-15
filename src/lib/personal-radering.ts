@@ -155,6 +155,8 @@ const TABELL: Record<string, string> = {
   lecture_signup: "Anmälningar till föreläsningar",
   manager_commission_rate: "Säljchefens provisionssatser",
   module_rating: "Betyg på utbildningsmoduler",
+  nav_chatt_logg: "Frågor till chatten",
+  nav_chatt_prov: "Godkända prov av chattens modell",
   nav_forslag: "Navs förslag och ändringar",
   nav_forslag_handelse: "Val och domar i Navs förslag",
   nav_preference: "Egna inställningar i Nav",

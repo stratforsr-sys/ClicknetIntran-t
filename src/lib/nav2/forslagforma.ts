@@ -500,3 +500,6 @@ export function farAndraForslagInst(roller: readonly string[], nyckel: string): 
   if (niva === "salesperson" || !faltForNyckel(nyckel)) return false;
   return niva === "superadmin" || ADMIN_FAR.includes(nyckel);
 }
+
+/** Har personen det nya hemmet? */
+export const harNyttHem = (f: Pick<ForslagInst, "hemNytt">, anstalld: string): boolean => f.hemNytt === "alla" || f.hemNytt.includes(anstalld);

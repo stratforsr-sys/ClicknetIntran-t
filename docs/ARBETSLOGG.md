@@ -5,6 +5,66 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-15 · Hemvyn, steg 3: chatten med Claude, byggd och avstängd (0304, 0305), på grenen `hemvy-chatt`
+
+**Vad:** skrivrutan i det nya hemmet kan fråga Claude. Claude läser färdiga mått med sex verktyg och skriver
+texten. Talen sätter servern in. Ingenting är påslaget, och rutten har aldrig pratat med Claude på riktigt.
+
+**Varför så här:**
+
+- **Claude skriver aldrig ett tal.** Den hänvisar till ett fält i ett verktygssvar (`{{t:1.antal}}`), och
+  `sattInTal` sätter in värdet med källa. En siffra utan hänvisning märks ut och räknas i loggen. Då kan ett
+  tal inte hamna hos fel person eller fel period utan att det syns. Svaret skickas därför i ett stycke och inte
+  tecken för tecken: en halv hänvisning ska aldrig synas.
+- **Behörigheten sitter i verktygen, inte i systemtexten.** Varje verktyg går med den inloggades krets
+  (`mote_statkrets()`). Verktygslistan är densamma för alla, så att alla delar samma cache.
+- **Claude gör ingenting.** Fem verktyg läser. Det sjätte förbereder ett utkast till uppgifter, och personen
+  trycker själv på Lägg i min dag (den vanliga rutten för uppgifter).
+- **Spärren sitter i databasen.** Triggern `nav_chatt_sparr` nekar `chatt.pa` utan bekräftat avtal och ett
+  godkänt prov för modellen. Rutten prövar samma sak vid varje fråga, och dessutom att provet gäller den
+  systemtext och de verktyg som körs nu (avtrycket), och att personen har det nya hemmet (`hem.nytt`).
+- **Gränserna för kostnaden (0305, beställaren 2026-11-15)** räknas i dollar ur loggens token och modellens
+  pris: per person och för företaget, varje kalendermånad, per miljö. De är data i `nav_chatt_tak` (en rad per
+  installation, standard 10 och 50 dollar), inte inställningar. 0304 hade ett tak i kronor och frågor per dag;
+  det är ersatt. "Per företag" blev en rad per installation: ingen anställd har ett `company_id`, så det finns
+  inget att dela upp på.
+- **En fråga reserverar sin högsta kostnad innan Claude anropas** (`nav_chatt_reservera`): gränserna prövas och
+  loggraden skrivs i samma steg, under ett lås, och raden rättas till den verkliga kostnaden när svaret är
+  klart. Två skäl, båda ur granskningen: femtio frågor samtidigt kunde annars alla läsa samma förbrukning och
+  gå igenom, och en fråga vars flik stängdes skrev aldrig sin rad och kostade då ingenting mot gränsen. Det
+  mesta en fråga kan kosta räknas som sex varv fulla uttoken, till den dyraste modellens pris när en
+  reservmodell kan ta över (0,24 dollar). Intoken är inte med i det påslaget.
+- **Samma slinga i rutten och i provet** (`samtal.ts`), så att det provet godkänner är det som körs.
+- **Provet kör mot en påhittad fixtur**, aldrig mot produktionen. Det kända svaret är inte skrivet för hand:
+  rättningen kör verktyget på fixturen och jämför med det modellen hänvisade till.
+
+**Beslut som avviker från eller lägger till designdokumentet:**
+
+- `las_vantar` läser palettens tre svar (besluta, kvittera, försenat). Kortets lista byggs i webbläsaren och
+  finns inte på servern. Verktyget bär därför raderna men inget antal (palettens listor är kapade vid sex), och
+  säger att antalet står på kortet. Av samma skäl bär `las_forslag` inget antal för det som ändrats.
+- `las_dag` räknar bokade tider (möte, 1:1, leverans, coachning) som personen inte tackat nej till. Frister,
+  ledighet och avbrutna uppgifter räknas inte, och klara uppgifter äldre än 14 dagar sägs inte som ett antal.
+- Källraden bakom ett tal väljs efter fältet: motviktens tal bär motviktens förklaring.
+- Ett utkast som Claude själv skrivit går inte att hänvisa till som källa (`_egnaOrd`): annars kunde ett
+  påhittat tal bli belagt genom det.
+- Order läses bara per månad. Veckofrågor om order får svaret att de räknas per månad.
+- Samtalet minns högst tre utbyten, och talen i gamla svar byts mot `[tal]` innan de skickas tillbaka.
+- Ny inställning `chatt.avtal` (bekräftat biträdesavtal), som både triggern och rutten kräver.
+- Chattens inställningar har ingen ruta att ändra i. Inställningar visar läget, vad som saknas, gränserna och
+  månadens förbrukning per person (superadmin). Var och en ser sin egen andel i procent under skrivrutan.
+- Källorna bakom verktygen (`kallor.ts`) är tunna anrop till befintliga byggfunktioner. De är typkontrollerade
+  men inte körda: i ruttprovet är de utbytta. Första riktiga körningen blir när chatten provas i previewn.
+
+**Inte gjort:** provet av modellerna (väntar på beställarens ja), klickprovet, och raden i Navnyheter (skrivs
+när chatten slås på). Provkörningen skriver inga loggrader och räknas inte mot gränserna.
+
+**Kvar från granskningen (små):** rutten litar på att reservmodellens svar går att lägga tillbaka oförändrat
+(kontrolleras i första riktiga körningen, liksom hur `model` ser ut i svaret), och märkningen av obelagda tal
+missar sammansatta talord ("tvåhundra") och märker vissa datumformer ("15/11") i onödan.
+
+**Prov:** `chattforma`, `chatt-rutt`, `chatt-db`, `nav2-hemvy` (avsnittet Chatten i skrivrutan).
+
 ## 2026-11-15 · Hemvyn, steg 2: det nya hemmet i utkastet, på grenen `hemvy-chatt`
 
 Fortsättning på steg 1 här under. Ingen migration. Inget är påslaget: ingen ser det nya hemmet förrän någon står i

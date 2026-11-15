@@ -9002,6 +9002,23 @@ button.hv-kfot:hover,.hv-tal:hover .hv-kfot{color:var(--hv-ink)}
 :where(.hv-navs) p b{font-weight:600}
 .hv-tank{color:var(--hv-ink-2)}
 .hv-kalla{margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.hv-chatt{display:flex;flex-direction:column;gap:28px;width:100%;max-width:780px;margin:8px auto 0}
+.hv-tur{display:flex;flex-direction:column;gap:12px}
+.hv-tur>.hv-kalla{margin-left:42px}
+.hv-q{align-self:flex-end;max-width:80%;margin:0;padding:9px 14px;border-radius:14px 14px 4px 14px;background:var(--hv-glass-2);border:1px solid var(--hv-glass-line);font-size:15px;line-height:1.5;overflow-wrap:anywhere}
+.hv-siffra{font:inherit;font-weight:600;color:inherit;padding:0 2px;border-radius:4px;border-bottom:1px solid var(--hv-brand);cursor:pointer;transition:background .15s}
+.hv-siffra:hover,.hv-siffra[aria-expanded="true"]{background:var(--hv-brand-soft)}
+.hv-obel{background:none;color:inherit;border-bottom:2px dotted var(--hv-ink-3)}
+.hv-talk{padding-top:10px;border-top:1px solid var(--hv-line)}
+.hv-utk{margin-left:42px;padding:16px 18px;max-width:560px}
+.hv-utk ul{list-style:none;margin:10px 0 14px;padding:0;display:flex;flex-direction:column;gap:8px}
+.hv-utk li{display:flex;justify-content:space-between;gap:16px;font-size:14.5px;overflow-wrap:anywhere}
+.hv-utk li small{flex:none;color:var(--hv-ink-3);font-size:12.5px}
+.hv-utk p{margin:0}
+.hv-utkrad{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.hv-cforbr{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px;font-size:13px}
+.hv-cforbr li{display:flex;justify-content:space-between;gap:16px}
+.hv-cforbr li span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hv-mono{font:11.5px/1.5 var(--f-mono);letter-spacing:.02em;color:var(--hv-ink-3)}
 .hv-glass{background:var(--hv-glass);border:1px solid var(--hv-glass-line);border-radius:18px;backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);box-shadow:inset 0 1px 0 var(--hv-glass-hi),var(--hv-shadow)}
 .hv-lista{margin-top:14px;padding:6px 18px 14px}
@@ -34431,7 +34448,8 @@ renderGolvet = function(){ return _ndHemGolvMo() + (typeof ndMoHemKort === 'func
      Golvet            genvägen: dagens signerade order och Grattis.
    ===================================================================== */
 const hvPa = () => !!(ND && ND.hem && ND.hem.nytt);
-S.hv = S.hv || {ark:null, id:null, fi:0, data:{}, laddar:{}, fel:'', kvitto:null, form:null, dra:false, sparar:false, inaktuell:false, q:'', kom:'', meny:null};
+S.hv = S.hv || {ark:null, id:null, fi:0, data:{}, laddar:{}, fel:'', kvitto:null, form:null, dra:false, sparar:false, inaktuell:false, q:'', kom:'', meny:null, chatt:[]};
+S.hv.chatt = S.hv.chatt || [];
 let hvTon = (() => { try { return localStorage.getItem('nav2-hvton') === 'ljus' ? 'ljus' : 'mork'; } catch(_){ return 'mork'; } })();
 const hvTal = n => Math.round(n).toLocaleString('sv-SE');
 const hvOrd = n => ['Noll', 'En', 'Två', 'Tre', 'Fyra', 'Fem', 'Sex', 'Sju', 'Åtta', 'Nio', 'Tio'][n] || String(n);
@@ -34605,18 +34623,113 @@ function hvAndrat(){
 }
 
 /* ---------- Skrivrutan: svarar som paletten tills chatten är påslagen, och säger det ---------- */
+const hvChattPa = () => !!(ND && ND.hem && ND.hem.chatt);
 function hvSkriv(){
   return `<form class="hv-skriv" data-hvskriv>
     <textarea id="hvQ" rows="1" placeholder="Sök, gör eller fråga Nav…" aria-label="Skriv till Nav" data-hvfalt="q">${esc(S.hv.q || '')}</textarea>
-    <div class="hv-srad"><span class="hv-tips">Svaren kommer ur Navs sökruta, inte från AI.</span><button class="hv-send" aria-label="Skicka">${I('arrow')}</button></div>
+    <div class="hv-srad"><span class="hv-tips">${hvChattPa() ? 'Svaren skrivs av AI ur Navs tal. Talen sätter Nav in.' + (typeof ND.hem.chattAnvant === 'number' ? ` ${ND.hem.chattAnvant} % av månadens AI-utrymme är använt.` : '') : 'Svaren kommer ur Navs sökruta, inte från AI.'}</span><button class="hv-send" aria-label="Skicka">${I('arrow')}</button></div>
   </form>`;
 }
-function hvFraga(){
-  const q = String(S.hv.q || '').trim(); if (!q) return;
-  S.hv.q = '';
+function hvSok(q){
   openPal();
   const i = document.getElementById('palIn'); if (!i) return;
   i.value = q; palSel = 0; PS.cur = null; drawPal(q);
+}
+function hvFraga(){
+  const q = String(S.hv.q || '').trim(); if (!q) return;
+  if (hvChattPa()) return hvChattFraga(q);
+  S.hv.q = '';
+  hvSok(q);
+}
+
+/* ---------- Chatten (designdokumentet, Steg 3): skrivrutan frågar Claude när chatten är påslagen ----------
+   Claude skriver texten, Nav sätter in talen. Varje tal är en knapp som visar sin källa, ett tal utan
+   belägg är utmärkt, och källraden säger att texten är skriven av AI. Claude gör ingenting: ett utkast
+   till uppgifter läggs in först när personen trycker. Samtalet finns bara i fliken och sparas inte här.
+   Svarar rutten nej (avstängd, tak, avböjt) säger rutan varför och erbjuder sökrutan. */
+const hvChattRen = t => String(t || '').replace(/⟦(?:t\d+|obelagt):([^⟧]*)⟧/g, '$1');
+async function hvChattFraga(q){
+  const H = S.hv, T = H.chatt;
+  if (T.some(t => t.laddar)){ toast('Vänta på svaret först.'); return; }
+  H.q = '';
+  const historia = T.filter(t => t.svar).slice(-3).map(t => ({fraga:t.fraga, svar:hvChattRen(t.svar.text)}));
+  const tur = {fraga:q, hamtar:[], svar:null, fel:'', laddar:true, visa:null, lagt:false, lagger:false, lagda:0};
+  T.push(tur);
+  Object.assign(H, {ark:'chatt', id:null, kvitto:null, fel:'', form:null, meny:null});
+  const rita = () => { if (S.view === 'hem' && S.hv.ark === 'chatt'){ render(); const el = document.querySelector('.hv-chatt'); if (el && el.lastElementChild && el.lastElementChild.scrollIntoView) el.lastElementChild.scrollIntoView({block:'end'}); } };
+  rita();
+  try {
+    const res = await fetch('/nav2/chatt', {method:'POST', credentials:'same-origin', headers:{'content-type':'application/json'}, body:JSON.stringify({fraga:q, historia})});
+    if (!res.ok || !res.body || !String(res.headers.get('content-type') || '').includes('event-stream')){
+      let d = null; try { d = await res.json(); } catch(_){}
+      if (res.status === 409){
+        // Avstängd sedan sidan lästes: rutan svarar som sökrutan, och säger varför.
+        ND.hem.chatt = false; T.pop();
+        if (!T.length && H.ark === 'chatt') H.ark = null;
+        if (S.view === 'hem') render();
+        toast((d && d.fel) || 'Chatten är inte påslagen.'); hvSok(q); return;
+      }
+      tur.fel = (d && d.fel) || (res.status === 401 ? 'Du är utloggad. Logga in och fråga igen.' : 'Chatten svarar inte just nu.');
+    } else {
+      const las = res.body.getReader(), dek = new TextDecoder(); let buf = '';
+      for (;;){
+        const {done, value} = await las.read(); if (done) break;
+        buf += dek.decode(value, {stream:true});
+        let i;
+        while ((i = buf.indexOf('\n\n')) >= 0){
+          const rad = buf.slice(0, i); buf = buf.slice(i + 2);
+          if (!rad.startsWith('data: ')) continue;
+          let h; try { h = JSON.parse(rad.slice(6)); } catch(_){ continue; }
+          if (h.h === 'hamtar') tur.hamtar.push(String(h.text || ''));
+          else if (h.h === 'svar') tur.svar = h;
+          else if (h.h === 'avbojt' || h.h === 'fel') tur.fel = String(h.text || 'Chatten svarar inte just nu.');
+          rita();
+        }
+      }
+      if (!tur.svar && !tur.fel) tur.fel = 'Svaret bröts. Försök igen.';
+    }
+  } catch(_){ tur.fel = 'Nav svarade inte. Kontrollera nätet och försök igen.'; }
+  tur.laddar = false; rita();
+}
+function hvChattText(t, ti){
+  return esc(t.svar.text).replace(/⟦(t\d+|obelagt):([^⟧]*)⟧/g, (_m, id, v) => id === 'obelagt'
+    ? `<mark class="hv-obel" title="Det här talet kunde jag inte belägga">${v}</mark>`
+    : `<button class="hv-siffra num" data-hvtal="${ti}:${id}" aria-expanded="${t.visa === id}" title="Visa källan">${v}</button>`)
+    .split(/\n{2,}/).map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
+}
+function hvChattUtkast(t, i){
+  const u = t.svar.utkast;
+  return `<div class="hv-glass hv-utk"><b>${u.length === 1 ? 'Utkast till en uppgift' : `Utkast till ${hvOrd(u.length).toLowerCase()} uppgifter`}</b>
+    <ul>${u.map(x => `<li><span>${esc(x.titel)}</span><small>${x.dag ? esc(frKort(x.dag)) : 'utan dag'}</small></li>`).join('')}</ul>
+    ${t.lagt ? `<p class="hv-tank">Tillagt i dina uppgifter.</p>` : `<p class="hv-utkrad"><button class="hv-kn" data-hvchattlagg="${i}"${t.lagger ? ' disabled' : ''}>Lägg i min dag</button><span class="hv-tank">Inget är skapat än.</span></p>`}
+  </div>`;
+}
+function hvArkChatt(){
+  return `<div class="hv-chatt" aria-live="polite">${(S.hv.chatt || []).map((t, i) => {
+    const s = t.svar, k = s && t.visa ? (s.tal || []).find(x => x.id === t.visa) : null;
+    const hamtar = t.hamtar.map(h => `<p class="hv-tank">${esc(h)}</p>`).join('') + (t.laddar && !t.hamtar.length ? '<p class="hv-tank">Frågar…</p>' : '');
+    const obel = s && s.obelagda ? `<p class="hv-tank">${s.obelagda === 1 ? 'Det markerade talet kunde jag inte belägga.' : 'De markerade talen kunde jag inte belägga.'}</p>` : '';
+    const kalla = k ? `<p class="hv-talk"><span class="hv-mono">${esc(k.om || 'Källan går inte att visa.')}</span></p>` : '';
+    const fel = t.fel ? `<p>${esc(t.fel)}</p><p><button class="hv-kn" data-hvchattsok="${i}">Sök i stället</button></p>` : '';
+    return `<div class="hv-tur"><p class="hv-q">${esc(t.fraga)}</p>${hvNavSager(`${hamtar}${s ? hvChattText(t, i) + obel + kalla : ''}${fel}`)}${s && (s.utkast || []).length ? hvChattUtkast(t, i) : ''}${s ? hvKalla(s.kalla || 'Skrivet av AI ur Navs tal') : ''}</div>`;
+  }).join('')}</div>`;
+}
+// Utkastet läggs in en uppgift i taget. Faller en står knappen kvar, och nästa tryck lägger bara in de som saknas.
+async function hvChattLagg(i){
+  const t = (S.hv.chatt || [])[i]; if (!t || !t.svar || t.lagt || t.lagger) return;
+  const u = t.svar.utkast || [];
+  t.lagger = true; render();
+  let klara = 0, fel = '';
+  for (const x of u.slice(t.lagda)){
+    const s = ndSvar(await ndSkriv('/nav2/uppgifter', {handling:'skapa', titel:x.titel, dag:x.dag}, {knapp:null}));
+    if (!s || s.fel || !s.ok){ fel = (s && s.fel) || 'Det gick inte att spara.'; break; }
+    klara++;
+  }
+  t.lagda += klara; t.lagger = false;
+  if (t.lagda >= u.length) t.lagt = true;
+  if (klara) ndOmlas('upg');
+  toast(fel ? (t.lagda ? `${t.lagda} av ${u.length} uppgifter är upplagda. ${fel}` : fel) : (u.length === 1 ? 'Uppgiften är upplagd.' : `${u.length} uppgifter är upplagda.`));
+  if (S.view === 'hem') render();
 }
 
 /* ---------- Arket: ett öppnat kort tar ytan ---------- */
@@ -34664,7 +34777,7 @@ function hvFot(){
 }
 function hvArk(){
   const a = S.hv.ark;
-  const kropp = a === 'vantar' ? hvArkVantar() : a === 'forslag' ? hvArkForslag() : a === 'team' ? hvArkTeam() : a === 'manad' ? hvArkManad() : a === 'andrat' ? hvArkAndrat() : a === 'vecka' ? hvArkVecka() : a === 'golvet' ? hvArkGolvet() : '';
+  const kropp = a === 'vantar' ? hvArkVantar() : a === 'forslag' ? hvArkForslag() : a === 'team' ? hvArkTeam() : a === 'manad' ? hvArkManad() : a === 'andrat' ? hvArkAndrat() : a === 'vecka' ? hvArkVecka() : a === 'golvet' ? hvArkGolvet() : a === 'chatt' ? hvArkChatt() : '';
   // Lyssna läser upp det som brinner, som i det gamla hemmets sammanfattning (speakBrief).
   const lyssna = a === 'vantar' ? `<button class="hv-kn hv-end" data-listen aria-pressed="${!!S.speaking}">${I(S.speaking ? 'x' : 'play')}${S.speaking ? 'Stoppa' : 'Lyssna'}</button>` : '';
   return `<div class="hv-lager hv-ark">
@@ -34975,15 +35088,18 @@ function hvFormOppna(typ){
 }
 ndOmlasAnmal('hv', {delar:['hem', 'uppgifter', 'moten', 'kalender']});
 
-document.addEventListener('click', e => {
+function hvKlick(e){
   if (!hvPa() || S.view !== 'hem') return;
-  const t = e.target.closest && e.target.closest('[data-hvstang], [data-hvgor], [data-hvforslag], [data-hvnasta], [data-hvval], [data-hvangra], [data-hvdra], [data-hvton], [data-hvigen], [data-hvfraga], [data-hvform], [data-hvformx], [data-hvmeny], [data-hvflagga], [data-hvdolj], [data-hvvisa], [data-hvga], [data-hvgratt], [data-hvark]');
+  const t = e.target.closest && e.target.closest('[data-hvstang], [data-hvtal], [data-hvchattsok], [data-hvchattlagg], [data-hvgor], [data-hvforslag], [data-hvnasta], [data-hvval], [data-hvangra], [data-hvdra], [data-hvton], [data-hvigen], [data-hvfraga], [data-hvform], [data-hvformx], [data-hvmeny], [data-hvflagga], [data-hvdolj], [data-hvvisa], [data-hvga], [data-hvgratt], [data-hvark]');
   // En väg ut ur hemmet (kalendern, uppgifterna, en inställning) stänger arket, så att Hem är hemmet nästa gång. Klicket går vidare som vanligt.
   if (!t){ if (S.hv.ark && e.target.closest && e.target.closest('.hv [data-view], .hv [data-go]')) Object.assign(S.hv, {ark:null, id:null, kvitto:null, form:null, meny:null}); return; }
   // Kort som är en enda knapp (data-hvark) får inte svälja knapparna inuti sig.
   const d = t.dataset;
   e.preventDefault(); e.stopPropagation();
   if (d.hvstang !== undefined){ hvStang(); return; }
+  if (d.hvtal){ const [ti, id] = d.hvtal.split(':'), tur = S.hv.chatt[+ti]; if (tur){ tur.visa = tur.visa === id ? null : id; render(); } return; }
+  if (d.hvchattsok !== undefined){ const tur = S.hv.chatt[+d.hvchattsok]; if (tur) hvSok(tur.fraga); return; }
+  if (d.hvchattlagg !== undefined){ hvChattLagg(+d.hvchattlagg); return; }
   if (d.hvgor){ complete(d.hvgor); return; }
   if (d.hvforslag){ hvOppna('forslag', d.hvforslag); return; }
   if (d.hvnasta !== undefined){ const n = ((ND.hem.forslag && ND.hem.forslag.oppna) || []).length; S.hv.fi = n ? (S.hv.fi + 1) % n : 0; render(); return; }
@@ -35002,7 +35118,8 @@ document.addEventListener('click', e => {
   if (d.hvga){ const r = ndHemRad.find(x => x.id === d.hvga); if (r && r.ga) r.ga(); return; }
   if (d.hvgratt){ hvGrattis(d.hvgratt); return; }
   if (d.hvark){ hvOppna(d.hvark); return; }
-}, true);
+}
+document.addEventListener('click', hvKlick, true);
 document.addEventListener('submit', e => {
   if (!hvPa() || S.view !== 'hem') return;
   const f = e.target.closest && e.target.closest('[data-hvskriv], [data-hvkommentar], [data-hvandring]'); if (!f) return;
@@ -35046,6 +35163,17 @@ const HVINST = [
   ['forslag.grans-motvikt', 'gransMotvikt', 'Gräns för motvikten', 'När motvikten räknas som sämre. Generös med flit: motvikten är en broms, inte ett påstående. Förvalt 0,2.']
 ];
 const hvInstFolk = () => ((ND.moten && (ND.moten.kollegor || ND.moten.saljare)) || []).slice().sort((a, b) => String(a.namn).localeCompare(String(b.namn), 'sv'));
+// Chatten har ingen brytare här: den slås på först när provet av modellen är kört och godkänt. Rutan säger läget och vad som saknas.
+function hvDollar(v){ return Number(v).toLocaleString('sv-SE', {minimumFractionDigits: Number.isInteger(+v) ? 0 : 2, maximumFractionDigits: 2}); }
+function hvChattLage(){
+  const C = ND && ND.hem && ND.hem.chattLage; if (!C) return '';
+  const u = C.utrymme;
+  // Gränserna är inga inställningar: de är data som beställaren säger, och det yttersta taket sätts i Anthropics Console.
+  const granser = u ? `Gränser: ${hvDollar(u.takPersonUsd)} dollar per person och ${hvDollar(u.takForetagUsd)} dollar för företaget, per kalendermånad. De ändras inte här.` : 'Gränserna gick inte att läsa.';
+  const folk = (C.allas || []).map(p => `<li><span>${esc(p.namn)}</span><span class="num">${hvDollar(p.usd)} dollar · ${p.fragor} ${p.fragor === 1 ? 'fråga' : 'frågor'}</span></li>`).join('');
+  const anvant = u ? `<div class="prf-swrad"><span class="prf-swt"><b>Använt den här månaden: <span class="num">${hvDollar(u.foretagUsd)} av ${hvDollar(u.takForetagUsd)} dollar</span></b><small class="hv-ihj">Räknat ur loggens token och modellens pris. Fylls på den 1:a.</small>${folk ? `<ul class="hv-cforbr">${folk}</ul>` : ''}</span></div>` : '';
+  return `<div class="prf-lista"><div class="prf-swrad"><span class="prf-swt"><b>${C.pa && !C.skal ? 'Chatten med AI är påslagen' : 'Chatten med AI är avstängd'}</b><small class="hv-ihj">${C.skal ? `${C.pa ? 'Den är påslagen men svarar inte. ' : ''}Det här saknas: ${esc(C.skal)} ` : ''}Modell: ${esc(C.modell)}. ${granser} Skrivrutan svarar som sökrutan så länge chatten är av.</small></span></div>${anvant}</div>`;
+}
 function hvInstRuta(){
   const V = ND && ND.hem && ND.hem.inst; if (!V) return '';
   const sw = (nyckel, on, l, h, attr) => { const id = 'hvI' + nyckel.replace(/\W/g, ''); return `<div class="prf-swrad"><span class="prf-swt"><b id="${id}L">${l}</b><small class="hv-ihj" id="${id}H">${h}</small></span><button type="button" role="switch" class="prf-sw" aria-checked="${!!on}" aria-labelledby="${id}L" aria-describedby="${id}H" ${attr}><i></i></button></div>`; };
@@ -35059,7 +35187,7 @@ function hvInstRuta(){
   const falt = HVINST.filter(([nyckel]) => V.farBrytare || nyckel === 'forslag.obekraftat-tid').map(([nyckel, f, l, h]) => { const id = 'hvI' + nyckel.replace(/\W/g, ''), tid = f === 'obekraftatTid';
     return `<div class="prf-swrad"><span class="prf-swt"><b><label for="${id}">${l}</label></b><small class="hv-ihj" id="${id}H">${h}</small></span><input class="uin hv-iin" id="${id}" ${tid ? 'type="time"' : 'type="text" inputmode="decimal"'} value="${esc(tid ? V[f] : String(V[f]).replace('.', ','))}" aria-describedby="${id}H" data-hvinst="${nyckel}"></div>`; }).join('');
   return `<div class="prf-kort" id="prf-r-hvinst"><div class="prf-kh"><div><h3>Nya hemmet</h3><p>Hemmet med fyra kort, Navs förslag och det som ändrats. Allt står av tills någon slår på det här.</p></div></div>
-    ${brytare}<div class="prf-lista">${falt}</div>${V.farBrytare ? '' : '<p class="hv-ihj">Brytarna och gränserna för Navs domar ändras av en superadmin.</p>'}</div>`;
+    ${brytare}<div class="prf-lista">${falt}</div>${V.farBrytare ? '' : '<p class="hv-ihj">Brytarna och gränserna för Navs domar ändras av en superadmin.</p>'}${hvChattLage()}</div>`;
 }
 async function hvInstSpara(nyckel, varde, fore){
   const s = await hvPost('installningar', {nyckel, varde});

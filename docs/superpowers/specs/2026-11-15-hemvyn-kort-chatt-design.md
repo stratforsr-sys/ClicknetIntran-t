@@ -781,6 +781,25 @@ uppgifter som personen godkänner. Claude kan inte utföra något.
 - Systemtexten och verktygslistan hålls oförändrade mellan anrop så att de kan
   cachas. Datum och klockslag läggs i användarens tur, aldrig i systemtexten.
   Kontrollera `usage.cache_read_input_tokens` i loggen.
+- **Vad som cachas.** Frågorna själva cachas aldrig: de är sällan lika, talen
+  ändras och var och en får bara se sitt. Det som cachas är den fasta början,
+  alltså verktygslistan och systemtexten med listan över mått, och inom en
+  fråga det som redan sagts mellan verktygsvarven. Ordningen är verktyg, sedan
+  systemtext, sedan samtalet. Allt som varierar (datum, person, roll, frågan)
+  ligger efter den fasta början. Verktygslistan är densamma för alla roller.
+  Behörigheten sätts i verktygen, inte genom att lista olika verktyg, så att
+  alla delar samma cache. Den fasta början måste vara minst 512 token för att
+  cachas på Sonnet 5.5, och det blir den med måttlistan.
+- Cachen lever i fem minuter efter senaste läsningen. Mät träffandelen i loggen
+  den första veckan innan någon väljer den längre cachen på en timme, som
+  kostar mer att skriva.
+- **Nyckeln.** I Vercel (clicknet-nav) finns sedan 2026-11-15
+  `ANTHROPIC_API_KEY` och `ANTHROPIC_WORKSPACE_ID`, i Production och Preview.
+  Nyckeln är inte bunden till ett workspace. Utan rubriken
+  `anthropic-workspace-id` svarar API:t 400, så klienten skapas med
+  `defaultHeaders: { "anthropic-workspace-id": process.env.ANTHROPIC_WORKSPACE_ID }`.
+  Nu delar preview och produktion samma nyckel. Previewens byts mot en egen
+  innan chatten provas (skilda nycklar ovan).
 
 ### Verktygen
 
@@ -846,8 +865,46 @@ arbetsdagar blir 1 050 frågor i månaden.
 Tänkandet räknas som uttoken och skiljer mellan modellerna, så provet mäter
 kostnaden per fråga för varje modell.
 
-Två tak, båda inställningar: kronor per månad för företaget och frågor per dag
-och person. När ett tak nås svarar rutan som paletten och säger varför.
+Med cachen blir intoken billigare men inte uttoken. En gissning, inte ett
+mätt tal: på Sonnet 5.5 ungefär 0,45 kr per fråga i stället för 0,72 kr. Med
+100 dollar på kontot blir det cirka 1 500 frågor utan cache och cirka 2 400
+med. Provet mäter det verkliga talet.
+
+**Frågor som återkommer blir kort, inte cachade svar.** Loggen sparar frågans
+text. En gång i veckan räknas vilka frågor många ställer, grupperade på
+innebörd och inte på exakt ordalydelse. En fråga som många ställer om och om
+igen ska bli ett kort eller en knapp som Nav räknar själv, utan AI. Det kostar
+ingenting, är snabbare och har ett tal med belägg. Ett svar från chatten
+återanvänds aldrig till en annan person eller en annan dag. Listan läses av
+beställaren, och chatten fortsätter att svara tills kortet finns.
+
+**Taken (beställaren 2026-11-15).** Taken räknas i dollar, i det Anthropic tar
+betalt, ur loggens token och priset för modellen. De sätts inte i Navs
+inställningar. Beställaren säger dem, och de ligger som data i en tabell per
+företag (ingen vy att ändra dem i). Ett annat företag får standardvärdena.
+
+| Tak | Clicknet (6 personer) | Standard för andra företag |
+|---|---|---|
+| Per person och kalendermånad | 14 dollar | 10 dollar |
+| Företaget per kalendermånad | 85 dollar | 50 dollar |
+| Ytterst, i Anthropics Console | 90 dollar (sätts av beställaren) | – |
+
+- 6 × 14 = 84 dollar ryms under företagets 85. Marginalen upp till Consolens 90
+  finns för att Navs uträkning och Anthropics faktura kan skilja något. Då är
+  det Navs tak som slår till först, och då med ett besked, inte Consolens, som
+  stoppar alla på en gång.
+- 14 dollar räcker till ungefär 340 frågor i månaden per person, alltså cirka
+  16 per arbetsdag (gissat vid 0,45 kr per fråga med cache).
+- En sjunde person får också 14 dollar, men företagets 85 gäller ändå. Taken
+  ska ses över när antalet personer ändras.
+- Kontrollen görs före varje anrop: personens förbrukning den här månaden
+  plus en högsta kostnad för en fråga (`max_tokens` gånger utpriset) får inte
+  gå över taket.
+- När ett tak nås svarar rutan som paletten och säger varför: "Du har använt
+  månadens AI-utrymme. Det fylls på den 1:a." Taket nollställs den 1:a varje
+  månad, och oanvänt förs inte över.
+- Varje person ser sin egen förbrukning. Beställaren ser allas.
+- Previewen har en egen nyckel och räknas inte mot taken.
 
 ### Säkerhet
 

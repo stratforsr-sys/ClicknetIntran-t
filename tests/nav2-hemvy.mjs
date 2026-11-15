@@ -132,8 +132,9 @@ function hem({ chef, forslag = 1, andrat = ANDRAT, rader = null, team = TEAM, un
     ndOmlasAnmal: () => {}, ndOmlas: () => Promise.resolve(true), render: () => {}, toast: () => {},
     document: { addEventListener: () => {}, getElementById: () => null, querySelector: () => null }, window: { addEventListener: () => {}, scrollTo: () => {} },
     localStorage: { getItem: () => null, setItem: () => {} },
+    openPal: () => { anrop.push(["pal"]); }, TextDecoder,
   };
-  kor(block, g, ["hvHem", "hvVantar", "hvForeslar", "hvTeam", "hvDinManad", "hvAndrat", "hvArk", "hvSkriv", "hvInstRuta", "hvPa", "hvFlagga", "hvDolj", "hvVisa", "hvGrattis", "hvHamta", "hvOppna", "hvValj", "hvTangent"]);
+  kor(block, g, ["hvHem", "hvVantar", "hvForeslar", "hvTeam", "hvDinManad", "hvAndrat", "hvArk", "hvSkriv", "hvInstRuta", "hvPa", "hvFlagga", "hvDolj", "hvVisa", "hvGrattis", "hvHamta", "hvOppna", "hvValj", "hvTangent", "hvFraga", "hvChattLagg", "hvKlick"]);
   g.anrop = anrop;
   return g;
 }
@@ -511,6 +512,128 @@ rubrik("Rutan Nya hemmet i Inställningar");
   const admin = hem({ chef: true, inst: { ...INST, farBrytare: false } }).hvInstRuta();
   ok("en admin ser klockslaget, men varken gränserna eller brytarna", admin.includes('data-hvinst="forslag.obekraftat-tid"') && !admin.includes('data-hvinst="forslag.grans-') && !admin.includes('data-hvinst="forslag.pa"') && !admin.includes('data-hvinst="hem.nytt"'), admin.slice(0, 600));
   ok("säljaren ser ingen ruta", hem({ chef: false, inst: null }).hvInstRuta() === "");
+}
+
+rubrik("Chatten i skrivrutan");
+{
+  const kodat = (r) => new TextEncoder().encode(`data: ${JSON.stringify(r)}\n\n`);
+  const strom = (rader, grind = null) => ({ ok: true, status: 200, headers: { get: () => "text/event-stream; charset=utf-8" }, body: { getReader() { const k = rader.map(kodat); let i = 0; return { read: async () => { if (grind && i === 1) await grind; return i < k.length ? { done: false, value: k[i++] } : { done: true }; } }; } } });
+  const nej = (status, data) => ({ ok: false, status, headers: { get: () => "application/json" }, body: null, json: async () => data });
+  const SVAR = { h: "svar", text: "Laget höll ⟦t1:12⟧ av ⟦t2:19⟧ möten. Det är ⟦obelagt:63 %⟧.\n\n<img src=x onerror=alert(1)>", tal: [{ id: "t1", varde: 12, om: "Hållna möten · Ditt lag · förra veckan · data per 2026-11-16", kalla: { verktyg: "las_matt", anrop: 1, falt: "antal" } }, { id: "t2", varde: 19, om: "Hållna möten · Ditt lag", kalla: { verktyg: "las_matt", anrop: 1, falt: "av" } }], obelagda: 1, kalla: "Skrivet av AI ur Navs tal", utkast: [] };
+  const klick = (g, attr) => g.hvKlick({ target: { closest: () => ({ dataset: attr }) }, preventDefault() {}, stopPropagation() {} });
+
+  // Av: skrivrutan svarar som paletten.
+  const av = hem({ chef: true });
+  const hamtat = [];
+  av.fetch = async (...a) => { hamtat.push(a); return nej(409, { fel: "Chatten är inte påslagen." }); };
+  av.S.hv.q = "hur går det för laget";
+  av.hvFraga();
+  ok("med chatten av går skrivrutan till paletten, och ingenting skickas till chatten", av.anrop.some((a) => a[0] === "pal") && hamtat.length === 0 && av.S.hv.ark === null);
+  ok("rutan säger att svaren inte kommer från AI", /Svaren kommer ur Navs sökruta, inte från AI/.test(av.hvSkriv()));
+
+  // På: frågan går till chatten, och korten viker undan.
+  const pa = hem({ chef: true });
+  pa.ND.hem.chatt = true;
+  let slapp; const grind = new Promise((k) => { slapp = k; });
+  const skickat = [];
+  pa.fetch = async (url, init) => { skickat.push([url, init]); return strom([{ h: "hamtar", text: "Hämtar hållna möten för laget, förra veckan." }, SVAR], grind); };
+  ok("rutan säger att svaren skrivs av AI", /skrivs av AI/.test(pa.hvSkriv()) && !/inte från AI/.test(pa.hvSkriv()));
+  pa.S.hv.q = "Hur gick lagets möten förra veckan?";
+  const p = pa.hvFraga();
+  await new Promise((k) => setTimeout(k, 5));
+  const mitt = pa.hvHem();
+  ok("frågan går till /nav2/chatt och inte till paletten", skickat.length === 1 && skickat[0][0] === "/nav2/chatt" && skickat[0][1].method === "POST" && JSON.parse(skickat[0][1].body).fraga === "Hur gick lagets möten förra veckan?" && !pa.anrop.some((a) => a[0] === "pal"));
+  ok("korten viker undan och frågan står kvar", pa.S.hv.ark === "chatt" && mitt.includes("Hur gick lagets möten förra veckan?") && !mitt.includes('class="hv-card'));
+  ok("medan verktyget kör står det vad som hämtas", mitt.includes("Hämtar hållna möten för laget, förra veckan."));
+  ok("skrivrutan står kvar under samtalet, och är tom", mitt.includes("data-hvskriv") && pa.S.hv.q === "");
+  slapp(); await p; await new Promise((k) => setTimeout(k, 5));
+  const klart = pa.hvHem();
+  ok("talen är knappar som bär sin källa", /<button class="hv-siffra[^"]*" data-hvtal="0:t1"[^>]*>12<\/button>/.test(klart) && /data-hvtal="0:t2"[^>]*>19</.test(klart), klart.slice(klart.indexOf("hv-tur"), klart.indexOf("hv-tur") + 900));
+  ok("ett tal utan belägg är utmärkt, och rutan säger det", /<mark class="hv-obel"[^>]*>63 %<\/mark>/.test(klart) && klart.includes("kunde jag inte belägga"));
+  ok("källraden säger att texten är skriven av AI", klart.includes("Skrivet av AI ur Navs tal") && !klart.slice(klart.indexOf("hv-tur")).includes("Räknat av regler"));
+  ok("text i svaret kan inte bli kod", !klart.includes("<img src=x") && klart.includes("&lt;img src=x"));
+  klick(pa, { hvtal: "0:t1" });
+  ok("ett klick på talet visar källan: mått, vem, period och data per", pa.hvHem().includes("Hållna möten · Ditt lag · förra veckan · data per 2026-11-16"));
+  klick(pa, { hvtal: "0:t1" });
+  ok("ett klick till döljer den", !pa.hvHem().includes("förra veckan · data per"));
+
+  // Nästa fråga bär samtalet, utan märken.
+  pa.fetch = async (url, init) => { skickat.push([url, init]); return strom([{ ...SVAR, text: "Inget nytt.", tal: [], obelagda: 0 }]); };
+  pa.S.hv.q = "Och veckan före?";
+  await pa.hvFraga();
+  const h2 = JSON.parse(skickat[1][1].body).historia;
+  ok("nästa fråga bär det förra utbytet, utan märken", h2.length === 1 && h2[0].fraga === "Hur gick lagets möten förra veckan?" && h2[0].svar.startsWith("Laget höll 12 av 19 möten.") && !h2[0].svar.includes("⟦"), JSON.stringify(h2));
+  ok("båda turerna står i samtalet", (pa.hvHem().match(/class="hv-tur"/g) || []).length === 2);
+
+  // Ett utkast: Claude förbereder, personen lägger in.
+  const u = hem({ chef: false });
+  u.ND.hem.chatt = true;
+  u.fetch = async () => strom([{ h: "hamtar", text: "Förbereder ett utkast till uppgifter." }, { h: "svar", text: "Jag har förberett två uppgifter.", tal: [], obelagda: 0, kalla: "Skrivet av AI ur Navs tal", utkast: [{ titel: "Ring <b>Hagby</b> Glas", dag: "2026-11-17" }, { titel: "Skicka offerten", dag: null }] }]);
+  const skrivet = [];
+  u.ndSkriv = async (url, data) => { skrivet.push([url, data]); return skrivet.length === 2 && u.__fall ? { fel: "Uppgiften sparades inte." } : { ok: "Uppgiften är upplagd." }; };
+  u.ndSvar = (x) => x;
+  const omlast = [];
+  u.ndOmlas = (d) => { omlast.push(d); return Promise.resolve(true); };
+  u.S.hv.q = "Lägg upp att jag ringer Hagby i morgon";
+  await u.hvFraga();
+  const ut = u.hvHem();
+  ok("utkastet visas med knappen Lägg i min dag, och inget är skapat", ut.includes('data-hvchattlagg="0"') && ut.includes("Lägg i min dag") && ut.includes("Inget är skapat än") && skrivet.length === 0, ut.slice(ut.indexOf("hv-utk"), ut.indexOf("hv-utk") + 500));
+  ok("utkastets titel kan inte bli kod, och en uppgift utan dag säger det", ut.includes("Ring &lt;b&gt;Hagby&lt;/b&gt; Glas") && ut.includes("utan dag"));
+  u.__fall = true;
+  await u.hvChattLagg(0);
+  ok("faller den andra uppgiften står knappen kvar", skrivet.length === 2 && u.hvHem().includes('data-hvchattlagg="0"') && omlast.includes("upg"));
+  u.__fall = false;
+  await u.hvChattLagg(0);
+  ok("ett nytt tryck lägger bara in den som saknas", skrivet.length === 3 && skrivet[2][1].titel === "Skicka offerten" && skrivet[2][1].dag === null && skrivet[0][0] === "/nav2/uppgifter" && skrivet[0][1].handling === "skapa" && skrivet[0][1].dag === "2026-11-17", JSON.stringify(skrivet));
+  ok("sedan är knappen borta och rutan säger att det är tillagt", !u.hvHem().includes("data-hvchattlagg") && u.hvHem().includes("Tillagt i dina uppgifter"));
+  await u.hvChattLagg(0);
+  ok("ett tryck till skapar ingenting", skrivet.length === 3);
+
+  // Taket, avböjandet och avstängningen.
+  const t = hem({ chef: false });
+  t.ND.hem.chatt = true;
+  t.fetch = async () => nej(429, { fel: "Du har använt månadens AI-utrymme. Det fylls på den 1:a.", tak: true });
+  t.S.hv.q = "en fråga till";
+  await t.hvFraga();
+  ok("när utrymmet är slut säger rutan varför, och erbjuder sökrutan", t.hvHem().includes("Du har använt månadens AI-utrymme. Det fylls på den 1:a.") && t.hvHem().includes('data-hvchattsok="0"'));
+  t.ND.hem.chattAnvant = 37;
+  ok("personen ser hur mycket av månadens AI-utrymme som är använt", t.hvSkriv().includes("37 % av månadens AI-utrymme är använt"), t.hvSkriv());
+  t.ND.hem.chattAnvant = null;
+  ok("går det inte att läsa står ingen procent", !/AI-utrymme/.test(t.hvSkriv()) && t.hvSkriv().includes("Svaren skrivs av AI"));
+  t.ND.hem.chatt = false; t.ND.hem.chattAnvant = 37;
+  ok("och när chatten är av står ingenting om utrymmet", !/AI-utrymme/.test(t.hvSkriv()));
+  klick(t, { hvchattsok: "0" });
+  ok("Sök i stället öppnar paletten", t.anrop.some((a) => a[0] === "pal"));
+  const a = hem({ chef: false });
+  a.ND.hem.chatt = true;
+  a.fetch = async () => strom([{ h: "avbojt", text: "Modellen avböjde att svara på det här. Jag svarar som sökrutan i stället." }]);
+  a.S.hv.q = "något konstigt";
+  await a.hvFraga();
+  ok("avböjer modellen säger rutan det rakt", a.hvHem().includes("Modellen avböjde att svara") && a.hvHem().includes("data-hvchattsok") && !a.hvHem().includes("Skrivet av AI"));
+  const s = hem({ chef: false });
+  s.ND.hem.chatt = true;
+  s.fetch = async () => nej(409, { fel: "Chatten är inte påslagen." });
+  s.S.hv.q = "hej hej";
+  await s.hvFraga();
+  ok("har chatten stängts av sedan sidan lästes går frågan till paletten", s.ND.hem.chatt === false && s.anrop.some((x) => x[0] === "pal") && s.S.hv.ark === null);
+  const n = hem({ chef: false });
+  n.ND.hem.chatt = true;
+  n.fetch = async () => { throw new Error("nätet"); };
+  n.S.hv.q = "hej hej";
+  await n.hvFraga();
+  ok("svarar inte Nav säger rutan det", /Nav svarade inte/.test(n.hvHem()) && n.S.hv.chatt[0].laddar === false);
+
+  // Rutan i Inställningar: läget, för superadmin.
+  const INST = { pa: false, obekraftatTid: "14:00", gransFacit: 0.01, gransDom: 0.05, gransPerson: 0.01, gransMotvikt: 0.2, foljda: [], hemNytt: [] };
+  const lage = hem({ chef: true, inst: { ...INST, farBrytare: true } });
+  lage.ND.hem.chattLage = { pa: false, skal: "Modellen har inget godkänt prov.", modell: "claude-sonnet-5-5", utrymme: { personUsd: 0, foretagUsd: 12.4, takPersonUsd: 14, takForetagUsd: 85 }, allas: [{ namn: "Sara <i>Prov</i>", usd: 9.25, fragor: 210 }, { namn: "Tea Prov", usd: 3.15, fragor: 1 }] };
+  const lr = lage.hvInstRuta();
+  ok("superadmin ser att chatten är av och vad som saknas", lr.includes("Chatten med AI är avstängd") && lr.includes("Modellen har inget godkänt prov."));
+  ok("gränserna står i dollar, per person och för företaget, och var de sätts", lr.includes("14 dollar per person") && lr.includes("85 dollar för företaget") && lr.includes("per kalendermånad") && !/tak i kronor|frågor per person och dag/.test(lr), lr.slice(lr.indexOf("Chatten med AI"), lr.indexOf("Chatten med AI") + 900));
+  ok("och vad som är använt i månaden, för företaget och per person", lr.includes("12,40 av 85 dollar") && lr.includes("Sara &lt;i&gt;Prov&lt;/i&gt;") && lr.includes("9,25 dollar") && lr.includes("210 frågor") && lr.includes("1 fråga") && !lr.includes("1 frågor"));
+  lage.ND.hem.chattLage = { ...lage.ND.hem.chattLage, utrymme: null, allas: [] };
+  ok("går utrymmet inte att läsa sägs det, utan ett påhittat tal", lage.hvInstRuta().includes("Gränserna gick inte att läsa") && !/\d+ av \d+ dollar/.test(lage.hvInstRuta()));
+  ok("utan läge står ingenting om chatten", !hem({ chef: true, inst: { ...INST, farBrytare: false } }).hvInstRuta().includes("Chatten med AI"));
 }
 
 console.log(fel ? `\n\x1b[31m${fel} prov föll.\x1b[0m` : "\n\x1b[32mAlla prov gick igenom.\x1b[0m");

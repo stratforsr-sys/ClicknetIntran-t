@@ -11,6 +11,7 @@ import { byggForslag, harNyttHem, lasInst, lasKrets, type NdForslag } from "./fo
 import type { ForslagInst } from "./forslagforma";
 import { nivaFor } from "./forma";
 import { byggTeam, type NdTeam } from "./hem-team";
+import { chattLage, type ChattLage } from "./chatt/logg";
 
 /**
  * Nav 2.0: startsidan.
@@ -99,6 +100,12 @@ export type NdHem = {
   team: NdTeam | null;
   /** Rutan Nya hemmet i Inställningar: värdena, för admin och uppåt. `farBrytare`: får slå på och av och ändra gränserna (superadmin). */
   inst: (ForslagInst & { farBrytare: boolean }) | null;
+  /** Frågar skrivrutan Claude? Sant bara för den som har det nya hemmet, när chatten är påslagen och får vara det (`farSlasPa`). */
+  chatt: boolean;
+  /** Chattens läge och vad som saknas, för rutan i Inställningar. Bara superadmin. */
+  chattLage: ChattLage | null;
+  /** Hur stor del av månadens AI-utrymme personen har använt, i procent (0–100). Bara när skrivrutan frågar Claude. */
+  chattAnvant: number | null;
 };
 
 const KL = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
@@ -215,6 +222,9 @@ export async function byggHem(supabase: SupabaseClient, user: CurrentUser): Prom
     [forslag, team] = await Promise.all([byggForslag(supabase, user, inst), byggTeam(user, krets)]);
   }
   const niva = nivaFor(user.roles as string[]);
+  // Chatten (0304): läses bara för den som har det nya hemmet, och för superadmin som ser läget i Inställningar.
+  const chatt = nytt || niva === "superadmin" ? await chattLage(supabaseAdmin(), mig, niva === "superadmin").catch(() => null) : null;
+  const chattPa = nytt && !!chatt && chatt.pa && chatt.skal === null;
   const nyckel = vapidPublik();
   const v = new Map(((val ?? []) as { key: string; value: unknown }[]).map((x) => [x.key, x.value]));
   const lista = (k: string): string[] => {
@@ -236,5 +246,8 @@ export async function byggHem(supabase: SupabaseClient, user: CurrentUser): Prom
     forslag,
     team,
     inst: inst && niva !== "salesperson" ? { ...inst.f, farBrytare: niva === "superadmin" } : null,
+    chatt: chattPa,
+    chattLage: niva === "superadmin" ? chatt : null,
+    chattAnvant: chattPa && chatt?.utrymme ? Math.min(100, Math.round((chatt.utrymme.personUsd / chatt.utrymme.takPersonUsd) * 100)) : null,
   };
 }

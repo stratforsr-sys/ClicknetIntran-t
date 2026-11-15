@@ -5,7 +5,7 @@ import type { CurrentUser } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { lasSidvis } from "@/lib/sidvis";
 import {
-  FORSLAG_NYCKLAR, TREND_BEHOVER, facitPerVal, lasForslagInst, nyckelDelar, oppetLage, troddeAvstamning,
+  FORSLAG_NYCKLAR, TREND_BEHOVER, facitPerVal, harNyttHem, lasForslagInst, nyckelDelar, oppetLage, troddeAvstamning,
   type Beslut, type FacitRad, type ForslagInst, type ForslagMote, type MotesUtfall, type Val,
 } from "./forslagforma";
 import {
@@ -139,8 +139,7 @@ export async function lasInst(db: Db): Promise<{ f: ForslagInst; m: MotenInst }>
   return { f: lasForslagInst(rader), m: lasInstallningar(rader) };
 }
 
-/** Har personen det nya hemmet? */
-export const harNyttHem = (f: ForslagInst, anstalld: string): boolean => f.hemNytt === "alla" || f.hemNytt.includes(anstalld);
+export { harNyttHem };
 
 /**
  * Kretsen ur `mote_statkrets()`: null = alla (bara säljchef, vd och admin), en

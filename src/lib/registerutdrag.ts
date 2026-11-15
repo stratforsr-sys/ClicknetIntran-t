@@ -304,6 +304,8 @@ export const KALLOR: Kalla[] = [
   { tabell: "mote", kolumn: "halls_av", andamal: "Möten du håller, och hur de gick" },
   // Navs förslag (0303). Förslaget följer med den det gäller; valen och domarna hämtas via BARN.
   { tabell: "nav_forslag", kolumn: "om", andamal: "Navs förslag om dina möten, och ändringar som följs upp för dig" },
+  // Chatten (0304). Frågans och svarets text nollas efter 90 dagar; resten av raden står kvar.
+  { tabell: "nav_chatt_logg", kolumn: "employee_id", andamal: "Dina frågor till chatten i Nav: när, vilka tal som lästes, vad det kostade och (i 90 dagar) frågan och svaret" },
   // Säljtavlan (0250). Gul 11 (produktionsprovet 2026-10-30): hur personen visas på tavlan.
   { tabell: "salesboard_person", kolumn: "employee_id", andamal: "Hur du visas på Säljtavlan" },
 ];
@@ -612,6 +614,7 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "mote_kedja", kolumn: "offert_av", skal: "Vem som skickade offerten — kortet handlar om kunden" },
   { tabell: "mote_kedja", kolumn: "avslut_av", skal: "Vem som stängde kortet (affär, nej, avbokat) — kortet handlar om kunden" },
   // Navs förslag (0303): vem som gjorde något i ett förslag om någon annan. Förslaget följer med den det gäller.
+  { tabell: "nav_chatt_prov", kolumn: "godkand_av", skal: "Vem som godkände ett prov av chattens modell; raden handlar om modellen, inte om personen" },
   { tabell: "nav_forslag", kolumn: "skapad_av", skal: "Vem som berättade om en ändring; raden handlar om den eller det laget ändringen gäller" },
   { tabell: "nav_forslag_handelse", kolumn: "av", skal: "Vem som valde, ångrade eller kommenterade; hämtas via förslaget, inte direkt" },
   // Säljtavlan (0250), gul 11: vem som ställde in tavlan åt någon annan. Personens egen visning står i KALLOR.

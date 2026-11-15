@@ -65,13 +65,23 @@ const manadMinus = (manad: string, n: number): string => {
  * ser rätt ut. Order och möten läses därför sida för sida, i stabil ordning. Ett fel kastas, också på en senare
  * sida: en halv läsning lämnas aldrig ut som om den vore allt.
  */
-async function lasOrder(db: Db, krets: readonly string[] | null, fran: string): Promise<TeamOrder[]> {
+export async function lasOrder(db: Db, krets: readonly string[] | null, fran: string): Promise<TeamOrder[]> {
   const rader = await lasSidvis<TeamOrder>((a, b) => {
     let q = db.from("sales_order").select(ORDER_KOL).or(`period_month.gte.${fran}-01,cancel_period_month.gte.${fran}-01`);
     if (krets !== null) q = q.in("salesperson_id", [...krets]);
     return q.order("id").range(a, b) as unknown as PromiseLike<{ data: TeamOrder[] | null; error: { message: string } | null }>;
   });
   return rader.map((o) => ({ ...o, signed_on: String(o.signed_on).slice(0, 10), cancelled_on: o.cancelled_on ? String(o.cancelled_on).slice(0, 10) : null }));
+}
+
+/** Alla möten från och med `fran` (mötestid eller bokningstid), sida för sida. Kretsen väljs av den som räknar. */
+export async function lasStatMoten(db: Db, fran: string): Promise<StatMote[]> {
+  const mr = await lasSidvis<MoteRad>((a, b) =>
+    db.from("mote").select("id, kedja_id, bokat_av, halls_av, bokat_nar, mote_tid, art, utfall, resultat, kalla, bekraftat_nar").or(`mote_tid.gte.${fran},bokat_nar.gte.${fran}`).order("id").range(a, b) as unknown as PromiseLike<{ data: MoteRad[] | null; error: { message: string } | null }>,
+  );
+  return mr.map((m) => ({
+    id: m.id, kedja: m.kedja_id, bokatAv: m.bokat_av, hallsAv: m.halls_av, bokatNar: m.bokat_nar, moteTid: m.mote_tid, art: m.art, utfall: m.utfall, resultat: m.resultat, kalla: m.kalla, bekraftatNar: m.bekraftat_nar,
+  }));
 }
 
 async function lasSparadTakt(db: Db, nyckel: string | null, fran: string): Promise<{ manad: string; gatt: number; prognos: number }[]> {
@@ -165,18 +175,14 @@ export async function teamGenomgang(user: CurrentUser, nu: Date = new Date()): P
   const [order, { data: pr }, mr, lagId, { data: fr }] = await Promise.all([
     lasOrder(db, krets, fran),
     personFraga.limit(1000),
-    lasSidvis<MoteRad>((a, b) =>
-      db.from("mote").select("id, kedja_id, bokat_av, halls_av, bokat_nar, mote_tid, art, utfall, resultat, kalla, bekraftat_nar").or(`mote_tid.gte.${manadStart},bokat_nar.gte.${manadStart}`).order("id").range(a, b) as unknown as PromiseLike<{ data: MoteRad[] | null; error: { message: string } | null }>,
-    ),
+    lasStatMoten(db, manadStart),
     krets === null ? Promise.resolve(null) : lagetJagLeder(db, mig),
     // Lagets öppna rader läses med läsarens egen klient: RLS avgör vilka förslag hen får se.
     supabase.from("nav_forslag_lage").select(LAGE_KOL).eq("regel", REGEL_OBEKRAFTAT).eq("sort", "forslag").eq("prov", false).is("dom", null).gt("utgar", nu.toISOString()).limit(200),
   ]);
   const sparade = await lasSparadTakt(db, taktKrets(krets, lagId), fran);
 
-  const allaMoten: StatMote[] = mr.map((m) => ({
-    id: m.id, kedja: m.kedja_id, bokatAv: m.bokat_av, hallsAv: m.halls_av, bokatNar: m.bokat_nar, moteTid: m.mote_tid, art: m.art, utfall: m.utfall, resultat: m.resultat, kalla: m.kalla, bekraftatNar: m.bekraftat_nar,
-  }));
+  const allaMoten = mr;
   const moten = inomKrets(allaMoten, [], krets).moten;
   const folk = ((pr ?? []) as unknown as { id: string; first_name: string | null; last_name: string | null }[]).map((p) => ({ id: p.id, namn: fullName(p as { first_name: string; last_name: string }) }));
   const rader = teamPersoner(folk, moten, order, manad, tz);
