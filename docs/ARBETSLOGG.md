@@ -5,6 +5,63 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-15 · Chatten: provet av modellerna och rättelserna efter det (0307), på grenen `hemvy-chatt`
+
+- **Provet kört fyra gånger** (beställarens ja, "kör bara på haiku och sonnet"), 30 frågor × 3 varv mot fixturen i
+  `tests/chatt-fragor.json`, aldrig mot produktionen. Ungefär 30 kr av godkända 67 kr.
+  - Körning 1: Sonnet 9/30, Haiku 11/30. Felen låg mest i märkningen och rättningen, inte i svaren.
+  - Körning 2: båda 23/30.
+  - Körning 3 (avtryck `9209e03ec16a`): Sonnet 30/30, 0 obelagda; Haiku 27/30.
+  - Körning 4, slutkoden (avtryck `dd3097dba5f0`, effort `low`): Sonnet 28/30 (efter en rättad rättning, se nedan),
+    0 allvarliga fel, 6,00 kr, 90 % cachat, 11 av 90 svar omskrivna, reservmodellen 0 gånger. Haiku 26/30, 0,37 kr,
+    1 allvarligt fel: "Jag har förberett ett utkast" utan att ha anropat `forbered_uppgifter`.
+- **Beslut:** Sonnet 5.5, effort `low`, kravet delat (allvarliga fel = 0, tal utan källa märkta och mätta). Haiku
+  används inte, och dess lucka (påstått utkast) stängs därför inte i koden. Raderna i `nav_chatt_prov` är INTE
+  godkända.
+- **Sonnets två missar i körning 4** (s08 och s12, varv 2): Claude räknade punkter i sin egen lista ("Det är tre order
+  som ger provision", "båda är försenade"). Märkningen fångade båda även efter omskrivningen, så inget tal utan källa
+  visades omärkt.
+- **Rättningen rättad, öppet:** t24 och s25 föll på "Jag kan inte ge dig någon andel … det finns inget att räkna
+  andelen på", som är ett rätt svar. Mönstret i `sager` vidgades efter att resultatet setts, och svaren rättades om
+  gratis med `--omratta`. Inget annat i rättningen ändrades efter körningen.
+- **Rättat i koden mellan körningarna** (`e55993e`, `ce823e0`, `f8befda`, `3acc5e1`, granskat med Fable 5.2):
+  datumspann är datum; citat ur datan räknas bara när det är ett helt fält eller en hel mening; mängdord är tal;
+  nekande före ett påstående räknas i rättningen; ett svar med tal utan källa skrivs om en gång (`OMSKRIV`);
+  utkastets antal går att hänvisa till; "laget" är hela företaget för chefen; små antal står i systemtexten;
+  avtrycket täcker omskrivning, effort och märkregler; `omskrivet` loggas (0307 KÖRD); provet kan spara svar
+  (`--spara`) och rätta om dem utan kostnad (`--omratta`).
+- **Prov:** `chattforma`, `chatt-rutt`, tsc (bara det gamla felet Pling.tsx/pling.ts), och hela `npm test` före push.
+- **Main inmergad i grenen** (Mötens statistik, `112f8ce`). Krockarna (package.json, moten.ts, motesstatforma.ts,
+  navnyheter, docs) löstes genom att båda sidor behölls.
+- **`test:handelselogg` grönt igen:** triggern från 0303 skriver action `installning` utan punkt. Den står nu i
+  `MODUL` ("Inställning") och klassas som en ändring (`typFor`), med prov i `tests/handelselogg.mjs`.
+- **Misstag rättat före push:** `21640f4` fick med worktreens symlänk `node_modules` (`.gitignore` hade
+  `node_modules/`, som inte matchar en länk). När grenen checkades ut ersatte länken paketen i `~/nav-hemvy`. Länken
+  är borttagen ur grenen, `.gitignore` säger nu `node_modules`, och `npm ci` är kört igen.
+
+## 2026-11-15 · Chatten: slutgranskningens tre små fel rättade (0306), på grenen `hemvy-chatt`
+
+Beställaren: "lägg en plan för att fixa allt detta", sedan "kör". Inget slogs på.
+
+- **Tal utan källa som inte märktes.** `TALORD` kände bara igen ett ord i taget, så "tvåhundra" och "femtiotusen"
+  slank igenom. Nu byggs ordet av taldelar från början till slut (`TALDEL`, längre delar först, "ettusen" med ett
+  t). "en" och "ett" ensamma är fortfarande artiklar. Veckoregeln slukade "vecka 46, 12 möten" som två veckor;
+  kommat är borta ur den, "veckorna 45 och 46" och "vecka 47–48" går fortfarande. "15/11" och "09.00" utan "kl."
+  märks i onödan, och det får stå: att släppa dem kunde släppa "3/4".
+- **Reservmodellen.** Anthropics typer (`BetaFallbackMessageIterationUsage`) och dokumentation: toppens `usage`
+  gäller bara sista försöket, `usage.iterations` har varje försök med sin modell. `forsok()` läser ut dem och
+  `kostnadUsd()` summerar varje försök till sin modells pris. Reservmodellerna (Opus 5, Opus 4.8) kostar 5/25
+  dollar per miljon, dyrare än Opus 5.5 (4/20), så den gamla regeln "okänd = Opus 5.5" underskattade. Nu är
+  okänd = det dyraste Nav känner (5/25), modellnamn med datum på slutet känns igen, och Haiku räknas 0,50/2,50 över
+  100 000 token. `efterReserv()` tar bort tänkande och verktygsanrop före sista `fallback`-blocket innan turen
+  skickas tillbaka (annars 400), och bara verktygen efter bytet körs. Loggen fick `reserv` (0306).
+- **120 sekunder.** Värsta fallet var sex varv à 60 s och två försök. Nu har hela frågan en frist på 100 s
+  (`FRIST_MS`): varje anrop får en `AbortSignal` som löper ut vid fristen (också mellan SDK:ns omförsök), varje
+  verktyg tävlar mot samma klocka, och ett nytt varv startar inte efter fristen. Avbröts ett anrop vet ingen vad
+  det kostade, så raden behåller reservationen (`loggKostnadUsd`).
+- **Prov:** `chattforma` (märkningen, försöken, priserna, reservturen) och `chatt-rutt` (bytet mitt i en fråga,
+  klockan). De nya ruttproven föll alla sex på den gamla slingan innan rättelsen.
+
 ## 2026-11-15 · Hemvyn, steg 3: chatten med Claude, byggd och avstängd (0304, 0305), på grenen `hemvy-chatt`
 
 **Vad:** skrivrutan i det nya hemmet kan fråga Claude. Claude läser färdiga mått med sex verktyg och skriver
@@ -150,6 +207,64 @@ Spec: `docs/superpowers/specs/2026-11-15-hemvyn-kort-chatt-design.md`. Plan:
   `mote_uppgift_skapa`, som jämför mot mikrosekunder och svarade null. Provet använder hela sekunder.
 
 ---
+
+
+## 2026-11-15 · Möten: statistiken som instrumentpanel (på `main` `112f8ce`)
+
+**Mergad** 2026-11-15 på beställarens "merga till main men endast det från den här sessionen": grenens tre
+commitar (`e5379db`, `dbf587e`, `8dbac65`) som en commit ovanpå `d4a026d` (main hade inte rört sig), trädet
+identiskt med den klickprovade previewen. Produktionsbygget grönt 20:45 UTC. Grenen `hemvy-chatt` är inte med.
+
+**Varför.** Beställaren öppnade inte statistiken: en tabell med 8 personer × 7 kolumner för en vecka, där 10–15
+möten gör procenten till brus. Fyra förhandsvisningar senare (artifact v9) blev det rutor med ett tal var: en mening
+om fyndet, Show rate som nav, fyra rutor, Efter första mötet och Att göra nu. Besluten står i designdokumentet.
+
+**Hur.** Talen räknas i `motespanel.ts` och översattes rad för rad från förlagans `renderVals()`; fixturen är
+förlagans "Era siffror" (produktionen 2026-11-14) utan kundnamn, och proven kräver förlagans tal (55 %, 2 av 6,
+[2,2,2,0], [7,5,1,2]). Servern räknar alla perioder och personer, så att klienten bara ritar och byte är
+omedelbart. Tiden räknas som lokala strängar i Mötens tidszon, så ett möte 23:30 svensk tid den sista dagen hör till
+rätt period. Bekräftelsefönstret följer tavlans regel (röda dagar räknas bort) i stället för förlagans helgregel.
+Kvalificeringens frågor i bladet är företagets egna (`inst.fragor`), inte förlagans fasta texter.
+
+**Storleken.** Första versionen skickade uuid i varje lista: 55 kB med 32 möten. Med korta nycklar och riktiga id
+en gång i kartan blev det 25 kB. Plan B (personerna räknas när de väljs) behövs inte vid den här storleken.
+
+**Prov.** Databasprovet läser produktionen i `begin read only` och jämför avgjorda, hållna, uteblivna, svarade,
+ringdes aldrig, kvalificerade, obedömda och bokade framåt med SQL: alla lika. `byggMotesstat` kan inte köras utanför
+Next, så provet kör samma rena funktion på samma kolumner; hopkopplingen i `motesstat.ts` är typkontrollerad och
+klickprovad i previewen.
+
+**Klickprovet i previewen (som Zen, produktionens data).** Alla 13 listor bakom talen har lika många rader som talet,
+perioderna, personerna, Mer, Esc, mörkt läge och valet efter omladdning fungerar, konsolen är ren. Tre fel hittades
+och rättades, vart och ett med ett prov som föll först:
+
+- **Målen tappades vid snabb inmatning.** "80 Tab 15 Tab" sparade bara `{"noshow": 15}`: `moInstSpara` ritade om
+  panelen före svaret, från det gamla sparade värdet, så Show rate tömdes och nästa fält skickade ett mål utan 80.
+  Nu gäller det skrivna direkt (och går tillbaka om servern säger nej, också om panelen hunnit stängas), sparningarna
+  av en nyckel går i tur och ordning, och omräkningen vid stängning väntar tills sparningen är klar.
+- **Kortet ledde bort från statistiken.** En rad i en lista öppnar kortet, men ✕ och Esc landade på Pipeline. Nu går
+  de tillbaka till statistiken med samma lista öppen (`S.moTillbaka`). Gammalt beteende, men den nya panelen leder
+  till kort från varje tal.
+- **"Välj en längre period för att se mer"** stod också när ingen längre period hade möten (Carl, vecka). Nu bara när
+  en längre period faktiskt har det (`byggPanelSvar`).
+
+- **Kortets rubrik visade bokaren som hållare** (main-kod, rättad här på beställarens "fixa det"). Utan öppet möte
+  föll `moNamn` tillbaka på kedjans första deltagare, oftast bokaren: Hjärtatsflytt stod "Mick håller" fast Zen höll
+  mötet. Nu läser servern vem som höll kedjans senaste hållna eller uteblivna möte ur historikens rader
+  (`senastAvgjorda`, ingen extra fråga), och rubriken säger "Zen håller", "Zen höll mötet" eller "Carl skulle ha
+  hållit mötet". Utan något avgjort möte står ingen hållare alls i stället för en gissning.
+
+Målet sattes och togs bort igen i gränssnittet: `moten.mal` står nu `{}` i produktionen (inga mål), samma som utan rad.
+
+**Behörigheten för målen.** Beställaren: "bara admin och superadmin". Det är Navs två nivåer över säljare (`forma.ts`:
+superadmin = VD och admin, admin = säljchef, teamledare, ekonomi, projektledare, leverans), och det är vad
+`farAndraInstallning` redan släpper igenom. Säljare och mötesbokare kan inte ändra målen. Ingen kodändring.
+
+**`test:handelselogg` blev rött av klickprovet, inte av grenen.** Triggern `nav_setting_historik` (0303, grenen
+`hemvy-chatt`, körd i produktionen men inte mergad) skriver action `installning` i `audit_log` vid varje ändrad
+inställning. Den finns inte i `MODUL` i `src/lib/handelselogg.ts`, varken på main eller på `hemvy-chatt`. Målprovet
+var den första ändringen av `nav_setting` sedan 0303 kördes, så nu har loggen tre sådana rader och provet faller på
+alla grenar. Rättas där 0303 hör hemma: `installning` in i `MODUL` och typindelningen.
 
 ## 2026-11-14 · Provisionslåset: resterna efter hårdtestet (0302)
 

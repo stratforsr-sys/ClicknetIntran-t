@@ -55,7 +55,7 @@ export const VERKTYG = [
     strict: true,
     input_schema: obj({
       matt: { type: "string", enum: MATTNYCKLAR, description: "Måttets nyckel i registret." },
-      vem: { type: "string", description: "\"jag\" för personen som frågar, \"laget\" för alla personen leder, eller en kollegas namn." },
+      vem: { type: "string", description: "\"jag\" för personen som frågar, \"laget\" för alla vars tal personen får se (för den som ser alla är det hela företaget), eller en kollegas namn." },
       period: { type: "string", enum: [...PERIODER] },
     }),
   },
@@ -263,7 +263,7 @@ function forbered(input: Record<string, unknown>): Verktygssvar {
     if (dag && (!DATUM.test(dag) || Number.isNaN(utc(dag).getTime()))) return { svar: { fel: "Dagen ska skrivas som ÅÅÅÅ-MM-DD, eller lämnas tom." } };
     utkast.push({ titel, dag: dag || null });
   }
-  return { svar: { _egnaOrd: true, utkast, uppgifter: utkast.length, besked: "Utkastet visas för personen. Ingenting är skapat förrän personen trycker på Lägg i min dag." }, utkast };
+  return { svar: { _egnaOrd: true, _belagda: ["uppgifter"], utkast, uppgifter: utkast.length, besked: "Utkastet visas för personen. Ingenting är skapat förrän personen trycker på Lägg i min dag." }, utkast };
 }
 
 /**
@@ -284,7 +284,7 @@ export async function korVerktyg(namn: string, input: unknown, c: Ctx, anrop: nu
       case "las_vantar": {
         const v = await c.kallor.vantar();
         // Inget antal: listan visar de första raderna av varje sort, och ett radantal vore ett fel tal.
-        return { svar: { ...marke, dataPer: c.idag, sammanfattning: kort(v.sammanfattning, 300), rader: v.rader.slice(0, 30).map((r) => kort(r, 200)), serInte: "Visar de första raderna av varje sort, inte alla. Hur många som väntar står på kortet Väntar på dig." } };
+        return { svar: { ...marke, dataPer: c.idag, sammanfattning: kort(v.sammanfattning, 300), rader: v.rader.slice(0, 30).map((r) => kort(r, 200)), serInte: "Visar de första raderna av varje sort, inte alla. Raderna räknas inte: ett antal finns bara i sammanfattningens text, och skrivs då som ett ordagrant citat av den." } };
       }
       case "las_dag": return { svar: { ...marke, ...(await lasDag(i, c)) } };
       case "las_provision": return { svar: { ...marke, ...(await lasProvision(i, c)) } };
@@ -298,6 +298,22 @@ export async function korVerktyg(namn: string, input: unknown, c: Ctx, anrop: nu
     return { svar: { ...marke, fel: "Det gick inte att läsa just nu." } };
   }
 }
+
+/** Vad ett fält är, för källraden: talet ska säga vilket fält det kommer ur, inte bara vilket verktyg. */
+const FALTNAMN: Record<string, string> = {
+  "las_dag.kalenderposter": "Kalenderposter",
+  "las_dag.uppgifterKvar": "Uppgifter kvar",
+  "las_dag.uppgifterKlara": "Klara uppgifter",
+  "las_provision.summa": "Provision, summa",
+  "las_provision.bokfort": "Provision, bokförd",
+  "las_provision.signerade": "Signerade order",
+  "las_provision.makulerade": "Makulerade order",
+  "las_provision.netto": "Order netto",
+  "las_provision.antalRader": "Rader i underlaget",
+  "las_provision.rader.belopp": "Belopp på en rad i underlaget",
+  "las_forslag.oppna": "Öppna förslag",
+  "forbered_uppgifter.uppgifter": "Uppgifter i utkastet",
+};
 
 /**
  * Raden som visas när någon klickar på ett tal: vad det är, vem det gäller, perioden och "data per". Ur
@@ -314,7 +330,8 @@ export function kallrad(svar: Record<string, unknown> | undefined, falt = ""): s
     : falt === "bokadePerVecka" ? "Första möten som bokades i perioden, per vecka"
     : falt === "vantarPaGodkannande" ? "Order som väntar på godkännande"
     : "";
+  const faltnamn = FALTNAMN[`${String(svar._verktyg ?? "")}.${falt.replace(/\.\d+\./g, ".")}`] ?? "";
   const period = s("period") ? (s("fran") && s("till") ? `${s("period")} (${s("fran")} till ${s("till")})` : s("period")) : s("dag");
-  const vad = egen || s("vad") || ({ las_forslag: "Navs förslag", las_vantar: "Väntar på dig", las_dag: "Kalender och uppgifter", las_provision: "Din provision", forbered_uppgifter: "Utkast till uppgifter" } as Record<string, string>)[s("_verktyg")] || "";
+  const vad = egen || faltnamn || s("vad") || ({ las_forslag: "Navs förslag", las_vantar: "Väntar på dig", las_dag: "Kalender och uppgifter", las_provision: "Din provision", forbered_uppgifter: "Utkast till uppgifter" } as Record<string, string>)[s("_verktyg")] || "";
   return [vad, s("vem"), period, s("dataPer") ? `data per ${s("dataPer")}` : ""].filter(Boolean).join(" · ");
 }

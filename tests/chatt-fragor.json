@@ -950,7 +950,7 @@
      }
     ],
     "sager": [
-     "inga|saknas|finns inte|för (få|lite|tidigt)|inte.{0,30}(möten|underlag|data)|noll"
+     "inga|saknas|finns inte|för (få|lite|tidigt)|inte.{0,30}(möten|underlag|data)|noll|går inte att säga|ingen andel|inte ge (dig )?någon andel|inget att räkna"
     ]
    }
   },
@@ -969,7 +969,7 @@
      }
     ],
     "sager": [
-     "inga|saknas|finns inte|för (få|lite|tidigt)|inte.{0,30}(möten|underlag|data)|noll"
+     "inga|saknas|finns inte|för (få|lite|tidigt)|inte.{0,30}(möten|underlag|data)|noll|går inte att säga|ingen andel|inte ge (dig )?någon andel|inget att räkna"
     ]
    }
   },

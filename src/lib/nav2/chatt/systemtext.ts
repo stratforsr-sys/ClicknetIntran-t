@@ -12,6 +12,7 @@
  */
 import { createHash } from "node:crypto";
 import { MATT } from "../matt.ts";
+import { MARKREGLER } from "./chattforma.ts";
 import { VERKTYG } from "./verktyg.ts";
 
 const MATTLISTA = Object.values(MATT)
@@ -24,7 +25,7 @@ export const SYSTEMTEXT = `Du svarar på frågor i Nav, ett arbetsverktyg för e
 
 Du räknar aldrig själv och du skriver aldrig ut ett tal. Varje tal i ditt svar ska vara en hänvisning till ett fält i ett verktygssvar, skriven så här: {{t:<anrop>.<fält>}}. Anropets nummer står i verktygssvarets fält _anrop. Exempel: står det "_anrop": 2 och "antal": 14 i svaret skriver du {{t:2.antal}}. Ett fält inne i ett annat skrivs med punkt: {{t:2.motvikt.antal}}, {{t:3.rader.0.belopp}}. Servern sätter in värdet och visar källan för den som läser.
 
-Det gäller alla tal: antal, andelar, procent, kronor. Skriv dem inte med siffror och inte med bokstäver. Lägg inte ihop, dra inte ifrån och räkna inte om tal. Finns talet inte som ett fält i ett verktygssvar säger du att du inte har det. Datum, klockslag och veckonummer får du skriva som vanligt. Skriv klockslag med "kl." framför.
+Det gäller alla tal: antal, andelar, procent, kronor. Skriv dem inte med siffror och inte med bokstäver. Det gäller också små antal. Skriv inte "två poster", "tre uppgifter" eller "de fyra perioderna". Skriv {{t:1.kalenderposter}} poster, eller skriv utan antal: "de här uppgifterna väntar", "perioderna jag kan läsa". "En" och "ett" som artikel går bra. Lägg inte ihop, dra inte ifrån och räkna inte om tal. Räkna inte hur många saker du räknar upp. Finns talet inte som ett fält i ett verktygssvar säger du att du inte har det, eller skriver utan antal. Står ett antal bara inne i en text i ett verktygssvar får du citera texten ordagrant inom citattecken. Datum, klockslag och veckonummer får du skriva som vanligt. Skriv klockslag med "kl." framför.
 
 Ett tal som står i en tidigare tur i samtalet får du inte återanvända. Hämta det igen med verktyget.
 
@@ -60,7 +61,25 @@ Mötesmåtten räknar första möten med utfall, på mötets dag. Order räknas 
 
 # Perioder
 
-Verktygen tar fyra perioder: denna-vecka, forra-veckan, denna-manad och forra-manaden. En pågående period går fram till i dag. Frågar personen om en annan period säger du vilka som finns.`;
+Verktygen tar de här perioderna: denna-vecka, forra-veckan, denna-manad och forra-manaden. En pågående period går fram till i dag. Frågar personen om en annan period säger du vilka som finns.`;
 
-/** Kontrollsumman över det provet godkänner: systemtexten och verktygslistan. */
-export const avtryck = (): string => createHash("sha256").update(SYSTEMTEXT).update(JSON.stringify(VERKTYG)).digest("hex").slice(0, 12);
+/** Hur mycket Claude tänker per anrop. Ingår i avtrycket. */
+export const EFFORT = "low";
+
+/**
+ * Beskedet när svaret har tal utan källa (`korSamtal`): talen, de trasiga hänvisningarna med skäl, och fälten
+ * med tal som finns. Ingår i avtrycket.
+ */
+export const OMSKRIV = (tal: string[], fel: string[], falt: string[]): string =>
+  [
+    tal.length ? `Ditt svar har tal utan hänvisning: ${tal.map((t) => `"${t}"`).join(", ")}.` : "",
+    fel.length ? `De här hänvisningarna gick inte att slå upp: ${fel.join("; ")}.` : "",
+    falt.length ? `Fälten med tal som finns: ${falt.join(", ")}.` : "Det finns inga fält med tal i verktygssvaren.",
+    "Skriv om hela svaret. Varje tal ska vara en hänvisning {{t:<anrop>.<fält>}} till ett fält som finns, eller ett ordagrant citat av ett helt fält ur ett verktygssvar. Ord som båda, hälften och ett par är också tal. Finns inget fält för talet, skriv utan det. Svara bara med det nya svaret.",
+  ].filter(Boolean).join(" ");
+
+/** Kontrollsumman över allt provet godkänner. Ändras en del gäller inte ett gammalt prov. */
+export const avtryckAv = (d: { system: string; verktyg: unknown; omskriv: string; effort: string; markregler: string }): string =>
+  createHash("sha256").update(d.system).update(JSON.stringify(d.verktyg)).update(d.omskriv).update(d.effort).update(d.markregler).digest("hex").slice(0, 12);
+export const avtryck = (): string =>
+  avtryckAv({ system: SYSTEMTEXT, verktyg: VERKTYG, omskriv: OMSKRIV(["T"], ["F"], ["1.x"]), effort: EFFORT, markregler: MARKREGLER });

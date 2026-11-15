@@ -55,6 +55,27 @@ skickades innan fältet fanns saknar belopp och räknas därför bara i antalet.
     href: "/moten",
   },
   {
+    slug: "moten-statistik-panel",
+    rubrik: "Möten: statistiken går att läsa på några sekunder",
+    ingress: "Show rate, no-show rate, svar på bekräftelsen, kvalificerade och closing rate i stora rutor, med det som väntar i dag längst ner.",
+    text: `**Statistik** i Möten börjar nu med en mening om det viktigaste i perioden, till exempel att inget av de
+obekräftade mötena blev av. Under den står **Show rate** stort, med mötena ett och ett som streck, och fyra rutor:
+**No-show rate**, **Svarade på bekräftelsen**, **Kvalificerade** och **Closing rate**. **Efter första mötet** visar
+hur många som gått till offert, fått ett nytt möte, följs upp eller dog. **Att göra nu** visar vad som väntar i dag:
+möten att bekräfta, uteblivna utan ny tid, uppföljningar att ringa och offerter som väntar på svar.
+
+Välj **Vecka**, **Månad** eller **90 dagar**, och en person eller alla. Navet minns valet till nästa gång. Tryck på ett
+tal för att se mötena eller korten bakom det, och på en rad för att öppna kortet på tavlan. Procent visas först när
+det finns minst fem möten att räkna på, annars står det till exempel "2 av 3".
+
+Vill ni ha ett mål per tal sätter admin det under **Inställningar › Statistik**. Då får rutan en pinne på mätaren och
+en rad som säger om talet ligger över eller under målet. Utan mål visas bara talet. Tabellen per person, offerterna,
+dagarna till mötet, bekräftelserna per bokare och källorna finns kvar under **Mer**.`,
+    datum: "2026-11-15",
+    roller: ["team_lead", "sales_manager", "ceo", "admin"],
+    href: "/moten",
+  },
+  {
     slug: "provisionsmanaden-last-for-order",
     rubrik: "Provision: ordrar väntar också när månaden fastställs",
     ingress: "Under de sekunder en provisionsmånad fastställs kan ingen order i den månaden godkännas, ändras eller makuleras. Ingen affär faller utanför bokföringen.",

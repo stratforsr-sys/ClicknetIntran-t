@@ -52,6 +52,9 @@ console.log("\n\x1b[1mTyperna är sju\x1b[0m");
 console.log("\n\x1b[1mOgiltig indata ger null\x1b[0m");
 {
   ok("tom action", typFor("") === null);
+  // 0303: triggern på nav_setting skriver bara "installning", utan punkt.
+  ok("en ändrad inställning är en ändring", typFor("installning") === "andring");
+  ok("inställningen är en känd modul", arModulKand("installning") && modulNamn("installning") === "Inställning");
   ok("null", typFor(null) === null);
   ok("undefined", typFor(undefined) === null);
   ok("utan punkt", typFor("nagot") === null, String(typFor("nagot")));

@@ -29,18 +29,27 @@ const TIDER: RegExp[] = [
   new RegExp(`${FORE}\\d{4}-\\d{2}-\\d{2}${EFTER}`, "gu"),
   new RegExp(`${FORE}(?:kl\\.?|klockan)\\s*\\d{1,2}(?:[.:]\\d{2})?${EFTER}`, "giu"),
   new RegExp(`${FORE}(?:[01]?\\d|2[0-3]):[0-5]\\d${EFTER}`, "gu"),
+  // Ett spann mellan två dagar som slutar på en månad: "9–15 nov", "1 till och med den 18 november".
+  new RegExp(`${FORE}(?:den\\s+)?(?:[1-9]|[12]\\d|3[01])\\s*(?:[–-]|till(?:\\s+och\\s+med)?)\\s*(?:den\\s+)?(?:[1-9]|[12]\\d|3[01])(?::[ae])?\\s+(?:${MANAD})(?:\\s+(?:19|20)\\d{2})?${EFTER}`, "giu"),
   new RegExp(`${FORE}(?:den\\s+)?(?:[1-9]|[12]\\d|3[01])(?::[ae])?\\s+(?:${MANAD})(?:\\s+(?:19|20)\\d{2})?${EFTER}`, "giu"),
   new RegExp(`${FORE}(?:${MANAD})\\s+(?:19|20)\\d{2}${EFTER}`, "giu"),
   new RegExp(`${FORE}(?:år|året)\\s+(?:19|20)\\d{2}${EFTER}`, "giu"),
-  new RegExp(`${FORE}(?:vecka|veckorna|v\\.)\\s*\\d{1,2}(?:\\s*(?:,|och|till|–|-)\\s*\\d{1,2})*${EFTER}`, "giu"),
+  new RegExp(`${FORE}(?:vecka|veckorna|v\\.)\\s*\\d{1,2}(?:(?:\\s+(?:och|till)\\s+|[–-])\\d{1,2})*${EFTER}`, "giu"),
 ];
 const SIFFROR = new RegExp(`${FORE}(?:\\d{1,3}(?:[ \\u00a0\\u202f]\\d{3})+|\\d+)(?:[.,]\\d+)?(?:\\s?%)?`, "gu");
-const ENTAL = "en|ett|två|tre|fyra|fem|sex|sju|åtta|nio";
-/** Tal i bokstäver. "en" och "ett" ensamma är artiklar och räknas inte. */
+/** Delarna ett tal i bokstäver byggs av. Längre delar först, så att "sjutton" inte läses som "sju". */
+const TALDEL = "ettusen|noll|tretton|fjorton|femton|sexton|sjutton|arton|nitton|tjugo|trettio|fyrtio|femtio|sextio|sjuttio|åttio|nittio|hundra|tusen|elva|tolv|två|tre|fyra|fem|sex|sju|åtta|nio|tio|ett|en";
+/**
+ * Tal i bokstäver, också sammansatta: "tolv", "tvåhundra", "femtiotusen", "trehundrafemtio".
+ * Ordet ska bestå av taldelar från början till slut. "en" och "ett" ensamma är artiklar och räknas inte.
+ */
 const TALORD = new RegExp(
-  `(?<![\\p{L}])(?:noll|två|tre|fyra|fem|sex|sju|åtta|nio|tio|elva|tolv|tretton|fjorton|femton|sexton|sjutton|arton|nitton|(?:tjugo|trettio|fyrtio|femtio|sextio|sjuttio|åttio|nittio)(?:${ENTAL})?|hundra|tusen|miljon(?:er)?|miljard(?:er)?)(?![\\p{L}])`,
+  `(?<![\\p{L}])(?!(?:en|ett)(?![\\p{L}]))(?:(?:${TALDEL})+|miljon(?:er)?|miljard(?:er)?)(?![\\p{L}])`,
   "giu",
 );
+
+/** Ord för mängder: "båda", "hälften", "en tredjedel", "dubbelt så många", "ett par". De är också tal. */
+const KVANTORD = /(?<![\p{L}])(?:båda|bägge|hälften|halva|dubbelt|tredubbelt|(?:tredje|fjärde|femte|tionde)del(?:en|ar|arna)?|ett\s+par)(?![\p{L}])/giu;
 
 /** Märken och våra egna platshållare får aldrig komma utifrån: varken ur modellens text eller ur ett verktygssvar. */
 const tvatta = (s: string): string => s.replace(/⟦/g, "[").replace(/⟧/g, "]").replace(/[-]/g, "");
@@ -48,18 +57,93 @@ const plats = (bas: number, i: number): string => String.fromCharCode(bas) + Str
 const platsRe = (bas: number): RegExp => new RegExp(`${String.fromCharCode(bas)}([\\uE100-\\uF000])${String.fromCharCode(bas + 1)}`, "g");
 
 function slaUpp(svar: Record<string, unknown>[], anrop: number, falt: string): number | string | undefined {
+  const r = slaUppMedSkal(svar, anrop, falt);
+  return "varde" in r ? r.varde : undefined;
+}
+
+/** Som `slaUpp`, men säger varför en hänvisning inte gick att slå upp. Skälet går tillbaka till Claude. */
+function slaUppMedSkal(svar: Record<string, unknown>[], anrop: number, falt: string): { varde: number | string } | { skal: string } {
   let x: unknown = svar[anrop - 1];
-  if (x === undefined || x === null) return undefined;
+  if (x === undefined || x === null) return { skal: `anrop ${anrop} finns inte` };
   // Ett svar som bär modellens egna ord (ett utkast den själv skrivit) är ingen källa: annars kunde ett påhittat tal tvättas genom det.
-  if ((x as Record<string, unknown>)._egnaOrd === true) return undefined;
+  // Undantaget är fält servern själv räknat (`_belagda`), som antalet uppgifter i utkastet.
+  const rot = x as Record<string, unknown>;
+  if (rot._egnaOrd === true && !(Array.isArray(rot._belagda) && rot._belagda.includes(falt))) return { skal: "svaret bär dina egna ord och är ingen källa" };
   for (const del of falt.split(".")) {
-    if (del.startsWith("_") || x === null || typeof x !== "object" || !Object.hasOwn(x as object, del)) return undefined;
+    if (del.startsWith("_") || x === null || typeof x !== "object" || !Object.hasOwn(x as object, del)) return { skal: "fältet finns inte" };
     x = (x as Record<string, unknown>)[del];
   }
-  if (typeof x === "number") return Number.isFinite(x) ? x : undefined;
-  if (typeof x === "string") return x.trim() ? x : undefined;
-  return undefined;
+  if (x === null || x === undefined || (typeof x === "string" && !x.trim())) return { skal: "fältet är tomt" };
+  if (typeof x === "number") return Number.isFinite(x) ? { varde: x } : { skal: "fältet är tomt" };
+  if (typeof x === "string") return { varde: x };
+  return { skal: "fältet är en lista eller en grupp, inte ett tal" };
 }
+
+/** Hänvisningarna i texten som inte går att slå upp, var och en med sitt skäl. */
+export function hanvisningsfel(text: string, svar: Record<string, unknown>[]): string[] {
+  return [...text.matchAll(REF)].flatMap((m) => {
+    const r = slaUppMedSkal(svar, Number(m[1]), m[2]);
+    return "skal" in r ? [`{{t:${m[1]}.${m[2]}}}: ${r.skal}`] : [];
+  });
+}
+
+/** Fälten med tal som går att hänvisa till, som `1.antal`. Claude får listan när ett svar skrivs om. */
+export function talfalt(svar: Record<string, unknown>[]): string[] {
+  const ut: string[] = [];
+  svar.forEach((s, i) => {
+    const ga = (x: unknown, stig: string, djup: number): void => {
+      if (ut.length >= 40 || djup > 3 || x === null || typeof x !== "object") return;
+      for (const [k, v] of Object.entries(x as Record<string, unknown>)) {
+        if (k.startsWith("_") || (Array.isArray(x) && Number(k) > 2)) continue;
+        const ny = stig ? `${stig}.${k}` : k;
+        if (typeof v === "number" && Number.isFinite(v) && "varde" in slaUppMedSkal(svar, i + 1, ny)) ut.push(`${i + 1}.${ny}`);
+        else ga(v, ny, djup + 1);
+      }
+    };
+    ga(s, "", 0);
+  });
+  return ut;
+}
+
+/** Citat inom raka eller typografiska citattecken, på en rad. */
+const CITAT = /"([^"\n]{1,400})"|“([^”\n]{1,400})”|”([^”\n]{1,400})”|«([^»\n]{1,400})»/g;
+/** Kortare än så kan ett citat vara en bit av ett datum eller ett tal, och skyddar ingenting. */
+const CITAT_MINST = 8;
+
+/** All text i verktygssvaren som går att citera. Svar med modellens egna ord och fält med understreck är ingen källa. */
+function textUr(svar: Record<string, unknown>[]): string[] {
+  const ut: string[] = [];
+  const ga = (x: unknown, djup: number): void => {
+    if (djup > 6 || ut.length > 2000) return;
+    if (typeof x === "string") { const s = x.replace(/\s+/g, " ").trim(); if (s) ut.push(s); return; }
+    if (Array.isArray(x)) { for (const y of x) ga(y, djup + 1); return; }
+    if (x && typeof x === "object") for (const [k, v] of Object.entries(x)) if (!k.startsWith("_")) ga(v, djup + 1);
+  };
+  for (const s of svar) if (s && s._egnaOrd !== true) ga(s, 0);
+  return ut;
+}
+
+/** Är `inne` ett helt fält, eller en hel mening i fältet? En bit av en mening kan klippa ett tal ("15" ur "115"). */
+const utanSlut = (x: string): string => x.replace(/[\s.!?:;,]+$/u, "").trim();
+const helDel = (falt: string, inne: string): boolean => {
+  const c = utanSlut(inne);
+  return utanSlut(falt) === c || falt.split(/(?<=[.!?])\s+/u).some((m) => utanSlut(m) === c);
+};
+
+/** Märkreglerna som text. De ingår i provets avtryck: ändras de gäller inte ett gammalt prov. */
+export const MARKREGLER = [REF, ...TIDER, SIFFROR, TALORD, KVANTORD, CITAT].map((r) => r.source).join("\n") + `\n${CITAT_MINST}`;
+
+/** Byter varje ordagrant citat ur ett verktygssvar mot det `ny` ger. Andra citat lämnas orörda. */
+function ersattCitat(text: string, svar: Record<string, unknown>[], ny: (m: string) => string): string {
+  const kallText = textUr(svar);
+  return text.replace(CITAT, (m, ...g: unknown[]) => {
+    const inne = String(g.slice(0, 4).find((x) => typeof x === "string") ?? "").replace(/\s+/g, " ").trim();
+    return inne.length >= CITAT_MINST && /\p{L}/u.test(inne) && kallText.some((s) => helDel(s, inne)) ? ny(m) : m;
+  });
+}
+
+/** Texten utan citaten ur datan: det Claude själv säger. Provet letar förbjudna ord bara där. */
+export const utanDatacitat = (text: string, svar: Record<string, unknown>[]): string => ersattCitat(text, svar, () => "\"…\"");
 
 const skriv = (v: number | string): string =>
   typeof v === "number" ? v.toLocaleString("sv-SE", { maximumFractionDigits: Number.isInteger(v) ? 0 : 1 }) : tvatta(v);
@@ -88,9 +172,11 @@ export function sattInTal(text: string, svar: Record<string, unknown>[]): { text
   });
   // En hänvisning som inte följer formen sätts aldrig in.
   t = t.replace(TRASIG_REF, () => { obelagda++; refar.push("⟦obelagt:?⟧"); return plats(0xe000, refar.length - 1); });
+  // Ett ordagrant citat ur ett verktygssvar är datan själv, med datan som källa. Claude påstår inget tal i det.
+  t = ersattCitat(t, svar, (m) => { if (tider.length >= 3000) return m; tider.push(m); return plats(0xe002, tider.length - 1); });
   for (const re of TIDER) t = t.replace(re, (m) => { if (tider.length >= 3000) return m; tider.push(m); return plats(0xe002, tider.length - 1); });
   const markt = (m: string): string => { obelagda++; return `⟦obelagt:${m}⟧`; };
-  t = t.replace(SIFFROR, markt).replace(TALORD, markt);
+  t = t.replace(SIFFROR, markt).replace(TALORD, markt).replace(KVANTORD, markt);
   t = t.replace(platsRe(0xe002), (_m, c: string) => tider[c.charCodeAt(0) - 0xe100] ?? "").replace(platsRe(0xe000), (_m, c: string) => refar[c.charCodeAt(0) - 0xe100] ?? "");
   return { text: t, tal, obelagda };
 }
@@ -102,39 +188,86 @@ export const utanMarken = (text: string): string => text.replace(/⟦(?:t\d+|obe
 /* Kostnaden                                                                 */
 /* ------------------------------------------------------------------------ */
 
-/** Dollar per miljon token, in och ut (designdokumentet, "Kostnad"). */
+/** Dollar per miljon token, in och ut (designdokumentet, "Kostnad"). De tre modellerna chatten kan ställas på. */
 const PRIS: Record<string, { inn: number; ut: number }> = {
   "claude-opus-5-5": { inn: 4, ut: 20 },
   "claude-sonnet-5-5": { inn: 2, ut: 10 },
   "claude-haiku-5-5": { inn: 0.1, ut: 0.5 },
 };
 export const KANDA_MODELLER: readonly string[] = Object.keys(PRIS);
+/**
+ * Reservmodellerna Anthropic kan låta ta över en fråga som den valda modellen avböjer. De kan inte väljas, men
+ * de kostar: 5 och 25 dollar per miljon token, mer än Opus 5.5.
+ */
+const RESERVPRIS: Record<string, { inn: number; ut: number }> = {
+  "claude-opus-5": { inn: 5, ut: 25 },
+  "claude-opus-4-8": { inn: 5, ut: 25 },
+};
+/** Det dyraste priset Nav känner till. En okänd modell räknas så, så att gränsen aldrig underskattas. */
+const DYRAST = Object.values({ ...PRIS, ...RESERVPRIS }).reduce((a, p) => ({ inn: Math.max(a.inn, p.inn), ut: Math.max(a.ut, p.ut) }), { inn: 0, ut: 0 });
+/** Haiku 5.5 kostar mer när prompten är över 100 000 token. */
+const HAIKU_STOR = { grans: 100_000, inn: 0.5, ut: 2.5 };
 /** Att läsa ur cachen kostar en tiondel av en vanlig intoken, att skriva dit en fjärdedel mer (fem minuters cache). */
 const CACHE_LAS = 0.1;
 const CACHE_SKRIV = 1.25;
 
-export type Usage = { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number | null; cache_creation_input_tokens?: number | null };
+export type Usage = {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_input_tokens?: number | null;
+  cache_creation_input_tokens?: number | null;
+  /** Ett försök per modell som körde: den begärda och varje reservmodell. Saknas när bara en modell körde. */
+  iterations?: ({ type: string; model?: string | null } & Partial<Usage>)[] | null;
+};
+
+/** Modellens namn utan datum på slutet: "claude-sonnet-5-5-20261001" är "claude-sonnet-5-5". */
+const utanDatum = (modell: string): string => modell.replace(/-\d{8}$/, "");
+const KAND_PRIS: Record<string, { inn: number; ut: number }> = { ...PRIS, ...RESERVPRIS };
+
+function prisFor(modell: string, prompt: number): { inn: number; ut: number } {
+  const namn = utanDatum(modell);
+  if (namn === "claude-haiku-5-5" && prompt > HAIKU_STOR.grans) return HAIKU_STOR;
+  return KAND_PRIS[namn] ?? DYRAST;
+}
+
+export type Forsok = { modell: string; reserv: boolean; usage: Usage };
 
 /**
- * Kostnaden i dollar för ett anrop: det Anthropic tar betalt, ur token och modellens pris. Taken räknas på det
- * här talet. En okänd modell räknas som den dyraste, så att taket aldrig underskattas.
+ * Försöken bakom ett svar. Avböjer den valda modellen och en reservmodell tar över står varje försök för sig i
+ * `usage.iterations`, med sin egen modell och sina egna token, och Anthropic tar betalt för varje. Toppens
+ * `usage` gäller då bara det sista försöket. `svarade` är modellen som stod för svaret (`model` i svaret).
  */
-export function kostnadUsd(modell: string, usage: Usage): number {
-  const p = PRIS[modell] ?? PRIS["claude-opus-5-5"];
-  return (
-    ((usage.input_tokens || 0) * p.inn +
-      (usage.cache_read_input_tokens || 0) * p.inn * CACHE_LAS +
-      (usage.cache_creation_input_tokens || 0) * p.inn * CACHE_SKRIV +
-      (usage.output_tokens || 0) * p.ut) /
-    1e6
-  );
+export function forsok(modell: string, usage: Usage, svarade: string = modell): Forsok[] {
+  const lista = Array.isArray(usage.iterations) ? usage.iterations : [];
+  if (!lista.length) return [{ modell: svarade, reserv: utanDatum(svarade) !== utanDatum(modell), usage }];
+  return lista.map((f) => {
+    const u: Usage = { input_tokens: f.input_tokens ?? 0, output_tokens: f.output_tokens ?? 0, cache_read_input_tokens: f.cache_read_input_tokens ?? 0, cache_creation_input_tokens: f.cache_creation_input_tokens ?? 0 };
+    if (f.type === "fallback_message") return { modell: f.model || "okand", reserv: true, usage: u };
+    if (f.type === "message") return { modell: f.model || modell, reserv: false, usage: u };
+    // Ett försök av en sort Nav inte känner räknas som den dyraste modellen.
+    return { modell: "okand", reserv: false, usage: u };
+  });
+}
+
+/**
+ * Kostnaden i dollar för ett anrop: det Anthropic tar betalt, ur token och modellens pris, för varje försök.
+ * Gränserna räknas på det här talet. En okänd modell räknas som den dyraste, så att gränsen aldrig underskattas.
+ */
+export function kostnadUsd(modell: string, usage: Usage, svarade: string = modell): number {
+  return forsok(modell, usage, svarade).reduce((summa, f) => {
+    const u = f.usage;
+    const las = u.cache_read_input_tokens || 0;
+    const skriv = u.cache_creation_input_tokens || 0;
+    const p = prisFor(f.modell, (u.input_tokens || 0) + las + skriv);
+    return summa + ((u.input_tokens || 0) * p.inn + las * p.inn * CACHE_LAS + skriv * p.inn * CACHE_SKRIV + (u.output_tokens || 0) * p.ut) / 1e6;
+  }, 0);
 }
 
 /** Samma kostnad i kronor, för den som läser loggen. */
 export const kostnadKr = (modell: string, usage: Usage, krPerDollar: number): number => kostnadUsd(modell, usage) * krPerDollar;
 
 /** Det mesta en fråga kan kosta i uttoken: varje varv fullt ut, till modellens utpris. Läggs på förbrukningen före anropet. */
-export const maxFragaUsd = (modell: string, maxUt: number, maxVarv: number): number => ((PRIS[modell] ?? PRIS["claude-opus-5-5"]).ut * maxUt * maxVarv) / 1e6;
+export const maxFragaUsd = (modell: string, maxUt: number, maxVarv: number): number => (prisFor(modell, 0).ut * maxUt * maxVarv) / 1e6;
 
 /* ------------------------------------------------------------------------ */
 /* Spärrarna                                                                 */
@@ -214,3 +347,20 @@ export function lasChattInst(rader: readonly { key: string; value: unknown }[]):
 
 /** Ett tidigare svar som skickas med i samtalet: utan märken och utan tal, så att ett gammalt tal inte kan återanvändas utan källa. */
 export const utanTal = (text: string): string => utanMarken(text).replace(/\d+(?:[\s.,:]\d+)*/g, "[tal]");
+
+/* ------------------------------------------------------------------------ */
+/* Reservmodellen                                                            */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * Turen som den skickas tillbaka efter att en reservmodell tagit över mitt i den. Före det sista bytet
+ * (`fallback`-blocket) behålls bara text, och bytesmärket står kvar där det stod. Tänkande och verktygsanrop
+ * från modellen som avböjde tas bort, och de verktygen körs aldrig. Efter bytet behålls allt. Utan byte är
+ * turen orörd. (Anthropics anvisning, "Echoing fallback turns back".)
+ */
+export function efterReserv<T extends { type: string }>(innehall: T[]): T[] {
+  let sista = -1;
+  innehall.forEach((b, i) => { if (b.type === "fallback") sista = i; });
+  if (sista < 0) return innehall;
+  return innehall.filter((b, i) => i >= sista || b.type === "text" || b.type === "fallback");
+}

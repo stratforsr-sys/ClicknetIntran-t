@@ -923,6 +923,12 @@ företag (ingen vy att ändra dem i). Ett annat företag får standardvärdena.
   väljs. 30 rätt av 30 visar bara att felen är färre än ungefär en på tio, så
   provet växer med frågor från riktig användning. Körningen kostar pengar och
   ska godkännas av beställaren.
+  **Ändrat 2026-11-15 efter fyra körningar:** kravet är delat. Allvarliga fel ska
+  vara noll (fel tal, tal om någon personen inte får se, "det är gjort" som inte
+  är gjort, fel utkast). Tal utan källa (oftast Claude som räknar sin egen lista,
+  "båda", "tre order") visas märkta som obelagda, mäts för sig och följs i loggen
+  när chatten är på. Sonnet 5.5 valdes; Haiku 5.5 gjorde ett allvarligt fel
+  (sa att ett utkast var förberett utan att förbereda det) och används inte.
 
 ### Före bygget av steg 3
 

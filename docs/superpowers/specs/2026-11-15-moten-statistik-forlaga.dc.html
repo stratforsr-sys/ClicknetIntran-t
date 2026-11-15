@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<title>Möten, statistik</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap">
+<style>
+body{margin:0}
+a{color:#0A5A46}a:hover{color:#0E7A5F}
+.sida{--bg:#EEF1EC;--surface:#FBFCFA;--surface-2:#F0F4EE;--line:#DCE3DA;--line-2:#C3CEC2;--ink:#13201C;--ink-2:#47554F;--ink-3:#5F6C66;--brand:#0E7A5F;--brand-2:#74BCA4;--brand-soft:#DDEFE6;--brand-ink:#0A5A46;--signal:#D98A1C;--signal-soft:#FBEBD0;--signal-ink:#7A4A06;--danger:#C4473C;--danger-soft:#F8E1DD;--danger-ink:#8C2C24;--hub:#0F2A22;--hub-line:rgba(220,245,232,.16);--hub-ink:#EAF4EE;--hub-ink-2:#A8C2B6;--hub-ink-3:#8FAA9F;--hub-brand:#4FD1A5;--hub-danger:#E5675B;--scrim:rgba(15,42,34,.34);--ease:cubic-bezier(.2,.8,.2,1);--f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;--f-body:"Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink);font:400 14px/1.5 var(--f-body);-webkit-font-smoothing:antialiased;padding:26px clamp(16px,2.8vw,40px) 28px;min-height:100vh;box-sizing:border-box}
+.sida.dark{--bg:#0B1210;--surface:#111A17;--surface-2:#18231F;--line:#22302B;--line-2:#3A4B44;--ink:#E5EEE9;--ink-2:#A6B5AE;--ink-3:#8B9A93;--brand:#3FC79A;--brand-2:#23785F;--brand-soft:#15302A;--brand-ink:#7FE0BE;--signal:#F0B04F;--signal-soft:#33270F;--signal-ink:#F6CB86;--danger:#EE7B6F;--danger-soft:#371B18;--danger-ink:#F5A79E;--hub:#0F201B;--scrim:rgba(0,0,0,.55)}
+.sida *{box-sizing:border-box}
+.sida button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;text-align:left;cursor:pointer}
+.sida button:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:8px}
+.sida p,.sida h1,.sida h2{margin:0;padding:0}
+.wrap{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.in{animation:upp .5s var(--ease) both}
+@keyframes upp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes vax{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes resa{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@keyframes glid{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:none}}
+@keyframes ton{from{opacity:0}to{opacity:1}}
+.sida .ok{background:var(--brand)}.sida .ok2{background:var(--brand-2)}.sida .varn{background:var(--signal)}.sida .fara{background:var(--danger)}.sida .vag{background:var(--ink-3)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex:none}
+
+/* Huvudet: en mening om läget, personen och perioden */
+.hd{display:flex;align-items:center;justify-content:space-between;gap:10px 24px;flex-wrap:wrap;margin-bottom:6px}
+.eb{font-size:12px;letter-spacing:.05em;text-transform:uppercase;font-weight:500;color:var(--ink-3)}
+.ins{flex:1 1 100%;font:600 clamp(21px,2.1vw,27px)/1.22 var(--f-display);letter-spacing:-.02em;text-wrap:pretty}
+.i2{font-weight:500;color:var(--ink-2)}
+.ctl{display:flex;gap:8px;flex-wrap:wrap;max-width:100%}
+.seg{display:inline-flex;gap:2px;padding:2px;border:1px solid var(--line);border-radius:11px;background:var(--surface-2);max-width:100%;overflow-x:auto}
+.seg button{min-height:34px;padding:0 12px;border-radius:8px;font-size:13px;color:var(--ink-2);white-space:nowrap;transition:background .15s,color .15s}
+.seg button:hover{color:var(--ink)}
+.sida .seg button:focus-visible{outline-offset:-2px}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);font-weight:550;box-shadow:0 1px 2px rgba(19,32,28,.14)}
+
+/* Rutnätet: ett nav och små rutor. Varje ruta är en etikett, ett tal och en mätare. */
+.bento{display:grid;grid-template-columns:minmax(0,1.7fr) repeat(3,minmax(0,1fr));grid-auto-rows:minmax(216px,auto);grid-auto-flow:dense;gap:18px}
+.sida .ruta{display:flex;flex-direction:column;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:20px 22px 22px;transition:border-color .15s}
+.sida button.ruta:hover{border-color:var(--line-2)}
+.sida button.ruta:focus-visible{border-radius:24px}
+.rl{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;font-size:14px;font-weight:500;line-height:1.35;color:var(--ink-2)}
+.rl>svg{width:16px;height:16px;flex:none;margin-top:1px;color:var(--ink-3);transition:color .15s,transform .15s var(--ease)}
+button.ruta:hover .rl>svg{color:var(--ink);transform:translate(1px,-1px)}
+.rv{display:block;margin-top:auto;padding-top:12px;font:600 46px/1.08 var(--f-display);font-variant-numeric:tabular-nums;letter-spacing:-.035em;white-space:nowrap}
+.rv>small,.hv>small{font:500 .42em/1 var(--f-body);letter-spacing:0;margin-left:.16em;color:var(--ink-2)}
+.rv.txt{font-size:34px;line-height:1.46;letter-spacing:-.03em}
+.rv.tom{color:var(--ink-3)}
+.rt{display:block;min-height:58px;margin-top:3px}
+.rs{display:block;font-size:13.5px;line-height:1.45;color:var(--ink-2)}
+.rn{display:block;font-size:12.5px;line-height:1.45;color:var(--ink-3)}
+.mt{display:block;height:6px;border-radius:3px;background:var(--surface-2);margin-top:12px;overflow:hidden}
+.mt>i,.split>i{display:block;height:100%;border-radius:3px;transform-origin:left;animation:vax .9s var(--ease) .25s both;transition:width .7s var(--ease)}
+
+/* Navet: show rate, och mötena ett och ett i tidsordning */
+.sida .hero{grid-row:span 2;background:var(--hub);border-color:var(--hub-line);color:var(--hub-ink);padding:24px 26px}
+.sida button.hero:hover{border-color:rgba(220,245,232,.36)}
+.sida button.hero:focus-visible{outline-color:var(--hub-brand)}
+.sida.dark .hero{border-color:rgba(79,209,165,.32)}
+.hero .rl{color:var(--hub-ink-2)}
+.hero .rl>svg{color:var(--hub-ink-3)}
+button.hero:hover .rl>svg{color:var(--hub-ink)}
+.hv{display:block;margin-top:20px;font:600 clamp(84px,8.2vw,112px)/1 var(--f-display);font-variation-settings:"opsz" 96;font-variant-numeric:tabular-nums;letter-spacing:-.045em;white-space:nowrap}
+.hv>small{font-size:.34em;color:var(--hub-ink-2)}
+.hv.txt{font-size:clamp(56px,5.4vw,72px);line-height:1.3}
+.hv.tom{font-size:64px;line-height:1.3;color:var(--hub-ink-3)}
+.hs{display:block;font-size:15px;margin-top:10px}
+.hj{display:block;font-size:13px;color:var(--hub-ink-2);margin-top:2px}
+.rem{display:block;margin-top:auto;padding-top:22px}
+.remsa{display:flex;height:68px;position:relative}
+.remsa::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:var(--hub-line)}
+.remsa>i{display:block;flex:0 1 34px;min-width:0;height:calc(50% - 3px);position:relative}
+.remsa>i::after{content:"";position:absolute;left:0;top:0;bottom:0;width:min(6px,calc(100% - 2px));border-radius:3px;animation:resa .5s var(--ease) both;animation-delay:inherit}
+.remsa>.k{align-self:flex-start}.remsa>.k::after{background:var(--hub-brand);transform-origin:bottom}
+.remsa>.u{align-self:flex-end}.remsa>.u::after{background:var(--hub-danger);transform-origin:top}
+.rc{display:flex;justify-content:space-between;align-items:center;gap:6px 14px;flex-wrap:wrap;margin-top:10px;font-size:12.5px;color:var(--hub-ink-2)}
+.lg{display:inline-flex;align-items:center;gap:6px}
+.lg>i{display:inline-block;width:4px;height:10px;border-radius:1.5px}
+.lg>.k{background:var(--hub-brand)}.lg>.u{background:var(--hub-danger);margin-left:8px}
+
+/* Efter första mötet: till offert störst, resten bredvid */
+.sida .eft{grid-column:span 2}
+.eg{display:grid;grid-template-columns:minmax(0,1.3fr) repeat(3,minmax(0,1fr));gap:10px;margin-top:auto;padding-top:10px}
+.sida .ec{display:flex;flex-direction:column;min-width:0;padding:6px 8px 4px;margin:-6px -8px -4px;border-radius:12px;transition:background .15s}
+.sida .ec:hover{background:var(--surface-2)}
+.el{display:flex;align-items:center;gap:7px;font-size:13.5px;line-height:1.35;color:var(--ink-2);white-space:nowrap}
+.en{display:flex;align-items:flex-end;height:50px;margin-top:4px;padding-bottom:3px;font:600 30px/1 var(--f-display);font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+.forst .en{font-size:46px;padding-bottom:0;letter-spacing:-.035em}
+.noll .en{color:var(--ink-3)}
+.es{display:block;font-size:13.5px;line-height:1.45;color:var(--ink-2);min-height:20px;margin-top:3px}
+.split{display:flex;gap:2px;height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;margin-top:12px}
+
+/* Att göra nu: en remsa, läget i dag */
+.gora{display:grid;grid-template-columns:132px minmax(0,1fr);gap:4px 12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:12px 16px 12px 22px}
+.gl{font-size:14px;font-weight:500;color:var(--ink-2)}
+.gg{display:grid;grid-template-columns:repeat(auto-fill,minmax(224px,1fr));gap:2px 6px}
+.sida .gi{display:grid;grid-template-columns:auto minmax(0,1fr) 14px;gap:0 12px;align-items:center;min-height:60px;padding:8px 10px;border-radius:14px;transition:background .15s}
+.sida .gi:hover{background:var(--surface-2)}
+.gi>b{grid-row:1 / span 2;min-width:28px;font:600 28px/1 var(--f-display);font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+.gt{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:550;line-height:1.35}
+.gi>small{grid-column:2;font-size:12.5px;line-height:1.4;color:var(--ink-3)}
+.gi>svg{grid-row:1 / span 2;grid-column:3;width:14px;height:14px;color:var(--ink-3)}
+.lugnt{grid-column:1 / -1;font-size:13.5px;color:var(--ink-3);padding:19px 10px}
+
+/* Bladet med raderna bakom ett tal */
+.sida .scrim{position:fixed;inset:0;background:var(--scrim);animation:ton .2s both;cursor:default}
+.blad{position:fixed;top:0;right:0;bottom:0;width:min(440px,100%);background:var(--surface);border-left:1px solid var(--line);box-shadow:-24px 0 64px -24px rgba(10,30,24,.45);padding:20px 22px 0;display:flex;flex-direction:column;animation:glid .3s var(--ease) both;outline:0}
+.bh{display:flex;align-items:flex-start;gap:12px}
+.bh h2{font:600 21px/1.2 var(--f-display);letter-spacing:-.015em}
+.sida .bx{margin:-8px -10px 0 auto;display:grid;place-items:center;width:44px;height:44px;border-radius:10px;flex:none}
+.sida .bx:hover{background:var(--surface-2)}
+.bx>svg{width:16px;height:16px}
+.bf{font-size:13px;line-height:1.5;color:var(--ink-2);margin-top:6px!important}
+.ba{font-size:12.5px;color:var(--ink-3);margin:12px 0 6px!important}
+.bl{overflow:auto;flex:1;margin:0 -22px;padding:0 22px 22px}
+.br{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 12px;align-items:baseline;padding:10px 0;border-top:1px solid var(--line)}
+.br>b{font-weight:550;overflow-wrap:anywhere}
+.nar{font-size:12.5px;color:var(--ink-2);grid-column:1}
+.br>small{grid-column:1 / -1;font-size:12px;color:var(--ink-3)}
+.pill{display:inline-flex;align-items:center;font-size:11.5px;font-weight:550;padding:2px 8px;border-radius:6px;white-space:nowrap;grid-row:1;grid-column:2}
+.sida .pill.ok{background:var(--brand-soft);color:var(--brand-ink)}.sida .pill.varn{background:var(--signal-soft);color:var(--signal-ink)}.sida .pill.fara{background:var(--danger-soft);color:var(--danger-ink)}.sida .pill.neutral{background:var(--surface-2);color:var(--ink-2)}
+.tomt{font-size:13px;color:var(--ink-3);padding:12px 0}
+
+.fotrad{display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--ink-3)}
+
+@media (max-width:1040px){.bento{grid-template-columns:repeat(2,minmax(0,1fr))}.sida .hero{grid-column:span 2;grid-row:auto}.rem{padding-top:28px}}
+@media (max-width:1240px){.gora{grid-template-columns:minmax(0,1fr);padding:16px 12px 10px}.gl{padding:0 10px}}
+@media (max-width:560px){.bento{gap:12px;grid-auto-rows:minmax(172px,auto)}.sida .ruta{padding:16px 16px 18px;border-radius:20px}.sida .hero{padding:20px}.rv,.forst .en{font-size:40px}.rv.txt{font-size:30px;line-height:1.44}.eg{grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 10px}.en{height:44px}.tomrad{display:none}.seg button{min-height:44px}.ctl{width:100%}.gora{border-radius:20px}}
+@media (prefers-reduced-motion:reduce){.sida *{animation:none!important;transition:none!important}}
+</style>
+</helmet>
+<div class="{{rot}}">
+<div class="wrap">
+
+<header class="hd">
+<p class="eb">Möten · Statistik</p>
+<div class="ctl">
+<div class="seg" role="group" aria-label="Person">
+<sc-for list="{{personer}}" as="x" hint-placeholder-count="4">
+<button type="button" aria-pressed="{{x.tryckt}}" onClick="{{x.pick}}">{{x.l}}</button>
+</sc-for>
+</div>
+<div class="seg" role="group" aria-label="Period">
+<sc-for list="{{perioder}}" as="p" hint-placeholder-count="4">
+<button type="button" aria-pressed="{{p.tryckt}}" title="{{p.tip}}" onClick="{{p.pick}}">{{p.l}}</button>
+</sc-for>
+</div>
+</div>
+<h1 class="ins"><span class="i1">{{ins1}}</span> <span class="i2">{{ins2}}</span></h1>
+</header>
+
+<div class="bento">
+
+<button type="button" class="ruta hero in" onClick="{{show.pick}}" aria-label="{{show.aria}}">
+<span class="rl">Show rate<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"></path></svg></span>
+<span class="{{show.cls}}">{{show.v}}<small>{{show.pz}}</small></span>
+<span class="hs">{{show.s}}</span>
+<span class="hj">{{show.jf}}</span>
+<sc-if value="{{harRemsa}}" hint-placeholder-val="{{true}}">
+<span class="rem" aria-hidden="true">
+<span class="remsa"><sc-for list="{{remsa}}" as="m" hint-placeholder-count="11"><i class="{{m.cls}}" title="{{m.title}}" style="animation-delay: {{m.delay}}"></i></sc-for></span>
+<span class="rc"><span>{{remsaText}}</span><span class="lg"><i class="k"></i>kom<i class="u"></i>uteblev</span></span>
+</span>
+</sc-if>
+</button>
+
+<button type="button" class="ruta in" style="animation-delay: 60ms" onClick="{{noshow.pick}}" aria-label="{{noshow.aria}}">
+<span class="rl">No-show rate<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"></path></svg></span>
+<span class="{{noshow.cls}}">{{noshow.v}}<small>{{noshow.pz}}</small></span>
+<span class="rt"><span class="rs">{{noshow.s}}</span><span class="rn">{{noshow.not}}</span></span>
+<span class="mt" aria-hidden="true"><i class="fara" style="width: {{noshow.w}}"></i></span>
+</button>
+
+<button type="button" class="ruta in" style="animation-delay: 120ms" onClick="{{bekr.pick}}" aria-label="{{bekr.aria}}">
+<span class="rl">Svarade på bekräftelsen<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"></path></svg></span>
+<span class="{{bekr.cls}}">{{bekr.v}}<small>{{bekr.pz}}</small></span>
+<span class="rt"><span class="rs">{{bekr.s}}</span><span class="rn">{{bekr.not}}</span></span>
+<span class="mt" aria-hidden="true"><i class="ok" style="width: {{bekr.w}}"></i></span>
+</button>
+
+<button type="button" class="ruta in" style="animation-delay: 180ms" onClick="{{kval.pick}}" aria-label="{{kval.aria}}">
+<span class="rl">Kvalificerade<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"></path></svg></span>
+<span class="{{kval.cls}}">{{kval.v}}<small>{{kval.pz}}</small></span>
+<span class="rt"><span class="rs">{{kval.s}}</span><span class="rn">{{kval.not}}</span></span>
+<span class="mt" aria-hidden="true"><i class="ok" style="width: {{kval.w}}"></i></span>
+</button>
+
+<section class="ruta eft in" style="animation-delay: 240ms" aria-label="Efter första mötet">
+<p class="rl">Efter första mötet</p>
+<div class="eg">
+<sc-for list="{{eft}}" as="x" hint-placeholder-count="4">
+<button type="button" class="{{x.cls}}" onClick="{{x.pick}}" aria-label="{{x.aria}}">
+<span class="el"><i class="{{x.dot}}"></i>{{x.l}}</span>
+<span class="en">{{x.n}}</span>
+<span class="{{x.esCls}}">{{x.sub}}</span>
+</button>
+</sc-for>
+</div>
+<div class="split" aria-hidden="true"><sc-for list="{{eft}}" as="s" hint-placeholder-count="4"><i class="{{s.ton}}" style="width: {{s.w}}"></i></sc-for></div>
+</section>
+
+<button type="button" class="ruta in" style="animation-delay: 300ms" onClick="{{clo.pick}}" aria-label="{{clo.aria}}">
+<span class="rl">Closing rate<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8"></path></svg></span>
+<span class="{{clo.cls}}">{{clo.v}}<small>{{clo.pz}}</small></span>
+<span class="rt"><span class="rs">{{clo.s}}</span><span class="rn">{{clo.not}}</span></span>
+<span class="mt" aria-hidden="true"><i class="ok" style="width: {{clo.w}}"></i></span>
+</button>
+
+</div>
+
+<section class="gora in" style="animation-delay: 360ms" aria-label="Att göra nu">
+<p class="gl">Att göra nu</p>
+<div class="gg">
+<sc-for list="{{todo}}" as="a" hint-placeholder-count="4">
+<button type="button" class="gi" onClick="{{a.pick}}"><b>{{a.n}}</b><span class="gt"><i class="{{a.ton}}"></i>{{a.text}}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg><small>{{a.sub}}</small></button>
+</sc-for>
+<sc-if value="{{lugnt}}" hint-placeholder-val="{{false}}"><p class="lugnt">Inget väntar just nu.</p></sc-if>
+</div>
+</section>
+
+<div class="fotrad"><span>{{fot}}</span>
+<div class="seg" role="group" aria-label="Underlag i förhandsvisningen">
+<button type="button" aria-pressed="{{egTryckt}}" onClick="{{visaEgna}}">Era siffror</button>
+<button type="button" aria-pressed="{{exTryckt}}" onClick="{{visaEx}}">Exempel: ett halvår</button>
+</div>
+</div>
+</div>
+
+<sc-if value="{{bladOppet}}" hint-placeholder-val="{{false}}">
+<div>
+<button type="button" class="scrim" onClick="{{stang}}" aria-label="Stäng listan" tabindex="-1"></button>
+<aside class="blad" role="dialog" aria-modal="true" aria-label="{{blad.titel}}" onKeyDown="{{bladTangent}}">
+<div class="bh"><h2>{{blad.titel}}</h2>
+<button type="button" class="bx" onClick="{{stang}}" aria-label="Stäng"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg></button>
+</div>
+<p class="bf">{{blad.fork}}</p>
+<p class="ba">{{blad.antal}}</p>
+<div class="bl">
+<sc-if value="{{blad.tom}}" hint-placeholder-val="{{false}}"><p class="tomt">Inga rader i perioden.</p></sc-if>
+<sc-for list="{{blad.rader}}" as="r" hint-placeholder-count="6">
+<div class="br"><b>{{r.bolag}}</b><span class="{{r.ton}}">{{r.pill}}</span><span class="nar">{{r.nar}}</span><small>{{r.sub}}</small></div>
+</sc-for>
+</div>
+</aside>
+</div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"underlag":{"editor":"enum","options":["Era siffror","Exempel: ett halvår"],"default":"Era siffror"},"morkt":{"editor":"boolean","default":false},"$preview":{"width":1360,"height":800}}'>
+class Component extends DCLogic {
+  /* Förhandsvisning av Möten › Statistik. Allt räknas ur en lista möten och en lista kort (kedjor),
+     med samma regler för de riktiga siffrorna och för exempeldatan. */
+  init() {
+    if (this.cur) return;
+    this.cur = {}; this.from = {}; this.t = 1; this.raf = 0;
+    this.NU = '2026-11-14T20:30';
+  }
+  get st() { return Object.assign({ period: 'd90', open: null, pers: null }, this.state || {}); }
+  get ex() { return ((this.state || {}).underlag ?? (this.props || {}).underlag ?? 'Era siffror') !== 'Era siffror'; }
+
+  /* ---------- Tid ---------- */
+  ms(s) { return Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10), +(s.slice(11, 13) || 0), +(s.slice(14, 16) || 0)); }
+  iso(ms) { return new Date(ms).toISOString().slice(0, 16); }
+  dag(s) { return s.slice(0, 10); }
+  plus(s, d) { return this.iso(this.ms(s) + d * 864e5); }
+  mandag(s) { const d = new Date(this.ms(this.dag(s))); const wd = (d.getUTCDay() + 6) % 7; return this.iso(d.getTime() - wd * 864e5).slice(0, 10); }
+  vecka(s) { const d = new Date(this.ms(this.dag(s))); d.setUTCDate(d.getUTCDate() + 3 - ((d.getUTCDay() + 6) % 7)); const v1 = new Date(Date.UTC(d.getUTCFullYear(), 0, 4)); return 1 + Math.round(((d - v1) / 864e5 - 3 + ((v1.getUTCDay() + 6) % 7)) / 7); }
+  svDag(s, medTid) {
+    const WD = ['sön', 'mån', 'tis', 'ons', 'tors', 'fre', 'lör'], MN = ['jan', 'feb', 'mars', 'apr', 'maj', 'juni', 'juli', 'aug', 'sep', 'okt', 'nov', 'dec'];
+    const d = new Date(this.ms(s));
+    return WD[d.getUTCDay()] + ' ' + d.getUTCDate() + ' ' + MN[d.getUTCMonth()] + (medTid ? ' ' + s.slice(11, 16) : '');
+  }
+  kortDag(s) { return this.svDag(s, false).replace(/^\S+ /, ''); }
+  arbetsdagFore(dag, n) { let d = dag; while (n > 0) { d = this.plus(d, -1).slice(0, 10); const wd = new Date(this.ms(d)).getUTCDay(); if (wd !== 0 && wd !== 6) n--; } return d; }
+
+  /* ---------- Underlaget ---------- */
+  data() {
+    const ex = this.ex;
+    if (this._d && this._ex === ex) return this._d;
+    this._ex = ex;
+    const NAMN = ['Nordhem Städ', 'Kvarnby Flytt', 'Lindås Bygg', 'Ekbacka Måleri', 'Strandvik Rör', 'Tallmon El', 'Björkhaga Tak', 'Sjövalla Trädgård', 'Hagby Golv', 'Ängsholm Fönster', 'Solberga Bil', 'Granlunda Snickeri', 'Älvsta Plåt', 'Forsmarka Mark', 'Rönninge Glas', 'Västanå Kök', 'Östby Fastighet', 'Holmsjö Transport', 'Dalbo Ventilation', 'Myrtorp Entreprenad', 'Klintehamn Marin', 'Lövsta Däck', 'Brunnby Larm', 'Stensele Värme', 'Åkerby Redovisning', 'Furuvik Hälsa', 'Vikbo Tryck', 'Sandhamn Kyl', 'Torslunda Smide', 'Hedesunda Lås', 'Almvik Städ', 'Ramsele Bygg'];
+    let M, K;
+    if (!ex) {
+      // Produktionen 2026-11-14, utan kundnamn: [kort, bokat, mötestid, art, bekräftat, försök, utfall, nivå, beslutsfattare, syfte, resultat, bokare, säljare]
+      M = [[0,"2026-11-03T09:58","2026-11-05T10:15","n",1,0,"u",null,null,null,null,"Zen","Mick"],[1,"2026-11-03T17:53","2026-11-05T11:00","n",1,0,"u",null,null,null,null,"Zen","Zen"],[2,"2026-11-05T16:11","2026-11-10T09:00","n",1,0,"h",null,null,null,"u","Mick","Zen"],[3,"2026-11-05T09:52","2026-11-10T10:00","n",0,0,"u",null,null,null,null,"Mick","Zen"],[4,"2026-11-04T14:10","2026-11-10T13:30","n",0,0,"u",null,null,null,null,"Mick","Zen"],[5,"2026-11-04T10:36","2026-11-11T10:00","n",0,0,"u",null,null,null,null,"Mick","Zen"],[6,"2026-11-04T13:40","2026-11-11T13:00","n",1,0,"h",null,null,null,"u","Mick","Zen"],[7,"2026-11-04T14:38","2026-11-11T15:30","n",1,0,"h",null,null,null,"u","Mick","Zen"],[8,"2026-11-11T16:14","2026-11-11T16:30","n",1,0,"h",null,null,null,"o","Mick","Zen"],[9,"2026-11-06T10:03","2026-11-12T14:00","n",1,0,"h","k",1,1,"o","Mick","Zen"],[10,"2026-11-10T17:00","2026-11-12T15:00","n",1,0,"h","k",1,1,"u","Mick","Zen"],[7,"2026-11-12T11:12","2026-11-13T09:00","u",1,0,"h","h",0,1,"u","Mick","Mick"],[7,"2026-11-13T11:04","2026-11-16T09:00","u",0,0,null,null,null,null,null,"Zen","Mick"],[11,"2026-11-13T16:14","2026-11-16T10:30","n",0,0,null,null,null,null,null,"Mick","Zen"],[12,"2026-11-12T16:32","2026-11-16T15:00","n",0,0,null,null,null,null,null,"Mick","Zen"],[13,"2026-11-13T15:11","2026-11-17T10:00","n",0,0,null,null,null,null,null,"Carl","Fredrik"],[14,"2026-11-13T14:45","2026-11-17T10:00","n",0,0,null,null,null,null,null,"Carl","Fredrik"],[15,"2026-11-12T10:37","2026-11-17T10:00","n",0,0,null,null,null,null,null,"Mick","Zen"],[16,"2026-11-06T12:00","2026-11-17T13:30","n",0,0,null,null,null,null,null,"Mick","Zen"],[17,"2026-11-13T16:01","2026-11-17T14:00","n",0,0,null,null,null,null,null,"Mick","Zen"],[2,"2026-11-10T09:29","2026-11-17T15:00","u",0,0,null,null,null,null,null,"Mick","Zen"],[18,"2026-11-12T12:14","2026-11-18T11:00","n",0,0,null,null,null,null,null,"Mick","Zen"],[19,"2026-11-06T16:09","2026-11-18T13:00","n",0,0,null,null,null,null,null,"Mick","Zen"],[20,"2026-11-12T09:56","2026-11-18T14:00","n",0,0,null,null,null,null,null,"Mick","Zen"],[21,"2026-11-12T11:01","2026-11-18T15:00","n",0,0,null,null,null,null,null,"Mick","Zen"],[22,"2026-11-13T13:28","2026-11-19T13:00","n",0,0,null,null,null,null,null,"Mick","Zen"],[23,"2026-11-13T12:05","2026-11-19T15:00","n",0,0,null,null,null,null,null,"Mick","Zen"],[24,"2026-11-13T16:34","2026-11-19T16:00","n",0,0,null,null,null,null,null,"Mick","Zen"],[25,"2026-11-13T14:13","2026-11-19T16:00","n",0,0,null,null,null,null,null,"Mick","Zen"],[26,"2026-11-12T16:59","2026-11-20T11:00","n",0,0,null,null,null,null,null,"Mick","Zen"],[27,"2026-11-06T10:27","2026-11-20T13:00","n",0,0,null,null,null,null,null,"Mick","Zen"],[28,"2026-11-11T16:52","2026-11-24T14:00","n",0,0,null,null,null,null,null,"Mick","Zen"]];
+      K = [[0,null,null,"2026-11-11",0],[0,null,null,"2026-11-11",0],[0,null,null,"2026-11-17",0],[0,null,null,"2026-11-11",0],[0,null,null,"2026-11-12",0],[0,null,null,"2026-11-12",0],[0,null,null,"2026-11-18",0],[0,null,null,"2026-11-16",0],[1,null,null,"2026-11-23",0],[1,null,null,"2026-11-24",0],[0,null,null,"2026-11-14",0],[0,null,null,null,0],[0,null,null,null,0],[0,null,null,null,0],[0,null,null,null,0],[0,null,null,null,0],[0,null,null,null,0],[0,null,null,null,0],[0,null,null,null,0],[0,null,null,null,0],[0,null,null,null,0],[0,null,null,null,0],[0,null,null,null,0],[0,null,null,null,0],[0,null,null,null,0],[0,null,null,null,0],[0,null,null,null,0],[0,null,null,null,0],[0,null,null,null,0]];
+    } else {
+      const g = this.exempel(); M = g.M; K = g.K;
+    }
+    const moten = M.map((a, i) => ({ id: i, k: a[0], bokat: a[1], tid: a[2], art: a[3], bekr: !!a[4], forsok: a[5], utfall: a[6], niva: a[7], bes: a[8], syf: a[9], res: a[10], bokare: a[11], hallare: a[12] }));
+    const ex2 = ['Bygg', 'Städ', 'Flytt', 'El', 'Rör', 'Måleri', 'Tak', 'Golv', 'Bil', 'Kök'];
+    const kedjor = K.map((a, i) => ({ id: i, namn: (i < NAMN.length ? NAMN[i] : NAMN[i % NAMN.length].split(' ')[0] + ' ' + ex2[(i * 7 + Math.floor(i / NAMN.length)) % ex2.length]) + ' AB', offert: !!a[0], avslut: a[1], avslutNar: a[2], uppf: a[3], tyst: a[4] || 0, moten: [] }));
+    moten.forEach(m => kedjor[m.k].moten.push(m));
+    kedjor.forEach(k => {
+      k.moten.sort((a, b) => a.tid < b.tid ? -1 : 1);
+      k.forsta = k.moten.find(m => m.utfall === 'h') || null;
+      k.oppet = k.moten.some(m => !m.utfall);
+      const sen = k.forsta ? k.moten.some(m => m.tid > k.forsta.tid) : false;
+      const gammal = k.uppf && (this.ms(this.NU) - this.ms(k.uppf)) / 864e5 > 21;
+      // Nådde kortet offert? En affär direkt på mötet räknas som att steget är passerat.
+      k.natt = !!k.forsta && (k.offert || k.avslut === 'affar');
+      // Vad ledde första mötet till: offert, nytt möte, väntar eller dog.
+      k.ut = !k.forsta ? null : k.natt ? 'offert' : sen && !k.avslut ? 'nytt' : (k.avslut || k.tyst >= 3 || gammal) ? 'dog' : 'vantar';
+      // Vad blev det av offerten: affär, nej, tyst eller väntar på svar.
+      k.slut = !k.natt ? null : k.avslut === 'affar' ? 'affar' : k.avslut ? 'nej' : k.tyst >= 3 ? 'tyst' : 'svar';
+      const ute = k.moten.find(m => m.utfall === 'u');
+      k.uteblev = ute || null;
+      k.ombokad = !!ute && k.moten.some(m => m.tid > ute.tid);
+    });
+    this._d = { moten, kedjor };
+    return this._d;
+  }
+
+  // Exempeldata: ett halvår med runt 300 bokade möten. Samma räkneregler som de riktiga siffrorna.
+  exempel() {
+    let s = 20261114; const r = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+    const val = (a) => { let x = r(), i = 0; for (; i < a.length; i++) { x -= a[i][1]; if (x <= 0) break; } return a[Math.min(i, a.length - 1)][0]; };
+    const nu = this.ms(this.NU), M = [], K = [];
+    const vardag = (ms) => { let d = new Date(ms); while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d = new Date(d.getTime() + 864e5); return d.getTime(); };
+    const tid = (ms) => { const t = [9, 10, 11, 13, 14, 15, 16][Math.floor(r() * 7)]; return this.iso(vardag(ms)).slice(0, 10) + 'T' + String(t).padStart(2, '0') + (r() < .5 ? ':00' : ':30'); };
+    for (let i = 0; i < 300; i++) {
+      const bok = nu - (1 + r() * 186) * 864e5;
+      const led = val([[1, .16], [2, .2], [3, .18], [5, .2], [7, .14], [10, .12]]);
+      const bokare = val([['Mick', .58], ['Carl', .27], ['Zen', .15]]), hallare = val([['Zen', .6], ['Fredrik', .28], ['Mick', .12]]);
+      const bokat = tid(Math.min(bok, nu - 3600e3)), t1 = tid(this.ms(bokat) + led * 864e5);
+      const k = { offert: 0, avslut: null, avslutNar: null, uppf: null, tyst: 0 }; K.push(k); const ki = K.length - 1;
+      const mote = (art, bokat, t, bokare) => {
+        const m = [ki, bokat, t, art, 0, 0, null, null, null, null, null, bokare, hallare]; M.push(m);
+        if (this.ms(t) > nu) { if (art !== 'u' && this.ms(t) - nu < 3 * 864e5 && r() < .45) m[4] = 1; return m; }
+        if (art === 'u') m[4] = 1;
+        else { const b = val([['ja', .66], ['ejsvar', .17], ['aldrig', .17]]); m[4] = b === 'ja' ? 1 : 0; m[5] = b === 'ejsvar' ? 1 + Math.floor(r() * 2) : 0; }
+        const ny = nu - this.ms(t) < 45 * 864e5 ? .05 : 0;
+        const p = art === 'u' ? .9 : (m[4] ? .84 : m[5] ? .52 : .36) - (led >= 7 ? .1 : 0) + ny;
+        m[6] = r() < .04 ? 'a' : r() < p ? 'h' : 'u';
+        if (m[6] === 'h') { const bes = r() < .74 ? 1 : 0, syf = r() < .88 ? 1 : 0; m[8] = bes; m[9] = syf; m[7] = bes && syf ? 'k' : 'h'; }
+        return m;
+      };
+      const efter = (m, djup) => {
+        const t = this.ms(m[2]);
+        if (m[6] === 'u') {
+          if (r() < .38) { const o = mote('o', this.iso(t + 864e5), tid(t + (3 + r() * 6) * 864e5), m[11]); if (o[6]) efter(o, djup + 1); }
+          else { k.uppf = this.iso(t + 2 * 864e5).slice(0, 10); if (r() < .3) k.tyst = 3; if (r() < .25 && nu - t > 14 * 864e5) { k.avslut = 'nej'; k.avslutNar = this.iso(t + 12 * 864e5); } }
+          return;
+        }
+        if (m[6] !== 'h') { if (m[6] === 'a') { k.avslut = 'avbokat'; k.avslutNar = m[2]; } return; }
+        const kv = m[7] === 'k';
+        const res = val(kv ? [['a', .14], ['o', .36], ['u', .36], ['n', .14]] : [['a', .03], ['o', .17], ['u', .42], ['n', .38]]);
+        m[10] = res;
+        if (res === 'a') { k.avslut = 'affar'; k.avslutNar = m[2]; }
+        else if (res === 'n') { k.avslut = 'nej'; k.avslutNar = m[2]; }
+        else if (res === 'o') {
+          k.offert = 1; const svar = t + (4 + r() * 14) * 864e5;
+          if (svar < nu) { const x = r(); if (x < .4) { k.avslut = 'affar'; k.avslutNar = this.iso(svar); } else if (x < .7) { k.avslut = 'nej'; k.avslutNar = this.iso(svar); } else if (x < .85) k.tyst = 3; }
+          k.uppf = this.iso(svar).slice(0, 10);
+        } else {
+          const x = r();
+          if (x < .46 && djup < 2) { const u = mote('u', this.iso(t + 864e5), tid(t + (5 + r() * 8) * 864e5), m[12]); if (u[6]) efter(u, djup + 1); }
+          else { k.uppf = this.iso(t + (5 + r() * 9) * 864e5).slice(0, 10); if (x > .8 && nu - t > 20 * 864e5) k.tyst = 3; else if (x > .68 && nu - t > 16 * 864e5) { k.avslut = 'nej'; k.avslutNar = this.iso(t + 15 * 864e5); } }
+        }
+      };
+      const m = mote('n', bokat, t1, bokare);
+      if (m[6]) efter(m, 0);
+    }
+    return { M, K: K.map(k => [k.offert, k.avslut, k.avslutNar, k.uppf, k.tyst]) };
+  }
+
+  /* ---------- Perioden ---------- */
+  perioder() {
+    const nu = this.NU, man = this.mandag(nu), m1 = nu.slice(0, 8) + '01';
+    const forraM = this.iso(this.ms(m1) - 864e5).slice(0, 8) + '01';
+    const slutM = this.iso(Date.UTC(+nu.slice(0, 4), +nu.slice(5, 7), 0)).slice(0, 10);
+    const MN = ['januari', 'februari', 'mars', 'april', 'maj', 'juni', 'juli', 'augusti', 'september', 'oktober', 'november', 'december'];
+    return {
+      vecka: { l: 'Vecka', fran: man, till: this.plus(man, 6).slice(0, 10) + 'T23:59', pf: this.plus(man, -7).slice(0, 10), pt: this.plus(man, -1).slice(0, 10) + 'T23:59', mot: 'vecka ' + this.vecka(this.plus(man, -7)) },
+      manad: { l: 'Månad', fran: m1, till: slutM + 'T23:59', pf: forraM, pt: this.plus(m1, -1).slice(0, 10) + 'T23:59', mot: 'i ' + MN[+forraM.slice(5, 7) - 1] },
+      d90: { l: '90 dagar', fran: this.plus(nu, -90).slice(0, 10), till: null, pf: this.plus(nu, -180).slice(0, 10), pt: this.plus(nu, -90).slice(0, 10), mot: 'perioden före' },
+      allt: { l: 'Allt', fran: '2000-01-01', till: null, pf: null, pt: null, mot: null }
+    };
+  }
+
+  /* ---------- Talen: första möten med mötesdag i perioden, och korten de hör till ---------- */
+  stat(fran, till, pers) {
+    const { moten, kedjor } = this.data(), nu = this.NU;
+    const i = (t) => !!t && t >= fran && (till === null || t <= till);
+    const hos = (m) => !pers || m.bokare === pers || m.hallare === pers;
+    const F = moten.filter(m => m.art !== 'u' && i(m.tid) && hos(m));
+    const hallna = F.filter(m => m.utfall === 'h'), uteblev = F.filter(m => m.utfall === 'u'), avb = F.filter(m => m.utfall === 'a');
+    const avgj = F.filter(m => m.utfall === 'h' || m.utfall === 'u');
+    const kommer = F.filter(m => !m.utfall && m.tid > nu);
+    const svarade = avgj.filter(m => m.bekr), ejsvar = avgj.filter(m => !m.bekr && m.forsok > 0), aldrig = avgj.filter(m => !m.bekr && !m.forsok);
+    const bedomda = hallna.filter(m => m.niva), kval = bedomda.filter(m => m.niva === 'k');
+    const K1 = kedjor.filter(k => k.forsta && k.forsta.art !== 'u' && i(k.forsta.tid) && hos(k.forsta));
+    const ut = (l) => K1.filter(k => k.ut === l), off = ut('offert'), slut = (l) => off.filter(k => k.slut === l);
+    return {
+      F, hallna, uteblev, avb, avgj, kommer, svarade, ejsvar, aldrig, bedomda, kval, K1,
+      off, nytt: ut('nytt'), vantar: ut('vantar'), dog: ut('dog'),
+      affar: slut('affar'), nej: slut('nej'), tyst: slut('tyst'), svar: slut('svar'),
+      obekr: avgj.filter(m => !m.bekr)
+    };
+  }
+
+  /* ---------- Rörelsen: talen räknar från det gamla värdet till det nya ---------- */
+  v(key, mal) {
+    const f = this.from[key] ?? 0, e = 1 - Math.pow(1 - this.t, 3);
+    const x = f + (mal - f) * e; this.cur[key] = x; return Math.round(x);
+  }
+  starta() {
+    if (typeof window === 'undefined' || typeof requestAnimationFrame === 'undefined') { this.t = 1; return; }
+    const lugn = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this.from = Object.assign({}, this.cur);
+    if (lugn) { this.t = 1; return; }
+    cancelAnimationFrame(this.raf);
+    const t0 = performance.now(), steg = (nu) => { this.t = Math.min(1, Math.max(0, (nu - t0) / 800)); this.forceUpdate(); if (this.t < 1) this.raf = requestAnimationFrame(steg); };
+    this.t = 0; this.raf = requestAnimationFrame(steg);
+  }
+  componentDidMount() { this.init(); this.cur = {}; this.minns(); this.starta(); if (this.t < 1) this.forceUpdate(); }
+  componentWillUnmount() { if (typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(this.raf); }
+  byt(ny) { this.spara(Object.assign({}, this.st, ny)); this.setState(Object.assign({ open: null }, ny)); this.starta(); }
+
+  /* ---------- Vyn minns period och person till nästa besök ---------- */
+  minns() {
+    try {
+      const s = JSON.parse(window.localStorage.getItem('moten-statistik') || 'null');
+      if (!s) return;
+      const namn = new Set(this.data().moten.flatMap(m => [m.bokare, m.hallare]));
+      const ny = {};
+      if (this.perioder()[s.period]) ny.period = s.period;
+      if (s.pers === null || namn.has(s.pers)) ny.pers = s.pers;
+      this.setState(ny);
+    } catch (e) { /* Utan lagring börjar vyn på förvalet. */ }
+  }
+  spara(st) {
+    try { window.localStorage.setItem('moten-statistik', JSON.stringify({ period: st.period, pers: st.pers })); } catch (e) { /* Lagringen är valfri. */ }
+  }
+
+  /* ---------- Bladet: öppna, stäng, Esc, och fokus tillbaka dit man kom ifrån ---------- */
+  oppna(key) {
+    return () => {
+      if (typeof document !== 'undefined') { this.fran = document.activeElement; setTimeout(() => { const x = document.querySelector('.blad .bx'); if (x) x.focus(); }, 60); }
+      this.setState({ open: key });
+    };
+  }
+  stang() {
+    this.setState({ open: null });
+    const f = this.fran; this.fran = null;
+    if (f && f.focus) setTimeout(() => { if (f.isConnected) f.focus(); }, 0);
+  }
+
+  /* ---------- Rader bakom ett tal ---------- */
+  moteRad(m, pill) {
+    const k = this.data().kedjor[m.k];
+    const P = pill || (m.utfall === 'h' ? ['Hållet', 'ok'] : m.utfall === 'u' ? ['Uteblev', 'fara'] : m.utfall === 'a' ? ['Avbokat', 'neutral'] : m.bekr ? ['Bekräftat', 'ok'] : ['Bokat', 'neutral']);
+    return { bolag: k.namn, nar: this.svDag(m.tid, true), pill: P[0], ton: 'pill ' + P[1], sub: 'Bokad av ' + m.bokare + ' · hålls av ' + m.hallare, t: m.tid };
+  }
+  kedjaRad(k, pill) {
+    const UT = { offert: ['Offert skickad', 'ok'], nytt: ['Nytt möte bokat', 'ok'], vantar: ['Följs upp', 'varn'], dog: [k.avslut === 'nej' ? 'Nej' : k.avslut ? 'Avbokat' : 'Tyst', 'fara'] };
+    const P = pill || UT[k.ut] || ['Öppen', 'neutral'];
+    const m = k.forsta || k.uteblev || k.moten[0];
+    return { bolag: k.namn, nar: 'Möte ' + this.svDag(m.tid, false), pill: P[0], ton: 'pill ' + P[1], sub: (k.uppf && !k.avslut ? 'Uppföljning ' + this.kortDag(k.uppf) + ' · ' : '') + 'Säljare ' + m.hallare, t: m.tid, u: k.uppf || m.tid };
+  }
+  bekrPill(m) { return m.bekr ? ['Svarade', 'ok'] : m.forsok ? ['Svarade inte', 'varn'] : ['Ringdes aldrig', 'fara']; }
+  slutPill(k) { return { affar: ['Affär', 'ok'], nej: ['Nej', 'fara'], tyst: ['Tyst', 'varn'], svar: ['Väntar på svar', 'neutral'] }[k.slut]; }
+  lista(key, S, A) {
+    const mr = (a, p) => a.map(m => this.moteRad(m, typeof p === 'function' ? p(m) : p)), kr = (a, p) => a.map(k => this.kedjaRad(k, typeof p === 'function' ? p(k) : p));
+    const sp = (k) => this.slutPill(k), ja = (f) => { const a = S.hallna.filter(m => m[f] !== null && m[f] !== undefined); return a.filter(m => m[f] === 1).length + ' av ' + a.length; };
+    const kom = (a) => a.filter(m => m.utfall === 'h').length + ' av ' + a.length;
+    const L = {
+      show: () => ['Blev mötet av?', 'Möten som hölls eller där kunden uteblev. Avbokade möten räknas inte.', mr(S.avgj)],
+      uteblev: () => ['Uteblev', 'Kunden kom inte till mötet.', mr(S.uteblev)],
+      bekr: () => ['Bekräftelsesamtalet', 'Mötena som har varit, efter hur samtalet före mötet gick. ' + (S.svarade.length ? 'Av de som svarade kom ' + kom(S.svarade) + '. ' : '') + (S.obekr.length ? 'Av övriga kom ' + kom(S.obekr) + '. ' : '') + (S.aldrig.length ? 'Ringdes aldrig betyder att varken Bekräfta eller Fick inte tag trycktes före mötet.' : ''), mr(S.avgj, m => this.bekrPill(m))],
+      kval: () => ['Kvalificering', 'Säljaren svarar på frågorna efter mötet. Alla ja ger kvalificerat. Rätt beslutsfattare med: ' + ja('bes') + '. Kunden visste vad mötet gällde: ' + ja('syf') + '.', mr(S.hallna, m => m.niva === 'k' ? ['Kvalificerat', 'ok'] : m.niva ? ['Inte kvalificerat', 'varn'] : ['Inte bedömt', 'varn'])],
+      offert: () => ['Till offert', 'Kort där en offert har skickats efter mötet, eller där det blev affär direkt.', kr(S.off, sp)],
+      nytt: () => ['Nytt möte bokat', 'Ingen offert än, men ett nytt möte är bokat.', kr(S.nytt)],
+      vantar: () => ['Följs upp', 'Mötet hölls och ska följas upp. Varken offert eller nytt möte än.', kr(S.vantar)],
+      dog: () => ['Dog efter första mötet', 'Nej eller tyst, utan offert och utan nytt möte.', kr(S.dog)],
+      closing: () => ['Offerterna', 'Closing rate är affärerna delat med de offerter som har fått ett ja eller ett nej.', kr(S.off, sp)],
+      svarnu: () => ['Offerter som väntar på svar', 'Alla offerter som är ute i dag, oavsett period.', kr(A.offsvar, k => k.uppf && k.uppf < this.dag(this.NU) ? ['Skulle följts upp', 'fara'] : ['Väntar på svar', 'neutral'])],
+      attbekr: () => ['Ska bekräftas', 'Bekräftelsen öppnar två arbetsdagar före mötet.', mr(A.attbekr, ['Att bekräfta', 'varn'])],
+      utantid: () => ['Uteblivna utan ny tid', 'Kunden uteblev och inget nytt möte är bokat.', kr(A.utantid, ['Ingen ny tid', 'fara'])],
+      uppfnu: () => ['Uppföljningar att ringa', 'Uppföljningsdagen är i dag eller har passerat.', kr(A.uppfnu, k => k.uppf < this.dag(this.NU) ? ['Försenad', 'fara'] : ['I dag', 'varn'])],
+      utan: () => ['Utfall saknas', 'Mötestiden har passerat men säljaren har inte satt något utfall.', mr(A.utan, ['Utfall saknas', 'varn'])],
+      kommer: () => ['Bokade framåt', 'Möten som inte har varit än.', mr(A.kommer)]
+    }[key];
+    if (!L) return null;
+    // Listorna bakom Att göra nu börjar med det som brådskar: närmast möte, äldsta uppföljning.
+    // Historiken bakom ett tal börjar med det senaste.
+    const fram = { attbekr: 't', utan: 't', utantid: 't', kommer: 't', uppfnu: 'u', svarnu: 'u' }[key];
+    const l = L(), rader = l[2].sort(fram ? (a, b) => (a[fram] < b[fram] ? -1 : a[fram] > b[fram] ? 1 : 0) : (a, b) => (a.t < b.t ? 1 : -1));
+    // Under rubriken: hur raderna fördelar sig, i stället för bara hur många de är.
+    const grupper = [];
+    rader.forEach(r => { const g = grupper.find(x => x[0] === r.pill); if (g) g[1]++; else grupper.push([r.pill, 1]); });
+    const kort = ['offert', 'nytt', 'vantar', 'dog', 'closing', 'svarnu', 'utantid', 'uppfnu'].includes(key);
+    const antal = !rader.length ? '' : grupper.length > 1 ? grupper.sort((a, b) => b[1] - a[1]).map(g => g[0] + ' ' + g[1]).join(' · ')
+      : rader.length + ' ' + (kort ? 'kort' : rader.length === 1 ? 'möte' : 'möten');
+    return { titel: l[0], fork: l[1].trim(), rader, antal, tom: rader.length === 0 };
+  }
+
+  /* ---------- Det som mallen läser ---------- */
+  renderVals() {
+    this.init();
+    const st = this.st, P = this.perioder(), p = P[st.period] || P.d90, pers = st.pers;
+    const S = this.stat(p.fran, p.till, pers), F0 = p.pf ? this.stat(p.pf, p.pt, pers) : null;
+    const { moten, kedjor } = this.data(), nu = this.NU, idag = this.dag(nu);
+    const hos = (m) => !pers || m.bokare === pers || m.hallare === pers;
+    const pct = (n, av) => av ? Math.round(n / av * 100) : 0;
+    const w = (n, av) => (av ? Math.max(n ? 2 : 0, n / av * 100) : 0).toFixed(2) + '%';
+    const ord = (n, en, fl) => n + ' ' + (n === 1 ? en : fl);
+    // Jämförelsen visas bara när båda perioderna har minst fem att räkna på. Under det är procenten brus.
+    const jf = (n, av, n0, av0) => {
+      if (!F0 || av < 5 || av0 < 5) return null;
+      const a = pct(n, av), b = pct(n0, av0);
+      return { rad: (a === b ? 'Samma som ' : (a > b ? 'Upp från ' : 'Ned från ') + b + ' % ') + p.mot, fore: b };
+    };
+    // Ett stort tal: procent när underlaget är minst fem, annars "2 av 3". Tomt underlag visar ett streck.
+    const tal = (key, namn, n, av, vad, tomt, kl) => Object.assign(
+      av === 0 ? { v: '–', pz: '', s: tomt, cls: kl + ' tom' }
+        : av >= 5 ? { v: String(this.v(key + 'p', pct(n, av))), pz: '%', s: this.v(key + 'n', n) + ' av ' + this.v(key + 'a', av) + ' ' + vad, cls: kl }
+          : { v: this.v(key + 'n', n) + ' av ' + this.v(key + 'a', av), pz: '', s: vad, cls: kl + ' txt' },
+      { w: w(n, av), not: '', pick: this.oppna(key), aria: namn + ': ' + (av === 0 ? (tomt || 'inget att räkna på än') : (av >= 5 ? pct(n, av) + ' procent, ' : '') + n + ' av ' + av + ' ' + vad) + '. Visa listan' });
+
+    const nH = S.hallna.length, nA = S.avgj.length, nK = S.K1.length, nO = S.off.length, ob = S.obekr;
+    const obH = ob.filter(m => m.utfall === 'h').length, bkH = S.svarade.filter(m => m.utfall === 'h').length;
+
+    /* Rubriken: det talen inte visar. Annars hur många som gått till offert. */
+    let ins1 = '';
+    if (ob.length >= 2 && S.svarade.length >= 2) {
+      if (obH === 0) ins1 = 'Inget av de ' + ob.length + ' obekräftade mötena blev av.';
+      else if (pct(bkH, S.svarade.length) - pct(obH, ob.length) >= 15) ins1 = 'Bekräftade möten blev av ' + bkH + ' av ' + S.svarade.length + ' gånger, obekräftade ' + obH + ' av ' + ob.length + '.';
+    }
+    if (!ins1) ins1 = nK ? (nO ? nO + ' av ' + ord(nK, 'hållet möte', 'hållna möten') + ' har gått till offert.' : 'Inget möte har gått till offert än.') : nA ? 'Inget möte blev av i perioden.' : S.F.length ? 'Inget av de bokade mötena har varit än.' : 'Inga möten i perioden.';
+    const ins2 = !S.F.length && st.period !== 'allt' ? 'Välj en längre period för att se mer.' : '';
+
+    /* Navet: show rate, och mötena ett och ett i tidsordning */
+    const jamfor = {
+      show: jf(nH, nA, F0 ? F0.hallna.length : 0, F0 ? F0.avgj.length : 0),
+      bekr: jf(S.svarade.length, nA, F0 ? F0.svarade.length : 0, F0 ? F0.avgj.length : 0),
+      kval: jf(S.kval.length, nH, F0 ? F0.kval.length : 0, F0 ? F0.hallna.length : 0),
+      offert: jf(nO, nK, F0 ? F0.off.length : 0, F0 ? F0.K1.length : 0),
+      closing: jf(S.affar.length, S.affar.length + S.nej.length, F0 ? F0.affar.length : 0, F0 ? F0.affar.length + F0.nej.length : 0)
+    };
+    const show = tal('show', 'Show rate', nH, nA, 'kom', 'Inget att räkna på än', 'hv');
+    show.jf = jamfor.show ? jamfor.show.rad : '';
+    // Tom period: navet säger vad som väntar i stället för bara ett streck, och öppnar de bokade mötena.
+    const kommer = moten.filter(m => m.art !== 'u' && hos(m) && !m.utfall && m.tid > nu).sort((a, b) => a.tid < b.tid ? -1 : 1);
+    if (!nA && kommer.length) {
+      const nasta = 'Nästa möte ' + this.svDag(kommer[0].tid, true);
+      Object.assign(show, { s: nasta, jf: ord(kommer.length, 'möte bokat framåt', 'möten bokade framåt'), pick: this.oppna('kommer'),
+        aria: 'Show rate: inget möte har varit än. ' + nasta + ', ' + ord(kommer.length, 'möte bokat', 'möten bokade') + '. Visa listan' });
+    }
+    const sista = S.avgj.slice().sort((a, b) => a.tid < b.tid ? -1 : 1).slice(-40);
+    const remsa = sista.map((m, j) => ({ cls: m.utfall === 'h' ? 'k' : 'u', title: this.svDag(m.tid, false) + ': ' + (m.utfall === 'h' ? 'kom' : 'uteblev'), delay: 250 + j * (sista.length > 20 ? 12 : 30) + 'ms' }));
+
+    /* Rutorna */
+    const noshow = tal('uteblev', 'No-show rate', S.uteblev.length, nA, 'uteblev', '', 'rv');
+    const bekr = tal('bekr', 'Svarade på bekräftelsen', S.svarade.length, nA, 'svarade', '', 'rv');
+    if (nA) bekr.not = S.ejsvar.length + ' svarade inte · ' + S.aldrig.length + ' ringdes aldrig';
+    const utanBed = nH - S.bedomda.length;
+    // Räknas på alla hållna (beställaren 2026-11-15): ett obedömt möte är inte kvalificerat, och talet och mätaren säger samma sak.
+    const kval = tal('kval', 'Kvalificerade', S.kval.length, nH, 'hållna möten', '', 'rv');
+    if (utanBed > 0) kval.not = utanBed === 1 ? '1 hållet saknar bedömning' : utanBed + ' hållna saknar bedömning';
+    const avgjO = S.affar.length + S.nej.length;
+    const ejAvgj = S.svar.length + S.tyst.length;
+    const clo = tal('closing', 'Closing rate', S.affar.length, avgjO, 'avgjorda blev affär', !nO ? (nK ? 'Ingen offert skickad än' : '') : nO === 1 ? '1 offert, inte avgjord än' : 'Ingen av ' + nO + ' offerter avgjord än', 'rv');
+    if (avgjO && ejAvgj) clo.not = ejAvgj === 1 ? '1 offert inte avgjord än' : ejAvgj + ' offerter inte avgjorda än';
+
+    /* Efter första mötet: vad varje hållet möte har lett till */
+    const eft = [['Till offert', S.off, 'ok', 'offert'], ['Nytt möte', S.nytt, 'ok2', 'nytt'], ['Följs upp', S.vantar, 'varn', 'vantar'], ['Dog', S.dog, 'fara', 'dog']].map((x, j) => ({
+      l: x[0], n: this.v('e' + x[3], x[1].length), ton: x[2], dot: 'dot ' + x[2], w: w(x[1].length, nK), cls: (j ? 'ec' : 'ec forst') + (x[1].length ? '' : ' noll'), pick: this.oppna(x[3]), esCls: j ? 'es tomrad' : 'es',
+      sub: j ? '' : nK ? (nK >= 5 ? pct(nO, nK) + '\u00a0% ' : '') + 'av ' + ord(nK, 'hållet', 'hållna') : 'Inget möte hållet än',
+      aria: x[0] + ': ' + x[1].length + ' av ' + ord(nK, 'hållet möte', 'hållna möten') + '. Visa korten'
+    }));
+
+    /* Att göra nu: läget i dag, oavsett period */
+    const attbekr = moten.filter(m => m.art !== 'u' && hos(m) && !m.utfall && m.tid > nu && !m.bekr && this.arbetsdagFore(this.dag(m.tid), 2) <= idag).sort((a, b) => a.tid < b.tid ? -1 : 1);
+    const utantid = kedjor.filter(k => k.uteblev && hos(k.uteblev) && !k.ombokad && !k.avslut && !k.forsta);
+    const utan = moten.filter(m => hos(m) && !m.utfall && m.tid <= nu);
+    const uppfnu = kedjor.filter(k => k.forsta && hos(k.forsta) && !k.avslut && !k.natt && !k.oppet && k.tyst < 3 && k.uppf && k.uppf <= idag);
+    const offsvar = kedjor.filter(k => k.slut === 'svar' && hos(k.forsta));
+    const A = { attbekr, utantid, uppfnu, utan, offsvar, kommer };
+    const rad = (a, en, fl, sub, ton, key) => a.length ? [{ n: a.length, text: a.length === 1 ? en : fl, sub, ton: 'dot ' + ton, pick: this.oppna(key) }] : [];
+    const sena = (a) => a.filter(k => k.uppf && k.uppf < idag).length;
+    const forsenat = (a) => { const s = sena(a); return !s ? '' : s === a.length && s > 1 ? 'Alla skulle ha följts upp' : s + ' skulle ha följts upp'; };
+    const nasta = offsvar.map(k => k.uppf).filter(Boolean).sort()[0];
+    const todo = rad(attbekr, 'möte ska bekräftas', 'möten ska bekräftas', attbekr.length ? 'Närmast ' + this.svDag(attbekr[0].tid, true) : '', 'varn', 'attbekr')
+      .concat(rad(utantid, 'utebliven utan ny tid', 'uteblivna utan ny tid', forsenat(utantid) || 'Ingen uppföljning försenad', 'fara', 'utantid'))
+      .concat(rad(uppfnu, 'uppföljning att ringa', 'uppföljningar att ringa', sena(uppfnu) ? sena(uppfnu) + (sena(uppfnu) === 1 ? ' är försenad' : ' är försenade') : 'I dag', sena(uppfnu) ? 'fara' : 'varn', 'uppfnu'))
+      .concat(rad(utan, 'möte saknar utfall', 'möten saknar utfall', 'Mötestiden har passerat', 'varn', 'utan'))
+      .concat(rad(offsvar, 'offert väntar på svar', 'offerter väntar på svar', forsenat(offsvar) || (nasta ? 'Följs upp ' + this.svDag(nasta, false) : 'Ingen uppföljning satt'), sena(offsvar) ? 'fara' : 'vag', 'svarnu'));
+
+    const namn = [...new Set(moten.flatMap(m => [m.bokare, m.hallare]))].sort((a, b) => a.localeCompare(b, 'sv'));
+    const o = st.open ? this.lista(st.open, S, A) : null;
+    // Jämförelsen med perioden före står i listan bakom talet, inte i rutan.
+    if (o && jamfor[st.open]) o.fork += ' ' + { show: 'Show rate', bekr: 'Svarade', kval: 'Kvalificerade', offert: 'Till offert', closing: 'Closing rate' }[st.open] + ' ' + p.mot + ': ' + jamfor[st.open].fore + ' %.';
+    const morkt = !!(this.props || {}).morkt;
+    return {
+      rot: morkt ? 'sida dark' : 'sida',
+      ins1, ins2,
+      personer: [{ l: 'Alla', tryckt: String(!pers), pick: () => this.byt({ pers: null }) }].concat(namn.map(n => ({ l: n, tryckt: String(pers === n), pick: () => this.byt({ pers: n }) }))),
+      perioder: Object.keys(P).map(k => ({ l: P[k].l, tryckt: String(k === st.period), tip: P[k].till === null ? (k === 'allt' ? 'Allt sedan första bokningen' : 'Mötesdag från ' + this.kortDag(P[k].fran)) + ', plus det som är bokat framåt' : 'Mötesdag ' + this.kortDag(P[k].fran) + ' till ' + this.kortDag(P[k].till), pick: () => this.byt({ period: k }) })),
+      show, remsa, harRemsa: remsa.length > 0, remsaText: nA > 40 ? 'De 40 senaste, möte för möte' : 'Möte för möte, äldst till vänster',
+      noshow, bekr, kval, clo, eft,
+      todo, lugnt: todo.length === 0,
+      fot: (this.ex ? 'Exempeldata.' : 'Era siffror lördag 14 nov.') + ' Bolagsnamnen i listorna är påhittade.',
+      egTryckt: String(!this.ex), exTryckt: String(this.ex),
+      visaEgna: () => this.byt({ underlag: 'Era siffror', pers: null }), visaEx: () => this.byt({ underlag: 'Exempel: ett halvår', pers: null }),
+      blad: o || { titel: '', fork: '', rader: [], antal: '', tom: false }, bladOppet: !!o, stang: () => this.stang(),
+      bladTangent: (e) => {
+        if (!e) return;
+        if (e.key === 'Escape') { e.stopPropagation(); this.stang(); }
+        // Bladet har en enda knapp. Tab stannar på den i stället för att gå ut bakom bladet.
+        else if (e.key === 'Tab' && typeof document !== 'undefined') { e.preventDefault(); const x = document.querySelector('.blad .bx'); if (x) x.focus(); }
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

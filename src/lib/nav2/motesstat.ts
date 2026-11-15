@@ -8,6 +8,11 @@ import {
   bakom, bekraftelsePerBokare, dagarTillMote, inomKrets, kretsFor, offerter, perKalla, vecka, veckotal,
   type Period, type StatKedja, type StatMote, type Veckotal,
 } from "./motesstatforma";
+import { lasInstallningar } from "./motesflode";
+import {
+  byggPanelSvar, panelKedja, panelMote, PANEL_KEDJA_KOLUMNER, PANEL_MOTE_KOLUMNER,
+  type PanelKedjaExtra, type PanelKedjaRad, type PanelMoteRad, type PanelSvar,
+} from "./motespanel";
 
 /**
  * Nav 2.0: Möten, statistiken (B3), läsningen.
@@ -78,6 +83,11 @@ export type NdMotesstat = {
    * inga rader att visa; tomma listor utelämnas.
    */
   bakom: Record<string, { denna: BakomTal; forra: BakomTal }>;
+  /**
+   * Panelen (beställaren 2026-11-15): talen för Vecka, Månad och 90 dagar, för alla i kretsen och för varje person,
+   * färdigräknade i motespanel.ts. Bara för chefen; null annars och när kretsen inte gick att läsa.
+   */
+  panel: PanelSvar | null;
 };
 type BakomTal = Partial<Record<keyof Veckotal, string[]>>;
 
@@ -171,6 +181,47 @@ function kretsAv(svar: { data: unknown; error: { message?: string } | null }): s
   return undefined;
 }
 
+// Panelen räknar 90 dagar och jämför med de 90 dagarna före: 180 dagar bakåt, och en dag till för tidszonen.
+const PANEL_DAGAR = 181;
+
+/**
+ * Panelens rader: möten med mötestid de senaste 180 dagarna och alla möten utan utfall, deras kedjor (med
+ * uppföljningsdagen och "inget svar i rad" ur mote_kedja, som vyn saknar) och Mötens inställningar. RLS avgör som
+ * för resten; kretsen läggs på i byggPanelSvar.
+ */
+async function lasPanelRader(supabase: SupabaseClient, nu: Date, kapad: { v: boolean }) {
+  const fran = new Date(nu.getTime() - PANEL_DAGAR * 86_400_000).toISOString();
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const fraga = (namn: string, villkor: (q: any) => any) =>
+    sidvis<PanelMoteRad>(namn, (a, b) => villkor(supabase.from("mote").select(PANEL_MOTE_KOLUMNER)).order("id").range(a, b), kapad);
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+  const [senaste, oppna, instSvar] = await Promise.all([
+    fraga("panel: möten 180 dagar", (q) => q.gte("mote_tid", fran)),
+    fraga("panel: möten utan utfall", (q) => q.is("utfall", null)),
+    supabaseAdmin().from("nav_setting").select("key, value").like("key", "moten.%").limit(100),
+  ]);
+  if (instSvar.error) console.error(`motesstat: panelens inställningar misslyckades: ${instSvar.error.message}`);
+  const inst = lasInstallningar((instSvar.data ?? []) as { key: string; value: unknown }[]);
+  const moten = unika([senaste, oppna], (m) => m.id).map(panelMote);
+  const kedjeIds = [...new Set(moten.map((m) => m.kedja))];
+  const delar = Array.from({ length: Math.ceil(kedjeIds.length / BIT) }, (_, i) => kedjeIds.slice(i * BIT, (i + 1) * BIT));
+  const kRader: PanelKedjaRad[] = [];
+  const extra = new Map<string, PanelKedjaExtra>();
+  await Promise.all(delar.flatMap((del) => [
+    (async () => {
+      const { data, error } = await supabase.from("mote_kedja_utfall").select(PANEL_KEDJA_KOLUMNER).in("kedja_id", del).limit(del.length);
+      if (error) { console.error(`motesstat: panelens kedjor misslyckades: ${error.message}`); kapad.v = true; }
+      kRader.push(...((data ?? []) as unknown as PanelKedjaRad[]));
+    })(),
+    (async () => {
+      const { data, error } = await supabase.from("mote_kedja").select("id, uppfoljning_datum, inget_svar_i_rad").in("id", del).limit(del.length);
+      if (error) { console.error(`motesstat: kedjornas uppföljning misslyckades: ${error.message}`); kapad.v = true; }
+      for (const k of (data ?? []) as unknown as PanelKedjaExtra[]) extra.set(k.id, k);
+    })(),
+  ]));
+  return { moten, kedjor: kRader.map((r) => panelKedja(r, extra.get(r.kedja_id))), bolag: kRader, inst };
+}
+
 /**
  * Hela läsningen i try/catch (S4): ett kast ger en tom NdMotesstat i stället för att fälla startsidan.
  * Perioderna räknas ur klockan och kan inte kasta.
@@ -185,7 +236,7 @@ export async function byggMotesstat(supabase: SupabaseClient, user: CurrentUser)
     const forra = vecka(dagarBakat(denna.fran, 7));
     return {
       jag: { denna: tomtTal(nu), forra: tomtTal(nu) }, chef: null, perioder: { denna, forra },
-      las: nu.toISOString(), ofullstandig: false, moten: [], kedjor: [], bolag: {}, bakom: {},
+      las: nu.toISOString(), ofullstandig: false, moten: [], kedjor: [], bolag: {}, bakom: {}, panel: null,
     };
   }
 }
@@ -209,7 +260,12 @@ async function bygg(supabase: SupabaseClient, user: CurrentUser): Promise<NdMote
 
   /* eslint-enable @typescript-eslint/no-explicit-any */
 
-  const [bokat, tid, oppnaMoten, oppnaKedjor, avslutade, offert, bokadeKedjor, samtalSvar, kretsSvar] = await Promise.all([
+  // Panelens rader läses bara för den som kan få chefsvyn.
+  // Ett fel i panelen ger panel null; chefens egna tal och veckovyn står kvar (granskningen 2026-11-15).
+  const panelLas = hasRole(user, ...CHEFSROLLER)
+    ? lasPanelRader(supabase, nu, kapad).catch((e) => { console.error(`motesstat: panelens läsning kastade: ${e instanceof Error ? e.message : String(e)}`); return null; })
+    : Promise.resolve(null);
+  const [bokat, tid, oppnaMoten, oppnaKedjor, avslutade, offert, bokadeKedjor, samtalSvar, kretsSvar, panelRader] = await Promise.all([
     motenFraga("möten (bokade i perioden)", (q) => q.gte("bokat_nar", fran).lte("bokat_nar", till)),
     motenFraga("möten (i perioden)", (q) => q.gte("mote_tid", fran).lte("mote_tid", till)),
     motenFraga("möten (öppna)", (q) => q.is("utfall", null)),
@@ -219,6 +275,7 @@ async function bygg(supabase: SupabaseClient, user: CurrentUser): Promise<NdMote
     kedjeFraga("kedjor (bokade i perioden)", (q) => q.gte("forsta_bokat_nar", fran).lte("forsta_bokat_nar", till)),
     supabase.rpc("mote_samtal_vecka", { p_fran: forra.fran, p_till: denna.till }).limit(MAX_SAMTAL),
     supabase.rpc("mote_statkrets"),
+    panelLas,
   ]);
   // Tas direkt när läsningarna kommit tillbaka: samtal som Lynes skriver in efter detta hör inte till talen (S3).
   const las = new Date().toISOString();
@@ -315,10 +372,14 @@ async function bygg(supabase: SupabaseClient, user: CurrentUser): Promise<NdMote
   const skickadeKedjor = krets === null ? kedjor : allaKedjor.filter((k) => jagIds.has(k.id) || kedjorIds.has(k.id));
   const skickadeKedjeIds = new Set(skickadeKedjor.map((k) => k.id));
   const skickadeKedjaRader = krets === null ? kedjaRader : kedjaRader.filter((k) => skickadeKedjeIds.has(k.kedja_id));
+  // Panelens rader inom kretsen. En felad krets ger ingen panel (som chefsvyn).
+  const panelInom = panelRader && !kretsFel ? inomKrets(panelRader.moten, panelRader.kedjor, krets) : null;
+  const panelKedjeIds = new Set(panelInom?.kedjor.map((k) => k.id) ?? []);
 
   // Kedjornas bolagsnamn (RLS: samma rader som kedjorna). Kedjor som mötena pekar på men som
   // inte kom med i kedjefrågorna (gamla, stängda) slås upp för sig.
   const bolagAv = new Map(skickadeKedjaRader.map((k) => [k.kedja_id, k.bolag_id]));
+  for (const k of panelRader?.bolag ?? []) if (k.bolag_id && panelKedjeIds.has(k.kedja_id)) bolagAv.set(k.kedja_id, k.bolag_id);
   const saknadeKedjor = [...new Set(skickadeMoten.map((m) => m.kedja))].filter((id) => !bolagAv.has(id));
   const bitar = <T,>(lista: T[]) => Array.from({ length: Math.ceil(lista.length / BIT) }, (_, i) => lista.slice(i * BIT, (i + 1) * BIT));
   await Promise.all(bitar(saknadeKedjor).map(async (del) => {
@@ -339,7 +400,7 @@ async function bygg(supabase: SupabaseClient, user: CurrentUser): Promise<NdMote
   }
 
   const ofullstandig = kapad.v;
-  const utan = { jag, perioder, las, ofullstandig, moten: skickadeMoten, kedjor: skickadeKedjor, bolag, bakom: bakomAlla };
+  const utan = { jag, perioder, las, ofullstandig, moten: skickadeMoten, kedjor: skickadeKedjor, bolag, bakom: bakomAlla, panel: null };
   if (!arChef || kretsFel) return { ...utan, chef: null };
 
   // Bara de som har gjort något: bokat eller hållit ett möte, eller ringt i perioden, och bara i kretsen.
@@ -347,12 +408,16 @@ async function bygg(supabase: SupabaseClient, user: CurrentUser): Promise<NdMote
   for (const m of moten) { ids.add(m.bokatAv); ids.add(m.hallsAv); }
   for (const s of samtalRader) ids.add(s.employee_id);
   for (const id of [...ids]) if (!iKretsen(id)) ids.delete(id);
+  // Panelens personer: alla som bokat eller hållit ett möte i kretsen de senaste 180 dagarna. Namnen läses i samma fråga.
+  const panelIds = new Set<string>();
+  for (const m of panelInom?.moten ?? []) for (const id of [m.bokatAv, m.hallsAv]) if (id && iKretsen(id)) panelIds.add(id);
+  const allaIds = new Set([...ids, ...panelIds]);
 
   const namn = new Map<string, string>();
-  if (ids.size) {
+  if (allaIds.size) {
     try {
       const { data, error } = await supabaseAdmin()
-        .from("employee").select("id, first_name, last_name").in("id", [...ids]).limit(ids.size);
+        .from("employee").select("id, first_name, last_name").in("id", [...allaIds]).limit(allaIds.size);
       if (error) console.error(`motesstat: namnen misslyckades: ${error.message}`);
       for (const p of (data ?? []) as unknown as { id: string; first_name: string; last_name: string }[]) namn.set(p.id, fullName(p));
     } catch (e) {
@@ -374,8 +439,16 @@ async function bygg(supabase: SupabaseClient, user: CurrentUser): Promise<NdMote
 
   for (const p of personer) bakomAlla[p.id] ??= bakomFor(p.id);
 
+  let panel: PanelSvar | null = null;
+  try {
+    panel = panelInom && panelRader ? byggPanelSvar(panelInom.moten, panelInom.kedjor, krets, namnPa, panelRader.inst, nu) : null;
+  } catch (e) {
+    console.error(`motesstat: panelen kastade: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
   return {
     ...utan,
+    panel,
     chef: {
       krets: krets === null ? "alla" : "team",
       personer,

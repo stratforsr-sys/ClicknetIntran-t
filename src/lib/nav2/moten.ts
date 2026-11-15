@@ -5,7 +5,7 @@ import { fullName, hasRole, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { dagarBakat, svenskTidpunkt, svenskVeckodag, svensktDatum } from "@/lib/klocka";
 import { lokal } from "./leads";
-import { arHallare, arKapad, nejSkal, offertPaketVal, saljarePerKedja, skivor, slaIhopAvgjorda, sorteraAvgjorda, farAndraInstallning, farRattaUtfall, farSeInstallningar, KOLUMNER, MOTE_PLATS, platsTyp, type Kolumn, type Platstyp } from "./motenforma";
+import { arHallare, arKapad, nejSkal, offertPaketVal, saljarePerKedja, senastAvgjorda, skivor, slaIhopAvgjorda, sorteraAvgjorda, farAndraInstallning, farRattaUtfall, farSeInstallningar, KOLUMNER, MOTE_PLATS, platsTyp, type Kolumn, type Platstyp } from "./motenforma";
 import {
   bekraftelseFonster, bradska, fordela, kortFas, lasInstallningar, manadFor, motesVal, PIPE_KOLUMNER, ringIgenTid, skaBekraftas, sorteraFas, sparadeSvar, ursprungligBokare,
   type MotenInst, type MotesVal, type PipeKolumn,
@@ -96,6 +96,8 @@ export type NdMoteKort = {
   /** `offertBelopp`: offertens belopp i hela kronor (0303). Null utan offert, och för äldre offerter som saknar det. */
   uppfoljning: { datum: string; text: string | null; offert: boolean; offertBelopp: number | null; ingetSvar: number; andrad: string | null } | null;
   historik: { id: string; tid: string; text: string }[];
+  /** Kedjans senaste hållna eller uteblivna möte: vem som höll det (kortets rubrik när inget möte är öppet). */
+  senast: { hallsAv: string; hallsAvNamn: string; utfall: "hallet" | "uteblev" } | null;
 };
 
 /** Ett möte som fått utfall i innevarande månad, eller ett äldre som fortfarande väntar på bedömning (Avgjort på tavlan). */
@@ -326,27 +328,33 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
     if (!error) vantandeRader = (data ?? []) as unknown as AvgjortRad[];
   }
   const avgjortRader = slaIhopAvgjorda(manadensRader, vantandeRader);
-  for (const r of rader) for (const id of [r.halls_av, r.bokat_av]) if (id && !namn.has(id)) saknade.add(id);
-  for (const m of avgjortRader) for (const id of [m.halls_av, m.bokat_av]) if (id && !namn.has(id)) saknade.add(id);
-  if (saknade.size) {
-    const { data } = await supabaseAdmin().from("employee").select("id, first_name, last_name").in("id", [...saknade]).limit(saknade.size);
-    for (const p of (data ?? []) as unknown as PersonRad[]) namn.set(p.id, fullName(p));
-  }
 
-  // Historiken: kedjornas avslutade möten (utfall satt), äldst först. Det öppna mötet står redan i `mote`.
+  // Historiken: kedjornas avslutade möten (utfall satt), äldst först. Det öppna mötet står redan i `mote`. Samma rader
+  // säger vem som höll kedjans senaste möte, för kortets rubrik när inget möte är öppet.
   const historik = new Map<string, { id: string; tid: string; text: string }[]>();
+  let senast = new Map<string, { hallsAv: string; utfall: "hallet" | "uteblev" }>();
   if (rader.length) {
     const { data } = await supabase
       .from("mote")
-      .select("id, kedja_id, mote_tid, utfall, resultat")
+      .select("id, kedja_id, mote_tid, utfall, resultat, halls_av")
       .in("kedja_id", rader.map((r) => r.kedja_id))
       .not("utfall", "is", null)
       .order("mote_tid", { ascending: true })
       .limit(MAX_MOTEN);
-    for (const m of (data ?? []) as unknown as MoteRad[]) {
+    const avslutade = (data ?? []) as unknown as (MoteRad & { halls_av: string | null })[];
+    for (const m of avslutade) {
       const rad = historikRad(m);
       historik.set(m.kedja_id, [...(historik.get(m.kedja_id) ?? []), rad]);
     }
+    senast = senastAvgjorda(avslutade);
+  }
+
+  for (const r of rader) for (const id of [r.halls_av, r.bokat_av]) if (id && !namn.has(id)) saknade.add(id);
+  for (const m of avgjortRader) for (const id of [m.halls_av, m.bokat_av]) if (id && !namn.has(id)) saknade.add(id);
+  for (const s of senast.values()) if (!namn.has(s.hallsAv)) saknade.add(s.hallsAv);
+  if (saknade.size) {
+    const { data } = await supabaseAdmin().from("employee").select("id, first_name, last_name").in("id", [...saknade]).limit(saknade.size);
+    for (const p of (data ?? []) as unknown as PersonRad[]) namn.set(p.id, fullName(p));
   }
 
   // Vilka som är med på de öppna mötena: kalenderhändelsens deltagare. Kortet syns redan (RLS på mote_kort),
@@ -463,6 +471,7 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
       ? { datum: String(r.uppfoljning_datum).slice(0, 10), text: r.uppfoljning_text, offert: r.offert === true, offertBelopp: r.offert === true ? offertBelopp.get(r.kedja_id) ?? null : null, ingetSvar: r.inget_svar_i_rad ?? 0, andrad: r.uppfoljning_andrad }
       : null,
     historik: historik.get(r.kedja_id) ?? [],
+    senast: (() => { const s = senast.get(r.kedja_id); return s ? { ...s, hallsAvNamn: namn.get(s.hallsAv) ?? "" } : null; })(),
     };
   });
 

@@ -46,7 +46,17 @@ export type MotenInst = {
   rubrikPrefix: string;
   /** Möten före den här tiden får aldrig "väntar på bedömning", påminnelser eller låsning. Sätts av migrationen. */
   gallerFran: string | null;
+  /** Statistikens mål, heltal procent per tal. Förval inga mål: utan mål visas inget omdöme (beställaren 2026-11-15). */
+  mal: Partial<Record<MalTal, number>>;
+  /** En kedja räknas som död när uppföljningen är äldre än så här många dagar. */
+  dodDagar: number;
+  /** ... eller när kunden inte svarat så här många gånger i rad. */
+  dodTysta: number;
 };
+
+/** Talen i statistikpanelen som kan ha ett mål. För noshow är lägre bättre. */
+export type MalTal = "show" | "noshow" | "bekr" | "kval" | "closing";
+export const MAL_TAL: readonly MalTal[] = ["show", "noshow", "bekr", "kval", "closing"];
 
 export const INST_FORVAL: MotenInst = {
   bekraftaDagar: 2,
@@ -64,6 +74,9 @@ export const INST_FORVAL: MotenInst = {
   utfallPaminnelse: "18:00",
   rubrikPrefix: "",
   gallerFran: null,
+  mal: {},
+  dodDagar: 21,
+  dodTysta: 3,
 };
 
 /** Nyckeln i nav_setting för varje inställning. */
@@ -80,9 +93,12 @@ export const INST_NYCKLAR: Record<keyof MotenInst, string> = {
   utfallPaminnelse: "moten.utfall-paminnelse",
   rubrikPrefix: "moten.rubrik-prefix",
   gallerFran: "moten.galler-fran",
+  mal: "moten.mal",
+  dodDagar: "moten.dod-dagar",
+  dodTysta: "moten.dod-tysta",
 };
 
-export const GRANSER = { dagarMax: 14, fragorMax: 5, fragaText: 120, kolumnnamn: 24, prefix: 40, belopp: 100000 } as const;
+export const GRANSER = { dodDagarMax: 365, dodTystaMax: 20, dagarMax: 14, fragorMax: 5, fragaText: 120, kolumnnamn: 24, prefix: 40, belopp: 100000 } as const;
 
 const arObjekt = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
@@ -132,6 +148,7 @@ export function giltigTidszon(tz: unknown): tz is string {
  * genom samma tolkare, så att det som går att spara alltid går att läsa.
  */
 const giltigtBelopp = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x) && x >= 0 && x <= GRANSER.belopp;
+const heltalMellan = (x: unknown, min: number, max: number): x is number => typeof x === "number" && Number.isInteger(x) && x >= min && x <= max;
 const giltigtNamn = (n: unknown): n is string => typeof n === "string" && !!n.trim() && n.trim().length <= GRANSER.kolumnnamn;
 
 const TOLKA: { [K in Exclude<keyof MotenInst, "kolumnnamn">]: (v: unknown) => MotenInst[K] | undefined } = {
@@ -159,6 +176,17 @@ const TOLKA: { [K in Exclude<keyof MotenInst, "kolumnnamn">]: (v: unknown) => Mo
   utfallPaminnelse: (v) => (typeof v === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : undefined),
   rubrikPrefix: (v) => (typeof v === "string" && v.trim().length <= GRANSER.prefix ? v.trim() : undefined),
   gallerFran: (v) => (typeof v === "string" && !Number.isNaN(Date.parse(v)) ? new Date(v).toISOString() : undefined),
+  mal: (v) => {
+    if (!arObjekt(v)) return undefined;
+    const ut: Partial<Record<MalTal, number>> = {};
+    for (const [k, x] of Object.entries(v)) {
+      if (!(MAL_TAL as readonly string[]).includes(k) || !heltalMellan(x, 0, 100)) return undefined;
+      ut[k as MalTal] = x;
+    }
+    return ut;
+  },
+  dodDagar: (v) => (heltalMellan(v, 1, GRANSER.dodDagarMax) ? v : undefined),
+  dodTysta: (v) => (heltalMellan(v, 1, GRANSER.dodTystaMax) ? v : undefined),
 };
 
 /**
@@ -191,6 +219,9 @@ const SPARFEL: Record<keyof MotenInst, string> = {
   utfallPaminnelse: "Skriv tiden som TT:MM, till exempel 18:00.",
   rubrikPrefix: "Prefixet får ha högst 40 tecken.",
   gallerFran: "Den här inställningen går inte att ändra.",
+  mal: "Varje mål ska vara ett heltal från 0 till 100.",
+  dodDagar: "Antalet dagar ska vara ett heltal från 1 till 365.",
+  dodTysta: "Antalet gånger ska vara ett heltal från 1 till 20.",
 };
 
 /** Inställningen och fältet för en nav_setting-nyckel, eller null. */

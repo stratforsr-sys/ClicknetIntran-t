@@ -6,7 +6,7 @@ import { sammaUrsprung } from "@/lib/nav2/skrivlage";
 import { CHATT_NYCKLAR, farSlasPa, lasChattInst, maxFragaUsd, provNyckel, takBesked, utanTal } from "@/lib/nav2/chatt/chattforma";
 import { skapaKallor } from "@/lib/nav2/chatt/kallor";
 import { chattMiljo } from "@/lib/nav2/chatt/logg";
-import { MAX_UT, MAX_VARV, fragetur, harReserv, korSamtal, type Handelse, type Klient, type Tur } from "@/lib/nav2/chatt/samtal";
+import { MAX_UT, MAX_VARV, fragetur, harReserv, korSamtal, loggKostnadUsd, type Handelse, type Klient, type Tur } from "@/lib/nav2/chatt/samtal";
 import { FORSLAG_NYCKLAR, harNyttHem, lasForslagInst } from "@/lib/nav2/forslagforma";
 import { avtryck } from "@/lib/nav2/chatt/systemtext";
 
@@ -126,7 +126,7 @@ export async function POST(request: Request) {
         .from("nav_chatt_logg")
         .update({
           tokens_in: r.usage.input_tokens, tokens_ut: r.usage.output_tokens, tokens_cache_las: r.usage.cache_read_input_tokens, tokens_cache_skriv: r.usage.cache_creation_input_tokens,
-          verktyg: r.anrop, stop_reason: r.stopp, ms: Date.now() - start, kostnad_usd: r.kostnadUsd, kostnad_kr: r.kostnadUsd * inst.krPerDollar, obelagda: r.obelagda, svar: r.ren,
+          verktyg: r.anrop, stop_reason: r.stopp, ms: Date.now() - start, kostnad_usd: loggKostnadUsd(r, hogst), kostnad_kr: loggKostnadUsd(r, hogst) * inst.krPerDollar, obelagda: r.obelagda, omskrivet: r.omskrivet, reserv: r.reserv, svar: r.ren,
         })
         .eq("id", radId);
       // Går rättningen inte att skriva står reservationen kvar: frågan räknas då som det mesta den kunde kosta.

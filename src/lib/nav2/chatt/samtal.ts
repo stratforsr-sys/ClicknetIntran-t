@@ -12,8 +12,8 @@
  *   - Systemtexten och verktygslistan är desamma i varje anrop, så att de cachas.
  *   - Varje anrop räknas i kostnaden, också när frågan slutar i ett fel.
  */
-import { kostnadUsd, sattInTal, utanMarken, type InsattTal, type Usage } from "./chattforma.ts";
-import { SYSTEMTEXT } from "./systemtext.ts";
+import { efterReserv, forsok, hanvisningsfel, kostnadUsd, sattInTal, talfalt, utanMarken, type InsattTal, type Usage } from "./chattforma.ts";
+import { EFFORT, OMSKRIV, SYSTEMTEXT } from "./systemtext.ts";
 import { VERKTYG, hamtarText, kallrad, korVerktyg, type Ctx, type Utkast } from "./verktyg.ts";
 
 /** Högst så här många anrop till Claude per fråga. */
@@ -28,7 +28,31 @@ export type Tur = { role: "user" | "assistant"; content: unknown };
 type Block = { type: string; text?: string; id?: string; name?: string; input?: unknown };
 type Meddelande = { stop_reason: string | null; usage: Usage; content: Block[]; model?: string };
 /** Det slingan behöver av Anthropics klient. */
-export type Klient = { beta: { messages: { stream(p: Record<string, unknown>): { finalMessage(): Promise<unknown> } } } };
+export type Klient = { beta: { messages: { stream(p: Record<string, unknown>, o?: { signal?: AbortSignal }): { finalMessage(): Promise<unknown> } } } };
+
+/**
+ * Hela frågan får så här lång tid, varv, anrop och verktyg tillsammans. Rutten får arbeta i 120 sekunder
+ * (`maxDuration`), och det som blir över går till att skriva den verkliga kostnaden i loggen.
+ */
+export const FRIST_MS = 100_000;
+const BESKED_TID = "Frågan tog för lång tid. Försök med en smalare fråga.";
+class Tidsslut extends Error {}
+
+/** Ett löfte som ger upp när tiden är slut. Det som hängde lämnas åt sitt öde; frågan går vidare. */
+function medFrist<T>(lofte: Promise<T>, ms: number): Promise<T> {
+  let t: ReturnType<typeof setTimeout> | undefined;
+  const slut = new Promise<never>((_res, rej) => { t = setTimeout(() => rej(new Tidsslut()), Math.max(0, ms)); });
+  return Promise.race([lofte, slut]).finally(() => clearTimeout(t));
+}
+
+/**
+ * Kostnaden som skrivs i loggen. Avbröts ett anrop vid fristen vet ingen vad det kostade, så raden behåller
+ * det reserverade beloppet (det mesta frågan kunde kosta), och aldrig mindre än det som faktiskt mättes.
+ */
+export const loggKostnadUsd = (r: { kostnadUsd: number; ofullstandig: boolean }, reserverat: number): number =>
+  r.ofullstandig ? Math.max(r.kostnadUsd, reserverat) : r.kostnadUsd;
+
+const obelagdaI = (text: string): string[] => [...new Set([...text.matchAll(/⟦obelagt:([^⟧]*)⟧/g)].map((m) => m[1]).filter((t) => t !== "?"))].slice(0, 20);
 
 export type Handelse =
   | { h: "hamtar"; text: string }
@@ -41,9 +65,17 @@ export type Samtalssvar = {
   usage: { input_tokens: number; output_tokens: number; cache_read_input_tokens: number; cache_creation_input_tokens: number };
   /** I dollar: det Anthropic tar betalt, och det gränserna räknas på. */
   kostnadUsd: number;
+  /** Hur många gånger en reservmodell tog över. */
+  reserv: number;
+  /** Svaret hade tal utan källa och skrevs om en gång (`OMSKRIV`). */
+  omskrivet: boolean;
+  /** Ett anrop avbröts vid fristen, så kostnaden ovan är inte hela kostnaden. */
+  ofullstandig: boolean;
   anrop: { namn: string; input: unknown }[];
   /** Verktygssvaren, i anropens ordning. */
   svar: Record<string, unknown>[];
+  /** Claudes egen text, med hänvisningarna (`{{t:1.antal}}`). Provet sparar den, så att rättningen kan göras om. */
+  ra: string | null;
   /** Svaret med märken (`⟦t1:12⟧`), eller null när frågan inte fick ett svar. */
   text: string | null;
   /** Svaret utan märken, som det sparas i loggen. */
@@ -53,54 +85,77 @@ export type Samtalssvar = {
   utkast: Utkast[];
 };
 
-export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[]; ctx: Ctx; sand: (h: Handelse) => void }): Promise<Samtalssvar> {
+export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[]; ctx: Ctx; sand: (h: Handelse) => void; fristMs?: number; klocka?: () => number }): Promise<Samtalssvar> {
   const { klient, modell, ctx, sand } = i;
+  const klocka = i.klocka ?? Date.now;
+  const slut = klocka() + (i.fristMs ?? FRIST_MS);
+  const kvar = () => slut - klocka();
   const turer = [...i.turer];
-  const ut: Samtalssvar = { stopp: "fel", usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, kostnadUsd: 0, anrop: [], svar: [], text: null, ren: null, tal: [], obelagda: 0, utkast: [] };
+  const ut: Samtalssvar = { stopp: "fel", usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, kostnadUsd: 0, reserv: 0, omskrivet: false, ofullstandig: false, anrop: [], svar: [], ra: null, text: null, ren: null, tal: [], obelagda: 0, utkast: [] };
   try {
     for (let varv = 0; ; varv++) {
+      if (kvar() <= 0) throw new Tidsslut();
       if (varv >= MAX_VARV) {
         ut.stopp = "for-manga-varv";
         sand({ h: "fel", text: "Frågan tog för många steg. Försök med en smalare fråga." });
         return ut;
       }
-      const m = (await klient.beta.messages
-        .stream({
-          model: modell,
-          max_tokens: MAX_UT,
-          system: [{ type: "text", text: SYSTEMTEXT, cache_control: { type: "ephemeral" } }],
-          tools: VERKTYG,
-          tool_choice: { type: "auto" },
-          output_config: { effort: "low" },
-          messages: turer,
-          ...(harReserv(modell) ? { fallbacks: "default", betas: [FALLBACK_BETA] } : {}),
-        })
-        .finalMessage()) as Meddelande;
+      // Anropet avbryts när fristen är slut, också mellan SDK:ns egna omförsök.
+      const avbryt = new AbortController();
+      const timer = setTimeout(() => avbryt.abort(), Math.max(0, kvar()));
+      let m: Meddelande;
+      try {
+        m = (await klient.beta.messages
+          .stream({
+            model: modell,
+            max_tokens: MAX_UT,
+            system: [{ type: "text", text: SYSTEMTEXT, cache_control: { type: "ephemeral" } }],
+            tools: VERKTYG,
+            tool_choice: { type: "auto" },
+            output_config: { effort: EFFORT },
+            messages: turer,
+            ...(harReserv(modell) ? { fallbacks: "default", betas: [FALLBACK_BETA] } : {}),
+          }, { signal: avbryt.signal })
+          .finalMessage()) as Meddelande;
+      } catch (e) {
+        if (avbryt.signal.aborted) {
+          ut.ofullstandig = true;
+          throw new Tidsslut();
+        }
+        throw e;
+      } finally {
+        clearTimeout(timer);
+      }
 
-      const u = m.usage;
-      ut.usage.input_tokens += u.input_tokens ?? 0;
-      ut.usage.output_tokens += u.output_tokens ?? 0;
-      ut.usage.cache_read_input_tokens += u.cache_read_input_tokens ?? 0;
-      ut.usage.cache_creation_input_tokens += u.cache_creation_input_tokens ?? 0;
-      // Svarade reservmodellen prissätts den som den dyraste: gränsen ska aldrig underskattas.
-      ut.kostnadUsd += kostnadUsd(m.model && m.model !== modell ? "okand" : modell, u);
+      // Tog en reservmodell över står varje försök för sig, med sin modell och sina token. Alla räknas.
+      const svarade = m.model || modell;
+      for (const f of forsok(modell, m.usage, svarade)) {
+        ut.usage.input_tokens += f.usage.input_tokens ?? 0;
+        ut.usage.output_tokens += f.usage.output_tokens ?? 0;
+        ut.usage.cache_read_input_tokens += f.usage.cache_read_input_tokens ?? 0;
+        ut.usage.cache_creation_input_tokens += f.usage.cache_creation_input_tokens ?? 0;
+        if (f.reserv) ut.reserv++;
+      }
+      ut.kostnadUsd += kostnadUsd(modell, m.usage, svarade);
       ut.stopp = m.stop_reason ?? "okant";
+      // Efter ett byte skickas bara det tillbaka som Anthropic tar emot, och bara verktygen efter bytet körs.
+      const innehall = efterReserv(m.content);
 
       if (ut.stopp === "refusal") {
         sand({ h: "avbojt", text: "Modellen avböjde att svara på det här. Jag svarar som sökrutan i stället." });
         return ut;
       }
       if (ut.stopp === "tool_use" || ut.stopp === "pause_turn") {
-        turer.push({ role: "assistant", content: m.content });
+        turer.push({ role: "assistant", content: innehall });
         if (ut.stopp === "pause_turn") continue;
         const resultat: unknown[] = [];
-        for (const block of m.content) {
+        for (const block of innehall) {
           if (block.type !== "tool_use") continue;
           const namn = String(block.name ?? "");
           const input = (block.input ?? {}) as Record<string, unknown>;
           ut.anrop.push({ namn, input });
           sand({ h: "hamtar", text: hamtarText(namn, input) });
-          const r = await korVerktyg(namn, input, ctx, ut.anrop.length);
+          const r = await medFrist(korVerktyg(namn, input, ctx, ut.anrop.length), kvar());
           ut.svar.push(r.svar);
           if (r.utkast) ut.utkast = r.utkast;
           resultat.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(r.svar) });
@@ -112,12 +167,21 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
         sand({ h: "fel", text: ut.stopp === "max_tokens" ? "Svaret blev för långt och bröts. Försök med en smalare fråga." : "Jag fick inget helt svar. Försök igen." });
         return ut;
       }
-      const text = m.content.flatMap((x) => (x.type === "text" && x.text ? [x.text] : [])).join("\n").trim();
+      const text = innehall.flatMap((x) => (x.type === "text" && x.text ? [x.text] : [])).join("\n").trim();
       if (!text) {
         sand({ h: "fel", text: "Jag fick inget svar. Försök igen." });
         return ut;
       }
       const insatt = sattInTal(text, ut.svar);
+      // Ett tal utan källa: Claude får skriva om svaret en gång, om det finns ett varv kvar. Personen ser bara det sista.
+      if (insatt.obelagda > 0 && !ut.omskrivet && varv + 1 < MAX_VARV) {
+        ut.omskrivet = true;
+        turer.push({ role: "assistant", content: innehall });
+        turer.push({ role: "user", content: OMSKRIV(obelagdaI(insatt.text), hanvisningsfel(text, ut.svar).slice(0, 10), talfalt(ut.svar)) });
+        sand({ h: "hamtar", text: "Kontrollerar talen i svaret." });
+        continue;
+      }
+      ut.ra = text;
       ut.text = insatt.text;
       ut.ren = utanMarken(insatt.text);
       ut.tal = insatt.tal;
@@ -126,6 +190,11 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
       return ut;
     }
   } catch (e) {
+    if (e instanceof Tidsslut) {
+      ut.stopp = "for-lang-tid";
+      sand({ h: "fel", text: BESKED_TID });
+      return ut;
+    }
     ut.stopp = "fel";
     console.error(`chatt: ${e instanceof Error ? e.message : String(e)}`);
     sand({ h: "fel", text: "Chatten svarar inte just nu. Jag svarar som sökrutan i stället." });

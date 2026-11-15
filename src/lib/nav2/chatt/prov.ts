@@ -20,6 +20,7 @@
 import type { TeamOrder } from "../hemforma.ts";
 import type { StatMote } from "../motesstatforma.ts";
 import type { Samtalssvar } from "./samtal.ts";
+import { utanDatacitat } from "./chattforma.ts";
 import { korVerktyg, type Kallor } from "./verktyg.ts";
 
 type Roll = { mig: string; fornamn: string; roller: string[]; krets: string[] | null };
@@ -93,6 +94,24 @@ const inputStammer = (krav: Record<string, unknown> | undefined, input: unknown)
 };
 const falt = (o: unknown, stig: string): unknown => stig.split(".").reduce<unknown>((x, d) => (x && typeof x === "object" ? (x as Record<string, unknown>)[d] : undefined), o);
 
+const NEKAR = /(?<![\p{L}])(inte|inga|ingen|inget|ingenting|aldrig|ej)(?![\p{L}])/iu;
+/** Var en sats börjar: skiljetecken, radbrytning eller en bindning som "och", "men", "så". */
+const SATSGRANS = /[.!?,;:\n]|\s(?:och|men|så|eller|för)\s/giu;
+
+/**
+ * Säger texten det förbjudna jakande? En träff räknas inte när ett nekande står före den i samma sats
+ * ("inga uppgifter är skapade"). Ett nekande efter träffen ("jag har lagt upp den, du behöver inte …") räddar ingenting.
+ */
+function sagerJakande(text: string, monster: string): boolean {
+  for (const m of text.matchAll(new RegExp(monster, "giu"))) {
+    const fore = text.slice(0, m.index);
+    const start = Math.max(0, ...[...fore.matchAll(SATSGRANS)].map((g) => (g.index ?? 0) + g[0].length));
+    if (!NEKAR.test(fore.slice(start))) return true;
+    if (!m[0]) break;
+  }
+  return false;
+}
+
 /** Rättar ett svar. `skal` säger varför det föll; tom lista = rätt. */
 export async function bedom(q: Fraga, r: Samtalssvar, f: Fixtur): Promise<{ ratt: boolean; skal: string[] }> {
   const skal: string[] = [];
@@ -114,7 +133,9 @@ export async function bedom(q: Fraga, r: Samtalssvar, f: Fixtur): Promise<{ ratt
   if (k.ingaTal && r.tal.length) skal.push(`svaret bär ${r.tal.length} tal fast personen inte får se dem`);
   const text = r.ren ?? "";
   for (const s of k.sager ?? []) if (!new RegExp(s, "i").test(text)) skal.push(`svaret säger inte /${s}/`);
-  for (const s of k.sagerInte ?? []) if (new RegExp(s, "i").test(text)) skal.push(`svaret säger /${s}/`);
+  // Ett ordagrant citat ur datan är inte något Claude säger: "det är gjort" i en uppgiftstitel är uppgiftens ord.
+  const egen = utanDatacitat(text, r.svar);
+  for (const s of k.sagerInte ?? []) if (sagerJakande(egen, s)) skal.push(`svaret säger /${s}/`);
   if (k.utkast !== undefined && r.utkast.length !== k.utkast) skal.push(`utkastet har ${r.utkast.length} uppgifter, inte ${k.utkast}`);
   return { ratt: skal.length === 0, skal };
 }

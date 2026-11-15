@@ -62,6 +62,19 @@ export function saljarePerKedja(moten: readonly { kedja_id: string; halls_av: st
   }
   return new Map([...bast].map(([k, v]) => [k, v.id]));
 }
+/**
+ * Kortets rubrik utan öppet möte: kedjans senaste möte som hölls eller där kunden uteblev, och vem som höll (eller
+ * skulle ha hållit) det. Ett avbokat möte hölls inte av någon och räknas inte. En kedja utan sådant möte saknas.
+ */
+export function senastAvgjorda(moten: readonly { kedja_id: string; halls_av: string | null; mote_tid: string; utfall: string | null }[]): Map<string, { hallsAv: string; utfall: "hallet" | "uteblev" }> {
+  const ut = new Map<string, { hallsAv: string; utfall: "hallet" | "uteblev"; tid: string }>();
+  for (const m of moten) {
+    if (!m.halls_av || (m.utfall !== "hallet" && m.utfall !== "uteblev")) continue;
+    const f = ut.get(m.kedja_id);
+    if (!f || m.mote_tid > f.tid) ut.set(m.kedja_id, { hallsAv: m.halls_av, utfall: m.utfall, tid: m.mote_tid });
+  }
+  return new Map([...ut].map(([k, v]) => [k, { hallsAv: v.hallsAv, utfall: v.utfall }]));
+}
 /** Avgjort (F18.1): månadens möten och de som väntar på bedömning oavsett månad. Ett möte står en gång, månadens rad gäller. */
 export function slaIhopAvgjorda<T extends { id: string }>(manadens: readonly T[], vantande: readonly T[]): T[] {
   const sedda = new Set(manadens.map((m) => m.id));
