@@ -7,6 +7,24 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 
 ---
 
+## HEMVYN: KORT, FÖRSLAG OCH CHATT (2026-11-15): grenen `hemvy-chatt`, 0303 KÖRD, INTE på main
+
+- **Vad:** hemvyn görs om till fyra kort (Väntar på dig, Nav föreslår, Teamet i månaden eller Din månad, Det som
+  ändrats) och en skrivruta, i tre steg. Spec och plan ligger i `docs/superpowers/` (2026-11-15). Skiss 9 avgör
+  utseendet. De tolv reglerna "Nav och AI: aldrig ett löfte utan belägg" gäller allt.
+- **Steg 1 (underlaget), byggt:** förslagsloggen (0303), rutten `/nav2/forslag`, jobben i torrkörning, offertens
+  belopp. Se arbetsloggen 2026-11-15.
+- **INGET ÄR PÅSLAGET.** `forslag.pa` (jobben skapar och dömer), `hem.nytt` (vilka som ser nya hemmet) och
+  `chatt.pa` står av. De slås på av beställaren i Inställningar, aldrig av en session.
+- **Provet av Claude-modellerna är INTE kört** (beställaren: "vänta med testerna för claude modellerna"). Chatten
+  går inte att slå på utan nyckel, kostnadstak och ett godkänt prov.
+- **Prov:** `forslag-statistik`, `takt`, `matt`, `forslagforma`, `hemtext`, `forslag-db`, `forslag-rutt`,
+  `forslag-jobb`, `nav2-offert` (alla i `npm test`).
+- **Kvar:** steg 2 (nya hemmet i utkastet) och steg 3 (chatten, avstängd) på samma gren, klickprov i previewn, och
+  beställarens ja före main.
+
+---
+
 ## UPPGIFTER: NYTT SEDAN SIST (2026-11-14): på `main` (`04442d9`), 0301 KÖRD, bygget grönt 22:38 UTC
 
 - **Vad:** en grön prick på raden (listorna, Att göra i dag, Hem) när någon ANNAN gjort något i en uppgift jag är i

@@ -302,6 +302,8 @@ export const KALLOR: Kalla[] = [
   // Möten (0260). Mötet följer med den som håller det, som calendar_event med organisatören.
   // Den som bokade åt en kollega får bokningen via händelseloggen (mote.created), se UNDANTAG.
   { tabell: "mote", kolumn: "halls_av", andamal: "Möten du håller, och hur de gick" },
+  // Navs förslag (0303). Förslaget följer med den det gäller; valen och domarna hämtas via BARN.
+  { tabell: "nav_forslag", kolumn: "om", andamal: "Navs förslag om dina möten, och ändringar som följs upp för dig" },
   // Säljtavlan (0250). Gul 11 (produktionsprovet 2026-10-30): hur personen visas på tavlan.
   { tabell: "salesboard_person", kolumn: "employee_id", andamal: "Hur du visas på Säljtavlan" },
 ];
@@ -329,6 +331,8 @@ export const BARN: Barn[] = [
   { tabell: "candidate_message", kolumn: "candidate_id", foralder: "candidate", falt: "id", andamal: "Mejl och sms till dig som kandidat" },
   { tabell: "candidate_booking", kolumn: "candidate_id", foralder: "candidate", falt: "id", andamal: "Dina intervjubokningar" },
   { tabell: "candidate_merit_request", kolumn: "candidate_id", foralder: "candidate", falt: "id", andamal: "Referenstagningen och referensernas svar om dig" },
+  // Navs förslag (0303): vad som valdes, vad Nav mätte och hur det gick.
+  { tabell: "nav_forslag_handelse", kolumn: "forslag", foralder: "nav_forslag", falt: "id", andamal: "Valen, kommentarerna och domarna i Navs förslag om dig" },
 ];
 
 /**
@@ -607,6 +611,9 @@ export const UNDANTAG: { tabell: string; kolumn: string; skal: string }[] = [
   { tabell: "mote_bolag", kolumn: "skapad_av", skal: "Vem som lade upp bolaget — uppgifterna handlar om kunden" },
   { tabell: "mote_kedja", kolumn: "offert_av", skal: "Vem som skickade offerten — kortet handlar om kunden" },
   { tabell: "mote_kedja", kolumn: "avslut_av", skal: "Vem som stängde kortet (affär, nej, avbokat) — kortet handlar om kunden" },
+  // Navs förslag (0303): vem som gjorde något i ett förslag om någon annan. Förslaget följer med den det gäller.
+  { tabell: "nav_forslag", kolumn: "skapad_av", skal: "Vem som berättade om en ändring; raden handlar om den eller det laget ändringen gäller" },
+  { tabell: "nav_forslag_handelse", kolumn: "av", skal: "Vem som valde, ångrade eller kommenterade; hämtas via förslaget, inte direkt" },
   // Säljtavlan (0250), gul 11: vem som ställde in tavlan åt någon annan. Personens egen visning står i KALLOR.
   { tabell: "salesboard_person", kolumn: "updated_by", skal: "Vem som ändrade hur en säljare visas på tavlan" },
   { tabell: "salesboard_screen", kolumn: "created_by", skal: "Vem som parkopplade en skärm med tavlan" },

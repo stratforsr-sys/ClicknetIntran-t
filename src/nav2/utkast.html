@@ -38106,7 +38106,8 @@ function msOffBlock(C){
   const st = [['Skickade', O.skickade], ['Affär', O.affar], ['Nej', O.nej], ['Tysta', O.tysta]].map(([l, v]) => `<div><dt>${l}</dt><dd class="num">${v === null || v === undefined ? '–' : v}</dd></div>`).join('');
   return `<section class="ms-blk" data-blk="offerter"><h3>Offerter</h3><dl class="ms-dl">${st}</dl>
     <p class="ms-med"><span>Mediantid offert till affär</span><b class="num">${m === null || m === undefined ? '–' : (Math.round(m * 10) / 10).toString().replace('.', ',') + (m === 1 ? ' dag' : ' dagar')}</b></p>
-    <p class="ms-fork">Skickade och stängda gäller veckan, tysta är läget just nu. Visar om offertspåret lönar sig eller bara skjuter upp nejen.</p></section>`;
+    ${O.rad ? `<p class="ms-med ms-vantar"><span>${esc(O.rad)}</span></p>` : ''}
+    <p class="ms-fork">Skickade och stängda gäller veckan, tysta och väntande är läget just nu. Äldre offerter saknar belopp, så summan gäller bara de som har ett. Visar om offertspåret lönar sig eller bara skjuter upp nejen.</p></section>`;
 }
 function msDagBlock(C){
   const rader = ['0–1', '2–3', '4–7', '8+'].map(h => {
@@ -38569,7 +38570,7 @@ function ndMoDialog(typ, kort, forval, fokus){
   // Flyttat och Uteblev: tiderna letas för hållaren och kollegorna på mötet (de som inte tackat nej).
   if (typ === 'flyttat' || typ === 'utfall') D.f = {hallsAv:k.mote.hallsAv, med:(k.mote.med || []).filter(p => p.svar !== 'nej').map(p => p.id)};
   // Utfall: en ruta för Hållet, Uteblev, Flyttat och Avbokat. `u` är valet, `svar` svaren på frågorna ({id: sant/falskt}).
-  if (typ === 'utfall'){ Object.assign(D, {u:'', svar:{}}); Object.assign(D.f, {val:'', skal:'', datum:aeArbFram(ndIdag(), 3), text:''}); }
+  if (typ === 'utfall'){ Object.assign(D, {u:'', svar:{}}); Object.assign(D.f, {val:'', skal:'', datum:aeArbFram(ndIdag(), 3), text:'', belopp:'', paket:'', lop:''}); }
   if (typ === 'nej') D.f = {skal:''};
   // Ändra uppföljningen (F8.3): dagen kunden ska ringas och raden på kortet. `orig` är det som stod, så att ett blad
   // utan ändring inte skickar något. Öppnat från panelen går bladet tillbaka dit.
@@ -39425,6 +39426,7 @@ function moDlgVy(D){
     if (f.val === 'uppfoljning') kropp += `<div class="mo-fl bred"><div class="mo-chips"><button type="button" class="chip" data-moupptid aria-pressed="${!!f.uppMote}">Boka ett möte</button></div></div>`;
     if (f.val === 'uppfoljning' && f.uppMote) kropp += moTidFalt(D, 'Uppföljningsmötet');
     else if (f.val === 'offert' || f.val === 'uppfoljning') kropp += moFalt(D, 'datum', f.val === 'offert' ? 'Ring kunden' : 'Följ upp den', moInp(D, 'datum', {typ:'date', extra:`min="${ndIdag()}" required`}));
+    if (f.val === 'offert') kropp += moOffertBeloppDel(D);
     if (f.val === 'uppfoljning') kropp += moFalt(D, 'text', 'Vad ska sägas', moInp(D, 'text', {ph:'En rad, till exempel: vill prata med sin kollega', extra:'maxlength="1000"'}), {bred:true});
   }
   const etikett = moDlgEtikett(D), sum = moDlgSum(D);
@@ -39432,6 +39434,19 @@ function moDlgVy(D){
     <header class="rxph"><div><h2 id="mopd">${titel}</h2><small>${esc(under)}</small></div><button type="button" class="ibtn rxpx" data-modlgx aria-label="Stäng">${I('x')}</button></header>
     <form class="mo-dform" data-modlg novalidate><div class="rxpb"><div class="mo-fg">${kropp}</div></div>
       <footer class="mo-df"><p class="mo-fe ${D.laslage ? 'las' : ''}" id="moDlgFe" role="alert" ${D.fe ? '' : 'hidden'}>${D.fe ? esc(D.fe) : ''}</p><p class="mo-sum" id="moDlgSum" aria-live="polite" ${sum ? '' : 'hidden'}>${sum}</p><div class="mo-dk"><button type="button" class="btn btn-s" data-modlgx>Avbryt</button><button type="submit" class="btn btn-p" ${D.sparar ? 'disabled aria-busy="true"' : ''}>${etikett}</button></div></footer></form></aside>`;
+}
+// Offertens belopp (0303): en offert har ett pris. Paketet och bindningstiden fyller i beloppet, som går att skriva
+// över. Talen per paket och bindningstid kommer färdiga från servern (ND.moten.offertPaket): klienten räknar inga pengar.
+const moOffertPaket = () => (ndMo() && ndMo().offertPaket) || [];
+function moOffertFyll(D){
+  const p = moOffertPaket().find(x => String(x.id) === String(D.f.paket)), b = p && D.f.lop ? p.belopp[D.f.lop] : null;
+  if (typeof b === 'number'){ D.f.belopp = String(b); delete D.fel.belopp; }
+}
+function moOffertBeloppDel(D){
+  const f = D.f, pk = moOffertPaket(), vald = pk.find(x => String(x.id) === String(f.paket));
+  const lop = vald ? Object.keys(vald.belopp) : [];
+  const chips = pk.length ? `<div class="mo-fl bred"><span class="mo-lbl" id="mo-opl">Paket <small class="muted">valfritt, fyller i beloppet</small></span><div class="mo-chips" role="group" aria-labelledby="mo-opl">${pk.map(x => `<button type="button" class="chip" data-mopaket="${x.id}" aria-pressed="${String(f.paket) === String(x.id)}">${esc(x.l)}</button>`).join('')}</div>${vald ? `<div class="mo-chips" role="group" aria-label="Bindningstid">${lop.map(l => `<button type="button" class="chip" data-molop="${l}" aria-pressed="${String(f.lop) === String(l)}">${l} mån</button>`).join('')}</div>` : ''}</div>` : '';
+  return chips + moFalt(D, 'belopp', 'Belopp', `${moInp(D, 'belopp', {ph:'Offertens pris i hela kronor', extra:'inputmode="numeric" maxlength="12" required'})}<p class="mo-ph">Hela kronor. En offert har ett pris.</p>`, {ob:true});
 }
 function moSkalFalt(D){
   return `<div class="mo-fl bred"><span class="mo-lbl" id="mo-sl">Skäl</span><div class="mo-chips" role="group" aria-labelledby="mo-sl">${moVal().nejSkal.map((t, i) => `<button type="button" class="chip" data-moskal="${i}" aria-pressed="${D.f.skal === t}">${esc(t)}</button>`).join('')}</div><p class="mo-err" id="moe-skal" ${D.fel.skal ? '' : 'hidden'}>${D.fel.skal ? esc(D.fel.skal) : ''}</p></div>`;
@@ -39515,6 +39530,13 @@ function moDlgBygg(D){
       if (f.datum < idag) return {e:{datum:'Datumet har passerat.'}};
       data.datum = f.datum;
       if (f.val === 'uppfoljning' && t(f.text)) data.text = t(f.text);
+      if (f.val === 'offert'){
+        const b = t(f.belopp).replace(/[\s\u00a0]/g, '');
+        if (!b) return {e:{belopp:'Skriv offertens belopp.'}};
+        if (!/^\d+$/.test(b) || +b > 100000000) return {e:{belopp:'Beloppet ska vara hela kronor, högst 100 000 000.'}};
+        data.belopp = +b;
+        if (f.paket) data.paket = +f.paket;
+      }
     }
     return {handling:'utfall', data};
   }
@@ -39764,7 +39786,7 @@ function moStatus(k){
   }
   const n = u.datum ? moDagar(ndIdag(), u.datum) : null, sen = n !== null && n < 0;
   const nar = n === null ? 'Ingen dag satt' : n === 0 ? 'Ring i dag' : n < 0 ? `Försenad ${-n} ${-n === 1 ? 'dag' : 'dagar'}` : `Ring ${moDag(u.datum)}`;
-  return `<span class="mo-tid ${sen ? 'sen' : ''}">${nar}</span><small>${u.offert ? '<b>Offert ute</b>' : 'Uppföljning'}${u.ingetSvar ? ` · inget svar ${u.ingetSvar} ${u.ingetSvar === 1 ? 'gång' : 'gånger'}` : ''}${u.text ? ` · ${esc(u.text)}` : ''}</small>`;
+  return `<span class="mo-tid ${sen ? 'sen' : ''}">${nar}</span><small>${u.offert ? `<b>Offert ute${typeof u.offertBelopp === 'number' ? ' · ' + kr(u.offertBelopp) : ''}</b>` : 'Uppföljning'}${u.ingetSvar ? ` · inget svar ${u.ingetSvar} ${u.ingetSvar === 1 ? 'gång' : 'gånger'}` : ''}${u.text ? ` · ${esc(u.text)}` : ''}</small>`;
 }
 // Ett öppet möte på tavlan: tiden i mono, bolaget, hållaren, försöken och när det ska vara bekräftat.
 function moPipeKort(k){
@@ -40233,7 +40255,7 @@ function moPanel(k){
     <div class="rxpb">
       <section class="rxsek"><h3>${m ? 'Mötet' : 'Uppföljning'}</h3>
         ${m ? `<p class="mo-pt"><b class="num">${moNar(m.tid)}</b> · ${m.langd} min · ${moRel(moMin(m.tid) - moNuMin())}${m.bekraftat ? ' · <span class="pill t-ok">Bekräftat</span>' : ''}${m.flyttningar ? ` · flyttat ${m.flyttningar} ${m.flyttningar === 1 ? 'gång' : 'gånger'}` : ''}${k.forsok ? ` · ${k.forsok} försök utan svar${moRingIgen(k) ? `, Nav påminner dig ${moRingIgen(k)}` : ''}` : ''}${k.fonster && !m.bekraftat && (f === 'bokat' || f === 'att_bekrafta') ? ` · bekräftas senast ${esc(moVdag(k.fonster.senast))}` : ''}${moUppfMote(k) && !m.bekraftat && f === 'bokat' ? ' · uppföljningsmöte, bekräftas inte' : ''}</p>${moPlatsRad(k)}<p class="muted">Bokat av ${esc(m.bokatAvNamn)}.</p>${moMedRad(k)}`
-          : `<p class="mo-pt"><b>${!u.datum ? 'Ingen dag satt' : moDag(u.datum) === 'i dag' ? 'Ring i dag' : 'Ring ' + moDag(u.datum)}</b>${u.offert ? ' · <span class="pill t-signal">Offert ute</span>' : ''}</p>${u.text ? `<p>${esc(u.text)}</p>` : ''}<p class="muted">${u.ingetSvar ? `Inget svar ${u.ingetSvar} ${u.ingetSvar === 1 ? 'gång' : 'gånger'} i rad.` : 'Inget försök utan svar än.'}</p>`}
+          : `<p class="mo-pt"><b>${!u.datum ? 'Ingen dag satt' : moDag(u.datum) === 'i dag' ? 'Ring i dag' : 'Ring ' + moDag(u.datum)}</b>${u.offert ? ` · <span class="pill t-signal">Offert ute${typeof u.offertBelopp === 'number' ? ' · ' + kr(u.offertBelopp) : ''}</span>` : ''}</p>${u.text ? `<p>${esc(u.text)}</p>` : ''}<p class="muted">${u.ingetSvar ? `Inget svar ${u.ingetSvar} ${u.ingetSvar === 1 ? 'gång' : 'gånger'} i rad.` : 'Inget försök utan svar än.'}</p>`}
         <div class="mo-kn pan">${moKnappar(k, true)}</div></section>
       <section class="rxsek"><h3>Bolaget</h3><dl class="ldfakta">${fakta.map(([a, b]) => `<div><dt>${a}</dt><dd>${b}</dd></div>`).join('')}</dl></section>
       ${moKundFolk(k).length ? `<section class="rxsek"><h3>Fler hos kunden</h3><dl class="ldfakta">${moKundFolk(k).map(p => { const t2 = p.telefon ? p.telefon.replace(/[^\d+]/g, '') : ''; return `<div><dt>${esc(p.namn || 'Hos kunden')}${p.svar && MOSVAR[p.svar] ? ` · ${MOSVAR[p.svar]}` : ''}</dt><dd>${[t2 ? `<a class="num" href="tel:${t2}" data-motel="${esc(p.telefon)}" title="Kopiera numret">${esc(p.telefon)}</a>` : '', p.epost ? `<a href="mailto:${esc(p.epost)}" data-mokop="${esc(p.epost)}" data-mokopok="Mejladressen är kopierad." title="Kopiera mejladressen">${esc(p.epost)}</a>` : ''].filter(Boolean).join('<br>') || '–'}</dd></div>`; }).join('')}</dl></section>` : ''}
@@ -40426,6 +40448,8 @@ document.addEventListener('click', e => {
     if (ds.moval){ stopp(); D.f.val = ds.moval; D.fel = {}; D.rort = true; moDlgRita(); moVidare(D, 'val'); return; }
     if (ds.moupptid !== undefined){ stopp(); D.f.uppMote = !D.f.uppMote; D.fel = {}; D.rort = true; if (D.f.uppMote && !D.tider) moHamtaTider(); moDlgRita(); return; }
     if (ds.moskal !== undefined){ stopp(); D.f.skal = moVal().nejSkal[+ds.moskal]; delete D.fel.skal; D.rort = true; moDlgRita(); return; }
+    if (ds.mopaket !== undefined){ stopp(); D.f.paket = String(D.f.paket) === ds.mopaket ? '' : ds.mopaket; if (!D.f.paket) D.f.lop = ''; D.rort = true; moOffertFyll(D); moDlgRita(); return; }
+    if (ds.molop !== undefined){ stopp(); D.f.lop = ds.molop; D.rort = true; moOffertFyll(D); moDlgRita(); moFokus('mod-belopp'); return; }
     if (ds.monul){ stopp(); D.f.nulage = D.f.nulage === ds.monul ? '' : ds.monul; D.rort = true; moDlgRita(); return; }
     if (ds.moplats){ stopp(); D.f.platsTyp = ds.moplats; delete D.fel.lank; delete D.fel.adress; D.rort = true; moDlgRita(); moFokus(ds.moplats === 'teams' ? 'mod-lank' : ds.moplats === 'plats' ? 'mod-adress' : ''); return; }
     if (ds.motidbyt !== undefined){ stopp(); D.tidOppen = true; moTidRita(); (document.querySelector('.mo-dlg .mo-t[aria-pressed="true"], .mo-dlg .mo-dag[aria-pressed="true"]') || document.getElementById('mod-tidDag'))?.focus({preventScroll:true}); return; }

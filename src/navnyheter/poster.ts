@@ -14,6 +14,21 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten-offertens-belopp",
+    rubrik: "Offerten får ett belopp",
+    ingress: "När du sätter Offert skickad på ett möte skriver du nu vad offerten är på. Då syns det hur mycket som ligger ute hos kunderna.",
+    text: `I **Möten**, när ett möte har hållits och du väljer **Offert skickad**, finns ett nytt fält: **Belopp**, i hela
+kronor. Väljer du ett paket och en bindningstid fylls beloppet i, och du kan skriva över det. Beloppet måste fyllas
+i: en offert har ett pris.
+
+Beloppet står sedan på kortet i Följ upp, bredvid **Offert ute**. Chefer ser i Mötens statistik hur många offerter
+som väntar och vad de är på tillsammans, till exempel *5 offerter väntar, 3 med belopp: 212 000 kr*. Offerter som
+skickades innan fältet fanns saknar belopp och räknas därför bara i antalet.`,
+    datum: "2026-11-15",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "provisionsmanaden-last-for-order",
     rubrik: "Provision: ordrar väntar också när månaden fastställs",
     ingress: "Under de sekunder en provisionsmånad fastställs kan ingen order i den månaden godkännas, ändras eller makuleras. Ingen affär faller utanför bokföringen.",

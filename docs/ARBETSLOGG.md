@@ -5,6 +5,37 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-15 · Hemvyn, steg 1: underlaget (0303), på grenen `hemvy-chatt`
+
+Beställaren godkände designdokumentet v3 ("Bygg allting … gör det 100% nu", provet av Claude-modellerna väntar).
+Spec: `docs/superpowers/specs/2026-11-15-hemvyn-kort-chatt-design.md`. Plan:
+`docs/superpowers/plans/2026-11-15-hemvyn-kort-chatt.md`. Steg 1 är allt som måste finnas innan någon ser något.
+
+- **Reglerna är rena och prövade var för sig** (`src/lib/nav2/`): `statistik.ts` (Fishers exakta prov, "tidigast
+  vid"), `takt.ts` (takten och dess eget facit vid samma dag), `matt.ts` (måttregistret, med motvikt och version),
+  `forslagforma.ts` (när ett obekräftat möte blir ett förslag, läget, facit per val, domen över en ändring,
+  trendregeln, inställningarna), `hemtext.ts` (alla texter: mallar, aldrig AI).
+- **0303, KÖRD:** `nav_forslag` och `nav_forslag_handelse` tar bara emot nya rader (trigger; provrader går att ta
+  bort, och personraderingen når dem). Läget läses ur vyn `nav_forslag_lage`. RLS: personen själv, kretsen enligt
+  `leads_employee`, lagets teamledare, och säljchef, vd och admin. Ett val per förslag tvingas i databasen
+  (`nav_forslag_valj` låser raden). `nav_facit_dom` och `nav_takt_dag` sparar vad Nav sa. En trigger på
+  `nav_setting` skriver gammalt och nytt värde i händelseloggen. `mote_kedja` får `offert_belopp` och
+  `offert_paket`. `mote_bekrafta_overta` lämnar över bekräftelseuppgiften till den som håller mötet.
+- **Rutten `/nav2/forslag`:** välj, ångra, personens egen rad, Berätta om en ändring, Pröva med laget och
+  inställningarna. Flytta mötet sparas av Mötens rutt när flytten är gjord.
+- **Jobben** (`forslag-jobb.ts`): ett steg i mötesjobbet och ett i nattjobbet. **Så länge `forslag.pa` är av skriver
+  de ingenting**, de räknar och svarar i kvittot. Granskningsfokus 6 kom ur rådgivarens sjätte varv: rättas ett
+  utfall efter domen skrivs en ny dom, och den gamla står kvar.
+- **Det enda användaren ser i steg 1:** fältet Belopp i rutan Offert skickad, beloppet på kortet och raden om
+  väntande offerter i statistiken.
+- **Varför så här:** en logg som inte går att skriva om är det som gör Navs facit värt något. Därför är Ångra en
+  egen rad, "ingen valde" och "låt stå" följs som de andra valen, och det Nav trodde skrivs på raden innan någon
+  väljer. Inget slås på av bygget: `forslag.pa`, `hem.nytt` och `chatt.pa` står av tills beställaren säger till.
+- **Misstag på vägen:** databasprovet skickade mötets tid genom JavaScript (millisekunder) till
+  `mote_uppgift_skapa`, som jämför mot mikrosekunder och svarade null. Provet använder hela sekunder.
+
+---
+
 ## 2026-11-14 · Provisionslåset: resterna efter hårdtestet (0302)
 
 Beställaren: "fixa allting" om de fyra resterna.

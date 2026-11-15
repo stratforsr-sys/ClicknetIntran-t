@@ -119,6 +119,29 @@ const tva = [
 ];
 ok("jämnt antal ger medelvärdet av de två mittersta", offerter(tva, V).medianDagar === 3.5);
 
+console.log("\n\x1b[1mofferter som väntar: antalet först, summan aldrig ensam\x1b[0m");
+{
+  const oppna = [
+    k("v1", { offertNar: "2026-10-20T10:00:00Z", kolumn: "folj_upp", offertBelopp: 71760 }),
+    k("v2", { offertNar: "2026-10-21T10:00:00Z", kolumn: "tyst", offertBelopp: 140240 }),
+    k("v3", { offertNar: "2026-10-22T10:00:00Z", kolumn: "folj_upp", offertBelopp: 0 }),
+    k("v4", { offertNar: "2026-10-01T10:00:00Z", kolumn: "folj_upp" }), // äldre offert, utan belopp
+    k("v5", { offertNar: "2026-10-02T10:00:00Z", kolumn: "tyst", offertBelopp: null }),
+    k("v6", { offertNar: "2026-10-26T10:00:00Z", avslut: "affar", avslutNar: "2026-10-28T10:00:00Z", offertBelopp: 99000 }), // stängd: väntar inte
+    k("v7", { offertNar: null, kolumn: "bokat", offertBelopp: 5000 }), // ingen offert
+  ];
+  const v = offerter(oppna, V);
+  lika("fem väntar, tre med belopp", [v.vantar, v.medBelopp, v.summa], [5, 3, 212000]);
+  ok("raden leder med antalet", v.rad === "5 offerter väntar, 3 med belopp: 212\u00a0000 kr.", v.rad);
+  ok("en stängd offert räknas inte i summan", v.summa === 212000);
+  ok("ingen med belopp: ingen summa alls", offerter([oppna[3], oppna[4]], V).rad === "2 offerter väntar, ingen med belopp.", offerter([oppna[3], oppna[4]], V).rad);
+  ok("en offert", offerter([oppna[0]], V).rad === "1 offert väntar, 1 med belopp: 71\u00a0760 kr.", offerter([oppna[0]], V).rad);
+  ok("inga offerter väntar", offerter([oppna[5], oppna[6]], V).rad === "Inga offerter väntar.", offerter([oppna[5], oppna[6]], V).rad);
+  // Teamledarens krets: bara kedjor vars första hållare ligger i den.
+  const annan = k("v8", { offertNar: "2026-10-20T10:00:00Z", kolumn: "folj_upp", offertBelopp: 1000000, forstaHallnaHallsAv: "någon-annan" });
+  lika("kretsen avgör vilka som räknas", [offerter([...oppna, annan], V, [S2]).vantar, offerter([...oppna, annan], V, [S2]).summa], [5, 212000]);
+}
+
 console.log("\n\x1b[1mdagarTillMote\x1b[0m");
 const d = dagarTillMote(moten, V);
 lika("alla fyra hinkar finns, i ordning", Object.keys(d), ["0–1", "2–3", "4–7", "8+"]);
@@ -259,7 +282,7 @@ console.log("\n\x1b[1mI2: teamets block räknar bara teamets rader\x1b[0m");
 
   const off = offerter(r.kedjor, V, krets);
   lika("offerter: UTE:s och kt2:s (UTE håller) offerter och affärer räknas inte", off,
-    { skickade: 2, affar: 1, nej: 0, tysta: 0, medianDagar: 3 });
+    { skickade: 2, affar: 1, nej: 0, tysta: 0, medianDagar: 3, vantar: 1, medBelopp: 0, summa: 0, rad: "1 offert väntar, ingen med belopp." });
   const offUtanKrets = offerter(r.kedjor, V);
   ok("offerter utan krets räknar som förut (ku2 med)", offUtanKrets.affar === 2);
   lika("offerter: krets null är oförändrat", offerter(kk, V, null), offerter(kk, V));

@@ -233,6 +233,17 @@ async function bygg(supabase: SupabaseClient, user: CurrentUser): Promise<NdMote
     art: m.art, utfall: m.utfall, resultat: m.resultat, kalla: m.kalla,
     bekraftatNar: isoEllerNull(m.bekraftat_nar),
   }));
+  // Offertens belopp (0303) står på kedjan, inte i vyn. Bara de offerter som väntar behöver det. Går läsningen inte
+  // räknas de som utan belopp: talet leder ändå med antalet, och summan står aldrig ensam.
+  const offertBelopp = new Map<string, number>();
+  {
+    const vantande = kedjaRader.filter((k) => k.avslut === null && k.offert_nar !== null).map((k) => k.kedja_id);
+    for (let i = 0; i < vantande.length; i += BIT) {
+      const { data } = await supabase.from("mote_kedja").select("id, offert_belopp").in("id", vantande.slice(i, i + BIT)).not("offert_belopp", "is", null).limit(BIT);
+      for (const r of (data ?? []) as unknown as { id: string; offert_belopp: number | string | null }[]) if (r.offert_belopp !== null) offertBelopp.set(r.id, Number(r.offert_belopp));
+    }
+  }
+
   const allaKedjor: StatKedja[] = kedjaRader.map((k) => ({
     id: k.kedja_id,
     forstaBokatAv: k.forsta_bokat_av ?? "",
@@ -245,6 +256,7 @@ async function bygg(supabase: SupabaseClient, user: CurrentUser): Promise<NdMote
     offertNar: isoEllerNull(k.offert_nar),
     kolumn: k.kolumn,
     kalla: k.kalla ?? "",
+    offertBelopp: offertBelopp.get(k.kedja_id) ?? null,
   }));
 
   // Teamledarens krets (0264). Bara en chefsroll begränsas av den; säljaren har RLS. null = alla.
