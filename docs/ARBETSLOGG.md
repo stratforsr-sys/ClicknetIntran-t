@@ -36,6 +36,12 @@ den nya var med på mötet, och den som får provision väljer aldrig bedömaren
 utfallet och hållaren i en update, Ändra prövar först), notisen lovade kalendern utan händelse, artjobbet rättade inte
 `ny` → `ombokning`, och "Rätta utfallet först" ledde ingenstans. Alla sju har ett prov som föll först.
 
+**På main.** Beställaren sa ja till ordningen 0313 → main → 0311. 0313 kördes först i provdatabasen nav-prov och sedan i
+produktionen 17:47 UTC (REST svarade 200 på 0,1–0,3 s direkt efter); main snabbspolades till `e795217` (två commits:
+`1bb01d4` agendan, `e795217` hållaren) 17:48 UTC, produktionsbygget grönt 17:50 UTC, och 0311 kördes 17:57 UTC efter
+bygget (25 startlägesinlägg bort, det enda riktiga inlägget kvar, `mote.mal` orörd). Inte provat i produktionens
+gränssnitt.
+
 **Avbrottet.** Medan det byggdes låg REST nere ~16:52–17:40 (PGRST002): hemvy-sessionens 0312 utlöste en full
 schemaomladdning som fastnade på tidszonsvyn på en Nano-databas vars disk-IO-budget två samtidiga provsviter hade
 tömt. Min omladdningssignal och två egna läsningar av tidszonerna gjorde det värre. Det släppte när all last slutat.
