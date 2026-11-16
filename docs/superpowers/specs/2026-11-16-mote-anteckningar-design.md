@@ -13,8 +13,11 @@ Möten bokas oftast av en mötesbokare åt en säljare. Det bokaren vet om kunde
 bestämmer, vad som är känsligt) har i dag ingen plats:
 
 - Bokningsbladet har bara **Agenda**, och den går till kunden i inbjudan.
-- Det gamla interna fältet **Mål** togs bort ur bladet 2026-11-13. 25 av 35 möten i produktionen har ett mål,
-  alltså är behovet verkligt. Det står fortfarande som "Mål, bara för er" i panelen på äldre möten.
+- Det gamla fältet **Mål** togs bort ur bladet 2026-11-13. 25 av 35 möten i produktionen har ett mål, och det
+  står som "Mål, bara för er" i panelen på äldre möten. **Rättat 2026-11-16 (0311):** målet var inte internt. Före
+  2026-11-13 blev `mal` kalenderinbjudans agenda (`kalAgenda = v.agenda ?? v.mal`), och alla 25 texterna stod
+  ordagrant i inbjudan till kunden. Beställaren: "en agenda ska gå ut i kalenderinbjudan sen ska det finnas
+  anteckningar utöver agendan."
 - Frågor mellan bokare och säljare går i dag utanför Nav (sms, Teams), och de syns inte för nästa person som
   tar kortet.
 
@@ -113,8 +116,9 @@ Enter skickar · Skift+Enter ny rad
 - Ett inlägg som inte gått fram står kvar i tråden som "Skickades inte. Försök igen", med samma id.
 - Det man skrivit men inte skickat ligger kvar om panelen stängs (per kort, i den här fliken). **(mitt val)**
 - **Tysta**: inga notiser från just den här tråden för mig. Står som "Tystad" och går att slå på igen.
-- De gamla mötesmålen ("Mål, bara för er") flyttas in i tråden som bokarens första inlägg, med bokningens
-  tid. Därför försvinner raden "Mål, bara för er" ur "Inför mötet". Inget går förlorat.
+- ~~De gamla mötesmålen flyttas in i tråden som bokarens första inlägg.~~ **Fel, rättat i 0311:** de var
+  kundens agenda. Ett äldre mötes `mal` visas som **Agenda** under "Inför mötet", oavsett om kortet har en tråd,
+  och tråden börjar tom på de gamla korten.
 
 ### Tavlan
 
@@ -162,7 +166,7 @@ mote_anteckning_sett
 
 - RLS: `mote_anteckning` select med exakt samma villkor som `mote_kedja_read`. `mote_anteckning_sett` bara
   egna rader. Inga skrivpolicyer: allt skrivs med service role genom rutten, efter rättighetsprövning.
-- Startläge: de 25 målen in som inlägg (bokaren, bokningens tid), och en `sett`-rad per deltagare och kedja
+- Startläge: ~~de 25 målen in som inlägg~~ (togs bort igen i 0311, de var agendan), och en `sett`-rad per deltagare och kedja
   satt till nu, så att ingenting står som nytt när funktionen slås på.
 - `anon` får ingenting.
 

@@ -11,7 +11,7 @@
  *
  *   1. Bara filerna i TILLATNA nämner `mote_anteckning`. En ny fil som läser tråden (en utkorg, ett brev, en
  *      ICS, en export, en AI-prompt) måste stå här med ett skäl, och då syns den i granskningen.
- *   2. Ingen migration utom 0310 nämner tabellen, och (med DATABASE_URL) ingen funktion i databasen läser den.
+ *   2. Ingen migration utom 0310 (tabellen) och 0311 (tar bort agendan ur tråden) nämner tabellen, och (med DATABASE_URL) ingen funktion i databasen läser den.
  *      Det är databasens funktioner som bygger inbjudningarna (calendar_event_ics) och utkorgens rader.
  *   3. I bokningen får bokarens anteckning bara hamna i tråden och i notisen till kollegorna (`bokningsDetalj`,
  *      och bara som `detalj:` i ett notifiera-anrop). Varje rad i rutten som nämner den prövas mot en lista.
@@ -64,7 +64,9 @@ rubrik("Bara de tillåtna filerna läser tråden");
 rubrik("Databasen");
 {
   const mig = filer(join(rot, "supabase")).filter((p) => readFileSync(p, "utf8").includes("mote_anteckning")).map((p) => relative(rot, p));
-  ok("bara 0310 nämner tabellen bland migrationerna", mig.length === 1 && mig[0].endsWith("0310_mote_anteckning.sql"), mig.join(", "));
+  // 0310 skapar tabellen; 0311 tar bara bort startlägets inlägg (agendan, som aldrig hörde hemma i tråden).
+  const MIG_TILLATNA = ["0310_mote_anteckning.sql", "0311_mote_anteckning_utan_agenda.sql"];
+  ok("bara 0310 och 0311 nämner tabellen bland migrationerna", mig.length === MIG_TILLATNA.length && mig.every((m) => MIG_TILLATNA.some((t) => m.endsWith(t))), mig.join(", "));
   if (process.env.DATABASE_URL) {
     const { default: pg } = await import("pg");
     const db = new pg.Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
@@ -126,6 +128,11 @@ rubrik("Klienten");
   ok("Ändra skickar ingen anteckning", andraBygg.length > 0 && !/anteckning/.test(andraBygg));
   const kal = [...u.matchAll(/\/nav2\/kalender[^'"`]*['"`][^\n]*anteckning/gi)];
   ok("ingen anteckning skickas till kalendern", kal.length === 0);
+  // Agendan är det som går i inbjudan, på ett äldre möte `mal` (moten/route.ts: kalAgenda = v.agenda ?? v.mal). Den
+  // visas som Agenda under Inför mötet, och aldrig beroende på om kortet har en tråd (beställaren 2026-11-16).
+  const infor = (u.match(/^.*<h3>Inför mötet<\/h3>.*$/m) ?? [""])[0];
+  ok("Inför mötet visar agendan oavsett tråden", infor.length > 0 && !/trad/.test(infor));
+  ok("ett äldre mötes agenda (mal) visas som Agenda", /<dt>Agenda<\/dt><dd class="mo-agd">\$\{esc\(m\.agenda \|\| m\.mal\)\}/.test(infor));
 }
 
 console.log(fel === 0 ? `\n\x1b[32mAlla ${antal} prov gick igenom.\x1b[0m` : `\n\x1b[31m${fel} av ${antal} prov föll.\x1b[0m`);

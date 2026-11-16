@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 /**
- * MÖTEN: ANTECKNINGARNA (migration 0310, `mote_anteckning` och `mote_anteckning_sett`).
+ * MÖTEN: ANTECKNINGARNA (migration 0310 och 0311, `mote_anteckning` och `mote_anteckning_sett`).
  *
  *   set -a; . ~/.clicknet/nav.env; set +a
  *   TZ=UTC node tests/motesanteckning-db.mjs
  *
  * Allt sker i EN transaktion mot den riktiga databasen och rullas ALLTID
- * tillbaka. Migrationsfilen läses från disk och körs två gånger inuti
- * transaktionen (den ska gå att köra om), så det är filens text som provas,
- * också innan den är körd på riktigt.
+ * tillbaka. Migrationsfilerna läses från disk och körs två gånger var, i
+ * nummerordning, inuti transaktionen (de ska gå att köra om), så det är filernas
+ * text som provas, också innan de är körda på riktigt.
  *
  * Provet skapar ett bolag och en kedja märkta `[PROV anteckning]`, men inget
  * möte: triggrarna på `mote` skriver i tabeller med identitetskolumner, och en
@@ -22,7 +22,8 @@
  *   4. CHECK-villkoret avvisar tom text, för lång text, text på ett borttaget inlägg
  *      och ett inlägg utan både text och borttagen (NULL släpper inte igenom),
  *   5. samma id två gånger blir ett inlägg (`on conflict do nothing`),
- *   6. startläget: varje gammalt mål finns som inlägg, och alla deltagare har en sett-rad,
+ *   6. startläget: ingen agenda ligger i tråden (0311 tar bort de gamla `mote.mal`, som var kundens
+ *      agenda i inbjudan och inget internt mål), och alla deltagare har en sett-rad,
  *   7. kedjan raderad: tråden och sett-raderna med den.
  */
 import { readFileSync } from "node:fs";
@@ -32,7 +33,7 @@ import { randomUUID } from "node:crypto";
 import pg from "pg";
 
 const HAR = dirname(fileURLToPath(import.meta.url));
-const MIGRATION = join(HAR, "..", "supabase", "migrations", "0310_mote_anteckning.sql");
+const MIGRATIONER = ["0310_mote_anteckning.sql", "0311_mote_anteckning_utan_agenda.sql"].map((f) => join(HAR, "..", "supabase", "migrations", f));
 
 if (!process.env.DATABASE_URL) {
   console.error("DATABASE_URL behövs.\n  set -a; . ~/.clicknet/nav.env; set +a; TZ=UTC node tests/motesanteckning-db.mjs");
@@ -97,9 +98,12 @@ const CHEF = ["team_lead", "sales_manager", "ceo", "admin"];
 await db.connect();
 try {
   await db.query("begin");
+  const motenFore = (await en(`select md5(coalesce(string_agg(id::text || '|' || coalesce(mal, '') || '|' || coalesce(agenda, ''), ',' order by id), '')) h from mote`)).h;
   if (!process.env.UTAN_MIGRATION) {
-    await db.query(readFileSync(MIGRATION, "utf8"));
-    await db.query(readFileSync(MIGRATION, "utf8"));
+    for (const fil of MIGRATIONER) {
+      await db.query(readFileSync(fil, "utf8"));
+      await db.query(readFileSync(fil, "utf8"));
+    }
   }
 
   const ejChef = await alla(
@@ -135,20 +139,22 @@ try {
   // ---------------------------------------------------------------------------
   sektion("Startläget");
 
-  const malSaknas = await en(`
-    select count(*)::int n from mote m
-     where nullif(btrim(m.mal), '') is not null
-       and not exists (select 1 from mote_anteckning a where a.mote_id = m.id and a.av = m.bokat_av and a.text = left(btrim(m.mal), 4000) and a.skapad = m.bokat_nar)`);
-  await ok(`varje gammalt mål finns som bokarens inlägg med bokningens tid (${malSaknas.n} saknas)`, malSaknas.n === 0);
-  const malDubbel = await en(`select count(*)::int n from (select mote_id from mote_anteckning where mote_id is not null group by mote_id, text having count(*) > 1) x`);
-  await ok("inget mål ligger två gånger efter två körningar", malDubbel.n === 0);
+  // `mote.mal` var före 2026-11-13 fältet som blev kalenderinbjudans agenda: det kunden fick, inget internt mål.
+  // Beställaren 2026-11-16: "en agenda ska gå ut i kalenderinbjudan sen ska det finnas anteckningar utöver agendan."
+  const agendaITraden = await en(`
+    select count(*)::int n from mote_anteckning a join mote m on m.id = a.mote_id
+     where a.id = md5('mote_anteckning:mal:' || m.id::text)::uuid`);
+  await ok(`ingen agenda ligger i tråden: startlägets inlägg är borta (${agendaITraden.n} kvar)`, agendaITraden.n === 0);
+  const motenEfter = (await en(`select md5(coalesce(string_agg(id::text || '|' || coalesce(mal, '') || '|' || coalesce(agenda, ''), ',' order by id), '')) h from mote`)).h;
+  await ok("mötenas agenda (mal och agenda) står orörd efter migrationerna", motenEfter === motenFore);
   const settSaknas = await en(`
     select count(*)::int n from mote_kedja k cross join lateral unnest(k.deltagare) d(p) join employee e on e.id = d.p
      where not exists (select 1 from mote_anteckning_sett s where s.kedja_id = k.id and s.employee_id = d.p)`);
   await ok(`varje deltagare har en sett-rad för sitt kort (${settSaknas.n} saknas)`, settSaknas.n === 0);
   const nyttVidStart = await en(`
     select count(*)::int n from mote_anteckning a join mote_anteckning_sett s on s.kedja_id = a.kedja_id
-     where a.av <> s.employee_id and a.skapad > s.sett_till`);
+     where a.av <> s.employee_id and a.skapad > s.sett_till
+       and a.skapad <= coalesce((select max(applied_at) from schema_migrations where name like '0310%'), now())`);
   await ok(`ingenting står som nytt för någon vid start (${nyttVidStart.n})`, nyttVidStart.n === 0);
 
   // ---------------------------------------------------------------------------
