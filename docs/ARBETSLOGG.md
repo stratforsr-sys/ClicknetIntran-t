@@ -25,7 +25,16 @@ Menyraden mättes sedan mot skiss 9 i Chrome, utfälld och smal, och byggdes om 
 Två mindre fynd rättades samtidigt. Min dag skrev "om 12.4 min" när klockan hade sekunder; nu står hela minuter.
 Arkens huvudrad är nu som skissen (ikonen 28 px, rubriken, Stäng esc utan ram).
 
-I `tests/nav2-hemvy.mjs` finns fyra nya avsnitt, och vart och ett föll först. Stilen lades in i previewen för hand och
+Efter pushen (c209c86) såg beställaren en grön ring inne i skrivrutan när man skrev ("ta bort den, gör den så att det är
+en hel fri ruta"). Rutans egen `outline:0` (tyngd 0,1,1) förlorade mot hemvyns allmänna fokusregel
+`.hv :is(…,[tabindex]):focus-visible` (0,3,0). I skiss 9 vinner rutans regel. Nu har textfältet en egen regel,
+`.hv .hv-skriv textarea:focus-visible{outline:0}`, och knapparna behåller sin ring.
+
+Previewen var seg (beställaren: "det är bara vitt"). Servern skickar sidans skal på 0,4 s och datan (`ndData`) efter
+12–25 s, mot cirka 5 s i produktionen. Orsaken: `NAV2_PG_URL` finns bara i Production och Preview (nav2-utkast), så
+grenens preview kör alla frågor via PostgREST, på en Nano som swappar (408 MB, 673 MB swap använd).
+
+I `tests/nav2-hemvy.mjs` finns fem nya avsnitt, och vart och ett föll först. Stilen lades in i previewen för hand och
 mättes mot skissen pixel för pixel före pushen. Kvar av klickprovet: Veckan (veckodagen står två gånger, och möten
 som börjar samtidigt ritas ovanpå varandra), Möten, Min statistik, Mer, mörk ton och mobilbredd.
 

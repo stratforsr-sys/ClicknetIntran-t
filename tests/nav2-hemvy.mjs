@@ -836,6 +836,16 @@ rubrik("Skiss 9 exakt: Min dag (punkt 23)");
   ok("och hela minuter i luften", sa.includes("<b>Allt ryms, med 4 h 11 min över.</b>"), sa.match(/<b>Allt ryms[^<]*<\/b>/)?.[0]);
 }
 
+rubrik("Skrivrutan är en enda fri ruta, utan ram inuti (beställaren 2026-11-16)");
+{
+  // Beställarens skärmbild: när man skrev fick textfältet en grön ring inne i rutan. Hemvyns allmänna
+  // fokusregel (.hv :is(…,[tabindex]):focus-visible, tyngd 0,3,0) slog rutans egen outline:0 (0,1,1).
+  // I skiss 9 vinner rutans outline:0, och ingen ring syns.
+  const fri = regel(".hv .hv-skriv textarea:focus-visible");
+  ok("textfältet i skrivrutan får ingen ring när man skriver", fri !== null && /(^|;)outline:0(;|$)/.test(fri), fri);
+  ok("knapparna i hemvyn behåller sin fokusring", (regel(".hv :is(button,textarea,input,select,[tabindex]):focus-visible") || "").includes("outline:2px solid var(--hv-brand)"));
+}
+
 rubrik("Skiss 9 exakt: Teamet i månaden (punkt 16 och 34–36)");
 {
   const RAD = (x) => ({ id: "p", namn: "X Prov", fornamn: "X", mal: 12, order: 7, status: "Före sitt mål", led: ["n", null, "u", "n", "u"], orsak: null, forklaring: "Bokade möten: över sitt eget spann två veckor i rad.", kommentar: null, ...x });
