@@ -14,6 +14,20 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten-offert-nasta-mote",
+    rubrik: "Möten: skickat en offert? Boka nästa möte direkt",
+    ingress: "När du sätter Hållet och väljer Offert skickad kan du boka nästa möte i samma steg. Kunden får en inbjudan till sin kalender.",
+    text: `Tryck **Utfall** på kortet, välj **Hållet** och sedan **Offert skickad**. Under valet finns **Boka ett möte**:
+välj dag och tid, och tryck **Spara och boka mötet**. Offerten räknas som vanligt i statistiken, och mötet bokas med
+samma kollegor, gäster och plats som förra mötet. Kunden får en kalenderinbjudan med mejl om vi har kundens e-post.
+Raden ovanför knappen säger om inbjudan går ut.
+
+Vill du hellre ringa kunden om offerten väljer du en dag i **Ring kunden** i stället, som förut.`,
+    datum: "2026-11-16",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "moten-anteckningar",
     rubrik: "Möten: anteckningar som hela mötet kan svara på",
     ingress: "Skriv det kollegan behöver veta när du bokar åt hen. Anteckningen blir en tråd på kortet där alla som är med på mötet kan svara, och de får en notis i telefonen och i klockan.",

@@ -388,7 +388,7 @@ export type UtfallIn = {
   datum?: string | null;
   text?: string | null;
   skal?: string | null;
-  /** Bara för `uteblev`: en ny tid, bokad direkt. */
+  /** En ny tid, bokad direkt: efter `uteblev` (ombokning) och efter Hållet → Uppföljning eller Offert skickad (uppföljningsmöte). */
   nyTid?: { dag: string; start: string } | null;
 };
 
@@ -407,8 +407,9 @@ export type UtfallIn = {
  * nollställer `inget_svar_i_rad`.
  *
  * `nyttMote` är ett möte som ska bokas i samma kedja: `ombokning` efter Uteblev,
- * `uppfoljning` efter Hållet → Uppföljning med en tid (byggsteg 4). Utan tid blir
- * uppföljningen bara ett datum, som förut.
+ * `uppfoljning` efter Hållet → Uppföljning eller Offert skickad med en tid
+ * (byggsteg 4, offerten 2026-11-16). Utan tid blir uppföljningen bara ett datum,
+ * som förut.
  *
  * `nu` är ögonblicket för `offert_nar` (ISO). Det är en parameter för att
  * provet ska kunna vara exakt; utan den tas klockan.
@@ -458,17 +459,19 @@ export function efterUtfall(
       };
     }
 
-    // Offert skickad: förvalt datum är idag + 3 arbetsdagar. Datumet får ändras.
+    // Offert skickad: förvalt datum är idag + 3 arbetsdagar. Datumet får ändras. Med en tid bokas nästa möte
+    // direkt i kedjan, som ett uppföljningsmöte med inbjudan till kunden, och kedjans datum blir mötesdagen.
+    // Offerten räknas på samma sätt med eller utan möte (`offert_nar`).
     if (inn.datum != null && inn.datum !== "" && !arDatum(inn.datum)) throw new Error("Välj ett datum för uppföljningen.");
     return {
       mote: { utfall: "hallet", resultat: "offert" },
       kedja: {
-        uppfoljning_datum: inn.datum || arbetsdagarFram(idag, 3),
+        uppfoljning_datum: inn.nyTid ? inn.nyTid.dag : inn.datum || arbetsdagarFram(idag, 3),
         uppfoljning_text: text ?? "Offert skickad",
         inget_svar_i_rad: 0,
         offert_nar: nu,
       },
-      nyttMote: null,
+      nyttMote: inn.nyTid ? { art: "uppfoljning", dag: inn.nyTid.dag, start: inn.nyTid.start } : null,
     };
   }
 
@@ -1087,7 +1090,7 @@ export function utfallIndata(body: unknown): Resultat<{ mote: string; inn: Utfal
     inn.skal = b.skal;
   }
   if (!tom(b.nyTid)) {
-    if (b.utfall !== "uteblev" && !(b.utfall === "hallet" && b.resultat === "uppfoljning")) return nej("En ny tid går bara att boka efter Uteblev eller som en uppföljning.");
+    if (b.utfall !== "uteblev" && !(b.utfall === "hallet" && (b.resultat === "uppfoljning" || b.resultat === "offert"))) return nej("En ny tid går bara att boka efter Uteblev, som en uppföljning eller efter en offert.");
     const n = (b.nyTid ?? {}) as Record<string, unknown>;
     const tid = dagOchStart(n.dag, n.start);
     if (!tid.ok) return tid;

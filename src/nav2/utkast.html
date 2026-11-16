@@ -39810,7 +39810,7 @@ function moBedomBygg(D){
 function moDlgEtikett(D){
   const T = moTyp(D);
   if (D.sparar) return D.typ === 'boka' ? 'Bokar …' : T === 'flyttat' ? 'Flyttar …' : 'Sparar …';   // knappen är låst och säger vad som pågår (F10.3)
-  if (T === 'hallet') return D.f.val === 'affar' ? 'Öppna ordern' : 'Spara utfallet';
+  if (T === 'hallet') return D.f.val === 'affar' ? 'Öppna ordern' : moUppMoteVal(D.f.val) && D.f.uppMote ? 'Spara och boka mötet' : 'Spara utfallet';
   if (T === 'uteblev') return D.ingenNy ? 'Spara utan ny tid' : 'Spara och boka ny tid';
   if (T === 'flyttat') return 'Flytta mötet';
   if (T === 'avbokat') return 'Spara som avbokat';
@@ -39913,12 +39913,13 @@ function moDlgVy(D){
     kropp += moBedomDel(D);
     // Följdfrågan (F16.2) visas när frågorna är besvarade, eller inte ställs: tolv val blir fyra åt gången.
     const svarKlara = !(moSvarData(D) || {}).fel;
-    const val = [['affar', 'Affär', 'Ordern öppnas med bolagets uppgifter ifyllda.'], ['nej', 'Nej', 'Kunden tackar nej. Kortet lämnar tavlan.'], ['offert', 'Offert skickad', 'Kortet går till Följ upp med ett samtal inbokat.'], ['uppfoljning', 'Uppföljning', 'Kunden vill tänka utan att ha fått en offert.']];
+    const val = [['affar', 'Affär', 'Ordern öppnas med bolagets uppgifter ifyllda.'], ['nej', 'Nej', 'Kunden tackar nej. Kortet lämnar tavlan.'], ['offert', 'Offert skickad', 'Boka nästa möte direkt, eller ett samtal i Följ upp.'], ['uppfoljning', 'Uppföljning', 'Kunden vill tänka utan att ha fått en offert.']];
     if (svarKlara) kropp += `<div class="mo-fl bred"><span class="mo-lbl" id="mo-vl">Vad ledde mötet till?</span><div class="mo-vals" role="radiogroup" aria-labelledby="mo-vl">${val.map(([n, t, h]) => `<button type="button" class="mo-val" role="radio" aria-checked="${f.val === n}" data-moval="${n}"><b>${t}</b><small>${h}</small></button>`).join('')}</div><p class="mo-err" id="moe-val" ${e.val ? '' : 'hidden'}>${esc(e.val || '')}</p></div>`;
     if (f.val === 'nej') kropp += moSkalFalt(D);
     // Byggsteg 4: en uppföljning kan bokas som ett riktigt möte i kedjan, med kalenderhändelse och inbjudan som en bokning.
-    if (f.val === 'uppfoljning') kropp += `<div class="mo-fl bred"><div class="mo-chips"><button type="button" class="chip" data-moupptid aria-pressed="${!!f.uppMote}">Boka ett möte</button></div></div>`;
-    if (f.val === 'uppfoljning' && f.uppMote) kropp += moTidFalt(D, 'Uppföljningsmötet');
+    // Sedan 2026-11-16 också efter Offert skickad: offerten räknas, och nästa möte går ut till kundens kalender.
+    if (moUppMoteVal(f.val)) kropp += `<div class="mo-fl bred"><div class="mo-chips"><button type="button" class="chip" data-moupptid aria-pressed="${!!f.uppMote}">Boka ett möte</button></div></div>`;
+    if (moUppMoteVal(f.val) && f.uppMote) kropp += moTidFalt(D, f.val === 'offert' ? 'Nästa möte' : 'Uppföljningsmötet');
     else if (f.val === 'offert' || f.val === 'uppfoljning') kropp += moFalt(D, 'datum', f.val === 'offert' ? 'Ring kunden' : 'Följ upp den', moInp(D, 'datum', {typ:'date', extra:`min="${ndIdag()}" required`}));
     if (f.val === 'uppfoljning') kropp += moFalt(D, 'text', 'Vad ska sägas', moInp(D, 'text', {ph:'En rad, till exempel: vill prata med sin kollega', extra:'maxlength="1000"'}), {bred:true});
   }
@@ -40011,10 +40012,10 @@ function moDlgBygg(D){
     if (f.val === 'affar') return {affar:true, svar:sv};
     const data = {mote:k.mote.id, utfall:'hallet', resultat:f.val === 'offert' ? 'offert' : f.val, ...(sv ? {svar:sv} : {})};
     if (f.val === 'nej'){ if (!f.skal) return {e:{skal:'Välj ett skäl.'}}; data.skal = f.skal; }
-    if (f.val === 'uppfoljning' && f.uppMote){
+    if (moUppMoteVal(f.val) && f.uppMote){
       if (!tid) return {e:{tid:moEgenFel(D) || 'Välj en tid för mötet.'}};
       data.nyTid = tid;
-      if (t(f.text)) data.text = t(f.text);
+      if (f.val === 'uppfoljning' && t(f.text)) data.text = t(f.text);
     } else if (f.val === 'offert' || f.val === 'uppfoljning'){
       if (!/^\d{4}-\d{2}-\d{2}$/.test(f.datum || '')) return {e:{datum:'Välj ett datum.'}};
       if (f.datum < idag) return {e:{datum:'Datumet har passerat.'}};
@@ -40049,8 +40050,12 @@ function moAndraDelar(D){
 // adress (kontakten eller någon till hos kunden); annars sägs det.
 const moKortTid = lokal => moKortNar(lokal, ndIdag());
 const moKundRad = har => har ? 'Kunden får en uppdaterad inbjudan.' : 'Kunden har ingen e-post och får inget besked.';
+// Offert skickad och Uppföljning kan boka nästa möte direkt i utfallsrutan (servern: efterUtfall i motenforma.ts).
+const moUppMoteVal = v => v === 'offert' || v === 'uppfoljning';
 function moDlgSum(D){
   const m = D.k && D.k.mote; if (!m) return '';
+  // Hållet med ett nytt möte: tiden och om kunden får inbjudan. Servern bjuder in bolagets e-post och gästerna från mötet.
+  if (moTyp(D) === 'hallet' && moUppMoteVal(D.f.val) && D.f.uppMote) return D.tid ? `<b class="num">${esc(moKortTid(D.tid))}</b> · ${String(D.k.epost || '').trim() || (m.gaster || []).length ? 'Kunden får en inbjudan till sin kalender.' : 'Kunden har ingen e-post och får ingen inbjudan.'}` : '';
   // Flytta (F15.1), också Flyttat i utfallsrutan: "tis 14:30 → tors 10:00" när en ny tid är vald.
   if (moTyp(D) === 'flyttat') return D.tid && D.tid !== m.tid ? `<b class="num">${esc(moKortTid(m.tid))} → ${esc(moKortTid(D.tid))}</b> · ${moKundRad(!!String(D.k.epost || '').trim() || (m.gaster || []).length > 0)}` : '';
   if (D.typ === 'andra'){

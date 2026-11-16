@@ -6,6 +6,31 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 ---
 
 
+## 2026-11-16 · Möten: Offert skickad + nästa möte direkt
+
+**Beställningen.** "När vi bokar ett möte sen har ett möte och sen skickar en offert så måste vi välja i mötesvyn
+offertskickad och sen kunna boka ett nytt möte direkt där som går ut i kalendern till kunden. Bygg detta snabbt."
+
+**Hur.** Uppföljning hade redan **Boka ett möte** i Hållet-rutan (byggsteg 4, `nyttMote.art = 'uppfoljning'`). Samma
+val finns nu under **Offert skickad**. Servern (`efterUtfall` i motenforma.ts) sätter `offert_nar` och resultatet
+`offert` som förut, och med `nyTid` bokas nästa möte i kedjan genom samma väg som uppföljningsmötet (`laggMote`):
+samma kollegor, gäster, personer, plats och agenda, och kunden bjuds in om bolaget har e-post. Kedjans
+uppföljningsdatum blir mötesdagen. `utfallIndata` tar `nyTid` också för `offert`. Ingen migration.
+
+**En sak lagad på vägen.** Fallerar bokningen läggs kedjans uppföljning tillbaka (`kedjaFore`). Den läste inte
+`offert_nar`, så med offerten hade en fallerad bokning lämnat kedjan som "offert skickad" fast mötet saknar utfall.
+`offert_nar` läses och återställs nu också.
+
+**Mina val.** Mötet blir art `uppfoljning` (det hålls efter ett hållet möte): ingen bekräftelse, ingen mötesprovision,
+inte "bokat" i statistiken, samma regel som Uppföljning → Boka ett möte. Ingen textrad för offerten (raden blir
+"Offert skickad" som förut). Knappen heter **Spara och boka mötet**, och raden ovanför säger tiden och om kunden får
+en inbjudan.
+
+**Prov.** `tests/moten.mjs` (sex nya kontroller), tsc på rutten och motenforma utan fel, moten, motesflode,
+nav2-omladdning, nav2-skriv, moten-rutt, navnyheter gröna. Klickprovet `~/nav2-utkast/delar/moten-offert/klick-offert.mjs`
+(kopia av moten-utfall-fel/klick-fel.mjs + tio OFFERT-steg i g16) mot provsidan med stubbad server. Inte provat i
+produktionens gränssnitt.
+
 ## 2026-11-16 · Möten: anteckningar som blir en tråd (0310)
 
 **Beställningen.** "I Nav när någon bokar ett möte så bokar de oftast åt någon annan. Det vore bra ifall vi kan

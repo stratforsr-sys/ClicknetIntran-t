@@ -1089,7 +1089,8 @@ export async function POST(request: Request) {
     //    tillbaka om bokningen fallerar (byggsteg 4).
     let kedjaFore: Record<string, unknown> | null = null;
     if (a.kedja && a.nyttMote) {
-      const { data } = await db.from("mote_kedja").select("uppfoljning_datum, uppfoljning_text, inget_svar_i_rad, uppfoljning_andrad").eq("id", m.kedja_id).maybeSingle();
+      // `offert_nar` följer med: Offert skickad + ett nytt möte sätter den, och en fallerad bokning lägger tillbaka den.
+      const { data } = await db.from("mote_kedja").select("uppfoljning_datum, uppfoljning_text, inget_svar_i_rad, uppfoljning_andrad, offert_nar").eq("id", m.kedja_id).maybeSingle();
       kedjaFore = (data as Record<string, unknown> | null) ?? null;
     }
     if (a.kedja) {
