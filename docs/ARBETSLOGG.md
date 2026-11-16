@@ -31,6 +31,9 @@ nav2-omladdning, nav2-skriv, moten-rutt, navnyheter gröna. Klickprovet `~/nav2-
 (kopia av moten-utfall-fel/klick-fel.mjs + tio OFFERT-steg i g16) mot provsidan med stubbad server. Inte provat i
 produktionens gränssnitt.
 
+**Läge.** På `main` som `53c610f` efter beställarens "Pusha", produktionsbygget grönt 15:35 UTC. Ingen migration.
+Inte provat i produktionens gränssnitt: ett riktigt prov skickar en inbjudan till kunden.
+
 ## 2026-11-16 · Möten: anteckningar som blir en tråd (0310)
 
 **Beställningen.** "I Nav när någon bokar ett möte så bokar de oftast åt någon annan. Det vore bra ifall vi kan
