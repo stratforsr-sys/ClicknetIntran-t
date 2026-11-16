@@ -14,6 +14,19 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten-ratt-namn-pa-notisen",
+    rubrik: "Möten: notisen säger vem som faktiskt flyttade mötet",
+    ingress: "Flyttar, avbokar, ändrar eller bokar du om ett möte som en kollega håller i står ditt namn på notisen, inte kollegans.",
+    text: `Förut stod den som höll i mötet som avsändare när någon annan flyttade, avbokade, ändrade eller bokade om det i
+**Möten**. Flyttade du ett möte som en kollega höll i fick du själv notisen "Kollegan flyttade … Svara igen", och
+kollegan fick ingenting. Nu står ditt namn på det de andra på mötet får, och den som håller i mötet får veta att
+du flyttade eller avbokade det. Du ombeds inte svara på din egen flytt, och bokar du ett möte där du själv är med
+har du redan sagt ja.`,
+    datum: "2026-11-16",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "moten-statistik-panel",
     rubrik: "Möten: statistiken går att läsa på några sekunder",
     ingress: "Show rate, no-show rate, svar på bekräftelsen, kvalificerade och closing rate i stora rutor, med det som väntar i dag längst ner.",

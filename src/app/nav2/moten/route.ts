@@ -284,7 +284,11 @@ export async function POST(request: Request) {
       // Ingen begäran att haka i. Utkorgsjobbet tar raderna inom en minut.
     }
   };
-  /** Flytta mötets kalenderhändelse. Aktören är hållaren själv, eller `lk_flytta` körs som hållaren (som `bokaAtKollega`). */
+  /**
+   * Flytta mötets kalenderhändelse. Aktören är hållaren själv, eller `lk_flytta` körs i hållarens kalender (som
+   * `bokaAtKollega`). Rätten prövas då på hållaren, men notiserna står på den som flyttade (`p_utfort_av`, 0309):
+   * hållaren får veta vem som flyttade, och den som flyttade ombeds inte svara på sin egen flytt.
+   */
   async function flyttaIKalender(m: MoteRad, dag: string, start: string): Promise<string | null> {
     if (!m.event_id) return null;
     if (m.halls_av === mig) {
@@ -292,7 +296,7 @@ export async function POST(request: Request) {
       return r.fel ?? null;
     }
     // Bara mötets egen händelse, och bara efter att `farSe` prövats på mötet.
-    const r = await lk<{ undo_id: string }>("lk_flytta", { p_aktor: m.halls_av, p_event: m.event_id, p_dag: dag, p_tid: `${start}:00`, p_minuter: null });
+    const r = await lk<{ undo_id: string }>("lk_flytta", { p_aktor: m.halls_av, p_event: m.event_id, p_dag: dag, p_tid: `${start}:00`, p_minuter: null, p_utfort_av: mig });
     if (!r.ok) return r.fel;
     efterKalender();
     return null;
@@ -303,7 +307,7 @@ export async function POST(request: Request) {
       const r = await stallIn(m.event_id);
       return r.fel ?? null;
     }
-    const r = await lk<{ undo_id: string }>("lk_stall_in", { p_aktor: m.halls_av, p_event: m.event_id });
+    const r = await lk<{ undo_id: string }>("lk_stall_in", { p_aktor: m.halls_av, p_event: m.event_id, p_utfort_av: mig });
     if (!r.ok) return r.fel;
     efterKalender();
     return null;
@@ -745,6 +749,8 @@ export async function POST(request: Request) {
       p_online_url: i.lank,
       p_agenda: (i.agenda ?? "").slice(0, 4000),
       p_reminder_min: 10,
+      // Den som bokade (eller bokade om) står på inbjudningarna (0309). Hållaren får Mötens `mote-bokat` i stället.
+      p_utfort_av: mig,
     });
     if (!svar.ok) return { fel: svar.fel };
     try {
@@ -1624,6 +1630,8 @@ export async function POST(request: Request) {
         p_reminder_off: null,
         p_show_as: null,
         p_privat: null,
+        // Den som ändrade står på kalenderns notiser (0309). Hållaren får Mötens `mote-andrat` nedan i stället.
+        p_utfort_av: mig,
       });
       if (!s.ok) {
         if (!(await tillbaka())) return svar({ fel: `Kalendern tog inte emot ändringen (${s.fel}) och tavlan kunde inte tas tillbaka. Kolla mötet i kalendern.` }, 500);

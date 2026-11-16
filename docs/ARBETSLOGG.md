@@ -6,6 +6,30 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 ---
 
 
+## 2026-11-16 · Möten: den som gjorde det står på kalenderns notiser (0309)
+
+**Felet.** Beställaren (Zen) flyttade Nordic Grön & Markservice AB:s möte i Möten 10:56 och fick notisen "Mick
+flyttade “Clicknet - Nordic Grön & Markservice AB: Möte”. Svara igen". Zen bokade mötet, Mick håller i det.
+Möten kör kalenderns `lk_flytta`/`lk_stall_in`/`lk_spara_mote`/`lk_skapa_mote` SOM HÅLLAREN när någon annan
+agerar (`p_aktor = halls_av`), eftersom `lk_far_andra` bara släpper in organisatören och den med ombud. Allt efter
+behörighetsprövningen blev därför hållarens: avsändaren på varje notis, vem som slipper svara igen (Zens svar
+nollställdes till `vantar`), och hållaren själv fick ingen notis alls (`lk_notis` hoppar över `till = av`).
+Mick fick alltså aldrig veta att hans möte flyttats till tis 17 nov 09:00.
+
+**Rättelsen.** 0309 ger de fyra funktionerna en sista parameter `p_utfort_av uuid default null`. Rätten prövas
+som förut på `p_aktor` (Möten har redan prövat sina egna regler), sedan `p_aktor := coalesce(p_utfort_av, p_aktor)`
+så att resten skrivs som den som gjorde det. Den som flyttade behåller sitt ja (`lk_flytta` skickar den i
+`p_behall`), den som bokar och själv är med får ja (`lk_skapa_mote`). Hållaren får kalenderns besked vid Flytta och
+Avboka, där Möten inte säger något själv; vid Ändra och bokning åt kollega tiger kalendern mot hållaren eftersom
+Möten redan skickar `mote-andrat`/`mote-bokat`. Utan parametern (Kalendern) är allt som förut. Funktionstexterna
+togs ur pg_proc, inte ur migrationsfilerna. Rutten skickar `p_utfort_av: mig` i alla fyra anropen.
+
+Utfallet själv (`utfall_av`, `resultat_av`, `mote.utfall`-händelsen) skrevs redan som den inloggade; det som var
+fel vid Uteblev + ny tid var ombokningens kalenderinbjudan (`bokaAtKollega`), som nu också står på den som gjorde det.
+
+**Prov.** `tests/moten-utfort-av-db.mjs` (i `test:alla`): kör 0309 i en transaktion som rullas tillbaka; rött utan
+0309 (42883), 31/31 med. `test:moten-rutt`, `test:moten`, `test:navnyheter` gröna; tsc på route.ts utan fel.
+
 ## 2026-11-15 · Möten: statistiken som instrumentpanel (på `main` `112f8ce`)
 
 **Mergad** 2026-11-15 på beställarens "merga till main men endast det från den här sessionen": grenens tre
