@@ -3,7 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { fullName } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import type { Motespost } from "@/lib/provision-motor";
-import { lasInstallningar, lokalDag, manadFor } from "@/lib/nav2/motesflode";
+import { fyllForegaende, lasInstallningar, lokalDag, manadFor } from "@/lib/nav2/motesflode";
+import { lasForegaende } from "@/lib/nav2/motesprovision-server";
 import { hallatSkal, vantandeFor, type MotesvyIndata, type MotesvyRad, type VantandeMote } from "@/lib/nav2/motesprovision";
 
 /**
@@ -228,7 +229,8 @@ export async function hamtaMotesvy(klient: SupabaseClient, jag: string, franOchM
       const kedjeRader = await lasIBitar(kandidatRader.map((r) => String(r.kedja_id)), (bit) =>
         admin.from("mote").select("id, art, foregaende_id, bokat_av").in("kedja_id", bit),
       );
-      const karta = new Map(kedjeRader.map((m) => [String(m.id), { art: String(m.art), foregaende: typeof m.foregaende_id === "string" ? m.foregaende_id : null, bokatAv: String(m.bokat_av) }]));
+      // Föregående möten på andra kort (en ombokning för samma kund, 0313). Ett läsfel ger kortens egna: det här är en visning.
+      const karta = await fyllForegaende(new Map(kedjeRader.map((m) => [String(m.id), { art: String(m.art), foregaende: typeof m.foregaende_id === "string" ? m.foregaende_id : null, bokatAv: String(m.bokat_av) }])), (ids) => lasForegaende(admin)(ids).catch(() => []));
       const kandidater: VantandeMote[] = kandidatRader.map((r) => {
         const id = String(r.id);
         const tid = String(r.mote_tid);

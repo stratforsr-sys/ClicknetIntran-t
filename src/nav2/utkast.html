@@ -39763,6 +39763,28 @@ function moFragor(){ const d = ndMo(); return ((d && d.inst && d.inst.fragor) ||
 const moEgenProv = m => !!m && !!m.bokatAv && m.bokatAv === ND.jag.id && m.hallsAv !== ND.jag.id && !!(ndMo() || {}).provisionPaSpel;
 const moFarBedoma = m => !!m && (m.hallsAv === ND.jag.id || (moAdmin() && !moEgenProv(m)));
 const MOUTFALL = [['hallet', 'Hållet'], ['uteblev', 'Uteblev'], ['flyttat', 'Flyttat'], ['avbokat', 'Avbokat']];
+/* Vem höll mötet (2026-11-16): bokaren står kvar, men den som faktiskt höll mötet sätter utfallet och svarar på
+   frågorna. Valen är de som var med på mötet (den som står som hållare, bokaren och kollegorna), bland dem som får
+   hålla möten (ND.moten.saljare); jag står tvåa när jag var med. Samma krets som servern kräver (`hallareByte`,
+   parter). D.holl är valet när det inte är den som står som hållare; servern skriver det med utfallet (`holl`). */
+function moHollVal(m){
+  const kan = new Set((ndMo().saljare || []).map(x => x.id)), med = (m.med || []).map(x => x.id || x);
+  const parter = [m.hallsAv, m.bokatAv, ...med], jag = parter.includes(ND.jag.id) ? [ND.jag.id] : [];
+  return [m.hallsAv, ...jag, ...parter.slice(1)].filter((id, i, a) => id && a.indexOf(id) === i && (id === m.hallsAv || kan.has(id)));
+}
+const moHollNamn = (m, id) => id === ND.jag.id ? 'Jag' : moFor(id === m.hallsAv ? m.hallsAvNamn : id === m.bokatAv && m.bokatAvNamn ? m.bokatAvNamn : moPersNamn(id));
+// Mötet som den som valts som hållare: frågorna och bedömningen räknas med henne.
+function moEffM(D){
+  const m = D.m || D.k.mote;
+  return D.holl && m && D.holl !== m.hallsAv ? {...m, hallsAv:D.holl, hallsAvNamn:D.holl === ND.jag.id ? ND.jag.namn : moPersNamn(D.holl)} : m;
+}
+function moHollDel(D){
+  const m = D.k.mote, ids = moHollVal(m);
+  if (ids.length < 2) return '';
+  const vald = D.holl || m.hallsAv;
+  const rad = vald !== m.hallsAv ? `<p class="mo-ph" id="mo-hlh">${esc(moFor(m.hallsAvNamn))} står som hållare. ${vald === ND.jag.id ? 'Du blir' : esc(moHollNamn(m, vald)) + ' blir'} hållare för det här mötet.</p>` : '';
+  return `<div class="mo-fl bred"><span class="mo-lbl" id="mo-hl">Vem höll mötet?</span><div class="mo-useg" role="radiogroup" aria-labelledby="mo-hl">${ids.map(id => `<button type="button" class="mo-segb" role="radio" aria-checked="${vald === id}" data-mohl="${id}">${esc(moHollNamn(m, id))}</button>`).join('')}</div>${rad}</div>`;
+}
 function moUtfallVal(D){
   return `<div class="mo-fl bred"><span class="mo-lbl" id="mo-ul">Hur gick det?</span><div class="mo-useg" role="radiogroup" aria-labelledby="mo-ul">${MOUTFALL.map(([n, t], i) => `<button type="button" class="mo-segb" role="radio" aria-checked="${D.u === n}" data-mou="${n}"${i === 0 ? ' id="mod-u"' : ''}>${t}</button>`).join('')}</div><p class="mo-err" id="moe-u" ${D.fel.u ? '' : 'hidden'}>${esc(D.fel.u || '')}</p></div>`;
 }
@@ -39775,7 +39797,7 @@ function moNivaRad(D, q, m){
 }
 // Frågedelen. Den som inte är hållare eller admin svarar inte: mötet väntar på hållaren. Noll aktiva frågor = ingen frågedel.
 function moBedomDel(D){
-  const m = D.m || D.k.mote, q = moFragor(), sv = D.svar || {}, e = D.fel;
+  const m = moEffM(D), q = moFragor(), sv = D.svar || {}, e = D.fel;
   if (!moFarBedoma(m)) return `<div class="mo-fl bred mo-hb"><b>Hållaren bedömer mötet</b><small>Mötet väntar på bedömning tills ${esc(moFor(m.hallsAvNamn) || 'hållaren')} har svarat på frågorna.</small></div>`;
   if (!q.length) return D.typ === 'bedom' ? '<p class="muted mo-hint">Inga frågor används just nu.</p>' : '';
   const fr = q.map((x, i) => `<div class="mo-fl bred mo-q"><span class="mo-lbl" id="mo-q-${esc(x.id)}">${esc(x.text)}</span><div class="mo-yn" role="radiogroup" aria-labelledby="mo-q-${esc(x.id)}">${[['1', 'Ja'], ['0', 'Nej']].map(([v, t]) => `<button type="button" class="mo-ynb" role="radio" aria-checked="${sv[x.id] === (v === '1')}" data-mosv="${esc(x.id)}|${v}"${i === 0 && v === '1' ? ' id="mod-svar"' : ''}>${t}</button>`).join('')}</div></div>`).join('');
@@ -39783,7 +39805,7 @@ function moBedomDel(D){
 }
 // Svaren som skickas: null när frågorna inte ställs (inte hållare eller admin, eller inga aktiva frågor), {fel} när något saknas.
 function moSvarData(D){
-  const m = D.m || D.k.mote, q = moFragor(), sv = D.svar || {};
+  const m = moEffM(D), q = moFragor(), sv = D.svar || {};
   if (!moFarBedoma(m) || !q.length) return null;
   if (!q.every(x => typeof sv[x.id] === 'boolean')) return {fel:'Svara på frågorna.'};
   return q.map(x => ({id:x.id, ja:sv[x.id]}));
@@ -39797,7 +39819,7 @@ function moVidare(D, steg){
   let n = null;
   if (steg === 'val') n = q(D.f.val === 'nej' ? '[data-moskal]' : D.f.val === 'affar' ? spara : '#mod-datum');
   else if (moTyp(D) === 'hallet' || D.typ === 'bedom' || (D.typ === 'ratta' && D.u === 'hallet')){
-    const obesv = moFarBedoma(D.m || D.k.mote) ? moFragor().find(x => typeof (D.svar || {})[x.id] !== 'boolean') : null;
+    const obesv = moFarBedoma(moEffM(D)) ? moFragor().find(x => typeof (D.svar || {})[x.id] !== 'boolean') : null;
     n = obesv ? q(`[data-mosv="${CSS.escape(obesv.id)}|1"]`) : q('.mo-val[aria-checked="true"]') || q('.mo-val') || q(spara);
   } else if (moTyp(D) === 'avbokat' || D.typ === 'ratta') n = q(spara);
   if (n) n.focus({preventScroll:false});
@@ -39871,16 +39893,16 @@ function moDlgVy(D){
   const titel = {boka:k ? 'Boka nytt möte' : 'Boka möte', flyttat:'Flytta mötet', nej:'Nej', andra:'Ändra mötet', utfall:'Sätt utfall', uppf:'Ändra uppföljningen', ratta:'Rätta utfall', bedom:D.ifr ? 'Ändra svaren' : 'Bedöm mötet'}[D.typ];
   const under = {boka:k ? `${k.namn}. Uppgifterna är ifyllda från kortet.` : 'Ett kort per bolag. Är numret redan bokat får du veta det.', flyttat:`${k && k.namn}. Nu ${k && k.mote ? moNar(k.mote.tid) : ''}. En ny tid är inte bekräftad.`, nej:`${k && k.namn}. Kortet lämnar tavlan.`, uppf:`${k && k.namn}.`, ratta:`${D.m ? D.m.namn : ''}. ${D.m ? moNar(D.m.tid) : ''}. Står som ${D.m ? moUtfallOrd(D.m.utfall) : ''}.`, andra:`${k && k.namn}. De som är med får besked om det som rör dem.`, utfall:`${k && k.namn}. ${k && k.mote ? moNar(k.mote.tid) : ''}.`, bedom:`${D.m ? D.m.namn : ''}. ${D.m ? moNar(D.m.tid) : ''}.${D.ifr ? (D.gamla ? ' Nivån är ifrågasatt. Svaren står som de gavs. Ändra det som är fel.' : ' Nivån är ifrågasatt. De nya svaren ersätter de gamla.') : D.foljd != null ? (D.foljd ? ` Nästa som väntar på bedömning, ${D.foljd} till efter det här.` : ' Det sista som väntar på bedömning.') : ''}`}[D.typ];
   const T = moTyp(D);
-  let kropp = D.typ === 'utfall' ? moUtfallVal(D) : '';
+  let kropp = D.typ === 'utfall' ? moUtfallVal(D) + (D.u === 'hallet' ? moHollDel(D) : '') : '';
   if (D.typ === 'boka' || D.typ === 'andra'){
     const sal = ndMo().saljare, hn = moPersNamn(f.hallsAv);
-    // I Ändra står hållaren fast: kalenderns arrangör byts inte på ett möte som redan är bokat.
-    const vem = D.typ === 'andra'
-      ? `<div class="mo-fl bred"><span class="mo-lbl">Vem håller</span><p class="mo-fast">${avatar(hn, 22)}<span>${esc(hn)}${f.hallsAv === ND.jag.id ? ' (jag)' : ''}</span></p>${moMedKnapp(D)}</div>`
-      : moFalt(D, 'hallsAv', 'Vem håller', `<select class="uin" id="mod-hallsAv" name="hallsAv">${sal.map(x => `<option value="${x.id}" ${f.hallsAv === x.id ? 'selected' : ''}>${esc(x.namn)}${x.id === ND.jag.id ? ' (jag)' : ''}</option>`).join('')}</select>${moMedKnapp(D)}`, {bred:true});
+    // Vem håller går att byta också i Ändra (2026-11-16): mötet flyttas då till den nyas kalender, kunden får ingenting.
+    // Står hållaren inte bland säljarna (slutat) står hon kvar som ett val, så att valet inte byter tyst.
+    const salV = sal.some(x => x.id === f.hallsAv) ? sal : [{id:f.hallsAv, namn:hn}, ...sal];
+    const vem = moFalt(D, 'hallsAv', 'Vem håller', `<select class="uin" id="mod-hallsAv" name="hallsAv">${salV.map(x => `<option value="${x.id}" ${f.hallsAv === x.id ? 'selected' : ''}>${esc(x.namn)}${x.id === ND.jag.id ? ' (jag)' : ''}</option>`).join('')}</select>${D.typ === 'andra' && D.orig && f.hallsAv !== D.orig.hallsAv ? '<p class="mo-ph" id="mo-hbh">Mötet flyttas till den nya hållarens kalender. Kunden får inget besked.</p>' : ''}${moMedKnapp(D)}`, {bred:true});
     // Ordningen (2026-11-13): allt om kunden på ett ställe (bolaget, kontakten, fler hos kunden, källan och nuläget),
     // sedan mötet (vem, när, var och agendan). Inget ligger hopfällt: det som ligger dolt blir inte ifyllt.
-    kropp = `${D.franUtkast ? '<div class="mo-fl bred"><p class="mo-ph">Du fortsätter på utkastet du lämnade. <button type="button" class="tlink inl" data-moborjaom>Börja om</button></p></div>' : ''}<h3 class="mo-sek">Kunden</h3>
+    kropp = `${D.typ === 'boka' && k && moArtRad(k) ? `<div class="mo-fl bred"><p class="mo-ph mo-art">${esc(moArtRad(k))}</p></div>` : ''}${D.franUtkast ? '<div class="mo-fl bred"><p class="mo-ph">Du fortsätter på utkastet du lämnade. <button type="button" class="tlink inl" data-moborjaom>Börja om</button></p></div>' : ''}<h3 class="mo-sek">Kunden</h3>
       ${moFalt(D, 'namn', 'Bolag', moInp(D, 'namn', {extra:'maxlength="150" required'}), {ob:true})}
       ${moFalt(D, 'doman', 'Webbadress', moInp(D, 'doman', {ph:'bolaget.se', extra:'inputmode="url" spellcheck="false" maxlength="200"'}))}
       ${moFalt(D, 'kontakt', 'Kontakt', moInp(D, 'kontakt', {ph:'Namn', extra:'maxlength="200"'}))}
@@ -40009,8 +40031,9 @@ function moDlgBygg(D){
     if (sv && sv.fel) e.svar = sv.fel;
     else if (!f.val) e.val = 'Välj vad mötet ledde till.';
     if (Object.keys(e).length) return {e};
-    if (f.val === 'affar') return {affar:true, svar:sv};
-    const data = {mote:k.mote.id, utfall:'hallet', resultat:f.val === 'offert' ? 'offert' : f.val, ...(sv ? {svar:sv} : {})};
+    const holl = D.holl && D.holl !== k.mote.hallsAv ? D.holl : null;
+    if (f.val === 'affar') return {affar:true, svar:sv, holl};
+    const data = {mote:k.mote.id, utfall:'hallet', resultat:f.val === 'offert' ? 'offert' : f.val, ...(sv ? {svar:sv} : {}), ...(holl ? {holl} : {})};
     if (f.val === 'nej'){ if (!f.skal) return {e:{skal:'Välj ett skäl.'}}; data.skal = f.skal; }
     if (moUppMoteVal(f.val) && f.uppMote){
       if (!tid) return {e:{tid:moEgenFel(D) || 'Välj en tid för mötet.'}};
@@ -40031,6 +40054,7 @@ function moDlgBygg(D){
 function moAndraBygg(D, tid){
   const f = D.f, o = D.orig, m = D.k.mote, t = v => String(v || '').trim(), data = {mote:m.id, fore:m.tid};
   ['namn', 'kontakt', 'telefon', 'epost', 'doman', 'kalla', 'agenda', 'nulage'].forEach(n => { if (t(f[n]) !== t(o[n])) data[n] = t(f[n]); });
+  if (f.hallsAv && f.hallsAv !== m.hallsAv) data.hallsAv = f.hallsAv;
   if (D.tid !== m.tid){ data.dag = tid.dag; data.start = tid.start; }
   const plats = x => x.platsTyp === 'plats' ? 'plats|' + t(x.adress) : x.platsTyp === 'teams' ? 'teams|' + t(x.lank) : 'telefon';
   if (plats(f) !== plats(o)){ data.platsTyp = f.platsTyp; if (f.platsTyp === 'plats') data.adress = t(f.adress); if (f.platsTyp === 'teams') data.lank = t(f.lank); }
@@ -40043,7 +40067,7 @@ function moAndraBygg(D, tid){
 // platsen är en ändring var, kollegorna och gästerna likaså.
 function moAndraDelar(D){
   const d = moAndraBygg(D, D.tid ? {dag:D.tid.slice(0, 10), start:D.tid.slice(11, 16)} : {dag:'', start:''}).data || {};
-  const falt = ['namn', 'kontakt', 'telefon', 'epost', 'doman', 'kalla', 'agenda', 'nulage', 'med', 'personer'].filter(n => n in d).length;
+  const falt = ['namn', 'kontakt', 'telefon', 'epost', 'doman', 'kalla', 'agenda', 'nulage', 'med', 'personer', 'hallsAv'].filter(n => n in d).length;
   return {antal:falt + ('dag' in d ? 1 : 0) + ('platsTyp' in d ? 1 : 0), tid:'dag' in d && !!D.tid, plats:'platsTyp' in d};
 }
 // Raden ovanför Spara: vad som händer med tiden, och om kunden får besked. Kundraden är bara sann när kunden har en
@@ -40084,7 +40108,17 @@ async function moDlgSkicka(){
     if (el) el.focus({preventScroll:false}); else document.getElementById('moe-' + forst)?.scrollIntoView({block:'nearest'});
     return;
   }
-  if (b.affar){ moAffar(D.k, D.k.mote ? D.k.mote.id : null, b.svar, D); return; }
+  // Affär går via orderformuläret och `kund`: den som höll mötet byts först (samma prövning som i utfallet).
+  if (b.affar){
+    if (b.holl){
+      D.sparar = true; D.fe = ''; moDlgRita();
+      const h = await ndMoPost('hallare', {mote:D.k.mote.id, ny:b.holl}, {ladda:false, tyst:true});
+      D.sparar = false;
+      if (!h.ok || h.fel){ D.fe = h.fel || 'Hållaren kunde inte bytas.'; moDlgRita(); return; }
+      D.k.mote.hallsAv = b.holl; D.k.mote.hallsAvNamn = b.holl === ND.jag.id ? ND.jag.namn : moPersNamn(b.holl); D.holl = null;
+    }
+    moAffar(D.k, D.k.mote ? D.k.mote.id : null, b.svar, D); return;
+  }
   if (b.inget){ moDlgStang(); toast('Inget ändrades.'); return; }
   D.sparar = true; D.fel = {}; D.fe = ''; D.laslage = false; moDlgRita();
   if (D.typ === 'boka' || (D.typ === 'andra' && 'kalla' in b.data)) moKallaMinns(String(D.f.kalla).trim());
@@ -40303,6 +40337,19 @@ function moPipeKort(k){
     ${kn && !ensam ? `<div class="mo-kn">${kn}</div>` : ''}</article>`;
 }
 // Ett möte som avgjorts i månaden. Beloppet syns bara för den som får mötesprovision.
+// "Det var jag som höll mötet" (2026-11-16): på ett möte som väntar på någon annans bedömning, för den som var med och
+// får hålla möten. Servern prövar resten (pengaspärren). Make your dream väntade på Zen, men Fredrik höll mötet.
+const moVarJag = a => a.hallsAv !== ND.jag.id && ((a.deltagare || []).includes(ND.jag.id) || a.bokatAv === ND.jag.id) && (ndMo().saljare || []).some(x => x.id === ND.jag.id);
+async function moJagHoll(a){
+  const s = await ndMoPost('hallare', {mote:a.mote, ny:ND.jag.id}, {ladda:false, tyst:true});
+  if (!s.ok || s.fel){ toast(s.fel || 'Hållaren kunde inte bytas.'); return; }
+  a.hallsAv = ND.jag.id; a.hallsAvNamn = ND.jag.namn;
+  ndMoBedom({id:a.mote, namn:a.namn, tid:a.tid, hallsAv:a.hallsAv, hallsAvNamn:a.hallsAvNamn, bokatAvNamn:a.bokatAvNamn});
+  ndOmlas('mo');
+}
+// Hur ett möte från kortet räknas (2026-11-16): samma regel som servern (motesArt, mote_foregaende). Ett möte efter det
+// första är aldrig ett nytt bokat möte. Samma kund på ett annat kort syns först i kvittot.
+const moArtRad = k => k.traffad ? 'Uppföljning: räknas inte som ett nytt bokat möte.' : (k.historik || []).length ? 'Nytt försök: räknas som ombokning, inte som ett nytt bokat möte.' : '';
 function moAvgKort(a){
   const d = ndMo(), visa = d.provisionPaSpel !== null && d.provisionPaSpel !== undefined, kr = visa && a.belopp !== null ? ` · ${Math.round(a.belopp).toLocaleString('sv-SE')}` : '';
   const [txt, ton] = a.utfall === 'hallet' ? (a.niva === 'kvalificerat' ? ['kvalificerat', 'ok'] : a.niva === 'hallet' ? ['hållet', ''] : a.vantarBedomning ? ['väntar på bedömning', 'vb'] : ['hållet', ''])
@@ -40311,7 +40358,7 @@ function moAvgKort(a){
   const namn = oppen ? `<button class="mo-ks" data-moopen="${a.kedja}"><b class="mo-nm" title="${esc(a.namn)}">${esc(a.namn)}</b></button>` : `<b class="mo-nm" title="${esc(a.namn)}">${esc(a.namn)}</b>`;
   return `<article class="mo-kort mo-pipe ${a.utfall === 'hallet' ? '' : 'mo-tapp'}" data-mote="${a.mote}">
     <span class="mo-pt2"><span>${+a.tid.slice(8, 10)} ${FRMK[+a.tid.slice(5, 7)]}</span><span class="mo-ut ${ton}">${txt}${kr}</span></span>${namn}
-    <div class="mo-pf"><span class="mo-ini" aria-hidden="true">${esc(moIni(a.hallsAvNamn))}</span><span>${esc(moFor(a.hallsAvNamn))}</span>${moAdmin() && a.affar !== true ? `<button class="tlink mo-ratta" data-moratta="${a.mote}" aria-label="Rätta utfall för ${esc(a.namn)}">Rätta utfall</button>` : ''}</div>${a.skal && a.utfall !== 'hallet' && visa ? `<small class="mo-skal" title="${esc(a.skal)}">${esc(a.skal)}</small>` : ''}${a.vantarBedomning && moFarBedoma(a) ? `<div class="mo-kn"><button class="btn btn-p btn-sm" data-mobedom="${a.mote}">Bedöm</button></div>` : ''}</article>`;
+    <div class="mo-pf"><span class="mo-ini" aria-hidden="true">${esc(moIni(a.hallsAvNamn))}</span><span>${esc(moFor(a.hallsAvNamn))}</span>${moAdmin() && a.affar !== true ? `<button class="tlink mo-ratta" data-moratta="${a.mote}" aria-label="Rätta utfall för ${esc(a.namn)}">Rätta utfall</button>` : ''}</div>${a.skal && a.utfall !== 'hallet' && visa ? `<small class="mo-skal" title="${esc(a.skal)}">${esc(a.skal)}</small>` : ''}${a.vantarBedomning && moFarBedoma(a) ? `<div class="mo-kn"><button class="btn btn-p btn-sm" data-mobedom="${a.mote}">Bedöm</button></div>` : a.vantarBedomning && moVarJag(a) ? `<div class="mo-kn"><button class="btn btn-s btn-sm" data-mohallare="${a.mote}">Det var jag som höll mötet</button></div>` : ''}</article>`;
 }
 function moKortVy(k){
   if (k.mote && moFas(k) !== 'avgjort') return moPipeKort(k);
@@ -41191,6 +41238,7 @@ document.addEventListener('click', e => {
     if (ds.mopin !== undefined){ stopp(); moPersLagg(D); return; }
     if (ds.mopx !== undefined){ stopp(); moPersTa(D, +ds.mopx); return; }
     if (ds.mokallapil !== undefined){ stopp(); if (D.kallaLista){ D.kallaLista = false; moKallaRita(); } else moKallaOppna(D); document.getElementById('mod-kalla')?.focus({preventScroll:true}); return; }
+    if (ds.mohl){ stopp(); D.holl = ds.mohl === D.k.mote.hallsAv ? null : ds.mohl; D.fel = {}; D.fe = ''; D.rort = true; moDlgRita(); return; }
     if (ds.mou){ stopp(); D.u = ds.mou; D.fel = {}; D.fe = ''; D.rort = true; if ((ds.mou === 'flyttat' || ds.mou === 'uteblev') && !D.tider) moHamtaTider(); moDlgRita(); moVidare(D, 'u'); return; }
     if (ds.moru){ stopp(); D.u = ds.moru; D.fel = {}; D.fe = ''; D.rort = true; moDlgRita(); moVidare(D, 'u'); return; }
     if (ds.mosv){ stopp(); const [qid, v] = ds.mosv.split('|'); D.svar[qid] = v === '1'; delete D.fel.svar; D.rort = true; moDlgRita(); const r = document.getElementById('moRes'); if (r && /^Räknas/.test(r.textContent)) moSag(r.textContent); moVidare(D, 'svar'); return; }
@@ -41233,6 +41281,7 @@ document.addEventListener('click', e => {
   if (ds.molas !== undefined){ stopp(); moLasOm(); return; }
   if (ds.moalla){ stopp(); moVisaAlla(ds.moalla); return; }
   if (ds.moratta){ stopp(); const a = ndMo().avgjorda.find(x => x.mote === ds.moratta); if (a && moAdmin()) ndMoRatta(a); return; }
+  if (ds.mohallare){ stopp(); const a = ndMo().avgjorda.find(x => x.mote === ds.mohallare); if (a) moJagHoll(a); return; }
   if (ds.mobedom){ stopp(); const a = ndMo().avgjorda.find(x => x.mote === ds.mobedom); if (a) ndMoBedom({id:a.mote, namn:a.namn, tid:a.tid, hallsAv:a.hallsAv, hallsAvNamn:a.hallsAvNamn, bokatAvNamn:a.bokatAvNamn}); return; }
   if (ds.moorder){ stopp(); ordGa(+ds.moorder); return; }
   if (ds.movy){ stopp(); S.moStat = ds.movy === 'stat'; S.moTillbaka = null; if (typeof MSP !== 'undefined'){ MSP.blad = null; MSP.anim = S.moStat; } render(); document.querySelector(`[data-movy="${ds.movy}"]`)?.focus({preventScroll:true}); return; }

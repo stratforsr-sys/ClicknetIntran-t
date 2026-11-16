@@ -260,6 +260,7 @@ const RUBRIK: Record<string, string> = {
   "mote.anteckning_skriven": "Möte: anteckning skriven",
   "mote.anteckning_andrad": "Möte: anteckning ändrad",
   "mote.anteckning_borttagen": "Möte: anteckning borttagen",
+  "mote.hallare_bytt": "Möte: ny hållare",
   "news.archived": "Nyhet arkiverad",
   "news.drafted": "Nyhet sparad som utkast",
   "news.published": "Nyhet publicerad",

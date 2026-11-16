@@ -8,6 +8,7 @@ import {
   harLastBelopp,
   rattelseNot,
   ursprungligBokare as ursprungligIKedjan,
+  fyllForegaende,
   type Lage,
   type MotenInst,
   type ProvisionsRad,
@@ -80,8 +81,17 @@ export async function ursprungligBokare(db: Db, moteId: string): Promise<string 
   const { data, error: e2 } = await db.from("mote").select("id, art, foregaende_id, bokat_av").eq("kedja_id", kedja).limit(1000);
   if (e2) throw fel("Kedjans möten gick inte att läsa", e2);
   const moten = (data ?? []) as unknown as { id: string; art: string; foregaende_id: string | null; bokat_av: string }[];
-  return ursprungligIKedjan(moteId, new Map(moten.map((m) => [m.id, { art: m.art, foregaende: m.foregaende_id, bokatAv: m.bokat_av }])));
+  // En ombokning kan följa på ett möte på ett annat kort för samma kund (0313): kartan fylls på därifrån.
+  const karta = await fyllForegaende(new Map(moten.map((m) => [m.id, { art: m.art, foregaende: m.foregaende_id, bokatAv: m.bokat_av }])), lasForegaende(db));
+  return ursprungligIKedjan(moteId, karta);
 }
+
+/** Läsaren till `fyllForegaende`: mötena med de id:na, var de än ligger. Ett läsfel kastar (pengar: aldrig "ingen bokare"). */
+export const lasForegaende = (db: Db) => async (ids: string[]): Promise<{ id: string; art: string; foregaende: string | null; bokatAv: string }[]> => {
+  const { data, error } = await db.from("mote").select("id, art, foregaende_id, bokat_av").in("id", ids).limit(ids.length);
+  if (error) throw fel("Föregående möten gick inte att läsa", error);
+  return ((data ?? []) as unknown as { id: string; art: string; foregaende_id: string | null; bokat_av: string }[]).map((m) => ({ id: m.id, art: m.art, foregaende: m.foregaende_id, bokatAv: m.bokat_av }));
+};
 
 /** Bolagets namn för rättelsens text. Ett läsfel ger en neutral text: namnet får aldrig stoppa pengarna. */
 async function bolagsnamn(db: Db, kedjaId: string): Promise<string> {

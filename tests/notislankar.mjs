@@ -117,6 +117,8 @@ ok("fel-lagad och fel-meddelande → rapporten", alla("fel-lagad", /^`\/fel\/\$\
 ok("mote-bokat → mötet", alla("mote-bokat", /^`\/moten\/\$\{/));
 ok("mote-andrat → mötet", alla("mote-andrat", /^`\/moten\/\$\{/));
 ok("mote-anteckning → kortets anteckningar", alla("mote-anteckning", /^`\/moten\/\$\{k\.id\}\?visa=anteckningar`$/));
+ok("mote-hallare → mötet", alla("mote-hallare", /^`\/moten\/\$\{m\.id\}`$/));
+ok("mote-bedom → mötet", alla("mote-bedom", /^`\/moten\/\$\{m\.id\}`$/));
 ok("konto-roll, konto-organisation och konto-behorighet → profilen", ["konto-roll", "konto-organisation", "konto-behorighet"].every((k) => alla(k, /^"\/profil"$/)));
 ok("utbildning-fraga → föreläsningen", alla("utbildning-fraga", /^`\/utbildning\/forelasning\/\$\{/));
 ok("utbildning-repetition → repetitionen", alla("utbildning-repetition", /^"\/utbildning\/repetition"$/));

@@ -3,12 +3,13 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fullName, hasRole, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
+import { lasForegaende } from "@/lib/nav2/motesprovision-server";
 import { dagarBakat, svenskTidpunkt, svenskVeckodag, svensktDatum } from "@/lib/klocka";
 import { lokal } from "./leads";
 import { antalNya } from "./motesanteckning";
 import { arHallare, arKapad, nejSkal, saljarePerKedja, senastAvgjorda, skivor, slaIhopAvgjorda, sorteraAvgjorda, farAndraInstallning, farRattaUtfall, farSeInstallningar, KOLUMNER, MOTE_PLATS, platsTyp, type Kolumn, type Platstyp } from "./motenforma";
 import {
-  bekraftelseFonster, bradska, fordela, kortFas, lasInstallningar, manadFor, motesVal, PIPE_KOLUMNER, ringIgenTid, skaBekraftas, sorteraFas, sparadeSvar, ursprungligBokare,
+  bekraftelseFonster, bradska, fordela, kortFas, lasInstallningar, manadFor, motesVal, PIPE_KOLUMNER, ringIgenTid, skaBekraftas, sorteraFas, sparadeSvar, ursprungligBokare, fyllForegaende,
   type MotenInst, type MotesVal, type PipeKolumn,
 } from "./motesflode";
 
@@ -101,6 +102,8 @@ export type NdMoteKort = {
   trad: { antal: number; nya: number } | null;
   /** Kedjans senaste hållna eller uteblivna möte: vem som höll det (kortets rubrik när inget möte är öppet). */
   senast: { hallsAv: string; hallsAvNamn: string; utfall: "hallet" | "uteblev" } | null;
+  /** Kunden har träffats på kortet (ett hållet möte): nästa möte är en uppföljning och räknas inte som bokat (2026-11-16). */
+  traffad: boolean;
 };
 
 /** Ett möte som fått utfall i innevarande månad, eller ett äldre som fortfarande väntar på bedömning (Avgjort på tavlan). */
@@ -332,6 +335,7 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
   // säger vem som höll kedjans senaste möte, för kortets rubrik när inget möte är öppet.
   const historik = new Map<string, { id: string; tid: string; text: string }[]>();
   let senast = new Map<string, { hallsAv: string; utfall: "hallet" | "uteblev" }>();
+  const traffade = new Set<string>();
   if (rader.length) {
     const { data } = await supabase
       .from("mote")
@@ -346,6 +350,7 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
       historik.set(m.kedja_id, [...(historik.get(m.kedja_id) ?? []), rad]);
     }
     senast = senastAvgjorda(avslutade);
+    for (const m of avslutade) if (m.utfall === "hallet") traffade.add(m.kedja_id);
   }
 
   // Anteckningarna (0310): antalet inlägg och de nya per kort, med samma RLS som kortet. Ett fel här får aldrig ta
@@ -486,6 +491,7 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
     historik: historik.get(r.kedja_id) ?? [],
     trad: trad.get(r.kedja_id) ?? (tradOk ? { antal: 0, nya: 0 } : null),
     senast: (() => { const s = senast.get(r.kedja_id); return s ? { ...s, hallsAvNamn: namn.get(s.hallsAv) ?? "" } : null; })(),
+    traffad: traffade.has(r.kedja_id),
     };
   });
 
@@ -621,7 +627,8 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
         .select("id, art, foregaende_id, bokat_av")
         .in("kedja_id", [...new Set(oppna.map((k) => k.kedja))])
         .limit(MAX_MOTEN);
-      const karta = new Map(((km ?? []) as { id: string; art: string; foregaende_id: string | null; bokat_av: string }[]).map((m) => [m.id, { art: m.art, foregaende: m.foregaende_id, bokatAv: m.bokat_av }]));
+      // Föregående möten på andra kort (en ombokning för samma kund, 0313). Ett läsfel ger kortets egna: det här är en visning.
+      const karta = await fyllForegaende(new Map(((km ?? []) as { id: string; art: string; foregaende_id: string | null; bokat_av: string }[]).map((m) => [m.id, { art: m.art, foregaende: m.foregaende_id, bokatAv: m.bokat_av }])), (ids) => lasForegaende(supabaseAdmin())(ids).catch(() => []));
       for (const k of oppna) {
         const m = k.mote!;
         const ursprunglig = ursprungligBokare(m.id, karta);

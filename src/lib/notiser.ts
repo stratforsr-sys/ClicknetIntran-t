@@ -616,6 +616,16 @@ export const NOTIS_KALLOR = [
    */
   "mote-anteckning",
   /**
+   * Nav 2.0, Möten (2026-11-16): någon gav dig ett möte att hålla, eller satte dig som den som höll det; eller någon
+   * annan tog över ett möte du höll eller bokade. Händelse: kalendern och utfallet följer med.
+   */
+  "mote-hallare",
+  /**
+   * Nav 2.0, Möten (2026-11-16): någon annan satte Hållet på ett möte du håller, och mötet väntar på dina svar på
+   * frågorna. Händelse, direkt: Make your dream väntade utan att någon visste (jobbets påminnelse kommer efter fristen).
+   */
+  "mote-bedom",
+  /**
    * Nav 2.0, Möten (2026-11-11): påminnelserna efter mötet. Utfallet saknas efter fristen, och ett hållet möte
    * väntar på hållarens bedömning (efter två dagar går det till en admin). Händelser: de skickas av jobbet när
    * fristen gått ut, och mejl skickas aldrig (inte i MEJLKALLOR).
@@ -845,6 +855,8 @@ export const HANDELSEKALLOR = [
   "mote-bokat",
   "mote-andrat",
   "mote-anteckning",
+  "mote-hallare",
+  "mote-bedom",
   "mote-utfall-saknas",
   "mote-bedomning-saknas",
   "mote-bekrafta",

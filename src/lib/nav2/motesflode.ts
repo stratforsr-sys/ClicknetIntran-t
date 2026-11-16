@@ -52,6 +52,12 @@ export type MotenInst = {
   dodDagar: number;
   /** ... eller när kunden inte svarat så här många gånger i rad. */
   dodTysta: number;
+  /**
+   * Samma kund räknas som ny efter så här många dagar (2026-11-16). Ett möte som bokas för en kund som haft ett möte på
+   * ett annat kort inom fönstret, utan att ha träffats, blir en ombokning av det mötet och inget nytt bokat möte.
+   * 0 = av. Pengar: avgör vem som får mötesprovisionen.
+   */
+  nyKundDagar: number;
 };
 
 /** Talen i statistikpanelen som kan ha ett mål. För noshow är lägre bättre. */
@@ -77,6 +83,7 @@ export const INST_FORVAL: MotenInst = {
   mal: {},
   dodDagar: 21,
   dodTysta: 3,
+  nyKundDagar: 90,
 };
 
 /** Nyckeln i nav_setting för varje inställning. */
@@ -96,9 +103,10 @@ export const INST_NYCKLAR: Record<keyof MotenInst, string> = {
   mal: "moten.mal",
   dodDagar: "moten.dod-dagar",
   dodTysta: "moten.dod-tysta",
+  nyKundDagar: "moten.ny-kund-dagar",
 };
 
-export const GRANSER = { dodDagarMax: 365, dodTystaMax: 20, dagarMax: 14, fragorMax: 5, fragaText: 120, kolumnnamn: 24, prefix: 40, belopp: 100000 } as const;
+export const GRANSER = { nyKundDagarMax: 365, dodDagarMax: 365, dodTystaMax: 20, dagarMax: 14, fragorMax: 5, fragaText: 120, kolumnnamn: 24, prefix: 40, belopp: 100000 } as const;
 
 const arObjekt = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 
@@ -187,6 +195,7 @@ const TOLKA: { [K in Exclude<keyof MotenInst, "kolumnnamn">]: (v: unknown) => Mo
   },
   dodDagar: (v) => (heltalMellan(v, 1, GRANSER.dodDagarMax) ? v : undefined),
   dodTysta: (v) => (heltalMellan(v, 1, GRANSER.dodTystaMax) ? v : undefined),
+  nyKundDagar: (v) => (heltalMellan(v, 0, GRANSER.nyKundDagarMax) ? v : undefined),
 };
 
 /**
@@ -222,6 +231,7 @@ const SPARFEL: Record<keyof MotenInst, string> = {
   mal: "Varje mål ska vara ett heltal från 0 till 100.",
   dodDagar: "Antalet dagar ska vara ett heltal från 1 till 365.",
   dodTysta: "Antalet gånger ska vara ett heltal från 1 till 20.",
+  nyKundDagar: "Antalet dagar ska vara ett heltal från 0 till 365.",
 };
 
 /** Inställningen och fältet för en nav_setting-nyckel, eller null. */
@@ -405,6 +415,30 @@ export function manadFor(moteTid: string, tz: string): string {
  * så vandringen ger null när den möter ett. Saknas ett föregående möte är
  * den som bokade det äldsta kända mötet den ursprungliga. En slinga ger null.
  */
+type KartRad = { art: string; foregaende: string | null; bokatAv: string };
+
+/**
+ * Fyller på kartan med de föregående möten som ligger på andra kort. En bokning för samma kund på ett nytt kort blir
+ * en ombokning av mötet på det gamla (`mote_foregaende`, 0313, beställaren 2026-11-16), och vandringen i
+ * `ursprungligBokare` ska då nå den ursprungliga bokaren där. `las` hämtar möten med de id:na. Högst `maxLed` led,
+ * och varje id läses en gång, så en slinga stannar.
+ */
+export async function fyllForegaende(
+  karta: ReadonlyMap<string, KartRad>,
+  las: (ids: string[]) => Promise<({ id: string } & KartRad)[]>,
+  maxLed = 20,
+): Promise<Map<string, KartRad>> {
+  const ut = new Map(karta);
+  const lasta = new Set<string>();
+  for (let led = 0; led < maxLed; led++) {
+    const saknas = [...new Set([...ut.values()].map((m) => m.foregaende).filter((id): id is string => !!id && !ut.has(id) && !lasta.has(id)))];
+    if (!saknas.length) break;
+    for (const id of saknas) lasta.add(id);
+    for (const r of await las(saknas)) ut.set(r.id, { art: r.art, foregaende: r.foregaende, bokatAv: r.bokatAv });
+  }
+  return ut;
+}
+
 export function ursprungligBokare(
   id: string,
   moten: ReadonlyMap<string, { art: string; foregaende: string | null; bokatAv: string }>,

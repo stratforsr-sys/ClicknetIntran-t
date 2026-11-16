@@ -176,6 +176,8 @@ const HANDLINGAR = [
   ["flytta", { mote: M, dag: SENARE.slice(0, 10), start: "10:00" }],
   ["avboka", { mote: M }],
   ["utfall", { mote: M, utfall: "uteblev" }],
+  ["utfall", { mote: M, utfall: "hallet", holl: B }], // vem som höll mötet (2026-11-16): samma krets som utfallet
+  ["hallare", { mote: M, ny: B }], // byt hållare (2026-11-16): samma krets som utfallet, prövas före allt annat
   ["bedom", { mote: M, svar: [] }, [["salesperson"], H]], // bara hållaren (eller en admin) bedömer
   ["ratta_utfall", { mote: M, utfall: "uteblev", skal: "Prov" }, [["admin"], "b0000000-0000-4000-8000-000000000005"]], // bara admin
   ["radera", { mote: M }],

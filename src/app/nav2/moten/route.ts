@@ -16,6 +16,9 @@ import {
   TYST_EFTER_INGET_SVAR,
   andraIndata,
   andringForKund,
+  hallareByte,
+  hallareIndata,
+  hallareNotiser,
   angraIndata,
   arHallare,
   arSkrivning,
@@ -316,10 +319,10 @@ export async function POST(request: Request) {
   }
 
   /** Tar tillbaka ett utfall vi nyss satte (villkorat på exakt den tid vi satte det). Ger false om det inte gick. */
-  async function angraUtfall(moteId: string, utfallNar: string): Promise<boolean> {
+  async function angraUtfall(moteId: string, utfallNar: string, hallsAvFore: string | null = null): Promise<boolean> {
     const { data, error } = await db
       .from("mote")
-      .update({ utfall: null, utfall_nar: null, utfall_av: null, resultat: null, resultat_nar: null, resultat_av: null, nej_skal: null })
+      .update({ utfall: null, utfall_nar: null, utfall_av: null, resultat: null, resultat_nar: null, resultat_av: null, nej_skal: null, ...(hallsAvFore ? { halls_av: hallsAvFore } : {}) })
       .eq("id", moteId)
       .eq("utfall_nar", utfallNar)
       .select("id");
@@ -386,6 +389,9 @@ export async function POST(request: Request) {
 
     case "bedom":
       return await bedom();
+
+    case "hallare":
+      return await hallare();
 
     case "ifragasatt":
       return await ifragasatt();
@@ -612,7 +618,22 @@ export async function POST(request: Request) {
       const { data: hallna } = await db.from("mote").select("id").eq("kedja_id", kedja).eq("utfall", "hallet").limit(1);
       kundenTraffad = ((hallna ?? []) as unknown[]).length > 0;
     }
-    const art = motesArt(kundenTraffad, v.foregaende);
+    // Vilket möte bokningen följer på, när klienten inte sa det (2026-11-16, "det ska inte räknas som ett nytt bokat
+    // möte när man bokar efter första mötet"): kortets senaste möte, annars samma kunds avgjorda möte på ett annat kort
+    // inom `moten.ny-kund-dagar` (`mote_foregaende`, 0313). Då blir det en ombokning, aldrig en ny bokning. Svarar inte
+    // databasen blir det som förut (ny), och bokningen stoppas inte.
+    let foregaende = v.foregaende ?? null;
+    if (!foregaende && !kundenTraffad) {
+      const { nyKundDagar } = await lasInst();
+      const { data: f, error: fFel } = await db.rpc("mote_foregaende", { p_kedja: kedja, p_fore: motetid.toISOString(), p_dagar: nyKundDagar });
+      if (!fFel && typeof f === "string") foregaende = f;
+      else if (fFel) {
+        // Databasen svarade inte: kortets senaste möte räcker (samma kort). Jobbet `mote_art_ratta` rättar det andra.
+        const { data: sist } = await db.from("mote").select("id").eq("kedja_id", kedja).order("bokat_nar", { ascending: false }).limit(1);
+        foregaende = ((sist ?? []) as { id: string }[])[0]?.id ?? null;
+      }
+    }
+    const art = motesArt(kundenTraffad, foregaende);
 
     // 5. Mötesraden, villkorad på att kedjan inte har något öppet möte (unika indexet mote_ett_oppet).
     const { data: oppet } = await db.from("mote").select("id").eq("kedja_id", kedja).is("utfall", null).limit(1);
@@ -630,7 +651,7 @@ export async function POST(request: Request) {
         langd_min: v.langd,
         kalla: v.kalla,
         art,
-        foregaende_id: v.foregaende,
+        foregaende_id: foregaende,
         mal: v.mal,
         agenda: v.agenda,
         personer: v.personer,
@@ -748,8 +769,10 @@ export async function POST(request: Request) {
       kunden,
       missade.length ? `Inbjudan till ${lista(missade)} kunde inte skickas. Bjud in från kalendern.` : "",
     ].filter(Boolean).join(" ");
+    // Hur mötet räknas (2026-11-16): ett möte efter det första är aldrig ett nytt bokat möte, och kvittot säger det.
+    const raknas = art === "uppfoljning" ? "Räknas som uppföljning, inte som ett nytt bokat möte." : art === "ombokning" ? "Räknas som ombokning, inte som ett nytt bokat möte." : "";
     return { res: svar({
-      ok: `Mötet ligger i kalendern ${nar(motetid)}. ${inbjudan}`.trim(),
+      ok: [`Mötet ligger i kalendern ${nar(motetid)}.`, inbjudan, raknas].filter(Boolean).join(" "),
       mote: moteId,
       kedja,
       bolag,
@@ -1022,11 +1045,25 @@ export async function POST(request: Request) {
     }
     const h = await moteForSe(mote);
     if ("res" in h) return h.res;
-    const m = h.m;
+    let m = h.m;
     // Avboka före mötets tid kräver bara `farSe` (prövat ovan). Efter mötets tid, och för ett utfall, krävs `farSattaUtfall`.
     if (avboka && !farAvboka(aktorn, m, m.mote_tid)) return svar({ fel: "Mötets tid har passerat. Bara de som är med på mötet eller en säljchef avbokar det nu." }, 403);
     if (!avboka && !farSattaUtfall(aktorn, m)) return svar({ fel: "Bara de som är med på mötet eller en säljchef sätter utfallet." }, 403);
     if (m.utfall) return svar({ fel: "Mötet har redan fått ett utfall." }, 409);
+
+    // Vem som höll mötet (2026-11-16): var det någon annan än den som står som hållare skrivs den nya hållaren i SAMMA
+    // update som utfallet, villkorad på den gamla (granskningen 2026-11-16: aldrig ett byte utan utfall). Nivån prövas
+    // som den nya hållaren. Före mötets tid finns kalendern att flytta: då i Ändra.
+    const hollAv = inn.holl && inn.holl !== m.halls_av ? inn.holl : null;
+    const mProv: MoteRad = hollAv ? { ...m, halls_av: hollAv } : m;
+    const mFore: MoteRad = m;
+    let hallarProv: HallarProv | null = null;
+    if (hollAv) {
+      if (Date.parse(m.mote_tid) > Date.now()) return svar({ fel: "Mötet har inte varit än. Byt hållare i Ändra." }, 409);
+      const pr = await provaHallare(m, hollAv, await lasInst());
+      if (pr instanceof Response) return pr;
+      hallarProv = pr;
+    }
 
     // Nivån prövas innan något sparas: svar som inte räcker ger 400 och inget utfall. Bara hållaren eller en admin
     // sätter nivån (`farBedoma`), och aldrig den som får mötesprovision för mötet (`farSattaNivaPa`, också en admin
@@ -1035,10 +1072,10 @@ export async function POST(request: Request) {
     const omfattat = omfattas(m.mote_tid, inst.gallerFran);
     let lage: Lage | null = null;
     if (inn.utfall === "hallet") {
-      let satter = farBedoma(aktorn, m);
+      let satter = farBedoma(aktorn, mProv);
       if (satter && omfattat) {
         try {
-          satter = farSattaNivaPa(aktorn, m, await provisionsmottagare(db, m, inst));
+          satter = farSattaNivaPa(aktorn, mProv, await provisionsmottagare(db, { ...mProv, provision_last_nar: null }, inst));
         } catch {
           // Mottagarna gick inte att läsa: Hållet sparas ändå, utan nivå. Hållaren eller en admin bedömer sedan.
           satter = false;
@@ -1068,21 +1105,24 @@ export async function POST(request: Request) {
     // Ett ombokat möte prövas innan något sparas.
     let nyTid: Date | null = null;
     if (a.nyttMote) {
-      if (!(await anstalld(m.halls_av))) return svar({ fel: "Den som höll mötet kan inte hålla ett nytt." }, 400);
+      if (!(await anstalld(mProv.halls_av))) return svar({ fel: "Den som höll mötet kan inte hålla ett nytt." }, 400);
       nyTid = svenskTidpunkt(a.nyttMote.dag, a.nyttMote.start);
       if (!Number.isFinite(nyTid.getTime())) return svar({ fel: "Välj en starttid." }, 400);
     }
 
-    // 1. Mötet.
-    const moteLapp: Record<string, unknown> = { ...a.mote, utfall_nar: nuIso, utfall_av: mig };
+    // 1. Mötet, med den som höll det när det var någon annan.
+    const moteLapp: Record<string, unknown> = { ...a.mote, utfall_nar: nuIso, utfall_av: mig, ...(hollAv ? { halls_av: hollAv } : {}) };
     if (a.mote.resultat) {
       moteLapp.resultat_nar = nuIso;
       moteLapp.resultat_av = mig;
     }
     {
-      const { data, error } = await db.from("mote").update(moteLapp).eq("id", m.id).is("utfall", null).select("id");
+      let q = db.from("mote").update(moteLapp).eq("id", m.id).is("utfall", null);
+      if (hollAv) q = q.eq("halls_av", mFore.halls_av);
+      const { data, error } = await q.select("id");
       if (error) return svar({ fel: "Utfallet kunde inte sparas." }, 500);
-      if (((data ?? []) as unknown[]).length === 0) return svar({ fel: "Mötet har redan fått ett utfall." }, 409);
+      if (((data ?? []) as unknown[]).length === 0) return svar({ fel: hollAv ? "Mötet har ändrats under tiden. Ladda om tavlan." : "Mötet har redan fått ett utfall." }, 409);
+      if (hollAv) m = mProv;
     }
 
     // 2. Kedjan. Bokas en uppföljning som ett möte sparas kedjans uppföljning först, så att den kan läggas
@@ -1102,7 +1142,7 @@ export async function POST(request: Request) {
       if ("uppfoljning_datum" in lapp) lapp.uppfoljning_andrad = nuIso;
       const { data, error } = await db.from("mote_kedja").update(lapp).eq("id", m.kedja_id).is("avslut", null).select("id");
       if (error || ((data ?? []) as unknown[]).length === 0) {
-        const tillbaka = await angraUtfall(m.id, nuIso);
+        const tillbaka = await angraUtfall(m.id, nuIso, hollAv ? mFore.halls_av : null);
         if (!tillbaka) return svar({ fel: HALVSKRIVET }, 500);
         return error ? svar({ fel: "Utfallet kunde inte sparas." }, 500) : svar({ fel: "Kedjan är redan avslutad." }, 409);
       }
@@ -1144,7 +1184,7 @@ export async function POST(request: Request) {
           // Det nya mötet finns kvar (bara kopplingen till kalendern fallerade): utfallet står kvar.
           return lagt.res;
         }
-        const tillbaka = await angraUtfall(m.id, nuIso);
+        const tillbaka = await angraUtfall(m.id, nuIso, hollAv ? mFore.halls_av : null);
         if (!tillbaka) return svar({ fel: HALVSKRIVET }, 500);
         if (kedjaFore) {
           const { data: ater } = await db.from("mote_kedja").update(kedjaFore).eq("id", m.kedja_id).eq("uppfoljning_andrad", nuIso).select("id");
@@ -1192,6 +1232,18 @@ export async function POST(request: Request) {
       }
     }
     const vantarBedomning = inn.utfall === "hallet" && omfattat && !lastNiva;
+    // Hållarbytet loggas och aviseras först när utfallet står (inget besked om ett byte som togs tillbaka).
+    if (hollAv && hallarProv) await efterHallarbyte(mFore, hollAv, hallarProv, false);
+    // Väntar mötet på hållarens bedömning säger det till hållaren (2026-11-16: Make your dream väntade utan att någon visste).
+    if (vantarBedomning && m.halls_av !== mig) {
+      const { data: bo } = await db.from("mote_bolag").select("namn").eq("id", kedja.bolag_id).maybeSingle();
+      await notifiera({
+        till: m.halls_av, av: mig, kalla: "mote-bedom", typ: "kalender",
+        rubrik: `${forFor(fullName(user!.employee!))} satte Hållet på ${(bo as { namn: string } | null)?.namn ?? "ett möte"}`,
+        detalj: "Svara på frågorna, så räknas mötet.",
+        href: `/moten/${m.id}`, objekt: { typ: "mote", id: m.id },
+      });
+    }
     const text = inn.utfall === "avbokat" ? "Mötet är avbokat." : inn.utfall === "uteblev" ? "Uteblev sparat." : "Utfallet är sparat.";
     return svar({
       ok: `${text}${bokat ? " " + bokat : ""}`,
@@ -1247,6 +1299,100 @@ export async function POST(request: Request) {
    * Får aktören mötesprovision för mötet (låsta rader, eller `fordela` med dagens inställning för ett olåst möte)?
    * Då ett färdigt 403-svar: ingen sätter eller ändrar nivån på sin egen provision. Ett läsfel ger 500, aldrig ett ja.
    */
+  /**
+   * Byt hållare (beställaren 2026-11-16, spec 2026-11-16-moten-hallare-utfall-design.md). Bokaren står kvar; krediten
+   * följer bokaren. Före mötet följer kalendern med (`lk_byt_organisator`: den nya blir organisatör, den gamla tas
+   * bort, kunden får ingenting). Efter mötet ändras bara mötesraden: det är den som höll mötet.
+   *
+   * Prövningen är `hallareByte`: samma krets som sätter utfall, den nya kan hålla möten, ett bedömt möte bara av admin
+   * och bara om mottagarna står kvar, och ingen ändrar sin egen mötesprovision. Mottagarna räknas före och efter med
+   * `provisionsmottagare` (efter: som om mötet inte vore låst, med den nya hållaren).
+   *
+   * Villkorad på den gamla hållaren: av två som byter samtidigt får den andra 409, och kalendern läggs tillbaka.
+   * Triggern `mote_efter_andring` lägger den nya hållaren i kortets deltagare. Svarar null när bytet är gjort.
+   */
+  type HallarProv = { fore: string[]; efter: string[] };
+  /** Prövningen före ett byte (`hallareByte`). Skriver ingenting. */
+  async function provaHallare(m: MoteRad, ny: string, inst: MotenInst): Promise<HallarProv | Response> {
+    const nyNamn = await anstalld(ny);
+    let fore: string[] = [];
+    let efter: string[] = [];
+    if (omfattas(m.mote_tid, inst.gallerFran)) {
+      try {
+        [fore, efter] = await Promise.all([
+          provisionsmottagare(db, m, inst),
+          provisionsmottagare(db, { ...m, halls_av: ny, provision_last_nar: null }, inst),
+        ]);
+      } catch {
+        return svar({ fel: "Mötesprovisionen gick inte att läsa. Försök igen." }, 500);
+      }
+    }
+    const efterMotet = Date.parse(m.mote_tid) <= Date.now();
+    const p = hallareByte({ aktor: aktorn, m, ny, nyKanHalla: !!nyNamn, fore, efter, efterMotet, parter: [m.halls_av, m.bokat_av, ...m.med] });
+    if ("fel" in p) return svar({ fel: p.fel }, p.status);
+    return { fore, efter };
+  }
+
+  /** Efter ett gjort byte: händelseloggen och notiserna (till den nya hållaren, den gamla och bokaren, utom mig). */
+  async function efterHallarbyte(m: MoteRad, ny: string, p: HallarProv, kalender: boolean): Promise<void> {
+    await skrivHandelse({ actorId: mig, action: "mote.hallare_bytt", objectType: "mote", objectId: m.id, meta: { kedja: m.kedja_id, fore: m.halls_av, efter: ny, kalender, fore_mottagare: p.fore, efter_mottagare: p.efter } });
+    const { data: k } = await db.from("mote_kedja").select("mote_bolag(namn)").eq("id", m.kedja_id).maybeSingle();
+    const bolag = (k as unknown as { mote_bolag: { namn: string } | null } | null)?.mote_bolag?.namn ?? "kunden";
+    const [nyFornamn] = await fornamnFor([ny]);
+    const n = hallareNotiser({ jag: forFor(fullName(user!.employee!)), bolag, nyFornamn, nar: nar(new Date(m.mote_tid)), efterMotet: Date.parse(m.mote_tid) <= Date.now(), kalender });
+    if (ny !== mig) {
+      await notifiera({ till: ny, av: mig, kalla: "mote-hallare", typ: "kalender", rubrik: n.ny.rubrik, detalj: n.ny.detalj, href: `/moten/${m.id}`, objekt: { typ: "mote", id: m.id } });
+    }
+    const ovriga = [...new Set([m.halls_av, m.bokat_av])].filter((x) => x !== mig && x !== ny);
+    if (ovriga.length) {
+      await notifieraFlera(ovriga, { av: mig, kalla: "mote-hallare", typ: "kalender", rubrik: n.ovriga.rubrik, detalj: n.ovriga.detalj, href: `/moten/${m.id}`, objekt: { typ: "mote", id: m.id } });
+    }
+  }
+
+  /**
+   * Byt hållare (beställaren 2026-11-16, spec 2026-11-16-moten-hallare-utfall-design.md). Bokaren står kvar; krediten
+   * följer bokaren. Före mötet följer kalendern med (`lk_byt_organisator`: den nya blir organisatör, den gamla tas
+   * bort, kunden får ingenting). Efter mötet ändras bara mötesraden: det är den som höll mötet.
+   *
+   * ORDNING (granskningen 2026-11-16): raden först, villkorad på den gamla hållaren, så att av två samtidiga byten bara
+   * det första går vidare och den andra aldrig rör kalendern. Sedan kalendern. Säger kalendern nej läggs raden tillbaka
+   * (villkorad på den nya), och inget loggas eller aviseras. Triggern `mote_efter_andring` lägger den nya hållaren i
+   * kortets deltagare. Svarar null när bytet är gjort.
+   */
+  async function bytHallare(m: MoteRad, ny: string, inst: MotenInst): Promise<Response | null> {
+    const p = await provaHallare(m, ny, inst);
+    if (p instanceof Response) return p;
+    const kalender = !!m.event_id && Date.parse(m.mote_tid) > Date.now();
+    const { data, error } = await db.from("mote").update({ halls_av: ny }).eq("id", m.id).eq("halls_av", m.halls_av).select("id");
+    if (error) return svar({ fel: "Hållaren kunde inte sparas. Försök igen." }, 500);
+    if (((data ?? []) as unknown[]).length === 0) return svar({ fel: "Mötet har redan en ny hållare. Ladda om tavlan." }, 409);
+    if (kalender) {
+      const k = await lk("lk_byt_organisator", { p_aktor: m.halls_av, p_event: m.event_id, p_ny: ny, p_utfort_av: mig });
+      if (!k.ok) {
+        const { data: ater, error: aterFel } = await db.from("mote").update({ halls_av: m.halls_av }).eq("id", m.id).eq("halls_av", ny).select("id");
+        if (aterFel || ((ater ?? []) as unknown[]).length === 0) {
+          await skrivFel({ kind: "automatic", path: "/nav2/moten", digest: `moten-hallare-${m.id}`, message: `Hållarbytet på mötet ${m.id} blev halvgjort: raden säger ${ny}, kalendern ${m.halls_av} (${k.fel}).`, blocking: false, reporterId: mig });
+          return svar({ fel: "Hållaren byttes på tavlan men inte i kalendern. Felet är rapporterat; ladda om tavlan." }, 500);
+        }
+        return svar({ fel: `Hållaren byttes inte. ${k.fel}` }, 409);
+      }
+    }
+    await efterHallarbyte(m, ny, p, kalender);
+    return null;
+  }
+
+  /** `hallare`: byt den som håller (eller höll) mötet. "Det var jag som höll mötet" är samma anrop med mig som ny. */
+  async function hallare(): Promise<Response> {
+    const r = hallareIndata(b);
+    if (!r.ok) return svar({ fel: r.fel }, 400);
+    const h = await moteForSe(r.varden.mote);
+    if ("res" in h) return h.res;
+    const fel = await bytHallare(h.m, r.varden.ny, await lasInst());
+    if (fel) return fel;
+    const [namn] = await fornamnFor([r.varden.ny]);
+    return svar({ ok: r.varden.ny === mig ? "Du står nu som hållare." : `${namn} håller nu mötet.`, mote: h.m.id, hallsAv: r.varden.ny });
+  }
+
   async function egenProvision(m: MoteRad, inst: MotenInst): Promise<Response | null> {
     let mottagare: string[];
     try {
@@ -1517,9 +1663,26 @@ export async function POST(request: Request) {
     const v = r.varden;
     const h = await moteForSe(v.mote);
     if ("res" in h) return h.res;
-    const m = h.m;
+    let m = h.m;
     if (m.utfall) return svar({ fel: "Mötet har redan fått ett utfall." }, 409);
     if (lokal(m.mote_tid) !== v.fore) return svar({ fel: "Mötet har ändrats. Ladda om tavlan." }, 409);
+    // Ny hållare (2026-11-16) först, med samma prövning som `hallare`: kalendern flyttas till den nya, och resten av
+    // Ändra räknar sedan med henne. Mötet läses om utan `farSe`: rätten är prövad, och den som gav bort sitt möte
+    // ska kunna spara resten av ändringen.
+    let hallareBytt = false;
+    if (v.hallsAv && v.hallsAv !== m.halls_av) {
+      // Det som annars nekar Ändra efter bytet prövas först (granskningen 2026-11-16): ett byte görs aldrig för en
+      // ändring som sedan avvisas. Tiden, och nya kollegor som slutat.
+      if (v.tid && !Number.isFinite(svenskTidpunkt(v.tid.dag, v.tid.start).getTime())) return svar({ fel: "Välj en starttid." }, 400);
+      const nyaMed = (v.med ?? []).filter((x) => !m.med.includes(x) && x !== m.halls_av && x !== v.hallsAv);
+      if ((await aktiva(nyaMed)).length !== nyaMed.length) return svar({ fel: "En av kollegorna finns inte längre i Nav. Ta bort namnet och försök igen." }, 400);
+      const fel = await bytHallare(m, v.hallsAv, await lasInst());
+      if (fel) return fel;
+      const omlast = await hamtaMote(m.id);
+      if (!omlast) return svar({ fel: "Mötet finns inte." }, 404);
+      m = omlast;
+      hallareBytt = true;
+    }
     const kedja = await hamtaKedja(m.kedja_id);
     if (!kedja) return svar({ fel: "Kedjan finns inte." }, 404);
     const { data: bolagRad } = await db.from("mote_bolag").select("id, namn, kontakt, telefon, epost, doman").eq("id", kedja.bolag_id).maybeSingle();
@@ -1615,6 +1778,7 @@ export async function POST(request: Request) {
     const gastAndras = gastIn.length > 0 || gastUt.length > 0;
 
     if (!Object.keys(bolagLapp).length && !Object.keys(moteLapp).length && !kalAndras && !gastAndras && !platsAndras) {
+      if (hallareBytt) return svar({ ok: `${(await fornamnFor([m.halls_av]))[0]} håller nu mötet.`, mote: m.id, kedja: m.kedja_id, hallsAv: m.halls_av });
       return svar({ ok: "Inget ändrades.", mote: m.id, kedja: m.kedja_id });
     }
     const varningar: string[] = [];

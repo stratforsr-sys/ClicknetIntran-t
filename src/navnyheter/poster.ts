@@ -14,6 +14,25 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten-vem-holl-motet",
+    rubrik: "Möten: den som höll mötet sätter utfallet",
+    ingress: "Höll en kollega mötet i stället för den som stod som hållare? Välj vem som höll det när du sätter Hållet, så svarar rätt person på frågorna och väljer nästa steg. Ett möte efter det första räknas aldrig som ett nytt bokat möte.",
+    text: `När du trycker **Sätt utfall** och väljer **Hållet** frågar bladet **Vem höll mötet?**. Var det du, välj dig
+själv: då svarar du på frågorna och väljer nästa steg direkt. Den som bokade mötet står kvar som bokare.
+
+Väntar ett möte på någon annans bedömning, men det var du som höll det, trycker du **Det var jag som höll mötet** på
+kortet under Avgjort.
+
+Ska någon annan hålla ett möte som inte har varit än, byter du **Vem håller** i **Ändra**. Mötet flyttar till den
+personens kalender. Kunden får inget besked.
+
+Bokar du ett nytt möte efter det första står det i bladet hur det räknas: en **uppföljning** eller en **ombokning**,
+aldrig ett nytt bokat möte. Kvittot säger samma sak.`,
+    datum: "2026-11-16",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "moten-offert-nasta-mote",
     rubrik: "Möten: skickat en offert? Boka nästa möte direkt",
     ingress: "När du sätter Hållet och väljer Offert skickad kan du boka nästa möte i samma steg. Kunden får en inbjudan till sin kalender.",

@@ -61,6 +61,10 @@ export const PUSHKALLOR = new Set<string>([
   // Möten (2026-11-16, 0310): en kollega skrev i anteckningarna på ett kort du är med på. Beställaren: notis "om
   // just den kunden och mötet i mobilen", så telefonen är förvalet. Tråden går att tysta per kort.
   "mote-anteckning",
+  // Möten (2026-11-16): ett möte du ska hålla, eller ska bedöma. Beställaren: Make your dream blev hängande, så den som
+  // ska göra något får veta det i telefonen.
+  "mote-hallare",
+  "mote-bedom",
 ]);
 
 /**

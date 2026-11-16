@@ -6,6 +6,41 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 ---
 
 
+## 2026-11-16 · Möten: vem som höll mötet, utfallet och uppföljningar (0313)
+
+**Beställningen.** Fredrik höll Make your dream, Zen stod som hållare. Fredrik satte Hållet och Offert skickad, och
+kvalificeringen gick inte att sätta: bara den som STÅR som hållare (eller en admin) svarar på frågorna, utfallet sätts
+en gång, och hållaren gick inte att byta. Beställaren bad om en genomgång mot "alla populära CRM system" och om att ett
+möte efter det första aldrig ska räknas som ett nytt bokat möte.
+
+**Undersökningen.** HubSpot ("created by" / "assigned to"), Salesforce/RevenueHero (`Booked_By` + `Assignee`) och Pulse
+RevOps: bokaren, den planerade hållaren och den som höll mötet är olika fält, krediten följer bokaren, kvalificerad är
+ett eget steg som säljaren (AE) gör, och bokaren får aldrig ensam äga ett steg som ger hen pengar. Fullcast: uppföljning
+markeras i datan, inte i statistiken. Källor i specen.
+
+**Varför så här.** Nav hade redan bokaren skild från hållaren och kvalificeringen som hållarens steg; det som saknades
+var att kunna säga vem som faktiskt höll mötet. Hållaren får aldrig bokarprovision (`fordela`), så ett hållarbyte kan
+flytta pengar: därav pengaspärren (ingen ändrar sin egen provision) och att ett bedömt möte bara byts när mottagarna
+står kvar (`andraProvision` räknar bara om beloppen ur låsta rader och kan inte lägga till en mottagare).
+Uppföljningar räknades redan rätt när kunden träffats; luckan var nya försök efter Uteblev/Avbokat, där klienten aldrig
+skickade `foregaende`. Servern sätter det nu själv.
+
+**Fynd under bygget.** `hallare` saknades i `SKRIVANDE_HANDLINGAR` och hade gått förbi läsläget (tests/moten.mjs fångade
+det). Ett avbokat möte vars tid låg efter den nya bokningen hade missats om föregående valts på mötestid: valet görs
+på bokningsordning. Migrationsnumret 0312 togs av hemvy-sessionen samma eftermiddag; Mötens blev 0313.
+
+**Granskningen.** En granskare (Opus) läste hela grenen: sju viktiga fynd, inga kritiska, och bekräftade att ingen kan
+höja sin egen provision direkt och att kunden aldrig får något av ett byte. Det viktigaste fyndet: efter mötet prövade
+bara klienten vem som kunde bli hållare, så en bokare kunde ha valt en vänligt inställd bedömare. Nu kräver servern att
+den nya var med på mötet, och den som får provision väljer aldrig bedömaren. Övriga: skrivordningen (raden före kalendern,
+utfallet och hållaren i en update, Ändra prövar först), notisen lovade kalendern utan händelse, artjobbet rättade inte
+`ny` → `ombokning`, och "Rätta utfallet först" ledde ingenstans. Alla sju har ett prov som föll först.
+
+**Avbrottet.** Medan det byggdes låg REST nere ~16:52–17:40 (PGRST002): hemvy-sessionens 0312 utlöste en full
+schemaomladdning som fastnade på tidszonsvyn på en Nano-databas vars disk-IO-budget två samtidiga provsviter hade
+tömt. Min omladdningssignal och två egna läsningar av tidszonerna gjorde det värre. Det släppte när all last slutat.
+Se minnet `nav-databasen-nano-swappar`.
+
 ## 2026-11-16 · Möten: Offert skickad + nästa möte direkt
 
 **Beställningen.** "När vi bokar ett möte sen har ett möte och sen skickar en offert så måste vi välja i mötesvyn
@@ -60,6 +95,18 @@ ger ingen egen notis (den följer med i "bokade ett möte åt dig"), och går an
 
 **Prov.** Se NASTA_SESSION. Mötens gamla klickprov: 660 gröna; g10 räknar bladets fält i exakt ordning och ser det
 nya fältet; g2/g19/g400 är röda också på main (provfilen ligger efter `d4a026d`).
+
+**Felet i startläget (samma dag, 0311).** Beställaren: "agendan nu blev en anteckning … en agenda ska gå ut i
+kalenderinbjudan sen ska det finnas anteckningar utöver agendan." Orsaken var mitt antagande i PRD:n att `mote.mal` var
+ett internt mål, för att panelen kallade det "Mål, bara för er". I produktionen stod alla 25 målen ordagrant i
+kalenderinbjudans agenda (`calendar_event.agenda_md`): före 2026-11-13 var `mal` fältet som blev agendan
+(`kalAgenda = v.agenda ?? v.mal`). Två fel samverkade: startläget kopierade agendan till tråden, och panelen dolde
+raden när kortet hade en tråd, vilket gällde alla kort eftersom tavlan skickar `trad: {antal: 0}` så fort läsningen
+lyckas. Rättelsen: panelen visar `m.agenda || m.mal` som Agenda under Inför mötet oavsett tråden, och 0311 tar bort
+startlägets inlägg (deras id är deterministiskt, texten orörd, ingen ändring). Proven vändes: `motesanteckning-db`
+kräver nu att ingen agenda ligger i tråden och att `mote.mal`/`mote.agenda` står orörda (föll med 25 kvar före
+0311), vakten kräver att Inför mötet inte beror på tråden (föll på main), klickprovet a1 likaså (70/71 på main,
+71/71 rättat). Lärdom: en etikett i gränssnittet är inte belägg för vad ett fält är; fråga datan vart texten går.
 
 **På main.** Beställaren sa "pusha till main" och, på frågan, ja till 0310 före mergen. 0310 kördes 14:42 UTC
 (25 inlägg på 24 kort ur de gamla målen, 65 sett-rader), `main` snabbspolades till `f953642` 14:43 UTC och

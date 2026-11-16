@@ -259,7 +259,8 @@ const harRoll = (u: Aktor, lista: readonly string[]): boolean => u.roller.some((
  * Frågorna räknas som pengar: utan frågor blir varje hållet möte kvalificerat (hårdtestet 2026-11-14).
  */
 export const PROVISIONS_ROLLER = ["finance", "ceo", "sales_manager", "admin"] as const;
-export const PENGANYCKLAR = ["moten.provision", "moten.mottagare", "moten.ombokning-provision", "moten.fragor"];
+// Fönstret för samma kund (2026-11-16) avgör om ett möte är en ombokning eller ett nytt bokat möte, alltså vem som får provisionen.
+export const PENGANYCKLAR = ["moten.provision", "moten.mottagare", "moten.ombokning-provision", "moten.fragor", "moten.ny-kund-dagar"];
 export const farSeInstallningar = (u: Aktor): boolean => nivaFor(u.roller) !== "salesperson";
 export const farAndraInstallning = (u: Aktor, nyckel: string): boolean =>
   farSeInstallningar(u) && (!PENGANYCKLAR.includes(nyckel) || harRoll(u, PROVISIONS_ROLLER));
@@ -314,6 +315,54 @@ export const RADERA_LAST = "Mötet har låst mötesprovision. Ändra utfallet f�
 export const EGEN_PROVISION = "Du får mötesprovision för det här mötet och kan inte sätta eller ändra nivån själv. Hållaren eller en annan admin gör det.";
 /** Rätta ett utfall i efterhand, eller bedöma om ett redan bedömt möte: bara admin (säljchef, VD, admin). */
 export const farRattaUtfall = (u: Aktor): boolean => harRoll(u, UTFALL_ROLLER);
+
+/**
+ * Vem som håller mötet (beställaren 2026-11-16, spec 2026-11-16-moten-hallare-utfall-design.md). Bokaren står kvar,
+ * hållaren går att byta: före mötet (kalendern följer med) och efter (den som faktiskt höll det, som sedan sätter utfall
+ * och svarar på frågorna). Krediten följer bokaren, som i HubSpot och Salesforce.
+ *
+ * PENGASPÄRREN: hållaren får aldrig bokarprovision (`fordela`), så ett byte kan ändra vem som får mötesprovision. Ändras
+ * mottagarna, och aktören är en av dem före eller efter, nekas bytet: ingen ändrar sin egen provision. Ett bedömt möte
+ * (låst provision) byts bara av en admin, som då räknar om provisionen.
+ */
+export const HALLARE_EGEN_PROVISION = "Bytet ändrar din mötesprovision. Den som höll mötet eller en annan admin byter.";
+
+/** Samma personer, oavsett ordning och dubbletter. */
+export function sammaMottagare(a: readonly string[], b: readonly string[]): boolean {
+  const x = new Set(a);
+  const y = new Set(b);
+  return x.size === y.size && [...x].every((id) => y.has(id));
+}
+
+export function hallareByte(i: {
+  aktor: Aktor;
+  m: MoteParter & { niva: string | null; provision_last_nar: string | null };
+  ny: string;
+  /** Den nya kan hålla möten: aktiv och i `HALLARE_ROLLER` (rutten läser det). */
+  nyKanHalla: boolean;
+  /** Mötesprovisionens mottagare med nuvarande hållare, och med den nya (`provisionsmottagare`). */
+  fore: readonly string[];
+  efter: readonly string[];
+  /** Mötets tid har passerat: bytet säger vem som HÖLL mötet, och den personen bedömer det. */
+  efterMotet: boolean;
+  /** De som var med på mötet: den som står som hållare, bokaren och kollegorna i kalendern. */
+  parter: readonly string[];
+}): { ok: true } | { fel: string; status: 400 | 403 | 409 } {
+  if (!farSattaUtfall(i.aktor, i.m)) return { fel: "Bara de som är med på mötet eller en säljchef byter hållare.", status: 403 };
+  if (i.ny === i.m.halls_av) return { fel: "Det är redan hen som håller mötet.", status: 409 };
+  if (!i.nyKanHalla) return { fel: "Den du valde kan inte hålla möten.", status: 400 };
+  const bedomt = !!(i.m.niva || i.m.provision_last_nar);
+  if (bedomt && !farRattaUtfall(i.aktor)) return { fel: "Mötet är redan bedömt, så hållaren kan inte bytas.", status: 403 };
+  // Låst provision räknas om ur de låsta raderna (`andraProvision`), som aldrig får en ny mottagare, och Rätta byter
+  // inte mottagare: ett bedömt möte vars mottagare skulle ändras går inte att byta hållare på (granskningen 2026-11-16).
+  if (bedomt && !sammaMottagare(i.fore, i.efter)) return { fel: "Mötet är redan bedömt och bytet skulle ändra vem som får mötesprovision, så hållaren kan inte bytas.", status: 409 };
+  // Efter mötet väljer bytet vem som bedömer mötet. Den som höll det måste ha varit med, och den som får provision för
+  // mötet väljer aldrig bedömaren: annars kunde bokaren låta en vänligt inställd kollega svara på frågorna.
+  if (i.efterMotet && !i.parter.includes(i.ny)) return { fel: "Bara den som var med på mötet kan stå som den som höll det.", status: 403 };
+  if (i.efterMotet && i.fore.includes(i.aktor.id)) return { fel: "Du får mötesprovision för mötet och väljer inte vem som bedömer det. Den som höll mötet byter.", status: 403 };
+  if (!sammaMottagare(i.fore, i.efter) && (i.fore.includes(i.aktor.id) || i.efter.includes(i.aktor.id))) return { fel: HALLARE_EGEN_PROVISION, status: 403 };
+  return { ok: true };
+}
 
 /**
  * Vad Hållet gör med nivån. Hållaren eller en admin med svar på alla aktiva frågor låser nivån; utan svar, eller
@@ -390,6 +439,8 @@ export type UtfallIn = {
   skal?: string | null;
   /** En ny tid, bokad direkt: efter `uteblev` (ombokning) och efter Hållet → Uppföljning eller Offert skickad (uppföljningsmöte). */
   nyTid?: { dag: string; start: string } | null;
+  /** Bara för `hallet`: den som höll mötet, när det inte var den som står som hållare (2026-11-16). */
+  holl?: string;
 };
 
 /**
@@ -865,7 +916,7 @@ export const SQL_INGET_SVAR = `update public.mote_kedja
  * igenom resten (`uppslag`, `lediga`, och `samtal` från B4), som bara läser. En okänd handling är
  * ingen skrivning och får sitt vanliga 400.
  */
-export const SKRIVANDE_HANDLINGAR = ["boka", "paminn", "forsok", "installningar", "bekrafta", "flytta", "avboka", "utfall", "bedom", "ifragasatt", "ratta_utfall", "ifragasatt_beslut", "kund", "nej", "inget_svar", "prova_igen", "radera", "andra", "angra", "uppfoljning_andra"] as const;
+export const SKRIVANDE_HANDLINGAR = ["boka", "paminn", "forsok", "installningar", "bekrafta", "flytta", "avboka", "utfall", "bedom", "ifragasatt", "ratta_utfall", "ifragasatt_beslut", "kund", "nej", "inget_svar", "prova_igen", "radera", "andra", "angra", "uppfoljning_andra", "hallare"] as const;
 export const arSkrivning = (handling: string): boolean => (SKRIVANDE_HANDLINGAR as readonly string[]).includes(handling);
 
 /**
@@ -938,7 +989,34 @@ export type AndraVarden = {
   personer?: Person[];
   /** Adresserna bland personerna som formuläret visade när Ändra öppnades: rutten slår ihop mot dem (trevägs). */
   gasterFore?: string[];
+  /** Ny hållare (2026-11-16). Skickas bara när den ändrats; rutten byter med samma prövning som `hallare`. */
+  hallsAv?: string;
 };
+
+/** Ett anställds id ur anropet, med gemener som Postgres skriver det. */
+const personId = (v: unknown): string | null => (typeof v === "string" && UUID.test(v.toLowerCase()) ? v.toLowerCase() : null);
+
+/** Notiserna om ett hållarbyte: till den nya hållaren, och till den gamla och bokaren. Kalendern lovas bara när den flyttades. */
+export function hallareNotiser(p: { jag: string; bolag: string; nyFornamn: string; nar: string; efterMotet: boolean; kalender: boolean }): {
+  ny: { rubrik: string; detalj: string };
+  ovriga: { rubrik: string; detalj: string };
+} {
+  return {
+    ny: p.efterMotet
+      ? { rubrik: `${p.jag} satte dig som den som höll mötet med ${p.bolag}`, detalj: "Sätt utfallet och svara på frågorna." }
+      : { rubrik: `${p.jag} gav dig mötet med ${p.bolag}`, detalj: p.kalender ? `${p.nar} · mötet ligger nu i din kalender` : p.nar },
+    ovriga: { rubrik: `${p.nyFornamn} ${p.efterMotet ? "höll" : "håller"} mötet med ${p.bolag}`, detalj: `${p.jag} ändrade det · ${p.nar}` },
+  };
+}
+
+/** Byt hållare: `{ mote, ny }` (2026-11-16). */
+export function hallareIndata(body: unknown): Resultat<{ mote: string; ny: string }> {
+  const b = (body ?? {}) as Record<string, unknown>;
+  if (!ID(b.mote)) return nej("Mötet stämmer inte.");
+  const ny = personId(b.ny);
+  if (!ny) return nej("Välj vem som håller mötet.");
+  return { ok: true, varden: { mote: b.mote, ny } };
+}
 
 export function andraIndata(body: unknown): Resultat<AndraVarden> {
   if (!body || typeof body !== "object") return nej("Ogiltig begäran.");
@@ -1028,6 +1106,11 @@ export function andraIndata(body: unknown): Resultat<AndraVarden> {
       v.gasterFore = fore.varden;
     }
   }
+  if (har("hallsAv")) {
+    const h = personId(b.hallsAv);
+    if (!h) return nej("Välj vem som håller mötet.");
+    v.hallsAv = h;
+  }
   return { ok: true, varden: v };
 }
 
@@ -1095,6 +1178,12 @@ export function utfallIndata(body: unknown): Resultat<{ mote: string; inn: Utfal
     const tid = dagOchStart(n.dag, n.start);
     if (!tid.ok) return tid;
     inn.nyTid = tid.varden;
+  }
+  if (!tom(b.holl)) {
+    if (b.utfall !== "hallet") return nej("Vem som höll mötet hör till Hållet.");
+    const h = personId(b.holl);
+    if (!h) return nej("Välj vem som höll mötet.");
+    inn.holl = h;
   }
   let svar: { id: string; ja: boolean }[] | null = null;
   if (!tom(b.svar)) {
