@@ -611,6 +611,11 @@ export const NOTIS_KALLOR = [
   /** Nav 2.0, Möten (2026-11-03): någon annan ändrade ett möte du håller (tid, plats, vilka som är med). Samma skäl. */
   "mote-andrat",
   /**
+   * Nav 2.0, Möten (2026-11-16, 0310): någon skrev i anteckningarna på ett kort du är med på eller har skrivit i.
+   * Händelse: anteckningen är ofta det hållaren behöver veta före mötet. Går aldrig till kunden.
+   */
+  "mote-anteckning",
+  /**
    * Nav 2.0, Möten (2026-11-11): påminnelserna efter mötet. Utfallet saknas efter fristen, och ett hållet möte
    * väntar på hållarens bedömning (efter två dagar går det till en admin). Händelser: de skickas av jobbet när
    * fristen gått ut, och mejl skickas aldrig (inte i MEJLKALLOR).
@@ -839,6 +844,7 @@ export const HANDELSEKALLOR = [
   "lead-paminn",
   "mote-bokat",
   "mote-andrat",
+  "mote-anteckning",
   "mote-utfall-saknas",
   "mote-bedomning-saknas",
   "mote-bekrafta",

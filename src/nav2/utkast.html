@@ -8299,6 +8299,47 @@ body.nd-riktig :is(.pv-lagrad,.arow[data-agenda],.pv-tab tbody tr[data-pvupers],
 .mo-pt{margin:0 0 4px}
 .rxsek .ldfakta .mo-bred{grid-column:1 / -1}
 .rxsek .ldfakta .mo-agd{white-space:pre-line}
+/* Anteckningarna (0310): en tråd per kort, bara för de som är med. Uppgiftsrutans skrivfält och bubblor. */
+.mo-ant h3 .mo-ant-tyst{margin-left:auto}
+.mo-ant-tyst{font-size:12px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--ink-3);padding:2px 6px;margin-right:-6px}
+.mo-ant-tyst:hover{color:var(--ink-2)}
+.mo-ant-tyst[aria-pressed="true"]{color:var(--ink-2);font-weight:600}
+.mo-ant-vem{margin:-4px 0 8px;font-size:12px;line-height:1.4;color:var(--ink-3)}
+.mo-ant-lista{display:flex;flex-direction:column}
+.mo-ant-i{display:grid;grid-template-columns:24px minmax(0,1fr);gap:10px;padding:6px 0}
+.mo-ant-i>.av{margin-top:1px}
+.mo-ant-b{min-width:0;display:flex;flex-direction:column;align-items:flex-start}
+.mo-ant-h{display:flex;align-items:baseline;flex-wrap:wrap;gap:2px 8px;width:100%;font-size:12px;color:var(--ink-3)}
+.mo-ant-h b{font-size:13px;font-weight:600;color:var(--ink)}
+.mo-ant-h time{font-variant-numeric:tabular-nums}
+.mo-ant-v{display:flex;gap:2px;margin-left:auto;opacity:0;transition:opacity .15s}
+.mo-ant-i:hover .mo-ant-v,.mo-ant-v:focus-within{opacity:1}
+@media (hover:none){.mo-ant-v{opacity:1}}
+.mo-ant-v .tlink{font-size:12px;padding:0 5px;color:var(--ink-3)}
+.mo-ant-v .tlink:hover{color:var(--ink-2)}
+.mo-ant-v .tlink.bekr{color:var(--danger-ink);font-weight:600;background:var(--danger-soft)}
+.mo-ant-t{margin:3px 0 0;padding:8px 12px;max-width:100%;border-radius:4px 12px 12px 12px;background:var(--surface-2);font-size:13.5px;line-height:1.5;color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere}
+.mo-ant-t a{color:inherit;text-decoration:underline;text-decoration-color:var(--line-2);text-underline-offset:3px}
+.mo-ant-t.borta{background:none;border:1px dashed var(--line-2);color:var(--ink-3)}
+.mo-ant-i.skickas .mo-ant-t{opacity:.6}
+.mo-ant-i.fel .mo-ant-t{box-shadow:inset 0 0 0 1px var(--danger)}
+.mo-ant-fel{margin:4px 0 0;font-size:12px;line-height:1.4;color:var(--danger-ink)}
+.mo-ant-av{display:flex;align-items:center;gap:10px;margin:8px 0 2px;font-size:11.5px;font-weight:500;color:var(--ink-3)}
+.mo-ant-av::before,.mo-ant-av::after{content:"";flex:1;height:1px;background:var(--line)}
+.mo-ant-av.ny{color:var(--brand-ink)}
+.mo-ant-av.ny::before,.mo-ant-av.ny::after{background:color-mix(in srgb,var(--brand) 45%,transparent)}
+.mo-ant-aldre{align-self:flex-start;font-size:12.5px;padding:2px 6px;margin:0 0 2px -6px}
+.mo-ant-tom{margin:0 0 4px;font-size:12.5px;line-height:1.45;color:var(--ink-3)}
+.mo-ant-skriv{margin-top:8px}
+.mo-ant-skriv .upg-kin{field-sizing:content}
+.mo-ant-skriv .upg-kin:disabled{cursor:not-allowed}
+.mo-ant-red{width:100%;margin-top:4px}
+.mo-ant-red .upg-kin{field-sizing:content}
+.mo-ant-redk{display:flex;align-items:center;gap:10px;margin-top:6px}
+.mo-ant-redk small{margin-left:auto;font-size:11.5px;color:var(--ink-3)}
+.mo-antn{display:inline-flex;align-items:center;gap:3px;flex:none;font:600 11.5px var(--f-mono);color:var(--brand-ink)}
+.mo-antn svg{width:13px;height:13px}
+.mo-ks .mo-antn{margin-top:3px}
 
 /* Mellanbredd: tavlan blir en rad som rullar sidledes i stället för att pressa ihop knapparna */
 @media (max-width:1180px){
@@ -39001,7 +39042,7 @@ function ndMoDialog(typ, kort, forval, fokus){
   const franPanel = !!k && S.moOpen === k.kedja;
   S.moOpen = null;
   const D = S.moDlg = {typ, k, kedja:k ? k.kedja : null, f:{}, fel:{}, fe:'', sparar:false, rort:false, tider:null, tok:0, dag:null, tid:null, ingenNy:false, upp:null};
-  if (typ === 'boka'){ D.f = {hallsAv:sal.some(x => x.id === jag) ? jag : (sal[0] ? sal[0].id : ''), namn:k ? k.namn : '', kontakt:k && k.kontakt || '', telefon:k && k.telefon || '', epost:k && k.epost || '', doman:k && k.doman || '', kalla:'', mal:'', agenda:'', nulage:'', med:[], personer:[], platsTyp:MOPLATSSENAST, adress:'', lank:'', langd:MOLANGD};
+  if (typ === 'boka'){ D.f = {hallsAv:sal.some(x => x.id === jag) ? jag : (sal[0] ? sal[0].id : ''), namn:k ? k.namn : '', kontakt:k && k.kontakt || '', telefon:k && k.telefon || '', epost:k && k.epost || '', doman:k && k.doman || '', kalla:'', mal:'', agenda:'', anteckning:'', nulage:'', med:[], personer:[], platsTyp:MOPLATSSENAST, adress:'', lank:'', langd:MOLANGD};
     if (forval) Object.assign(D.f, forval);
     // Utkastet (F10.1): bara den tomma bokningen tar upp det. Hållaren och kollegorna prövas mot dem som finns nu, och
     // en tid som hunnit passera följer inte med.
@@ -39854,7 +39895,8 @@ function moDlgVy(D){
       ${moMedVy(D)}
       ${moTidFalt(D)}
       ${moPlatsVy(D)}
-      ${moFalt(D, 'agenda', 'Agenda', `<textarea class="uin" id="mod-agenda" name="agenda" rows="3" maxlength="2000" placeholder="Det ni ska gå igenom på mötet" aria-describedby="mo-agh">${esc(f.agenda || '')}</textarea><p class="mo-ph" id="mo-agh">${D.typ === 'andra' ? 'Kunden ser agendan i inbjudan. En ändring skickas inte för sig, den följer med nästa inbjudan.' : 'Kunden ser agendan i inbjudan.'}</p>${D.typ === 'andra' && String(f.mal || '').trim() ? `<p class="mo-ph mo-malg">Målet från bokningen, bara för er: ${esc(f.mal)}</p>` : ''}`, {bred:true})}`;
+      ${moFalt(D, 'agenda', 'Agenda', `<textarea class="uin" id="mod-agenda" name="agenda" rows="3" maxlength="2000" placeholder="Det ni ska gå igenom på mötet" aria-describedby="mo-agh">${esc(f.agenda || '')}</textarea><p class="mo-ph" id="mo-agh">${D.typ === 'andra' ? 'Kunden ser agendan i inbjudan. En ändring skickas inte för sig, den följer med nästa inbjudan.' : 'Kunden ser agendan i inbjudan.'}</p>${D.typ === 'andra' && String(f.mal || '').trim() ? `<p class="mo-ph mo-malg">Målet från bokningen, bara för er: ${esc(f.mal)}</p>` : ''}`, {bred:true})}
+      ${D.typ === 'boka' ? moAntBladFalt(D) : ''}`;
   } else if (T === 'flyttat' || T === 'uteblev'){
     kropp += moTidFalt(D, 'Ny tid');
   } else if (T === 'avbokat'){
@@ -39885,6 +39927,13 @@ function moDlgVy(D){
     <header class="rxph"><div><h2 id="mopd">${titel}</h2><small>${esc(under)}</small></div><button type="button" class="ibtn rxpx" data-modlgx aria-label="Stäng">${I('x')}</button></header>
     <form class="mo-dform" data-modlg novalidate><div class="rxpb"><div class="mo-fg">${kropp}</div></div>
       <footer class="mo-df"><p class="mo-fe ${D.laslage ? 'las' : ''}" id="moDlgFe" role="alert" ${D.fe ? '' : 'hidden'}>${D.fe ? esc(D.fe) : ''}</p><p class="mo-sum" id="moDlgSum" aria-live="polite" ${sum ? '' : 'hidden'}>${sum}</p><div class="mo-dk"><button type="button" class="btn btn-s" data-modlgx>Avbryt</button><button type="submit" class="btn btn-p" ${D.sparar ? 'disabled aria-busy="true"' : ''}>${etikett}</button></div></footer></form></aside>`;
+}
+// Bokarens anteckning (0310): till den som håller mötet och kollegorna, aldrig till kunden. Den blir första inlägget i
+// kortets anteckningar. Rubriken säger vem den är till och följer valet av hållare.
+function moAntBladFalt(D){
+  const f = D.f, till = [f.hallsAv, ...(f.med || [])].filter(id => id && id !== ND.jag.id).map(id => moFor(moPersNamn(id)));
+  const vem = till.length ? moAntOch(till) : '';
+  return moFalt(D, 'anteckning', vem ? `Anteckning till ${esc(vem)}` : 'Anteckning', `<textarea class="uin" id="mod-anteckning" name="anteckning" rows="2" maxlength="${MOANTMAX}" placeholder="${esc(vem ? `Det ${vem} behöver veta inför mötet` : 'Det som är bra att veta inför mötet')}" aria-describedby="mo-anh">${esc(f.anteckning || '')}</textarea><p class="mo-ph" id="mo-anh">Bara för er. Kunden ser den aldrig. Den blir första anteckningen på kortet, och alla som är med kan svara.</p>`, {bred:true});
 }
 function moSkalFalt(D){
   return `<div class="mo-fl bred"><span class="mo-lbl" id="mo-sl">Skäl</span><div class="mo-chips" role="group" aria-labelledby="mo-sl">${moVal().nejSkal.map((t, i) => `<button type="button" class="chip" data-moskal="${i}" aria-pressed="${D.f.skal === t}">${esc(t)}</button>`).join('')}</div><p class="mo-err" id="moe-skal" ${D.fel.skal ? '' : 'hidden'}>${D.fel.skal ? esc(D.fel.skal) : ''}</p></div>`;
@@ -39925,12 +39974,15 @@ function moDlgBygg(D){
     if (!tid) e.tid = moEgenFel(D) || 'Välj en tid.';
     if (f.platsTyp === 'plats' && !t(f.adress)) e.adress = 'Skriv var mötet hålls.';
     if (f.platsTyp === 'teams' && t(f.lank) && !/^https:\/\/\S+$/i.test(t(f.lank))) e.lank = 'Länken ska börja med https://.';
+    if (D.typ === 'boka' && t(f.anteckning).length > MOANTMAX) e.anteckning = 'Anteckningen är för lång, högst 4 000 tecken.';
     if (Object.keys(e).length) return {e};
     if (D.typ === 'andra') return moAndraBygg(D, tid);
     const data = {namn:t(f.namn), telefon:t(f.telefon), kalla:t(f.kalla), hallsAv:f.hallsAv, dag:tid.dag, start:tid.start};
     if (moLangd(D) !== MOLANGD) data.langd = moLangd(D);
     if (f.platsTyp === 'teams' || f.platsTyp === 'plats'){ data.platsTyp = f.platsTyp; if (f.platsTyp === 'plats') data.adress = t(f.adress); else if (t(f.lank)) data.lank = t(f.lank); }
     ['kontakt', 'epost', 'doman', 'agenda', 'nulage'].forEach(n => { if (t(f[n])) data[n] = t(f[n]); });
+    // Anteckningen har ett id som följer bladet: ett nytt försök efter ett nätfel blir samma inlägg.
+    if (t(f.anteckning)){ data.anteckning = t(f.anteckning); data.anteckningId = D.antId || (D.antId = moAntUuid()); }
     if (f.med.length) data.med = f.med;
     const ps = moPersData(f.personer); if (ps.length) data.personer = ps;
     if (D.kedja) data.kedja = D.kedja;
@@ -40242,7 +40294,7 @@ function moPipeKort(k){
   const drag = mal.length ? ` data-drag draggable="true" aria-description="Kan dras till ${esc(mal.join(' eller '))}"` : '';
   return `<article class="mo-kort mo-pipe ${brad ? 'e-' + brad : ''} ${S.moNy === k.kedja ? 'ny' : ''}" data-kedja="${k.kedja}"${drag}>
     <button class="mo-ks" data-moopen="${k.kedja}"><span class="mo-pt2"><span>${esc(moNar(m.tid))}</span>${hoger}</span><b class="mo-nm" title="${esc(k.namn)}">${esc(k.namn)}</b></button>${ring}
-    <div class="mo-pf"><span class="mo-ini" aria-hidden="true">${esc(moIni(m.hallsAvNamn))}</span>${vem}${due}${ensam ? kn : ''}</div>
+    <div class="mo-pf"><span class="mo-ini" aria-hidden="true">${esc(moIni(m.hallsAvNamn))}</span>${vem}${moAntMarke(k)}${due}${ensam ? kn : ''}</div>
     ${kn && !ensam ? `<div class="mo-kn">${kn}</div>` : ''}</article>`;
 }
 // Ett möte som avgjorts i månaden. Beloppet syns bara för den som får mötesprovision.
@@ -40260,7 +40312,7 @@ function moKortVy(k){
   if (k.mote && moFas(k) !== 'avgjort') return moPipeKort(k);
   const hallare = moNamn(k);
   return `<article class="mo-kort ${k.idag ? 'idag' : ''} ${S.moNy === k.kedja ? 'ny' : ''}" data-kedja="${k.kedja}">
-    <button class="mo-ks" data-moopen="${k.kedja}"><b class="mo-nm" title="${esc(k.namn)}">${esc(k.namn)}</b>${moStatus(k)}${hallare ? `<small class="mo-vem">${esc(moFor(hallare))}${moFler(k) ? ` +${moFler(k)}` : ''}${k.mote ? ` · ${k.mote.langd} min${moPlatsKort(k) ? ` · ${esc(moPlatsKort(k))}` : ''}` : ''}</small>` : ''}</button>
+    <button class="mo-ks" data-moopen="${k.kedja}"><b class="mo-nm" title="${esc(k.namn)}">${esc(k.namn)}</b>${moStatus(k)}${moAntMarke(k)}${hallare ? `<small class="mo-vem">${esc(moFor(hallare))}${moFler(k) ? ` +${moFler(k)}` : ''}${k.mote ? ` · ${k.mote.langd} min${moPlatsKort(k) ? ` · ${esc(moPlatsKort(k))}` : ''}` : ''}</small>` : ''}</button>
     <div class="mo-kn">${moKnappar(k)}</div></article>`;
 }
 function moPlural(n, en, flera){ return `${n} ${n === 1 ? en : flera}`; }
@@ -40432,7 +40484,7 @@ function ndMoVy(){
     ${stat ? '' : moUppVy()}
     ${S.moFilter && !stat ? `<div class="mo-filt"><span class="chip on">Filtrerat: ${esc(MOFILTER[S.moFilter] || S.moFilter)}<button data-mofiltx aria-label="Ta bort filtret">${I('x')}</button></span></div>` : ''}
     ${stat ? '<section class="card mo-stat" id="moStat" aria-label="Statistik"></section>' : d.fel ? moLasfelVy() : moHeltTomt(d) ? moTomtVy() : ingen ? moIngenVy() : `<div class="mo-tavla" role="list">${MOPIPE.map(kolVy).join('')}</div>${d.kapad ? `<p class="ms-fot" data-mo-kapad>${MOKAPAD}</p>` : ''}`}
-    ${S.moOpen ? moPanel(d.kort.find(k => k.kedja === S.moOpen)) : ''}
+    ${S.moOpen ? moPanel(d.kort.find(k => k.kedja === S.moOpen)) : moAntStangd()}
     ${S.moDlg ? moDlgVy(S.moDlg) : ''}
     ${S.moInst && d.installningar ? moInstVy() : ''}`;
 }
@@ -40712,6 +40764,218 @@ function moSteg(d, franTangent){
   if (franTangent) moPanelFokus();
   else (document.querySelector(`.rxpanel [data-mosteg="${d}"]:not([disabled])`) || document.querySelector('.rxpanel [data-mosteg]:not([disabled])'))?.focus({preventScroll:true});
 }
+/* ---------- Anteckningarna (0310) ----------
+   Beställaren 2026-11-16: den som bokar bokar oftast åt någon annan. Bokarens anteckning blir första inlägget i kortets
+   tråd, och alla som är med på kortet läser, svarar och får notis i klockan och telefonen. ALDRIG TILL KUNDEN: tråden
+   har en egen rutt (/nav2/moten/anteckningar) och en egen tabell som inget utskick läser
+   (tests/mote-anteckning-aldrig-kund.mjs). Rutan har inget läge för att skriva till kunden.
+   Id:t sätts här (crypto.randomUUID) och följer med vid ett nytt försök: servern gör samma id till samma inlägg.
+   Tråden läses när panelen öppnas och var tionde sekund medan den är öppen och fliken syns. Listan ritas om bara när
+   något ändrats, och skrivrutan rörs aldrig: det skrivna står i MOANTUTK (och i fliken, sessionStorage). */
+const MOANT = new Map();   // kedja -> {d: serverns svar, laddar, fel, alla, nyGrans, vantar: Map(id -> inlägg på väg), red, ny, html}
+const MOANTUTK = new Map();   // kedja -> det man skrivit men inte skickat
+const MOANTURL = '/nav2/moten/anteckningar', MOANTVISA = 4, MOANTPULS = 10000, MOANTMAX = 4000;
+let MOANTOPEN = null;   // kortet vars panel är öppen nu: en ny öppning läser tråden och sätter "Nytt" på nytt
+const moAntSt = kedja => { let s = MOANT.get(kedja); if (!s){ s = {d:null, laddar:false, fel:null, alla:false, nyGrans:undefined, vantar:new Map(), red:null, ny:null, html:null}; MOANT.set(kedja, s); } return s; };
+function moAntUtkast(kedja){
+  if (MOANTUTK.has(kedja)) return MOANTUTK.get(kedja);
+  let t = ''; try { t = String(JSON.parse(sessionStorage.getItem('nd-mo-ant') || '{}')[kedja] || ''); } catch(_){}
+  MOANTUTK.set(kedja, t); return t;
+}
+function moAntUtkastSatt(kedja, t){
+  MOANTUTK.set(kedja, t);
+  try { const o = JSON.parse(sessionStorage.getItem('nd-mo-ant') || '{}'); if (t) o[kedja] = t; else delete o[kedja]; sessionStorage.setItem('nd-mo-ant', JSON.stringify(o)); } catch(_){}
+}
+// Id:t sätts här. crypto.randomUUID finns bara i en säker kontext; getRandomValues finns överallt.
+const moAntUuid = () => { if (window.crypto && crypto.randomUUID) return crypto.randomUUID(); const b = crypto.getRandomValues(new Uint8Array(16)); b[6] = (b[6] & 15) | 64; b[8] = (b[8] & 63) | 128; const h = [...b].map(x => x.toString(16).padStart(2, '0')).join(''); return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`; };
+const moAntOch = l => l.length < 2 ? l.join('') : `${l.slice(0, -1).join(', ')} och ${l[l.length - 1]}`;
+// Vilka som är med: serverns lista när tråden är läst, annars kortets deltagare med tavlans namn.
+function moAntMed(k){
+  const s = moAntSt(k.kedja), ids = s.d ? s.d.med.map(p => p.id) : (k.deltagare || []);
+  const namn = id => s.d ? ((s.d.med.find(p => p.id === id) || {}).namn || '') : moPersNamn(id);
+  return {andra:ids.filter(id => id !== ND.jag.id).map(id => moFor(namn(id))).filter(Boolean), jagMed:ids.includes(ND.jag.id)};
+}
+// Tiden som tråden säger den: "09:12" i dag, annars "i går 14:10" eller "tis 17 nov 14:10".
+function moAntTid(iso){ const l = moLokal(iso); return !l ? '' : l.slice(0, 10) === ndIdag() ? moKl(l) : moNar(l); }
+// Länkar och mobilnummer går att trycka på, som i resten av panelen (ett klick på numret kopierar det). Allt annat är text.
+const MOANTLANK = /(https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]])|(?<![\d+])((?:\+46\s?|0)7\d(?:[\s-]?\d){7})(?!\d)/g;
+function moAntText(t){
+  let ut = '', i = 0;
+  for (const m of String(t).matchAll(MOANTLANK)){
+    ut += esc(t.slice(i, m.index));
+    if (m[1]) ut += `<a href="${esc(m[1])}" target="_blank" rel="noopener noreferrer">${esc(m[1])}</a>`;
+    else ut += `<a class="num" href="tel:${esc(m[2].replace(/[^\d+]/g, ''))}" data-motel="${esc(m[2])}" title="Kopiera numret">${esc(m[2])}</a>`;
+    i = m.index + m[0].length;
+  }
+  return ut + esc(t.slice(i));
+}
+function moAntTom(k){
+  const {andra} = moAntMed(k);
+  return `<p class="mo-ant-tom">Inga anteckningar än. ${andra.length ? `Skriv det ${esc(moAntOch(andra))} behöver veta.` : 'Skriv det som är bra att veta inför mötet.'}</p>`;
+}
+function moAntInlagg(k, a){
+  const s = moAntSt(k.kedja), egen = a.av === ND.jag.id, red = s.red && s.red.id === a.id, las = !!(s.d && s.d.skrivlage === false);
+  const nar = a.status === 'skickas' ? 'skickas …' : a.status === 'fel' ? '' : moAntTid(a.skapad), full = !a.status && moLokal(a.skapad);
+  const bekr = S.moBekr === 'ant|' + a.id;
+  const verk = egen && !a.borttagen && !a.status && !red && !las ? `<span class="mo-ant-v"><button type="button" class="tlink" data-moantandra="${a.id}">Ändra</button><button type="button" class="tlink${bekr ? ' bekr' : ''}" data-moanttabort="${a.id}">${bekr ? 'Säker? Ta bort' : 'Ta bort'}</button></span>` : '';
+  const kropp = a.borttagen ? '<p class="mo-ant-t borta">Anteckningen togs bort.</p>'
+    : red ? `<div class="mo-ant-red"><div class="upg-kfalt"><textarea class="upg-kin" id="moAntRed" rows="2" maxlength="${MOANTMAX}" aria-label="Ändra anteckningen">${esc(s.red.text)}</textarea></div><div class="mo-ant-redk"><button type="button" class="btn btn-s btn-sm" data-moantspara="${a.id}">Spara</button><button type="button" class="tlink" data-moantavbryt="${a.id}">Avbryt</button><small>Enter sparar, Esc avbryter</small></div></div>`
+    : `<p class="mo-ant-t">${moAntText(a.text || '')}</p>`;
+  const fel = a.status === 'fel' ? `<p class="mo-ant-fel" role="alert">${esc(a.fel || 'Skickades inte.')} <button type="button" class="tlink inl" data-moantigen="${a.id}">Försök igen</button> <button type="button" class="tlink inl" data-moantslang="${a.id}">Ta bort</button></p>` : '';
+  return `<article class="mo-ant-i${a.status ? ' ' + a.status : ''}${s.ny === a.id ? ' upg-ny' : ''}" data-antid="${a.id}">${avatar(a.avNamn || ND.jag.namn, 24)}<div class="mo-ant-b"><div class="mo-ant-h"><b>${egen ? 'Du' : esc(moFor(a.avNamn || ''))}</b><time${full ? ` datetime="${esc(a.skapad)}" title="${esc(moNar(full))}"` : ''}>${esc(nar)}</time>${a.andrad && !a.borttagen ? '<span>ändrad</span>' : ''}${verk}</div>${kropp}${fel}</div></article>`;
+}
+// Inläggen i serverns ordning, med de egna som är på väg sist. "Nytt" står före det första från någon annan efter
+// gränsen som gällde när panelen öppnades. Fler än fyra: de fyra senaste, och alltid alla nya.
+function moAntListaHtml(k){
+  const s = moAntSt(k.kedja), d = s.d;
+  if (!d){
+    if (s.fel) return `<p class="mo-ant-tom" role="alert">${esc(s.fel)} <button type="button" class="tlink inl" data-moantlas="${k.kedja}">Försök igen</button></p>`;
+    return k.trad && k.trad.antal === 0 ? moAntTom(k) : '<p class="mo-ant-tom" aria-busy="true">Läser anteckningarna …</p>';
+  }
+  const alla = [...d.inlagg, ...[...s.vantar.values()].filter(v => !d.inlagg.some(x => x.id === v.id))];
+  if (!alla.length) return moAntTom(k);
+  const g = s.nyGrans === undefined || s.nyGrans === false ? null : s.nyGrans === null ? -Infinity : Date.parse(s.nyGrans);
+  const forstaNy = g === null ? -1 : alla.findIndex(a => a.av !== ND.jag.id && !a.borttagen && !a.status && Date.parse(a.skapad) > g);
+  const flerMoten = new Set(alla.map(a => a.mote).filter(Boolean)).size > 1;
+  let fran = 0;
+  if (!s.alla && alla.length > MOANTVISA){ fran = alla.length - MOANTVISA; if (forstaNy >= 0 && forstaNy < fran) fran = forstaNy; }
+  let ut = fran > 0 ? `<button type="button" class="tlink mo-ant-aldre" data-moantalla="${k.kedja}">Visa ${fran} äldre</button>` : d.fler ? '<p class="mo-ant-tom">Äldre anteckningar visas inte.</p>' : '';
+  let forra = fran > 0 ? alla[fran - 1].mote : undefined;
+  alla.slice(fran).forEach((a, j) => {
+    if (flerMoten && a.mote && a.mote !== forra && d.moten[a.mote]){ const l = moLokal(d.moten[a.mote]); if (l) ut += `<div class="mo-ant-av" role="separator"><span>Mötet ${esc(moNar(l))}</span></div>`; }
+    if (a.mote) forra = a.mote;
+    if (fran + j === forstaNy) ut += '<div class="mo-ant-av ny" role="separator"><span>Nytt</span></div>';
+    ut += moAntInlagg(k, a);
+  });
+  return ut;
+}
+// Ritar om bara listan, och bara när den ändrats. Fokus i ändringsrutan står kvar (den ritas inte om medan man skriver).
+function moAntRita(kedja){
+  if (S.view !== 'moten' || S.moOpen !== kedja) return;
+  const k = ndMo() && ndMo().kort.find(x => x.kedja === kedja), el = document.getElementById('moAntLista'); if (!k || !el) return;
+  const html = moAntListaHtml(k); if (html === el.innerHTML || html === moAntSt(kedja).html) return;
+  const ae = document.activeElement, redFokus = ae && ae.id === 'moAntRed', pos = redFokus ? [ae.selectionStart, ae.selectionEnd] : null;
+  moAntSt(kedja).html = html; el.innerHTML = html;
+  if (redFokus){ const r = document.getElementById('moAntRed'); if (r){ r.focus({preventScroll:true}); try { r.setSelectionRange(pos[0], pos[1]); } catch(_){} } }
+  moAntHuvud(k);
+}
+// Raden under rubriken och Tysta följer serverns svar (vilka som är med kan ha ändrats sedan tavlan lästes).
+function moAntHuvud(k){
+  const v = document.querySelector('.mo-ant-vem'); if (v) v.textContent = moAntVem(k);
+  const h = document.getElementById('moAntH'), t = moAntTystKnapp(k), b = h && h.querySelector('[data-moanttyst]');
+  if (h && !b && t) h.insertAdjacentHTML('beforeend', t); else if (b && t){ const n = document.createElement('div'); n.innerHTML = t; b.replaceWith(n.firstChild); }
+  const hint = document.getElementById('moAntHint'); if (hint) hint.textContent = moAntHint(k);
+}
+function moAntVem(k){
+  const {andra, jagMed} = moAntMed(k);
+  return `${jagMed ? (andra.length ? `${moAntOch(andra)} och du` : 'Bara du') : (andra.length ? moAntOch(andra) : 'Ingen än')} · kunden ser aldrig det här`;
+}
+function moAntHint(k){
+  const s = moAntSt(k.kedja), {andra, jagMed} = moAntMed(k);
+  if (s.d && s.d.skrivlage === false) return 'Nav är i läsläge. Anteckningarna går att läsa men inte skriva.';
+  if (!jagMed) return 'Du är inte med på kortet. Skriver du får du en notis när någon svarar.';
+  return `${andra.length ? `${moAntOch(andra)} får en notis.` : 'Ingen annan är med på kortet än.'} Enter skickar, Skift+Enter ger ny rad.`;
+}
+function moAntTystKnapp(k){
+  const s = moAntSt(k.kedja); if (!s.d) return '';
+  const {jagMed} = moAntMed(k); if (!jagMed && !s.d.inlagg.some(a => a.av === ND.jag.id)) return '';
+  const t = !!s.d.tyst;
+  return `<button type="button" class="tlink mo-ant-tyst" data-moanttyst="${k.kedja}" aria-pressed="${t}" title="${t ? 'Du får inga notiser från anteckningarna på det här kortet. Tryck för att få dem igen.' : 'Inga notiser från anteckningarna på det här kortet'}">${t ? 'Tystad' : 'Tysta'}</button>`;
+}
+function moAntSek(k){
+  if (MOANTOPEN !== k.kedja){   // panelen öppnades nu (eller stegade till ett annat kort): läs tråden, "Nytt" sätts på nytt
+    MOANTOPEN = k.kedja; const s = moAntSt(k.kedja); s.nyGrans = undefined; s.alla = false; s.red = null; s.ny = null; s.html = null;
+    setTimeout(() => moAntLas(k.kedja), 0);
+  }
+  const s = moAntSt(k.kedja), utk = moAntUtkast(k.kedja), las = !!(s.d && s.d.skrivlage === false), {andra} = moAntMed(k);
+  s.html = moAntListaHtml(k);
+  return `<section class="rxsek mo-ant" aria-labelledby="moAntH"><h3 id="moAntH">Anteckningar${moAntTystKnapp(k)}</h3>
+        <p class="mo-ant-vem">${esc(moAntVem(k))}</p>
+        <div class="mo-ant-lista" id="moAntLista">${s.html}</div>
+        <form class="mo-ant-skriv" data-moantform="${k.kedja}" novalidate><div class="upg-kfalt"><textarea id="moAntIn" class="upg-kin" rows="1" maxlength="${MOANTMAX}" placeholder="${esc(las ? 'Nav är i läsläge' : andra.length ? `Skriv till ${moAntOch(andra)} …` : 'Skriv en anteckning …')}" aria-label="Ny anteckning" aria-describedby="moAntHint" ${las ? 'disabled' : ''}>${esc(utk)}</textarea><button type="submit" class="upg-send" aria-label="Skicka anteckningen" title="Skicka (Enter)" ${utk.trim() && !las ? '' : 'disabled'}>${upgIk('upp')}</button></div><p class="upg-khint" id="moAntHint">${esc(moAntHint(k))}</p></form></section>`;
+}
+const moAntStangd = () => { MOANTOPEN = null; return ''; };
+// Serverns svar in: tråden, och sedan läst. Kortets markering på tavlan släcks direkt.
+function moAntIn(kedja, d){
+  const s = moAntSt(kedja), forra = s.d;
+  s.d = d; s.fel = null;
+  // Gränsen för "Nytt" tas från den första läsningen efter öppningen. Den som inte är med på kortet och aldrig läst
+  // tråden (en chef) får inget "Nytt"-streck.
+  if (s.nyGrans === undefined) s.nyGrans = d.settTill ? d.settTill : (d.med.some(p => p.id === ND.jag.id) ? null : false);
+  // Nya inlägg från andra medan panelen är öppen: skärmläsaren får höra dem, och de glider in.
+  if (forra){ const nya = d.inlagg.filter(a => a.av !== ND.jag.id && !a.borttagen && !forra.inlagg.some(x => x.id === a.id)); if (nya.length){ s.ny = nya[nya.length - 1].id; moSag(nya.map(a => `${moFor(a.avNamn)}: ${moKapa(String(a.text || ''), 200)}`).join('. ')); } }
+  const k = ndMo() && ndMo().kort.find(x => x.kedja === kedja);
+  if (k) k.trad = {antal:d.inlagg.filter(a => !a.borttagen).length, nya:0};
+  moAntRita(kedja);
+  // Läst: det nyaste inlägget servern visade, om det är nyare än markeringen. Bara när panelen syns.
+  const sist = d.inlagg.length ? d.inlagg[d.inlagg.length - 1].skapad : null;
+  if (sist && S.moOpen === kedja && !document.hidden && (!d.settTill || Date.parse(sist) > Date.parse(d.settTill))){
+    d.settTill = sist;
+    // Trådens notiser försvinner ur klockan på servern; klockan hämtas om så att den säger samma sak.
+    ndSkriv(MOANTURL, {handling:'sett', kedja, till:sist}, {nyckel:'antsett|' + kedja, knapp:null}).then(r => { if (r.ok && typeof klHamta === 'function') klHamta(); }).catch(() => {});
+  }
+}
+async function moAntLas(kedja, tyst){
+  const s = moAntSt(kedja); if (s.laddar) return; s.laddar = true;
+  try {
+    const r = await ndSkriv(MOANTURL, {handling:'las', kedja}, {nyckel:'antlas|' + kedja, knapp:null, tid:15000});
+    if (r.ok && r.data && Array.isArray(r.data.inlagg)){ moAntIn(kedja, r.data); return; }
+    if (r.pagar || tyst) return;
+    s.fel = r.status === 403 || r.status === 404 ? (r.fel || 'Du ser inte längre det här kortet.') : 'Anteckningarna gick inte att läsa.';
+    moAntRita(kedja);
+  } finally { s.laddar = false; }
+}
+async function moAntSkicka(kedja){
+  const el = document.getElementById('moAntIn'), text = String(el ? el.value : moAntUtkast(kedja)).trim();
+  if (!text) return;
+  if (text.length > MOANTMAX){ toast('Anteckningen är för lång, högst 4 000 tecken.'); return; }
+  const s = moAntSt(kedja), v = {id:moAntUuid(), av:ND.jag.id, avNamn:ND.jag.namn, text, skapad:new Date().toISOString(), mote:null, andrad:null, borttagen:false, status:'skickas'};
+  s.vantar.set(v.id, v); s.ny = v.id; s.alla = s.alla || false;
+  moAntUtkastSatt(kedja, '');
+  if (el){ el.value = ''; const kn = el.form && el.form.querySelector('.upg-send'); if (kn) kn.disabled = true; }
+  moAntRita(kedja);
+  el && el.closest('form')?.scrollIntoView({block:'nearest', behavior:'smooth'});
+  await moAntSkickaEn(kedja, v);
+}
+async function moAntSkickaEn(kedja, v){
+  const s = moAntSt(kedja); v.status = 'skickas'; v.fel = null; moAntRita(kedja);
+  const r = await ndSkriv(MOANTURL, {handling:'skriv', id:v.id, kedja, text:v.text}, {nyckel:'antskriv|' + v.id, knapp:null});
+  if (r.ok && r.data && Array.isArray(r.data.inlagg)){ s.vantar.delete(v.id); moAntIn(kedja, r.data); return; }
+  if (r.pagar) return;
+  v.status = 'fel';
+  v.fel = r.status === 423 ? 'Nav är i läsläge. Den skickades inte.' : r.utloggad ? 'Du är utloggad. Den skickades inte.' : r.status === 400 && r.fel ? r.fel : r.hangde ? 'Ingen kontakt med Nav. Den skickades inte.' : (r.fel || 'Den skickades inte.');
+  if (r.utloggad) ndSkrivFel(r);
+  moAntRita(kedja);
+}
+// Ändra och Ta bort: bara det egna. Svaret är hela tråden.
+async function moAntAndra(kedja, id, handling, text){
+  const s = moAntSt(kedja), a = s.d && s.d.inlagg.find(x => x.id === id); if (!a) return;
+  const r = await ndSkriv(MOANTURL, {handling, id, ...(handling === 'andra' ? {text, fore:a.andrad} : {})}, {knapp:null});
+  if (r.data && Array.isArray(r.data.inlagg)){ if (r.ok) s.red = null; moAntIn(kedja, r.data); }
+  if (!r.ok) ndSkrivFel(r, handling === 'andra' ? 'Ändringen sparades inte.' : 'Anteckningen togs inte bort.');
+  else toast(handling === 'andra' ? 'Anteckningen är ändrad.' : 'Anteckningen är borttagen.');
+  if (r.ok && handling === 'andra') document.querySelector(`[data-antid="${CSS.escape(id)}"] [data-moantandra]`)?.focus({preventScroll:true});
+}
+async function moAntTysta(kedja){
+  const s = moAntSt(kedja); if (!s.d) return;
+  const ny = !s.d.tyst, r = await ndSkriv(MOANTURL, {handling:'tyst', kedja, tyst:ny}, {knapp:null});
+  if (!r.ok){ ndSkrivFel(r, 'Det sparades inte.'); return; }
+  s.d.tyst = ny; s.html = null; toast(r.data && r.data.ok || (ny ? 'Tystad.' : 'Notiserna är på igen.'));
+  const k = ndMo().kort.find(x => x.kedja === kedja); if (k) moAntHuvud(k);
+  document.querySelector('[data-moanttyst]')?.focus({preventScroll:true});
+}
+// Notisens länk (/moten/<id>?visa=anteckningar): tråden i synfältet, och skrivrutan i fokus där det inte öppnar ett tangentbord.
+function moAntFokus(){
+  const sek = document.querySelector('.rxpanel .mo-ant'); if (!sek) return moPanelFokus();
+  sek.scrollIntoView({block:'start', behavior:'smooth'});
+  if (!(window.matchMedia && matchMedia('(pointer: coarse)').matches)) document.getElementById('moAntIn')?.focus({preventScroll:true});
+}
+// Tavlans markering: nya anteckningar från andra på kortet. Inga nya, ingen markering.
+const MOANTIKON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H10l-5 4V6a1 1 0 0 1 1-1z"/></svg>';
+const moAntMarke = k => k.trad && k.trad.nya > 0 ? `<span class="mo-antn" title="${k.trad.nya} ${k.trad.nya === 1 ? 'ny anteckning' : 'nya anteckningar'}" aria-label="${k.trad.nya} ${k.trad.nya === 1 ? 'ny anteckning' : 'nya anteckningar'}">${MOANTIKON}${k.trad.nya}</span>` : '';
+// Medan panelen är öppen och fliken syns: tråden var tionde sekund. Ingen läsning med en ändring på gång.
+setInterval(() => { if (S.view === 'moten' && S.moOpen && MOANTOPEN === S.moOpen && !document.hidden && ndMo() && !(moAntSt(S.moOpen).red)) moAntLas(S.moOpen, true); }, MOANTPULS);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.view === 'moten' && S.moOpen && MOANTOPEN === S.moOpen) moAntLas(S.moOpen, true); });
 function moPanel(k){
   if (!k) return '';
   const f = moFas(k), m = k.mote, u = moUpp(k), tel = k.telefon ? k.telefon.replace(/[^\d+]/g, '') : '';
@@ -40725,9 +40989,10 @@ function moPanel(k){
         ${m ? `<p class="mo-pt"><b class="num">${moNar(m.tid)}</b> · ${m.langd} min · ${moRel(moMin(m.tid) - moNuMin())}${m.bekraftat ? ' · <span class="pill t-ok">Bekräftat</span>' : ''}${m.flyttningar ? ` · flyttat ${m.flyttningar} ${m.flyttningar === 1 ? 'gång' : 'gånger'}` : ''}${k.forsok ? ` · ${k.forsok} försök utan svar${moRingIgen(k) ? `, Nav påminner dig ${moRingIgen(k)}` : ''}` : ''}${k.fonster && !m.bekraftat && (f === 'bokat' || f === 'att_bekrafta') ? ` · bekräftas senast ${esc(moVdag(k.fonster.senast))}` : ''}${moUppfMote(k) && !m.bekraftat && f === 'bokat' ? ' · uppföljningsmöte, bekräftas inte' : ''}</p>${moPlatsRad(k)}<p class="muted">Bokat av ${esc(m.bokatAvNamn)}.</p>${moMedRad(k)}`
           : `<p class="mo-pt"><b>${!u.datum ? 'Ingen dag satt' : moDag(u.datum) === 'i dag' ? 'Ring i dag' : 'Ring ' + moDag(u.datum)}</b>${u.offert ? ' · <span class="pill t-signal">Offert ute</span>' : ''}</p>${u.text ? `<p>${esc(u.text)}</p>` : ''}<p class="muted">${u.ingetSvar ? `Inget svar ${u.ingetSvar} ${u.ingetSvar === 1 ? 'gång' : 'gånger'} i rad.` : 'Inget försök utan svar än.'}</p>`}
         <div class="mo-kn pan">${moKnappar(k, true)}</div></section>
+      ${moAntSek(k)}
       <section class="rxsek"><h3>Bolaget</h3><dl class="ldfakta">${fakta.map(([a, b]) => `<div><dt>${a}</dt><dd>${b}</dd></div>`).join('')}</dl></section>
       ${moKundFolk(k).length ? `<section class="rxsek"><h3>Fler hos kunden</h3><dl class="ldfakta">${moKundFolk(k).map(p => { const t2 = p.telefon ? p.telefon.replace(/[^\d+]/g, '') : ''; return `<div><dt>${esc(p.namn || 'Hos kunden')}${p.svar && MOSVAR[p.svar] ? ` · ${MOSVAR[p.svar]}` : ''}</dt><dd>${[t2 ? `<a class="num" href="tel:${t2}" data-motel="${esc(p.telefon)}" title="Kopiera numret">${esc(p.telefon)}</a>` : '', p.epost ? `<a href="mailto:${esc(p.epost)}" data-mokop="${esc(p.epost)}" data-mokopok="Mejladressen är kopierad." title="Kopiera mejladressen">${esc(p.epost)}</a>` : ''].filter(Boolean).join('<br>') || '–'}</dd></div>`; }).join('')}</dl></section>` : ''}
-      ${m && (m.agenda || m.mal || m.nulage) ? `<section class="rxsek"><h3>Inför mötet</h3><dl class="ldfakta">${m.agenda ? `<div class="mo-bred"><dt>Agenda</dt><dd class="mo-agd">${esc(m.agenda)}</dd></div>` : ''}${m.mal ? `<div class="mo-bred"><dt>Mål, bara för er</dt><dd>${esc(m.mal)}</dd></div>` : ''}${m.nulage ? `<div><dt>Nuläge</dt><dd>${esc(moVal().nulage[m.nulage] || m.nulage)}</dd></div>` : ''}</dl></section>` : ''}
+      ${m && (m.agenda || (m.mal && !k.trad) || m.nulage) ? `<section class="rxsek"><h3>Inför mötet</h3><dl class="ldfakta">${m.agenda ? `<div class="mo-bred"><dt>Agenda</dt><dd class="mo-agd">${esc(m.agenda)}</dd></div>` : ''}${m.mal && !k.trad ? `<div class="mo-bred"><dt>Mål, bara för er</dt><dd>${esc(m.mal)}</dd></div>` : ''}${m.nulage ? `<div><dt>Nuläge</dt><dd>${esc(moVal().nulage[m.nulage] || m.nulage)}</dd></div>` : ''}</dl></section>` : ''}
       <section class="rxsek"><h3>Historik</h3>${k.historik.length ? `<ol class="rxlog">${k.historik.slice().reverse().map(h => `<li${moAdmin() && h.id ? ' class="mo-hr"' : ''}><span class="num">${+h.tid.slice(8, 10)} ${FRMK[+h.tid.slice(5, 7)]}</span>${esc(h.text.replace(/^\d+ \p{L}+ · /u, ''))}${moAdmin() && h.id ? moHistRadera(h, k) : ''}</li>`).join('')}</ol>` : '<p class="muted">Ingen historik än. Första mötet är på gång.</p>'}</section>
       <div class="mo-pslut"><button class="tlink mo-plank" data-molank="${m ? m.id : k.kedja}">${m ? 'Kopiera länk till mötet' : 'Kopiera länk till kortet'}</button>${m && moFarRadera(m) ? moRadera(k) : ''}</div>
     </div></aside>`;
@@ -40942,6 +41207,19 @@ document.addEventListener('click', e => {
   if (ds.mosteg){ stopp(); moSteg(+ds.mosteg, false); return; }
   if (ds.mokop){ if (window.matchMedia && matchMedia('(pointer: coarse)').matches) return; stopp(); kopiera(ds.mokop, ds.mokopok || 'Kopierat.'); return; }
   if (ds.molank){ stopp(); kopiera(location.origin + '/moten/' + encodeURIComponent(ds.molank), 'Länken är kopierad. Den öppnar kortet i Nav.'); return; }
+  // Anteckningarna (0310). Id:n och kortet läses ur knappen innan något ritas om (morfen återanvänder knappen).
+  if (ds.moantalla){ stopp(); const kedja = ds.moantalla; moAntSt(kedja).alla = true; moAntRita(kedja); document.querySelector('#moAntLista .mo-ant-i')?.setAttribute('tabindex', '-1'); document.querySelector('#moAntLista .mo-ant-i')?.focus({preventScroll:true}); return; }
+  if (ds.moantlas){ stopp(); const kedja = ds.moantlas; moAntSt(kedja).fel = null; moAntRita(kedja); moAntLas(kedja); return; }
+  if (ds.moanttyst){ stopp(); moAntTysta(ds.moanttyst); return; }
+  if (ds.moantandra || ds.moanttabort || ds.moantspara || ds.moantavbryt || ds.moantigen || ds.moantslang){
+    stopp(); const kedja = S.moOpen, s = kedja && moAntSt(kedja); if (!s) return;
+    if (ds.moantandra){ const id = ds.moantandra, a = s.d && s.d.inlagg.find(x => x.id === id); if (!a) return; s.red = {id, text:a.text || ''}; S.moBekr = null; moAntRita(kedja); moFokus('moAntRed'); return; }
+    if (ds.moantavbryt){ const id = ds.moantavbryt; s.red = null; moAntRita(kedja); document.querySelector(`[data-antid="${CSS.escape(id)}"] [data-moantandra]`)?.focus({preventScroll:true}); return; }
+    if (ds.moantspara){ const id = ds.moantspara, el = document.getElementById('moAntRed'), text = String(el ? el.value : s.red && s.red.text || '').trim(); if (!text){ toast('Skriv något, eller ta bort anteckningen.'); return; } moAntAndra(kedja, id, 'andra', text); return; }
+    if (ds.moanttabort){ const id = ds.moanttabort; if (moBekrTva('ant|' + id, `[data-moanttabort="${id}"]`)) moAntAndra(kedja, id, 'ta_bort'); return; }
+    if (ds.moantigen){ const v = s.vantar.get(ds.moantigen); if (v) moAntSkickaEn(kedja, v); return; }
+    if (ds.moantslang){ const v = s.vantar.get(ds.moantslang); if (!v) return; s.vantar.delete(v.id); if (!moAntUtkast(kedja).trim()){ moAntUtkastSatt(kedja, v.text); const el = document.getElementById('moAntIn'); if (el){ el.value = v.text; const kn = el.form && el.form.querySelector('.upg-send'); if (kn) kn.disabled = false; } } moAntRita(kedja); document.getElementById('moAntIn')?.focus({preventScroll:true}); return; }
+  }
   if (ds.mostang !== undefined){ stopp(); moStang(); return; }
   if (ds.monylank){ stopp(); const k = ndMo().kort.find(x => x.kedja === ds.monylank); if (k && moFarMote(k)) ndMoDialog('andra', k, null, 'mod-lank'); return; }
   if (ds.moa){ stopp(); const [a, kedja] = ds.moa.split('|'); moKor(a, kedja); return; }
@@ -40970,6 +41248,7 @@ document.addEventListener('submit', e => {
   const f = e.target;
   if (f.matches && f.matches('[data-mosok]')){ e.preventDefault(); e.stopImmediatePropagation(); moUppslag(new FormData(f).get('q') || ''); return; }
   if (f.matches && f.matches('[data-modlg]')){ e.preventDefault(); e.stopImmediatePropagation(); moDlgSkicka(); return; }
+  if (f.matches && f.matches('[data-moantform]')){ e.preventDefault(); e.stopImmediatePropagation(); moAntSkicka(f.dataset.moantform); return; }
   if (f.matches && f.matches('[data-mopam]')){
     e.preventDefault(); e.stopImmediatePropagation();
     const F = new FormData(f), p = {namn:String(F.get('namn')).trim(), telefon:String(F.get('telefon')).trim(), dag:F.get('dag'), start:F.get('start')};
@@ -41017,6 +41296,9 @@ document.addEventListener('input', e => {   // Formuläret behåller det som skr
     if (n === 'telefon'){ clearTimeout(moDlgUppslag.t); moDlgUppslag.t = setTimeout(moDlgUppslag, 700); }
     return;
   }
+  // Anteckningarna: det skrivna sparas medan man skriver (morfen skriver tillbaka det vid varje omritning).
+  if (e.target.id === 'moAntIn' && S.moOpen){ moAntUtkastSatt(S.moOpen, e.target.value); const kn = e.target.form && e.target.form.querySelector('.upg-send'); if (kn) kn.disabled = !e.target.value.trim(); return; }
+  if (e.target.id === 'moAntRed' && S.moOpen){ const s = moAntSt(S.moOpen); if (s.red) s.red.text = e.target.value; return; }
   const f = e.target.closest('[data-mopam]'); if (f && S.moPam) S.moPam[e.target.name] = e.target.value;
   else if (e.target.id === 'moSok'){ S.moQ = e.target.value; render(); }   // texten filtrerar tavlan medan man skriver (F4.1)
 }, true);
@@ -41141,6 +41423,12 @@ function moTangent(e){
   if (e.key === 'Tab' && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey && S.moDlg && e.target && e.target.closest && e.target.closest('.mo-dlg .mo-spw') && moSpokTa(e.target)){ e.preventDefault(); e.stopImmediatePropagation(); return; }
   if (e.key === 'Tab') moFalla(e);
   const moten = S.view === 'moten' && !!ndMo();
+  // Anteckningarna: Enter skickar och sparar, Skift+Enter ger ny rad, Esc avbryter en ändring (och stänger inte panelen).
+  if (moten && S.moOpen && e.target && (e.target.id === 'moAntIn' || e.target.id === 'moAntRed') && !e.isComposing){
+    if (e.key === 'Enter' && !e.shiftKey && !e.altKey){ e.preventDefault(); e.stopImmediatePropagation(); if (e.repeat) return;
+      if (e.target.id === 'moAntIn') moAntSkicka(S.moOpen); else { const s = moAntSt(S.moOpen); if (s.red) document.querySelector(`[data-moantspara="${CSS.escape(s.red.id)}"]`)?.click(); } return; }
+    if (e.key === 'Escape' && e.target.id === 'moAntRed'){ e.preventDefault(); e.stopImmediatePropagation(); const s = moAntSt(S.moOpen); if (s.red) document.querySelector(`[data-moantavbryt="${CSS.escape(s.red.id)}"]`)?.click(); return; }
+  }
   if (e.key === 'Escape'){
     if (moten && S.keysOverlay) return;   // ?-rutan ligger överst: Navs egen Esc stänger den
     if (document.getElementById('pal')) return;   // paletten ligger överst (G10): Navs egen Esc stänger den, Möten rör inget
@@ -41432,14 +41720,14 @@ function ndPvGaManad(m){
   pvGa();
   if (pvManader().includes(m)){ S.pvM = m; render(); }
 }
-function ndMoGaMote(id){
+function ndMoGaMote(id, anteckningar){
   moGa();
   const d = ndMo(); if (!d) return;
   // Ett avgjort möte (B18): den som får bedöma det får Bedöm, annars öppnas kortets panel om kedjan står kvar på tavlan.
   const a = (d.avgjorda || []).find(x => String(x.mote) === id);
   if (a && a.vantarBedomning && moFarBedoma(a)){ ndMoBedom({id:a.mote, namn:a.namn, tid:a.tid, hallsAv:a.hallsAv, hallsAvNamn:a.hallsAvNamn, bokatAvNamn:a.bokatAvNamn}); return; }
   const k = d.kort.find(x => String(x.kedja) === id || (x.mote && String(x.mote.id) === id) || (a && x.kedja === a.kedja));
-  if (k){ S.moOpen = k.kedja; render(); setTimeout(moPanelFokus, 20); return; }
+  if (k){ S.moOpen = k.kedja; render(); setTimeout(anteckningar ? moAntFokus : moPanelFokus, 20); return; }
   if (!d.fel) toast('Mötet finns inte längre på tavlan.');   // oläst tavla (B16) säger redan vad som är fel
 }
 function ndUtbGaNotis(d){
@@ -41523,7 +41811,7 @@ ndGa = function(href){
     case 'avtal': { if (NDUUID.test(sub || '') && !d[2]){ const a = ndMa() && (ndMa().avtal || []).find(x => String(x.id) === sub); maGa(a && ndMa().hanterar ? a.personId : null); return; } if (sub) return nav(); maGa(); return; }
     case 'leads': { if (sub){ ldSt(); if (!ldL(sub)) return nav(); } ldGa(sub || null); return; }
     // Möten (ndmo.js): /moten är tavlan, /moten/<mötets eller kedjans id> öppnar mötet (notisen mote-bokat).
-    case 'moten': if (sub && !d[2]){ ndMoGaMote(sub); return; } moGa(); return;
+    case 'moten': if (sub && !d[2]){ ndMoGaMote(sub, new URLSearchParams(h.split('?')[1] || '').get('visa') === 'anteckningar'); return; } moGa(); return;
     // /logg och /logg?typ=radering: filtret står i adressen, som i repots /logg.
     case 'logg': { if (sub) return nav();
       const typ = new URLSearchParams(h.split('?')[1] || '').get('typ'); rlsGaVy('logg'); if (RLSTYP.some(([k]) => k === typ)){ S.rlsLoggTyp = typ; render(); } return; }

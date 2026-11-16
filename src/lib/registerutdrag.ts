@@ -302,6 +302,9 @@ export const KALLOR: Kalla[] = [
   // Möten (0260). Mötet följer med den som håller det, som calendar_event med organisatören.
   // Den som bokade åt en kollega får bokningen via händelseloggen (mote.created), se UNDANTAG.
   { tabell: "mote", kolumn: "halls_av", andamal: "Möten du håller, och hur de gick" },
+  // 0310: anteckningarna på mötes-korten. Det du skrivit, och hur långt du läst och om du tystat en tråd.
+  { tabell: "mote_anteckning", kolumn: "av", andamal: "Anteckningar du skrivit på kort i Möten" },
+  { tabell: "mote_anteckning_sett", kolumn: "employee_id", andamal: "Hur långt du läst anteckningarna på kort i Möten, och trådar du tystat" },
   // Säljtavlan (0250). Gul 11 (produktionsprovet 2026-10-30): hur personen visas på tavlan.
   { tabell: "salesboard_person", kolumn: "employee_id", andamal: "Hur du visas på Säljtavlan" },
 ];

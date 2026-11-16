@@ -78,6 +78,8 @@ import { faltFor, lasInstallningar, motesTz, niva, nivaSvar, omfattas, provaAngr
 import { ManadenStangs, ProvisionKonflikt, andraProvision, harLastProvision, harOmbokning, ifragasattProvision, latStaProvision, lasProvision, lastaRader, provisionsmottagare } from "@/lib/nav2/motesprovision-server";
 import { medNyckel } from "@/lib/nav2/nyckel";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
+import { bokningsDetalj, idIndata, textIndata } from "@/lib/nav2/motesanteckning";
+import { randomUUID } from "node:crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -466,6 +468,12 @@ export async function POST(request: Request) {
     const r = bokaIndata(b);
     if (!r.ok) return svar({ fel: r.fel }, 400);
     const v = r.varden;
+    // Anteckningen till den som håller mötet (0310): bara för de som är med på kortet, aldrig till kunden. Den blir
+    // första inlägget i kortets tråd. Id:t sätts av webbläsaren, så att ett nytt försök inte ger två inlägg.
+    const antIn = b.anteckning === undefined || b.anteckning === null || (typeof b.anteckning === "string" && !b.anteckning.trim()) ? null : textIndata(b.anteckning);
+    if (antIn && !antIn.ok) return svar({ fel: antIn.fel }, 400);
+    const anteckning = antIn && antIn.ok ? antIn.text : null;
+    const anteckningId = idIndata(b.anteckningId) ?? randomUUID();
     if (!(await anstalld(v.hallsAv))) return svar({ fel: "Den som ska hålla mötet finns inte, har slutat eller är ingen säljare." }, 400);
     if ((await aktiva(v.med)).length !== v.med.length) return svar({ fel: "En av kollegorna finns inte längre i Nav. Ta bort namnet och försök igen." }, 400);
     const motetid = svenskTidpunkt(v.dag, v.start);
@@ -551,7 +559,21 @@ export async function POST(request: Request) {
       else if (skapadKedja) await db.from("mote_kedja").delete().eq("id", kedja);
     };
 
-    return (await laggMote({ kedja, bolag, v, motetid, varningar, skapadBolag, skapadKedja, stada })).res;
+    const lagt = await laggMote({ kedja, bolag, v, motetid, varningar, skapadBolag, skapadKedja, stada, anteckning });
+    if (!anteckning || !lagt.kvar) return lagt.res;
+    // Mötet står. Anteckningen skrivs efter, och går den inte att skriva står mötet ändå (kvittot säger det).
+    const { error: antFel } = await db
+      .from("mote_anteckning")
+      .upsert({ id: anteckningId, kedja_id: kedja, mote_id: lagt.kvar, av: mig, text: anteckning }, { onConflict: "id", ignoreDuplicates: true });
+    if (!antFel) {
+      await db.from("mote_anteckning_sett").upsert({ kedja_id: kedja, employee_id: mig, sett_till: new Date().toISOString() }, { onConflict: "kedja_id,employee_id" });
+      await skrivHandelse({ actorId: mig, action: "mote.anteckning_skriven", objectType: "mote_kedja", objectId: kedja, meta: { anteckning: anteckningId, mote: lagt.kvar, tecken: anteckning.length, vid: "boka" } });
+      return lagt.res;
+    }
+    const j = (await lagt.res.clone().json().catch(() => null)) as Svar | null;
+    if (!j) return lagt.res;
+    const varning = [j.varning, "Anteckningen sparades inte. Skriv den i kortets anteckningar."].filter(Boolean).join(" ");
+    return svar({ ...j, varning }, lagt.res.status);
   }
 
   /**
@@ -569,6 +591,8 @@ export async function POST(request: Request) {
     skapadBolag: boolean;
     skapadKedja: boolean;
     stada: () => Promise<void>;
+    /** Bokarens anteckning (0310). Dess början följer med i hållarens och kollegornas notis, så att det blir en notis. */
+    anteckning?: string | null;
   }): Promise<{ res: Response; kvar: string | null }> {
     const { kedja, bolag, v, motetid, varningar, skapadBolag, skapadKedja, stada } = i;
     const ut = (data: Svar, status = 200) => ({ res: svar(data, status), kvar: null });
@@ -693,7 +717,7 @@ export async function POST(request: Request) {
         kalla: "mote-bokat",
         typ: "kalender",
         rubrik: `${forFor(fullName(user!.employee!))} bokade ett möte med dig`,
-        detalj: `${v.namn} · ${nar(motetid)}${hallare ? ` · ${hallare} håller i det` : ""}`,
+        detalj: bokningsDetalj(`${v.namn} · ${nar(motetid)}${hallare ? ` · ${hallare} håller i det` : ""}`, i.anteckning),
         href: `/moten/${moteId}`,
         objekt: { typ: "mote", id: moteId },
       });
@@ -705,7 +729,7 @@ export async function POST(request: Request) {
         kalla: "mote-bokat",
         typ: "kalender",
         rubrik: `${forFor(fullName(user!.employee!))} bokade ett möte åt dig`,
-        detalj: `${v.namn} · ${nar(motetid)}`,
+        detalj: bokningsDetalj(`${v.namn} · ${nar(motetid)}`, i.anteckning),
         href: `/moten/${moteId}`,
       objekt: { typ: "mote", id: moteId },
       });
