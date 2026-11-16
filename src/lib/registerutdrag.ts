@@ -306,6 +306,9 @@ export const KALLOR: Kalla[] = [
   { tabell: "nav_forslag", kolumn: "om", andamal: "Navs förslag om dina möten, och ändringar som följs upp för dig" },
   // Chatten (0304). Frågans och svarets text nollas efter 90 dagar; resten av raden står kvar.
   { tabell: "nav_chatt_logg", kolumn: "employee_id", andamal: "Dina frågor till chatten i Nav: när, vilka tal som lästes, vad det kostade och (i 90 dagar) frågan och svaret" },
+  // 0310: anteckningarna på mötes-korten. Det du skrivit, och hur långt du läst och om du tystat en tråd.
+  { tabell: "mote_anteckning", kolumn: "av", andamal: "Anteckningar du skrivit på kort i Möten" },
+  { tabell: "mote_anteckning_sett", kolumn: "employee_id", andamal: "Hur långt du läst anteckningarna på kort i Möten, och trådar du tystat" },
   // Säljtavlan (0250). Gul 11 (produktionsprovet 2026-10-30): hur personen visas på tavlan.
   { tabell: "salesboard_person", kolumn: "employee_id", andamal: "Hur du visas på Säljtavlan" },
 ];

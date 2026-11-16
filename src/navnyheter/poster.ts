@@ -14,6 +14,37 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "moten-anteckningar",
+    rubrik: "Möten: anteckningar som hela mötet kan svara på",
+    ingress: "Skriv det kollegan behöver veta när du bokar åt hen. Anteckningen blir en tråd på kortet där alla som är med på mötet kan svara, och de får en notis i telefonen och i klockan.",
+    text: `När du bokar ett möte åt en kollega finns ett nytt fält under Agendan: **Anteckning till** kollegan. Skriv det hen
+behöver veta, till exempel vem som bestämmer eller när kunden inte vill bli uppringd. Kunden ser den aldrig.
+
+Anteckningen blir det första i **Anteckningar** på kortet, direkt under Mötet. Där kan alla som är med på mötet läsa
+och svara, och de får en notis i telefonen och i klockan när någon annan skriver. Ett tryck på notisen öppnar kortet
+vid anteckningarna. Kort med något nytt du inte läst har en liten pratbubbla med antalet på tavlan.
+
+**Enter** skickar och **Skift+Enter** ger en ny rad. Dina egna anteckningar kan du ändra eller ta bort. Vill du inte
+ha notiser från ett visst kort trycker du **Tysta** vid rubriken. Anteckningarna följer kunden, så de står kvar om
+mötet bokas om eller följs upp med ett nytt möte.`,
+    datum: "2026-11-16",
+    roller: [],
+    href: "/moten",
+  },
+  {
+    slug: "moten-ratt-namn-pa-notisen",
+    rubrik: "Möten: notisen säger vem som faktiskt flyttade mötet",
+    ingress: "Flyttar, avbokar, ändrar eller bokar du om ett möte som en kollega håller i står ditt namn på notisen, inte kollegans.",
+    text: `Förut stod den som höll i mötet som avsändare när någon annan flyttade, avbokade, ändrade eller bokade om det i
+**Möten**. Flyttade du ett möte som en kollega höll i fick du själv notisen "Kollegan flyttade … Svara igen", och
+kollegan fick ingenting. Nu står ditt namn på det de andra på mötet får, och den som håller i mötet får veta att
+du flyttade eller avbokade det. Du ombeds inte svara på din egen flytt, och bokar du ett möte där du själv är med
+har du redan sagt ja.`,
+    datum: "2026-11-16",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "nya-hemmet-fyra-kort",
     rubrik: "Nya hemmet: fyra kort, Nav föreslår och en chatt",
     ingress: "Ett nytt hem är byggt. Det är avstängt för alla och slås på per person i Inställningar, så att ni kan prova det själva först.",

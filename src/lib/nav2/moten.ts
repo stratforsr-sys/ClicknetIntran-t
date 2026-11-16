@@ -5,6 +5,7 @@ import { fullName, hasRole, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { dagarBakat, svenskTidpunkt, svenskVeckodag, svensktDatum } from "@/lib/klocka";
 import { lokal } from "./leads";
+import { antalNya } from "./motesanteckning";
 import { arHallare, arKapad, nejSkal, offertPaketVal, saljarePerKedja, senastAvgjorda, skivor, slaIhopAvgjorda, sorteraAvgjorda, farAndraInstallning, farRattaUtfall, farSeInstallningar, KOLUMNER, MOTE_PLATS, platsTyp, type Kolumn, type Platstyp } from "./motenforma";
 import {
   bekraftelseFonster, bradska, fordela, kortFas, lasInstallningar, manadFor, motesVal, PIPE_KOLUMNER, ringIgenTid, skaBekraftas, sorteraFas, sparadeSvar, ursprungligBokare,
@@ -96,6 +97,9 @@ export type NdMoteKort = {
   /** `offertBelopp`: offertens belopp i hela kronor (0303). Null utan offert, och för äldre offerter som saknar det. */
   uppfoljning: { datum: string; text: string | null; offert: boolean; offertBelopp: number | null; ingetSvar: number; andrad: string | null } | null;
   historik: { id: string; tid: string; text: string }[];
+  /** Anteckningarna på kortet (0310): hur många inlägg, och hur många från andra jag inte sett. Null när de inte gick
+   *  att läsa (då visar tavlan ingen markering, och panelen läser tråden själv). */
+  trad: { antal: number; nya: number } | null;
   /** Kedjans senaste hållna eller uteblivna möte: vem som höll det (kortets rubrik när inget möte är öppet). */
   senast: { hallsAv: string; hallsAvNamn: string; utfall: "hallet" | "uteblev" } | null;
 };
@@ -349,6 +353,31 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
     senast = senastAvgjorda(avslutade);
   }
 
+  // Anteckningarna (0310): antalet inlägg och de nya per kort, med samma RLS som kortet. Ett fel här får aldrig ta
+  // tavlan med sig: då saknas markeringen (`trad: null`), och panelen läser tråden när den öppnas.
+  const trad = new Map<string, { antal: number; nya: number }>();
+  let tradOk = false;
+  if (rader.length) {
+    const ids = [...new Set(rader.map((r) => r.kedja_id))];
+    const [inl, sett] = await Promise.all([
+      lasISkivor<{ kedja_id: string; av: string; skapad: string; borttagen: string | null }>(ids, (s) => supabase.from("mote_anteckning").select("kedja_id, av, skapad, borttagen").in("kedja_id", s).is("borttagen", null).limit(1000)),
+      lasISkivor<{ kedja_id: string; sett_till: string }>(ids, (s) => supabase.from("mote_anteckning_sett").select("kedja_id, sett_till").eq("employee_id", jag).in("kedja_id", s).limit(1000)),
+    ]);
+    if (inl && sett) {
+      tradOk = true;
+      const settTill = new Map(sett.map((x) => [x.kedja_id, x.sett_till]));
+      const per = new Map<string, typeof inl>();
+      for (const a of inl) per.set(a.kedja_id, [...(per.get(a.kedja_id) ?? []), a]);
+      // Nytt räknas för den som är med på kortet eller har läst tråden förut. En chef som ser alla kort och aldrig
+      // öppnat tråden får ingen markering på varje kort.
+      const med = new Map(rader.map((r) => [r.kedja_id, r.deltagare ?? []]));
+      for (const [k, l] of per) {
+        const foljer = settTill.has(k) || (med.get(k) ?? []).includes(jag);
+        trad.set(k, { antal: l.length, nya: foljer ? antalNya(l, jag, settTill.get(k) ?? null) : 0 });
+      }
+    }
+  }
+
   for (const r of rader) for (const id of [r.halls_av, r.bokat_av]) if (id && !namn.has(id)) saknade.add(id);
   for (const m of avgjortRader) for (const id of [m.halls_av, m.bokat_av]) if (id && !namn.has(id)) saknade.add(id);
   for (const s of senast.values()) if (!namn.has(s.hallsAv)) saknade.add(s.hallsAv);
@@ -471,6 +500,7 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
       ? { datum: String(r.uppfoljning_datum).slice(0, 10), text: r.uppfoljning_text, offert: r.offert === true, offertBelopp: r.offert === true ? offertBelopp.get(r.kedja_id) ?? null : null, ingetSvar: r.inget_svar_i_rad ?? 0, andrad: r.uppfoljning_andrad }
       : null,
     historik: historik.get(r.kedja_id) ?? [],
+    trad: trad.get(r.kedja_id) ?? (tradOk ? { antal: 0, nya: 0 } : null),
     senast: (() => { const s = senast.get(r.kedja_id); return s ? { ...s, hallsAvNamn: namn.get(s.hallsAv) ?? "" } : null; })(),
     };
   });

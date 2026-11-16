@@ -58,6 +58,9 @@ export const PUSHKALLOR = new Set<string>([
   // standardläget också för den som inte slagit på allt. Ring igen efter Fick inte tag (2026-11-14) av samma skäl.
   "mote-bekrafta",
   "mote-ring-igen",
+  // Möten (2026-11-16, 0310): en kollega skrev i anteckningarna på ett kort du är med på. Beställaren: notis "om
+  // just den kunden och mötet i mobilen", så telefonen är förvalet. Tråden går att tysta per kort.
+  "mote-anteckning",
 ]);
 
 /**

@@ -396,6 +396,63 @@ Spec: `docs/superpowers/specs/2026-11-15-hemvyn-kort-chatt-design.md`. Plan:
 ---
 
 
+## 2026-11-16 · Möten: anteckningar som blir en tråd (0310)
+
+**Beställningen.** "I Nav när någon bokar ett möte så bokar de oftast åt någon annan. Det vore bra ifall vi kan
+bygga in typ en chattfunktion som sparar historik och att man först kan lägga till anteckningar … sen blir den
+anteckningen en chatt där alla som är med i mötet kan se och skriva och få notis om just den kunden och mötet i
+mobilen och notis klockan. Detta får aldrig gå till kund." Undersökning, PRD och bygge i samma pass; beställaren bad
+om få frågor. PRD: `docs/superpowers/specs/2026-11-16-mote-anteckningar-design.md`.
+
+**Varför så här.** Bladet hade sedan 2026-11-13 bara Agendan, som går till kunden; det interna målet var borttaget
+men 25 av 35 möten hade ett. Undersökningen: Zendesks vanligaste fel är en intern anteckning som går ut publikt,
+eftersom samma ruta har båda lägena. Här finns ingen väg till kunden alls: egen tabell, egen rutt, och ett prov som
+fäller den som börjar läsa tabellen någon annanstans. HubSpots regel för vem som aviseras (den som äger, har skrivit
+eller nämnts, aldrig författaren) blev mottagarregeln. Id:t sätts av webbläsaren och återanvänds vid ett nytt
+försök (`on conflict do nothing`), så att ett nätfel aldrig blir två inlägg.
+
+**En tråd per kort, inte per möte.** Ombokningar och uppföljningsmöten ligger i samma kedja; tråden följer kunden.
+Inlägget minns mötet som var aktuellt, och tråden sätter ut mötesdagen när den byter möte.
+
+**Mina val** (märkta i PRD:n): fältet bara i Boka (Ändra har tråden i panelen), sektionen direkt under Mötet,
+de fyra senaste och "Visa N äldre" (alltid alla nya), Tysta per kort, notisen läses bort ur klockan när tråden
+läses, den som inte är med och aldrig läst tråden (en chef) får ingen markering på varje kort, bokningens anteckning
+ger ingen egen notis (den följer med i "bokade ett möte åt dig"), och går anteckningen inte att spara står mötet
+ändå (kvittot säger det).
+
+**Prov.** Se NASTA_SESSION. Mötens gamla klickprov: 660 gröna; g10 räknar bladets fält i exakt ordning och ser det
+nya fältet; g2/g19/g400 är röda också på main (provfilen ligger efter `d4a026d`).
+
+**På main.** Beställaren sa "pusha till main" och, på frågan, ja till 0310 före mergen. 0310 kördes 14:42 UTC
+(25 inlägg på 24 kort ur de gamla målen, 65 sett-rader), `main` snabbspolades till `f953642` 14:43 UTC och
+produktionsbygget var grönt 14:45 UTC. Ordningen spelar roll: koden tål att tabellerna saknas (tavlan visar ingen
+tråd, bokningens anteckning ger en varning), men varningen hade synts i produktionen tills migrationen körts.
+Inte provat i produktionens gränssnitt; skarpt prov med två konton och telefonen kvar.
+
+## 2026-11-16 · Möten: den som gjorde det står på kalenderns notiser (0309)
+
+**Felet.** Beställaren (Zen) flyttade Nordic Grön & Markservice AB:s möte i Möten 10:56 och fick notisen "Mick
+flyttade “Clicknet - Nordic Grön & Markservice AB: Möte”. Svara igen". Zen bokade mötet, Mick håller i det.
+Möten kör kalenderns `lk_flytta`/`lk_stall_in`/`lk_spara_mote`/`lk_skapa_mote` SOM HÅLLAREN när någon annan
+agerar (`p_aktor = halls_av`), eftersom `lk_far_andra` bara släpper in organisatören och den med ombud. Allt efter
+behörighetsprövningen blev därför hållarens: avsändaren på varje notis, vem som slipper svara igen (Zens svar
+nollställdes till `vantar`), och hållaren själv fick ingen notis alls (`lk_notis` hoppar över `till = av`).
+Mick fick alltså aldrig veta att hans möte flyttats till tis 17 nov 09:00.
+
+**Rättelsen.** 0309 ger de fyra funktionerna en sista parameter `p_utfort_av uuid default null`. Rätten prövas
+som förut på `p_aktor` (Möten har redan prövat sina egna regler), sedan `p_aktor := coalesce(p_utfort_av, p_aktor)`
+så att resten skrivs som den som gjorde det. Den som flyttade behåller sitt ja (`lk_flytta` skickar den i
+`p_behall`), den som bokar och själv är med får ja (`lk_skapa_mote`). Hållaren får kalenderns besked vid Flytta och
+Avboka, där Möten inte säger något själv; vid Ändra och bokning åt kollega tiger kalendern mot hållaren eftersom
+Möten redan skickar `mote-andrat`/`mote-bokat`. Utan parametern (Kalendern) är allt som förut. Funktionstexterna
+togs ur pg_proc, inte ur migrationsfilerna. Rutten skickar `p_utfort_av: mig` i alla fyra anropen.
+
+Utfallet själv (`utfall_av`, `resultat_av`, `mote.utfall`-händelsen) skrevs redan som den inloggade; det som var
+fel vid Uteblev + ny tid var ombokningens kalenderinbjudan (`bokaAtKollega`), som nu också står på den som gjorde det.
+
+**Prov.** `tests/moten-utfort-av-db.mjs` (i `test:alla`): kör 0309 i en transaktion som rullas tillbaka; rött utan
+0309 (42883), 31/31 med. `test:moten-rutt`, `test:moten`, `test:navnyheter` gröna; tsc på route.ts utan fel.
+
 ## 2026-11-15 · Möten: statistiken som instrumentpanel (på `main` `112f8ce`)
 
 **Mergad** 2026-11-15 på beställarens "merga till main men endast det från den här sessionen": grenens tre

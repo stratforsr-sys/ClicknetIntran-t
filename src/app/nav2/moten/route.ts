@@ -79,6 +79,8 @@ import { ManadenStangs, ProvisionKonflikt, andraProvision, harLastProvision, har
 import { medNyckel } from "@/lib/nav2/nyckel";
 import { forslagEfterFlytt } from "@/lib/nav2/forslag";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
+import { bokningsDetalj, idIndata, textIndata } from "@/lib/nav2/motesanteckning";
+import { randomUUID } from "node:crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -285,7 +287,11 @@ export async function POST(request: Request) {
       // Ingen begäran att haka i. Utkorgsjobbet tar raderna inom en minut.
     }
   };
-  /** Flytta mötets kalenderhändelse. Aktören är hållaren själv, eller `lk_flytta` körs som hållaren (som `bokaAtKollega`). */
+  /**
+   * Flytta mötets kalenderhändelse. Aktören är hållaren själv, eller `lk_flytta` körs i hållarens kalender (som
+   * `bokaAtKollega`). Rätten prövas då på hållaren, men notiserna står på den som flyttade (`p_utfort_av`, 0309):
+   * hållaren får veta vem som flyttade, och den som flyttade ombeds inte svara på sin egen flytt.
+   */
   async function flyttaIKalender(m: MoteRad, dag: string, start: string): Promise<string | null> {
     if (!m.event_id) return null;
     if (m.halls_av === mig) {
@@ -293,7 +299,7 @@ export async function POST(request: Request) {
       return r.fel ?? null;
     }
     // Bara mötets egen händelse, och bara efter att `farSe` prövats på mötet.
-    const r = await lk<{ undo_id: string }>("lk_flytta", { p_aktor: m.halls_av, p_event: m.event_id, p_dag: dag, p_tid: `${start}:00`, p_minuter: null });
+    const r = await lk<{ undo_id: string }>("lk_flytta", { p_aktor: m.halls_av, p_event: m.event_id, p_dag: dag, p_tid: `${start}:00`, p_minuter: null, p_utfort_av: mig });
     if (!r.ok) return r.fel;
     efterKalender();
     return null;
@@ -304,7 +310,7 @@ export async function POST(request: Request) {
       const r = await stallIn(m.event_id);
       return r.fel ?? null;
     }
-    const r = await lk<{ undo_id: string }>("lk_stall_in", { p_aktor: m.halls_av, p_event: m.event_id });
+    const r = await lk<{ undo_id: string }>("lk_stall_in", { p_aktor: m.halls_av, p_event: m.event_id, p_utfort_av: mig });
     if (!r.ok) return r.fel;
     efterKalender();
     return null;
@@ -463,6 +469,12 @@ export async function POST(request: Request) {
     const r = bokaIndata(b);
     if (!r.ok) return svar({ fel: r.fel }, 400);
     const v = r.varden;
+    // Anteckningen till den som håller mötet (0310): bara för de som är med på kortet, aldrig till kunden. Den blir
+    // första inlägget i kortets tråd. Id:t sätts av webbläsaren, så att ett nytt försök inte ger två inlägg.
+    const antIn = b.anteckning === undefined || b.anteckning === null || (typeof b.anteckning === "string" && !b.anteckning.trim()) ? null : textIndata(b.anteckning);
+    if (antIn && !antIn.ok) return svar({ fel: antIn.fel }, 400);
+    const anteckning = antIn && antIn.ok ? antIn.text : null;
+    const anteckningId = idIndata(b.anteckningId) ?? randomUUID();
     if (!(await anstalld(v.hallsAv))) return svar({ fel: "Den som ska hålla mötet finns inte, har slutat eller är ingen säljare." }, 400);
     if ((await aktiva(v.med)).length !== v.med.length) return svar({ fel: "En av kollegorna finns inte längre i Nav. Ta bort namnet och försök igen." }, 400);
     const motetid = svenskTidpunkt(v.dag, v.start);
@@ -548,7 +560,21 @@ export async function POST(request: Request) {
       else if (skapadKedja) await db.from("mote_kedja").delete().eq("id", kedja);
     };
 
-    return (await laggMote({ kedja, bolag, v, motetid, varningar, skapadBolag, skapadKedja, stada })).res;
+    const lagt = await laggMote({ kedja, bolag, v, motetid, varningar, skapadBolag, skapadKedja, stada, anteckning });
+    if (!anteckning || !lagt.kvar) return lagt.res;
+    // Mötet står. Anteckningen skrivs efter, och går den inte att skriva står mötet ändå (kvittot säger det).
+    const { error: antFel } = await db
+      .from("mote_anteckning")
+      .upsert({ id: anteckningId, kedja_id: kedja, mote_id: lagt.kvar, av: mig, text: anteckning }, { onConflict: "id", ignoreDuplicates: true });
+    if (!antFel) {
+      await db.from("mote_anteckning_sett").upsert({ kedja_id: kedja, employee_id: mig, sett_till: new Date().toISOString() }, { onConflict: "kedja_id,employee_id" });
+      await skrivHandelse({ actorId: mig, action: "mote.anteckning_skriven", objectType: "mote_kedja", objectId: kedja, meta: { anteckning: anteckningId, mote: lagt.kvar, tecken: anteckning.length, vid: "boka" } });
+      return lagt.res;
+    }
+    const j = (await lagt.res.clone().json().catch(() => null)) as Svar | null;
+    if (!j) return lagt.res;
+    const varning = [j.varning, "Anteckningen sparades inte. Skriv den i kortets anteckningar."].filter(Boolean).join(" ");
+    return svar({ ...j, varning }, lagt.res.status);
   }
 
   /**
@@ -566,6 +592,8 @@ export async function POST(request: Request) {
     skapadBolag: boolean;
     skapadKedja: boolean;
     stada: () => Promise<void>;
+    /** Bokarens anteckning (0310). Dess början följer med i hållarens och kollegornas notis, så att det blir en notis. */
+    anteckning?: string | null;
   }): Promise<{ res: Response; kvar: string | null }> {
     const { kedja, bolag, v, motetid, varningar, skapadBolag, skapadKedja, stada } = i;
     const ut = (data: Svar, status = 200) => ({ res: svar(data, status), kvar: null });
@@ -690,7 +718,7 @@ export async function POST(request: Request) {
         kalla: "mote-bokat",
         typ: "kalender",
         rubrik: `${forFor(fullName(user!.employee!))} bokade ett möte med dig`,
-        detalj: `${v.namn} · ${nar(motetid)}${hallare ? ` · ${hallare} håller i det` : ""}`,
+        detalj: bokningsDetalj(`${v.namn} · ${nar(motetid)}${hallare ? ` · ${hallare} håller i det` : ""}`, i.anteckning),
         href: `/moten/${moteId}`,
         objekt: { typ: "mote", id: moteId },
       });
@@ -702,7 +730,7 @@ export async function POST(request: Request) {
         kalla: "mote-bokat",
         typ: "kalender",
         rubrik: `${forFor(fullName(user!.employee!))} bokade ett möte åt dig`,
-        detalj: `${v.namn} · ${nar(motetid)}`,
+        detalj: bokningsDetalj(`${v.namn} · ${nar(motetid)}`, i.anteckning),
         href: `/moten/${moteId}`,
       objekt: { typ: "mote", id: moteId },
       });
@@ -746,6 +774,8 @@ export async function POST(request: Request) {
       p_online_url: i.lank,
       p_agenda: (i.agenda ?? "").slice(0, 4000),
       p_reminder_min: 10,
+      // Den som bokade (eller bokade om) står på inbjudningarna (0309). Hållaren får Mötens `mote-bokat` i stället.
+      p_utfort_av: mig,
     });
     if (!svar.ok) return { fel: svar.fel };
     try {
@@ -1627,6 +1657,8 @@ export async function POST(request: Request) {
         p_reminder_off: null,
         p_show_as: null,
         p_privat: null,
+        // Den som ändrade står på kalenderns notiser (0309). Hållaren får Mötens `mote-andrat` nedan i stället.
+        p_utfort_av: mig,
       });
       if (!s.ok) {
         if (!(await tillbaka())) return svar({ fel: `Kalendern tog inte emot ändringen (${s.fel}) och tavlan kunde inte tas tillbaka. Kolla mötet i kalendern.` }, 500);
