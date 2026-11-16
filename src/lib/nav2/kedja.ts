@@ -84,16 +84,32 @@ const dagMinus = (dag: string, n: number): string => new Date(Date.parse(`${dag}
  * Tio rullande veckor för en person, nyast först, ur dagar (YYYY-MM-DD) för varje händelse. Vecka k är de sju
  * dagarna som slutar k·7 dagar före i dag. En person utan ett enda samtal på tio veckor finns inte i växeln:
  * samtalsledet blir null i stället för noll. Underlaget är summorna för de två senaste veckorna och de åtta före.
+ *
+ * `forsta` är personens första dag (YYYY-MM-DD). En vecka som börjar före den är ingen nolla utan saknad data: alla
+ * led blir null, så att den som är ny inte ser ut att ligga över eller under sitt eget spann. Fyra hela veckor
+ * behövs innan ett led får färg ("för tidigt att säga" tills dess).
  */
-export function personVeckor(h: { samtal: readonly string[]; bokade: readonly string[]; hallna: readonly string[]; uteblev: readonly string[]; order: readonly string[] }, idag: string): { veckor: Vecka[]; s: Underlag; f: Underlag } {
+export function personVeckor(h: { samtal: readonly string[]; bokade: readonly string[]; hallna: readonly string[]; uteblev: readonly string[]; order: readonly string[] }, idag: string, forsta: string | null = null): { veckor: Vecka[]; s: Underlag; f: Underlag } {
   const fonster = Array.from({ length: 10 }, (_x, k) => ({ slut: dagMinus(idag, 7 * k), start: dagMinus(idag, 7 * k + 6) }));
   const per = (dagar: readonly string[]) => fonster.map((w) => dagar.filter((d) => d >= w.start && d <= w.slut).length);
   const samtal = per(h.samtal), bokade = per(h.bokade), hallna = per(h.hallna), uteblev = per(h.uteblev), order = per(h.order);
   const iVaxeln = samtal.some((n) => n > 0);
-  const veckor = fonster.map((_w, k) => ({ samtal: iVaxeln ? samtal[k] : null, svar: null, bokade: bokade[k], hallna: hallna[k], order: order[k] }));
+  const tom: Vecka = { samtal: null, svar: null, bokade: null, hallna: null, order: null };
+  const veckor = fonster.map((w, k): Vecka => (forsta !== null && w.start < forsta ? tom : { samtal: iVaxeln ? samtal[k] : null, svar: null, bokade: bokade[k], hallna: hallna[k], order: order[k] }));
   const summa = (v: number[], a: number, b: number) => v.slice(a, b).reduce((x, y) => x + y, 0);
   const del = (a: number, b: number): Underlag => ({ samtal: summa(samtal, a, b), hallna: summa(hallna, a, b), uteblev: summa(uteblev, a, b), order: summa(order, a, b) });
   return { veckor, s: del(0, 2), f: del(2, 10) };
+}
+
+/**
+ * Personens första dag, för kedjan: anställningsdagen när den finns. Annars den dag personen lades in i Nav, eller
+ * den första händelsen före det om data har förts in i efterhand. Veckor före den dagen är ingen data, inte nollor.
+ */
+export function forstaDag(b: { start: string | null; lagd: string | null } | undefined, handelser: readonly string[]): string | null {
+  if (b?.start) return b.start;
+  if (!b?.lagd) return null;
+  const tidigast = handelser.reduce<string | null>((m, d) => (m === null || d < m ? d : m), null);
+  return tidigast !== null && tidigast < b.lagd ? tidigast : b.lagd;
 }
 
 /**

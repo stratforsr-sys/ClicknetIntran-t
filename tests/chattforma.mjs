@@ -7,7 +7,7 @@
  *
  *   TZ=UTC node --experimental-strip-types tests/chattforma.mjs
  */
-import { hanvisningsfel, sattInTal, utanMarken, kostnadKr, kostnadUsd, maxFragaUsd, farSlasPa, takBesked, lasUtrymme, lasChattInst, utanTal, KANDA_MODELLER, forsok, efterReserv, lasBilagor, bilageBlock, bilagaUsd, bilagaLogg, BILAGA } from "../src/lib/nav2/chatt/chattforma.ts";
+import { hanvisningsfel, sattInTal, utanMarken, kostnadKr, kostnadUsd, maxFragaUsd, farSlasPa, takBesked, lasUtrymme, lasChattInst, utanTal, KANDA_MODELLER, forsok, efterReserv, lasBilagor, bilageBlock, bilagaUsd, bilagaLogg, BILAGA, forePagar, PAGAR_BESKED } from "../src/lib/nav2/chatt/chattforma.ts";
 
 let fel = 0;
 const ok = (namn, villkor, extra = "") => {
@@ -231,8 +231,25 @@ console.log("\n\x1b[1mBifoga (skiss 9, punkt 26)\x1b[0m");
   ok("trasig fil ger ett besked", !trasig.ok && /^Filen går inte att skicka: /.test(trasig.fel));
   const block = bilageBlock(l.bilagor);
   ok("bilden går som ett image-block, PDF:en som ett document-block", block[0].type === "image" && block[0].source.media_type === "image/png" && block[1].type === "document" && block[1].source.media_type === "application/pdf" && block[1].source.type === "base64");
+  ok("den sista bilagan bär cachemärket, de andra inte: bilagan skickas om i varje varv", block[1].cache_control?.type === "ephemeral" && !("cache_control" in block[0]) && bilageBlock([l.bilagor[0]])[0].cache_control?.type === "ephemeral" && bilageBlock([]).length === 0);
+  ok("cachemärket ändrar inte det Claude läser", JSON.stringify(Object.keys(block[0]).sort()) === JSON.stringify(["source", "type"]) && block[1].source.data === l.bilagor[1].data);
   ok("bilagorna kostar i reservationen", bilagaUsd("claude-sonnet-5-5", l.bilagor, 4) > 0 && bilagaUsd("claude-sonnet-5-5", [], 4) === 0);
   ok("loggen får bara antal och sort", bilagaLogg(l.bilagor) === " [2 bifogade: PNG, PDF]" && !bilagaLogg(l.bilagor).includes("bild.png") && bilagaLogg([]) === "");
+}
+
+rubrik("En fråga i taget per person");
+{
+  const NU = Date.parse("2026-11-16T09:00:00Z");
+  const nar = (sek) => new Date(NU - sek * 1000).toISOString();
+  const MAX = 130_000;
+  ok("ingen annan pågående rad: frågan ställs", forePagar([{ id: "b", nar: nar(0) }], "b", NU, MAX) === false && forePagar([], "b", NU, MAX) === false);
+  ok("en äldre pågående rad: min väntar", forePagar([{ id: "a", nar: nar(5) }, { id: "b", nar: nar(0) }], "b", NU, MAX) === true);
+  ok("av två stoppas aldrig båda", forePagar([{ id: "a", nar: nar(5) }, { id: "b", nar: nar(0) }], "a", NU, MAX) === false);
+  ok("samma ögonblick: id avgör, så att bara en väntar", forePagar([{ id: "a", nar: nar(0) }, { id: "b", nar: nar(0) }], "b", NU, MAX) === true && forePagar([{ id: "a", nar: nar(0) }, { id: "b", nar: nar(0) }], "a", NU, MAX) === false);
+  ok("min rad syns inte än: en annan pågående räknas som före", forePagar([{ id: "a", nar: nar(5) }], "b", NU, MAX) === true);
+  ok("en rad som fastnat räknas inte", forePagar([{ id: "a", nar: nar(200) }], "b", NU, MAX) === false);
+  ok("trasiga rader och inget svar stoppar ingen", forePagar(null, "b", NU, MAX) === false && forePagar([{ id: 1, nar: nar(5) }, { id: "a", nar: "inte ett datum" }, null], "b", NU, MAX) === false);
+  ok("beskedet säger vad som händer och vad man gör", PAGAR_BESKED === "Din förra fråga pågår fortfarande. Försök igen när den är klar.");
 }
 
 console.log(fel ? `\n\x1b[31m${fel} ✗\x1b[0m` : "\n\x1b[32mAllt stämmer\x1b[0m");

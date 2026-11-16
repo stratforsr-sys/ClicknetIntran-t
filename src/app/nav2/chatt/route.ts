@@ -1,12 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { after } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { svenskKlocka, svensktDatum } from "@/lib/klocka";
 import { sammaUrsprung } from "@/lib/nav2/skrivlage";
-import { CHATT_NYCKLAR, bilagaLogg, bilagaUsd, bilageBlock, farSlasPa, lasBilagor, lasChattInst, maxFragaUsd, provNyckel, takBesked, utanTal } from "@/lib/nav2/chatt/chattforma";
+import { CHATT_NYCKLAR, PAGAR_BESKED, bilagaLogg, bilagaUsd, bilageBlock, farSlasPa, forePagar, lasBilagor, lasChattInst, maxFragaUsd, provNyckel, takBesked, utanTal } from "@/lib/nav2/chatt/chattforma";
 import { skapaKallor } from "@/lib/nav2/chatt/kallor";
 import { chattMiljo } from "@/lib/nav2/chatt/logg";
-import { MAX_UT, MAX_VARV, fragetur, harReserv, korSamtal, loggKostnadUsd, type Handelse, type Klient, type Tur } from "@/lib/nav2/chatt/samtal";
+import { MAX_UT, MAX_VARV, fragetur, harReserv, korSamtal, loggKostnadUsd, type Handelse, type Klient, type Samtalssvar, type Tur } from "@/lib/nav2/chatt/samtal";
 import { FORSLAG_NYCKLAR, harNyttHem, lasForslagInst } from "@/lib/nav2/forslagforma";
 import { avtryck } from "@/lib/nav2/chatt/systemtext";
 
@@ -17,9 +18,13 @@ export const maxDuration = 120;
  * Nav 2.0: chatten med Claude (designdokumentet, Steg 3).
  *
  *   POST {fraga, historia?: [{fraga, svar}], bilagor?: [{sort, namn, data}]}   svaret strömmas som händelser (text/event-stream):
- *     {h: "hamtar", text}                        vad som hämtas medan ett verktyg kör
+ *     {h: "hamtar", text, anrop?, verktyg?}      vad som hämtas; `anrop` (från 1) finns för ett verktyg, inte för omskrivningen
+ *     {h: "klart", anrop, ok, text, ms}          verktyget med det numret är klart: källraden, eller felet när ok är falskt
  *     {h: "svar", text, tal, obelagda, kalla, kort}
- *     {h: "avbojt", text} | {h: "fel", text}     skrivrutan svarar då som sökrutan
+ *     {h: "avbojt", text} | {h: "fel", text, kod} skrivrutan svarar då som sökrutan (`Felkod` i samtal.ts)
+ *   Efter svar, avbojt eller fel kommer inget mer, och strömmen stängs alltid. Klienten stoppar en fråga genom att
+ *   avbryta sin fetch (AbortController): det som pågår hos Claude får bli klart och räknas, inget nytt anrop görs.
+ *   En andra fråga medan den förra pågår får 429 med `kod: "pagar"`; en nådd gräns 429 med `tak: true, kod: "tak"`.
  *
  * AVSTÄNGD tills någon slår på den: utan `chatt.pa` svarar rutten 409 innan något annat händer, och
  * skrivrutan svarar som paletten. Detsamma för den som inte har det nya hemmet (`hem.nytt`). Påslagen
@@ -44,6 +49,9 @@ export const maxDuration = 120;
  * Svaret skickas i ett stycke när det är klart, inte tecken för tecken: talen sätts in av servern, och
  * en halv hänvisning ska aldrig synas.
  */
+
+/** En pågående rad äldre än så här har fastnat: rutten hinner aldrig arbeta längre. */
+const PAGAR_MS = (maxDuration + 10) * 1000;
 
 const json = (data: unknown, status: number) => new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", "Cache-Control": "private, no-store, max-age=0" } });
 
@@ -91,9 +99,18 @@ export async function POST(request: Request) {
   const { data: resSvar, error: resFel } = await db.rpc("nav_chatt_reservera", { p_miljo: miljo, p_employee: mig.id, p_modell: modell, p_max_usd: hogst, p_fraga: fraga + bilagaLogg(bilagor) });
   const res = resSvar as { ok?: unknown; id?: unknown; skal?: unknown } | null;
   if (resFel || !res || typeof res.ok !== "boolean") return json({ fel: "Chattens utrymme gick inte att läsa, så jag svarar som sökrutan." }, 503);
-  if (!res.ok) return json({ fel: takBesked(res.skal), tak: true }, 429);
+  if (!res.ok) return json({ fel: takBesked(res.skal), tak: true, kod: "tak" }, 429);
   if (typeof res.id !== "string" || !res.id) return json({ fel: "Chattens utrymme gick inte att läsa, så jag svarar som sökrutan." }, 503);
   const radId = res.id;
+
+  // En fråga i taget per person, också från två flikar. Gick spärren inte att läsa ställs frågan: den är ett skydd, inte en grind.
+  const { data: pagar } = await db.from("nav_chatt_logg").select("id, nar").eq("employee_id", mig.id).eq("miljo", miljo).eq("stop_reason", "pagar").gte("nar", new Date(Date.now() - PAGAR_MS).toISOString()).limit(20);
+  if (forePagar(pagar, radId, Date.now(), PAGAR_MS)) {
+    // Raden står kvar, utan kostnad: frågan ställdes men gick aldrig till Claude.
+    const { error } = await db.from("nav_chatt_logg").update({ stop_reason: "dubbel", kostnad_usd: 0, kostnad_kr: 0, ms: 0 }).eq("id", radId);
+    if (error) console.error(`chatt: den dubbla frågans rad rättades inte: ${error.message}`);
+    return json({ fel: PAGAR_BESKED, kod: "pagar" }, 429);
+  }
 
   const nu = new Date();
   const idag = svensktDatum(nu);
@@ -116,34 +133,76 @@ export async function POST(request: Request) {
   const kallor = skapaKallor(user);
   const enc = new TextEncoder();
 
+  // Personen slutar lyssna när strömmen avbryts (Stopp, en stängd flik). Inget nytt anrop görs då, men frågan räknas.
+  const avbruten = new AbortController();
+  let ctrl!: ReadableStreamDefaultController<Uint8Array>;
   const strom = new ReadableStream<Uint8Array>({
-    async start(ctrl) {
-      const start = Date.now();
-      // Har personen stängt fliken kastar strömmen. Frågan ska räknas och loggas ändå.
-      const sand = (h: Handelse) => {
-        try {
-          ctrl.enqueue(enc.encode(`data: ${JSON.stringify(h)}\n\n`));
-        } catch {
-          /* ingen lyssnar längre */
-        }
-      };
-      const r = await korSamtal({ klient: klient as unknown as Klient, modell, turer, ctx: { mig: mig.id, idag, kallor }, sand });
-      const { error } = await db
-        .from("nav_chatt_logg")
-        .update({
-          tokens_in: r.usage.input_tokens, tokens_ut: r.usage.output_tokens, tokens_cache_las: r.usage.cache_read_input_tokens, tokens_cache_skriv: r.usage.cache_creation_input_tokens,
-          verktyg: r.anrop, stop_reason: r.stopp, ms: Date.now() - start, kostnad_usd: loggKostnadUsd(r, hogst), kostnad_kr: loggKostnadUsd(r, hogst) * inst.krPerDollar, obelagda: r.obelagda, omskrivet: r.omskrivet, reserv: r.reserv, svar: r.ren,
-        })
-        .eq("id", radId);
+    start(c) {
+      ctrl = c;
+    },
+    cancel() {
+      avbruten.abort();
+    },
+  });
+  let avslutad = false;
+  const sand = (h: Handelse) => {
+    if (avslutad) return;
+    if (h.h === "svar" || h.h === "avbojt" || h.h === "fel") avslutad = true;
+    try {
+      ctrl.enqueue(enc.encode(`data: ${JSON.stringify(h)}\n\n`));
+    } catch {
+      // Strömmen är stängd: ingen lyssnar längre.
+      avbruten.abort();
+    }
+  };
+
+  // Stoppad fråga: raden slutar genast spärra nästa fråga ("stoppas"), medan kostnaden står kvar reserverad tills
+  // anropet som pågår är klart. Villkoret på "pagar" gör att den aldrig skriver över den slutliga rättningen.
+  let samtaletKlart = false;
+  let stoppas: Promise<void> | null = null;
+  avbruten.signal.addEventListener("abort", () => {
+    if (samtaletKlart) return;
+    stoppas = Promise.resolve(db.from("nav_chatt_logg").update({ stop_reason: "stoppas" }).eq("id", radId).eq("stop_reason", "pagar")).then(
+      ({ error }) => { if (error) console.error(`chatt: den stoppade frågans rad ändrades inte: ${error.message}`); },
+      (e: unknown) => { console.error(`chatt: den stoppade frågans rad ändrades inte: ${e instanceof Error ? e.message : String(e)}`); },
+    );
+  }, { once: true });
+
+  // Arbetet startar nu och hålls vid liv av `after` tills loggraden är rättad, också om personen stänger fliken.
+  const jobb = (async () => {
+    const start = Date.now();
+    let r: Samtalssvar | null = null;
+    try {
+      r = await korSamtal({ klient: klient as unknown as Klient, modell, turer, ctx: { mig: mig.id, idag, kallor }, sand, avbruten: avbruten.signal });
+    } catch (e) {
+      console.error(`chatt: ${e instanceof Error ? e.message : String(e)}`);
+      sand({ h: "fel", text: "Chatten svarar inte just nu. Jag svarar som sökrutan i stället.", kod: "ai" });
+    }
+    samtaletKlart = true;
+    try {
+      if (stoppas) await stoppas;
+      // Utan svar vet ingen vad frågan kostade: raden får det reserverade beloppet, och slutar vara pågående.
+      const rad = r
+        ? {
+            tokens_in: r.usage.input_tokens, tokens_ut: r.usage.output_tokens, tokens_cache_las: r.usage.cache_read_input_tokens, tokens_cache_skriv: r.usage.cache_creation_input_tokens,
+            verktyg: r.anrop, stop_reason: r.stopp, ms: Date.now() - start, kostnad_usd: loggKostnadUsd(r, hogst), kostnad_kr: loggKostnadUsd(r, hogst) * inst.krPerDollar, obelagda: r.obelagda, omskrivet: r.omskrivet, reserv: r.reserv, svar: r.ren,
+          }
+        : { stop_reason: "fel", ms: Date.now() - start, kostnad_usd: hogst, kostnad_kr: hogst * inst.krPerDollar };
+      const { error } = await db.from("nav_chatt_logg").update(rad).eq("id", radId);
       // Går rättningen inte att skriva står reservationen kvar: frågan räknas då som det mesta den kunde kosta.
       if (error) console.error(`chatt: loggraden rättades inte: ${error.message}`);
+    } catch (e) {
+      console.error(`chatt: loggraden rättades inte: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      avslutad = true;
       try {
         ctrl.close();
       } catch {
-        /* redan stängd */
+        // Redan stängd av den som lyssnade.
       }
-    },
-  });
+    }
+  })();
+  after(jobb);
 
   return new Response(strom, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "private, no-store, no-transform", "X-Accel-Buffering": "no" } });
 }

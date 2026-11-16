@@ -4,7 +4,7 @@
  *
  *   node --experimental-strip-types tests/kedja.mjs
  */
-import { ledFor, kedja, forklaring, statusMotMal, tillMalet, personVeckor, veckofonster } from "../src/lib/nav2/kedja.ts";
+import { ledFor, kedja, forklaring, statusMotMal, tillMalet, personVeckor, veckofonster, forstaDag } from "../src/lib/nav2/kedja.ts";
 
 let fel = 0;
 const lika = (namn, fas, vantat) => { const ok = JSON.stringify(fas) === JSON.stringify(vantat); console.log(`  ${ok ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m"} ${namn}${ok ? "" : ` (fick ${JSON.stringify(fas)})`}`); if (!ok) fel++; };
@@ -45,6 +45,22 @@ lika("ett samtal före de tio veckorna räknas inte", pv.s.samtal + pv.f.samtal,
 lika("underlaget: två veckor mot åtta", [pv.s.uteblev, pv.f.uteblev], [0, 1]);
 lika("utan samtal i växeln: null, inte noll", personVeckor({ samtal: [], bokade: [], hallna: [], uteblev: [], order: [] }, "2026-11-16").veckor[0].samtal, null);
 lika("svar är alltid null", pv.veckor[0].svar, null);
+
+// Den som är ny: veckor före första dagen är ingen data, inte nollor. Annars ser två veckors arbete ut som "över spannet".
+const ny = { samtal: ["2026-11-16", "2026-11-15", "2026-11-14", "2026-11-09", "2026-11-08", "2026-11-07"], bokade: ["2026-11-15", "2026-11-14", "2026-11-08", "2026-11-07"], hallna: [], uteblev: [], order: ["2026-11-12", "2026-11-05"] };
+const utanForsta = kedja(personVeckor(ny, "2026-11-16").veckor);
+lika("utan första dag: nollorna före ger 'över' (felet som rättas)", utanForsta.led[2], "u");
+const medForsta = personVeckor(ny, "2026-11-16", "2026-11-03");
+lika("veckor före första dagen: alla led null", [medForsta.veckor[2], medForsta.veckor[9]], [{ samtal: null, svar: null, bokade: null, hallna: null, order: null }, { samtal: null, svar: null, bokade: null, hallna: null, order: null }]);
+lika("en vecka som börjar före första dagen räknas inte heller", medForsta.veckor[1].bokade, 2);
+lika("en vecka som börjar dagen före: null", personVeckor(ny, "2026-11-16", "2026-11-04").veckor[1].bokade, null);
+lika("ny person: inget led får färg, för tidigt att säga", kedja(medForsta.veckor).led, [null, null, null, null, null]);
+lika("ny person: ingen orsak", kedja(medForsta.veckor).orsak, null);
+lika("första dagen: anställningsdagen går före", forstaDag({ start: "2026-11-03", lagd: "2026-01-10" }, ["2025-12-01"]), "2026-11-03");
+lika("utan anställningsdag: dagen personen lades in", forstaDag({ start: null, lagd: "2026-11-03" }, ["2026-11-05"]), "2026-11-03");
+lika("data före inläggningen: den första händelsen", forstaDag({ start: null, lagd: "2026-11-03" }, ["2026-11-05", "2026-09-01"]), "2026-09-01");
+lika("ingenting känt: ingen första dag", forstaDag(undefined, ["2026-09-01"]), null);
+lika("första dagen långt bak: som förut", personVeckor(ny, "2026-11-16", "2025-01-01").veckor.map((v) => v.bokade), personVeckor(ny, "2026-11-16").veckor.map((v) => v.bokade));
 
 // Samtalen läses vecka för vecka samtidigt: fönstren täcker hela spannet, utan glapp och utan överlapp.
 const f = veckofonster("2026-09-07T12:00:00.000Z", "2026-11-16T12:00:00.000Z");

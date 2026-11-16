@@ -9070,370 +9070,361 @@ td .ndprovsen{font-size:12.5px}
 .ndtjpsum output{font-variant-numeric:tabular-nums;font-weight:600}
 @media (max-width:560px){.ndtjprad{grid-template-columns:minmax(0,1fr) 92px auto}.ndtjprad>output{grid-column:1/-1;text-align:left}}
 /* ===================== Nya hemmet (prefix hv) =====================
-   Ett glasfönster kant i kant, som skiss 9. Fönstret har sina egna färger (--hv-…), så att menyraden och
-   resten av Nav aldrig ändras av det. Ljust eller mörkt följer Navs tema i Inställningar. */
+   Ett fönster kant i kant, som skiss 9: täckande ytor med en tunn linje, en lugn enfärgad bakgrund och urtavlan
+   som svag signatur. Fönstret har sina egna färger (--hv-…), så att menyraden och resten av Nav aldrig ändras av
+   det. Ljust eller mörkt följer Navs tema i Inställningar. Skugga finns bara på det som flyter (skrivrutan,
+   menyerna, nedfällningen). Rörelse är bara transform och opacity, 120 till 250 ms. */
 .main.hvmode{padding:0}
 .main.hvmode .wrap{max-width:none;gap:0}
-/* Rutan Nästa att göra står annars över skrivrutan. Den lyfts över rutan i stället. */
-body:has(.main.hvmode) .todopill:not(.min){bottom:calc(128px + env(safe-area-inset-bottom,0px))}
+/* Rutan Nästa att göra står annars över skrivrutan. Den lyfts över rutan i stället.
+   hvbody sätts på body i samma rad som hvmode (render), så att ingen :has på body behöver omvärderas vid varje DOM-ändring. */
+body.hvbody .todopill:not(.min){bottom:calc(128px + env(safe-area-inset-bottom,0px))}
 /* Ihopfälld som i skissen: en ring på 46 px, 28 px från kanterna. */
-body:has(.main.hvmode) .todopill.min{right:28px;bottom:calc(28px + env(safe-area-inset-bottom,0px));padding:0;width:46px;height:46px;box-shadow:0 0 0 1px rgba(255,255,255,.14),0 8px 22px rgba(19,32,28,.22)}
-body:has(.main.hvmode) .todopill.min .pmin{width:46px;height:46px;font:600 11px var(--f-body)}
-body:has(.main.hvmode) .todopill.min .pmin svg{inset:4px;width:38px;height:38px}
+body.hvbody .todopill.min{right:28px;bottom:calc(28px + env(safe-area-inset-bottom,0px));padding:0;width:46px;height:46px;box-shadow:0 0 0 1px rgba(255,255,255,.14),0 8px 22px rgba(19,32,28,.22)}
+body.hvbody .todopill.min .pmin{width:46px;height:46px;font:600 11px var(--f-body)}
+body.hvbody .todopill.min .pmin svg{inset:4px;width:38px;height:38px}
 .hv{
-  --hv-base:#0E1B17; --hv-field-a:rgba(14,122,95,.44); --hv-field-b:rgba(217,138,28,.10);
-  --hv-glass:rgba(255,255,255,.05); --hv-glass-2:rgba(255,255,255,.105); --hv-glass-3:rgba(255,255,255,.15); --hv-glass-line:rgba(255,255,255,.09); --hv-glass-hi:rgba(255,255,255,.09); --hv-pop:rgba(16,31,26,.84);
-  --hv-ink:#EDF3F0; --hv-ink-2:#A9B9B2; --hv-ink-3:#7C8E86; --hv-line:rgba(255,255,255,.075); --hv-line-2:rgba(255,255,255,.15);
+  --hv-fs-1:12px; --hv-fs-2:13px; --hv-fs-3:14px; --hv-fs-4:16px; --hv-fs-mono:11px; --hv-fs-h3:20px; --hv-fs-h2:28px; --hv-fs-h1:40px; --hv-fs-tal:60px;
+  --hv-s1:4px; --hv-s2:8px; --hv-s3:12px; --hv-s4:16px; --hv-s5:24px; --hv-s6:32px;
+  --hv-r1:8px; --hv-r2:16px;
+  --hv-t-snabb:120ms; --hv-t:180ms; --hv-t-lugn:250ms; --hv-ease:cubic-bezier(.2,.7,.2,1);
+  --hv-base:#0E1B17;
+  --hv-glass:color-mix(in srgb,var(--hv-ink) 4%,var(--hv-base)); --hv-glass-2:color-mix(in srgb,var(--hv-ink) 8%,var(--hv-base)); --hv-glass-3:color-mix(in srgb,var(--hv-ink) 12%,var(--hv-base)); --hv-glass-line:rgba(255,255,255,.09); --hv-pop:color-mix(in srgb,var(--hv-ink) 9%,var(--hv-base));
+  --hv-ink:#EDF3F0; --hv-ink-2:#A9B9B2; --hv-ink-3:#7C8E86; --hv-line:rgba(255,255,255,.075); --hv-line-2:rgba(255,255,255,.15); --hv-line-3:#5E7068;
   --hv-brand:#5DC39F; --hv-on-brand:#06211A; --hv-brand-ink:#6FCDAB; --hv-brand-soft:rgba(93,195,159,.15);
-  --hv-signal:#E8B15A; --hv-danger:#EE8B80;
-  --hv-shadow:0 18px 44px rgba(0,0,0,.26); --hv-ring:rgba(93,195,159,.17); --hv-ring-2:rgba(93,195,159,.08); --hv-dialdot:rgba(217,138,28,.15);
-  --hv-p-inne:#5DC39F; --hv-p-sjuk:#E98A7F; --hv-p-ledig:#8DB6E4; --hv-p-ej:rgba(255,255,255,.28);
-  --hv-ease:cubic-bezier(.2,.7,.2,1);
-  color:var(--hv-ink);font:14px/1.5 var(--f-body);
+  --hv-signal:#E8B15A; --hv-signal-ink:#E8B15A; --hv-danger:#EE8B80;
+  --hv-shadow:0 8px 24px rgba(0,0,0,.18); --hv-ring:rgba(93,195,159,.17); --hv-ring-2:rgba(93,195,159,.08); --hv-dialdot:rgba(93,195,159,.12);
+  --hv-p-inne:#5DC39F; --hv-p-sjuk:#E98A7F; --hv-p-ledig:#8DB6E4;
+  color:var(--hv-ink);font:var(--hv-fs-3)/1.5 var(--f-body);font-variant-numeric:tabular-nums;
 }
 .hv[data-hvtema="ljus"]{
-  --hv-base:#E8EDE6; --hv-field-a:rgba(14,122,95,.22); --hv-field-b:rgba(217,138,28,.17);
-  --hv-glass:rgba(255,255,255,.50); --hv-glass-2:rgba(255,255,255,.74); --hv-glass-3:rgba(255,255,255,.95); --hv-glass-line:rgba(255,255,255,.85); --hv-glass-hi:#fff; --hv-pop:rgba(255,255,255,.88);
-  --hv-ink:#13201C; --hv-ink-2:#44524C; --hv-ink-3:#66746D; --hv-line:rgba(19,32,28,.09); --hv-line-2:rgba(19,32,28,.17);
+  --hv-base:#E8EDE6;
+  --hv-glass:color-mix(in srgb,#fff 55%,var(--hv-base)); --hv-glass-2:color-mix(in srgb,#fff 80%,var(--hv-base)); --hv-glass-3:#FFFFFF; --hv-glass-line:rgba(19,32,28,.12); --hv-pop:#FFFFFF;
+  --hv-ink:#13201C; --hv-ink-2:#44524C; --hv-ink-3:#5A6862; --hv-line:rgba(19,32,28,.09); --hv-line-2:rgba(19,32,28,.17); --hv-line-3:#85938B;
   --hv-brand:#0E7A5F; --hv-on-brand:#FFFFFF; --hv-brand-ink:#0A5A46; --hv-brand-soft:#DDEFE6;
-  --hv-signal:#D98A1C; --hv-danger:#C4473C;
-  --hv-shadow:0 14px 36px rgba(19,32,28,.09); --hv-ring:rgba(14,122,95,.19); --hv-ring-2:rgba(14,122,95,.08); --hv-dialdot:rgba(217,138,28,.20);
-  --hv-p-inne:#0E7A5F; --hv-p-sjuk:#C4473C; --hv-p-ledig:#3A6EA5; --hv-p-ej:#B9C5B8;
+  --hv-signal:#D98A1C; --hv-signal-ink:#8A5200; --hv-danger:#C4473C;
+  --hv-shadow:0 8px 24px rgba(19,32,28,.12); --hv-ring:rgba(14,122,95,.19); --hv-ring-2:rgba(14,122,95,.08); --hv-dialdot:rgba(14,122,95,.14);
+  --hv-p-inne:#0E7A5F; --hv-p-sjuk:#C4473C; --hv-p-ledig:#3A6EA5;
 }
 .hv *{box-sizing:border-box}
 :where(.hv) button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0;margin:0}
 :where(.hv) button:disabled{cursor:default;opacity:.5}
 .hv :is(button,textarea,input,select,[tabindex]):focus-visible{outline:2px solid var(--hv-brand);outline-offset:2px}
+.hv :is(h1,h2,h3,h4){text-wrap:balance}
 .hv .num{font-family:var(--f-body);font-variant-numeric:tabular-nums;letter-spacing:0}
 .hv svg{flex:none}
-.hv-fonster{position:relative;isolation:isolate;overflow:hidden;height:100dvh;display:flex;flex-direction:column;background:var(--hv-base);padding:16px 36px 20px;transition:background .4s}
-.hv-grund{position:absolute;inset:0;z-index:-1;pointer-events:none;overflow:hidden;background:radial-gradient(900px 620px at 16% -10%,var(--hv-field-a),transparent 62%),radial-gradient(560px 460px at 98% 106%,var(--hv-field-b),transparent 64%)}
-.hv-dial{position:absolute;right:-170px;top:-200px;width:820px;height:820px;transition:transform 1s var(--hv-ease),opacity .6s}
+.hv-fonster{position:relative;isolation:isolate;overflow:hidden;height:100dvh;display:flex;flex-direction:column;background:var(--hv-base);padding:var(--hv-s4) var(--hv-s6)}
+.hv-grund{position:absolute;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+/* Urtavlan står still. Den flyttar sig bara när läget byter, kort och med transform. */
+.hv-dial{position:absolute;right:-170px;top:-200px;width:820px;height:820px;will-change:transform;transition:transform var(--hv-t-lugn) var(--hv-ease),opacity var(--hv-t-lugn) var(--hv-ease)}
 .hv:not([data-hvlage="hem"]) .hv-dial{transform:translate(-70px,110px) scale(.94);opacity:.6}
-.hv-dial g{transform-origin:200px 200px;animation:hvrot 240s linear infinite}
-@keyframes hvrot{to{transform:rotate(360deg)}}
-@keyframes hvupp{from{opacity:0;transform:translateY(10px)}}
+@keyframes hvupp{from{opacity:0;transform:translateY(6px)}}
 .hv-inre{flex:1;position:relative;display:flex;flex-direction:column;width:100%;max-width:1300px;margin-inline:auto;min-height:0}
 /* Under skrivrutan tonar tråden ut i fönstrets egen färg, så att ingen text sticker fram nedanför. */
-.hv-inre::after{content:"";position:absolute;left:-36px;right:-36px;bottom:-20px;height:62px;z-index:2;pointer-events:none;background:linear-gradient(transparent,var(--hv-base) 72%);opacity:0;transition:opacity .4s}
+.hv-inre::after{content:"";position:absolute;left:-32px;right:-32px;bottom:-16px;height:62px;z-index:2;pointer-events:none;background:linear-gradient(transparent,var(--hv-base) 72%);opacity:0;transition:opacity var(--hv-t) var(--hv-ease)}
 .hv[data-hvlage="trad"] .hv-inre::after{opacity:1}
 .hv-scen{flex:1;position:relative;min-height:0;z-index:1}
-.hv-lager{position:absolute;inset:0;display:flex;flex-direction:column;min-height:0;animation:hvupp .35s var(--hv-ease);transition:opacity .4s var(--hv-ease),transform .45s var(--hv-ease)}
-.hv-skriver .hv-hemlager{opacity:.12;transform:translateY(-10px) scale(.99)}
+.hv-lager{position:absolute;inset:0;display:flex;flex-direction:column;min-height:0;animation:hvupp var(--hv-t) var(--hv-ease);transition:opacity var(--hv-t) var(--hv-ease)}
+/* När man skriver på hemmet lämnar korten tabbordningen och skärmläsaren, så att Enter aldrig öppnar ett ark mitt i ett samtal. */
+.hv-skriver .hv-hemlager{opacity:0;visibility:hidden;pointer-events:none;transition:opacity var(--hv-t) var(--hv-ease),visibility 0s var(--hv-t)}
 
 /* Överraden: ett tal och en stapel, datum och Stämpla in. Vilka som är var ligger bakom ett klick. */
-.hv-topp{position:relative;display:flex;align-items:center;gap:20px;min-height:36px;flex:none}
-.hv-meny{display:none;place-items:center;width:36px;height:36px;margin-left:-8px;border-radius:10px;color:var(--hv-ink)}
+.hv-topp{position:relative;display:flex;align-items:center;gap:var(--hv-s5);min-height:36px;flex:none}
+.hv-meny{display:none;place-items:center;width:36px;height:36px;margin-left:-8px;border-radius:var(--hv-r1);color:var(--hv-ink)}
 .hv-meny svg{width:20px;height:20px}
-.hv-lg{display:inline-flex;align-items:center;gap:12px;height:36px;padding:0 10px;margin-left:-10px;border-radius:10px;white-space:nowrap;transition:background .15s}
-.hv-lg:hover,.hv-lg[aria-expanded="true"]{background:var(--hv-glass-2)}
-.hv-lg b{font:600 20px/1 var(--f-body);letter-spacing:-.02em}
-.hv-lg b small{font-size:12px;font-weight:500;color:var(--hv-ink-2);margin-left:1px}
-.hv-lgt{font-size:12.5px;color:var(--hv-ink-2)}
+.hv-lg{display:inline-flex;align-items:center;gap:var(--hv-s3);height:36px;padding:0 var(--hv-s2);margin-left:-8px;border-radius:var(--hv-r1);white-space:nowrap}
+.hv-lg[aria-expanded="true"]{background:var(--hv-glass-2)}
+.hv-lg b{font:600 var(--hv-fs-h3)/1 var(--f-body);letter-spacing:-.02em}
+.hv-lg b small{font-size:var(--hv-fs-1);font-weight:500;color:var(--hv-ink-2);margin-left:1px}
+.hv-lgt{font-size:var(--hv-fs-1);color:var(--hv-ink-2)}
 .hv-lgbar{display:flex;gap:2px;width:150px;height:4px}
-.hv-lgbar i{display:block;border-radius:2px;min-width:5px}
-.hv-lg svg{width:14px;height:14px;color:var(--hv-ink-3);transition:transform .2s var(--hv-ease)}
+.hv-lgbar i{display:block;border-radius:99px;min-width:5px}
+.hv-lg svg{width:14px;height:14px;color:var(--hv-ink-3);transition:transform var(--hv-t) var(--hv-ease)}
 .hv-lg[aria-expanded="true"] svg{transform:rotate(180deg)}
-.hv-lgh{margin-left:auto;display:flex;align-items:center;gap:14px}
-.hv-datum{font-size:12.5px;color:var(--hv-ink-2);white-space:nowrap}
-.hv-datum small{font:500 11px var(--f-mono);color:var(--hv-ink-3);margin-left:8px}
-.hv-stamp{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 14px;border-radius:10px;background:var(--hv-brand);color:var(--hv-on-brand);font-size:13px;font-weight:600;white-space:nowrap}
-.hv-stamp.inne{background:transparent;color:var(--hv-ink-2);font-weight:500;padding:0 8px}
-.hv-stamp.inne:hover{background:var(--hv-glass-2)}
+.hv-lgh{margin-left:auto;display:flex;align-items:center;gap:var(--hv-s4)}
+.hv-datum{font-size:var(--hv-fs-1);color:var(--hv-ink-2);white-space:nowrap}
+.hv-datum small{font:500 var(--hv-fs-mono) var(--f-mono);color:var(--hv-ink-3);margin-left:var(--hv-s2)}
+.hv-stamp{display:inline-flex;align-items:center;gap:var(--hv-s2);height:36px;padding:0 var(--hv-s4);border-radius:var(--hv-r1);background:var(--hv-brand);color:var(--hv-on-brand);font-size:var(--hv-fs-2);font-weight:600;white-space:nowrap}
+.hv-stamp.inne{background:transparent;color:var(--hv-ink-2);font-weight:500;padding:0 var(--hv-s2)}
 .hv-stamp.inne svg{color:var(--hv-brand);width:14px;height:14px}
-.hv-dra{position:absolute;left:-10px;top:44px;width:min(520px,100%);z-index:6;padding:12px 18px;border-radius:16px;background:var(--hv-pop);border:1px solid var(--hv-glass-line);backdrop-filter:blur(30px) saturate(150%);-webkit-backdrop-filter:blur(30px) saturate(150%);box-shadow:var(--hv-shadow);animation:hvupp .3s var(--hv-ease)}
-.hv-prow{display:grid;grid-template-columns:26px minmax(0,1fr) 130px minmax(0,1fr);gap:12px;align-items:center;min-height:36px;font-size:13px;border-top:1px solid var(--hv-line)}
+.hv-dra{position:absolute;left:-8px;top:44px;width:min(520px,100%);z-index:6;padding:var(--hv-s3) var(--hv-s4);border-radius:var(--hv-r2);background:var(--hv-pop);border:1px solid var(--hv-line-2);box-shadow:var(--hv-shadow);animation:hvupp var(--hv-t) var(--hv-ease)}
+.hv-prow{display:grid;grid-template-columns:26px minmax(0,1fr) 130px minmax(0,1fr);gap:var(--hv-s3);align-items:center;min-height:36px;font-size:var(--hv-fs-2);border-top:1px solid var(--hv-line)}
 .hv-prow:first-child{border-top:0}
-.hv-st{display:inline-flex;align-items:center;gap:6px;font-size:12px}
+.hv-st{display:inline-flex;align-items:center;gap:var(--hv-s2);font-size:var(--hv-fs-1)}
 .hv-st i{width:6px;height:6px;border-radius:50%}
-.hv-dt{color:var(--hv-ink-2);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hv-av{width:26px;height:26px;border-radius:7px;background:var(--hv-brand-soft);color:var(--hv-brand-ink);display:grid;place-items:center;font-size:10.5px;font-weight:600}
+.hv-dt{color:var(--hv-ink-2);font-size:var(--hv-fs-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hv-av{width:26px;height:26px;border-radius:var(--hv-r1);background:var(--hv-brand-soft);color:var(--hv-brand-ink);display:grid;place-items:center;font-size:var(--hv-fs-1);font-weight:600}
 
 /* Hälsningen: få saker, stora tal, luft. */
-.hv-hero{padding:30px 2px 0}
-.hv-hero h1{margin:0;font:600 38px/1.05 var(--f-display);letter-spacing:-.025em;color:var(--hv-ink)}
-.hv-hero p{display:flex;align-items:center;gap:10px;margin:8px 0 0;font-size:15.5px;color:var(--hv-ink-2);white-space:nowrap;overflow:hidden}
+.hv-hero{padding:var(--hv-s6) 2px 0}
+.hv-hero h1{margin:0;font:600 var(--hv-fs-h1)/1.05 var(--f-display);letter-spacing:-.025em;color:var(--hv-ink)}
+.hv-hero p{display:flex;align-items:center;gap:var(--hv-s3);margin:var(--hv-s2) 0 0;font-size:var(--hv-fs-4);color:var(--hv-ink-2);white-space:nowrap;overflow:hidden}
 .hv-hero p>span{overflow:hidden;text-overflow:ellipsis}
 .hv-hero p b{color:var(--hv-ink);font-weight:550}
-.hv-lyssna{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px 0 6px;border-radius:6px;font-size:12.5px;color:var(--hv-ink-3);flex:none}
-.hv-lyssna:hover{background:var(--hv-glass-2);color:var(--hv-ink)}
+.hv-lyssna{display:inline-flex;align-items:center;gap:var(--hv-s1);height:28px;padding:0 var(--hv-s2);border-radius:var(--hv-r1);font-size:var(--hv-fs-1);color:var(--hv-ink-3);flex:none}
 .hv-lyssna svg{width:10px;height:10px;fill:currentColor}
 .hv-stopp{width:8px;height:8px;border-radius:1px;background:currentColor}
 
-/* Korten är glas i samma fönster. */
-.hv-kort{display:grid;grid-template-columns:1.42fr 1fr 1fr 1fr;gap:16px;margin-top:26px}
-.hv-card{background:var(--hv-glass);border:1px solid var(--hv-glass-line);border-radius:18px;backdrop-filter:blur(24px) saturate(150%);-webkit-backdrop-filter:blur(24px) saturate(150%);box-shadow:inset 0 1px 0 var(--hv-glass-hi),var(--hv-shadow);padding:18px 22px 16px;display:flex;flex-direction:column;min-width:0;min-height:0}
-.hv-card.hv-tal{cursor:pointer;transition:background .15s}
-.hv-card.hv-tal:hover{background:var(--hv-glass-2)}
-.hv-chead{display:flex;align-items:baseline;gap:8px;margin-bottom:10px}
+/* Korten är täckande ytor med en tunn linje. */
+.hv-kort{display:grid;grid-template-columns:1.42fr 1fr 1fr 1fr;gap:var(--hv-s4);margin-top:var(--hv-s5)}
+.hv-card{background:var(--hv-glass);border:1px solid var(--hv-glass-line);border-radius:var(--hv-r2);padding:20px var(--hv-s5) var(--hv-s4);display:flex;flex-direction:column;min-width:0;min-height:0}
+.hv-card.hv-tal{cursor:pointer}
+.hv-chead{display:flex;align-items:baseline;gap:var(--hv-s2);margin-bottom:var(--hv-s3)}
 .hv-chead .hv-heat.nav{align-self:center}
-.hv-chead h2{margin:0;font:500 13.5px/1.3 var(--f-body);color:var(--hv-ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.hv-chead h2{margin:0;font:500 var(--hv-fs-2)/1.3 var(--f-body);color:var(--hv-ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .hv-chead .hv-meta{white-space:nowrap}
-.hv-meta{font-size:12.5px;color:var(--hv-ink-3)}
+.hv-meta{font-size:var(--hv-fs-1);color:var(--hv-ink-3)}
 .hv-end{margin-left:auto}
-.hv-rad{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:12px;height:48px;border-top:1px solid var(--hv-line);overflow:hidden}
-.hv-rad>b{font-weight:500;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hv-rad{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:var(--hv-s3);height:48px;border-top:1px solid var(--hv-line);overflow:hidden}
+.hv-rad>b{font-weight:500;font-size:var(--hv-fs-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hv-heat{width:7px;height:7px;border-radius:50%;background:var(--hv-ink-3);justify-self:center}
 .hv-heat.hot{background:var(--hv-danger)}
 .hv-heat.nav{width:15px;height:15px;border-radius:0;background:none;display:inline-flex}
-.hv-btn{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 13px;border-radius:9px;font-size:13px;font-weight:550;background:var(--hv-glass-2);border:1px solid var(--hv-line-2);white-space:nowrap;transition:background .15s}
-.hv-btn:hover{background:var(--hv-glass-3)}
+.hv-btn{display:inline-flex;align-items:center;gap:var(--hv-s2);min-height:32px;padding:0 var(--hv-s3);border-radius:var(--hv-r1);font-size:var(--hv-fs-2);font-weight:550;background:var(--hv-glass-2);border:1px solid var(--hv-line-2);white-space:nowrap}
 .hv-btn svg{width:13px;height:13px;color:var(--hv-brand)}
-.hv-btn.hv-gor{min-height:34px;padding:0 16px;background:var(--hv-brand);color:var(--hv-on-brand);border-color:transparent;font-weight:600}
-.hv-btn.hv-gor:hover{filter:brightness(1.07)}
-.hv-kfot{margin-top:auto;padding-top:10px;font-size:12.5px;color:var(--hv-ink-3);align-self:flex-start;text-align:left}
-button.hv-kfot:hover,.hv-tal:hover .hv-kfot{color:var(--hv-ink)}
-.hv-lugn{flex:1;display:flex;align-items:center;gap:10px;color:var(--hv-ink-2);border-top:1px solid var(--hv-line)}
+.hv-btn.hv-gor{min-height:36px;padding:0 var(--hv-s4);background:var(--hv-brand);color:var(--hv-on-brand);border-color:transparent;font-weight:600}
+.hv-kfot{margin-top:auto;padding-top:var(--hv-s3);font-size:var(--hv-fs-1);color:var(--hv-ink-3);align-self:flex-start;text-align:left}
+/* Ett lugnt läge ligger mitt i ytan i stället för att lämna ett stort tomt kort. */
+.hv-lugn{flex:1;display:flex;align-items:center;justify-content:center;gap:var(--hv-s3);color:var(--hv-ink-2);text-align:center;border-top:1px solid var(--hv-line)}
 .hv-lugn svg{width:16px;height:16px;color:var(--hv-brand)}
-.hv-lugn2{flex-direction:column;align-items:flex-start;justify-content:center;gap:4px}
-.hv-lugn2 span{font-size:15.5px;color:var(--hv-ink)}
-.hv-lugn2 small{font-size:12.5px;line-height:1.45;color:var(--hv-ink-3)}
-.hv-stor{display:flex;flex-direction:column;gap:7px;margin-top:6px}
-.hv-stor b{font:600 60px/.92 var(--f-display);letter-spacing:-.04em;white-space:nowrap}
-.hv-stor span{color:var(--hv-ink-2);font-size:14px}
-.hv-ftxt{margin:12px 0 0;font-size:14.5px;line-height:1.5;color:var(--hv-ink-2);max-width:46ch}
-.hv-ftxt1{margin-top:6px;font-size:15px;color:var(--hv-ink)}
-.hv-dom{margin:8px 0 0;font-size:13px;font-weight:550;color:var(--hv-ink)}
-.hv-not{margin:8px 0 0;font-size:12.5px;line-height:1.45;color:var(--hv-ink-3)}
-.hv-frad{display:flex;align-items:center;gap:14px;margin-top:auto;padding-top:14px}
+.hv-lugn2{flex-direction:column;align-items:center;justify-content:center;gap:var(--hv-s1)}
+.hv-lugn2 span{font-size:var(--hv-fs-4);color:var(--hv-ink)}
+.hv-lugn2 small{font-size:var(--hv-fs-1);line-height:1.45;color:var(--hv-ink-3);text-wrap:pretty}
+.hv-stor{display:flex;flex-direction:column;gap:var(--hv-s2);margin-top:var(--hv-s2)}
+.hv-stor b{font:600 var(--hv-fs-tal)/.92 var(--f-display);letter-spacing:-.04em;white-space:nowrap}
+.hv-stor span{color:var(--hv-ink-2);font-size:var(--hv-fs-3)}
+.hv-ftxt{margin:var(--hv-s3) 0 0;font-size:var(--hv-fs-3);line-height:1.5;color:var(--hv-ink-2);max-width:46ch;text-wrap:pretty}
+.hv-ftxt1{margin-top:var(--hv-s2);font-size:var(--hv-fs-4);color:var(--hv-ink)}
+.hv-dom{margin:var(--hv-s2) 0 0;font-size:var(--hv-fs-2);font-weight:550;color:var(--hv-ink)}
+.hv-not{margin:var(--hv-s2) 0 0;font-size:var(--hv-fs-1);line-height:1.45;color:var(--hv-ink-3);text-wrap:pretty}
+.hv-frad{display:flex;align-items:center;gap:var(--hv-s4);margin-top:auto;padding-top:var(--hv-s3)}
 .hv-frad .hv-kfot{margin:0;padding:0;align-self:center}
 .hv-tal .hv-frad .hv-kfot{color:var(--hv-ink-2)}
 .hv-frad .hv-btn+.hv-kfot,.hv-frad .hv-meta{margin-left:auto}
-.hv-matare{position:relative;height:6px;border-radius:3px;background:var(--hv-line-2);margin-top:14px}
-.hv-matare i{position:absolute;top:0;bottom:0;border-radius:3px}
+.hv-matare{position:relative;height:6px;border-radius:99px;background:var(--hv-line-2);margin-top:var(--hv-s4)}
+.hv-matare i{position:absolute;top:0;bottom:0;border-radius:99px}
 .hv-matare .nu{left:0;background:var(--hv-brand)}
 .hv-matare .takt{width:3px;top:-3px;bottom:-3px;background:var(--hv-ink-2);border-radius:2px;transform:translateX(-50%)}
-.hv-matare.hv-bred{height:8px;border-radius:4px;margin-top:4px}
-.hv-matare.hv-steg{display:flex;gap:3px;background:none}
+.hv-matare.hv-bred{height:8px;margin-top:var(--hv-s1)}
+.hv-matare.hv-steg{display:flex;gap:var(--hv-s1);background:none}
 .hv-matare.hv-steg i{position:static;flex:1;background:var(--hv-line-2)}
 .hv-matare.hv-steg i.pa{background:var(--hv-brand)}
 .hv-matare.hv-steg i.vant{background:color-mix(in srgb,var(--hv-brand) 38%,transparent)}
 
-/* Genvägarna och skrivrutan: samma glas. */
-.hv-genv{display:flex;justify-content:center;gap:8px;margin-top:auto;padding-top:14px}
-.hv-chip{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 15px;border-radius:12px;font-size:13px;font-weight:500;white-space:nowrap;background:var(--hv-glass-2);border:1px solid var(--hv-glass-line);backdrop-filter:blur(26px) saturate(160%);-webkit-backdrop-filter:blur(26px) saturate(160%);box-shadow:inset 0 1px 0 var(--hv-glass-hi),0 6px 18px rgba(0,0,0,.10)}
-.hv-chip:hover{background:var(--hv-glass-3)}
-.hv-chip.hv-fraga{padding-left:10px;border-color:color-mix(in srgb,var(--hv-brand) 40%,transparent)}
+/* Genvägarna och skrivrutan. Skrivrutan flyter över tråden och har därför en skugga. */
+.hv-genv{display:flex;justify-content:center;gap:var(--hv-s2);margin-top:auto;padding-top:var(--hv-s4)}
+.hv-chip{display:inline-flex;align-items:center;gap:var(--hv-s2);height:34px;padding:0 var(--hv-s4);border-radius:var(--hv-r1);font-size:var(--hv-fs-2);font-weight:500;white-space:nowrap;background:var(--hv-glass-2);border:1px solid var(--hv-glass-line)}
+.hv-chip.hv-fraga{padding-left:var(--hv-s3);border-color:color-mix(in srgb,var(--hv-brand) 40%,transparent)}
 .hv-chip.hv-fraga span:first-child{display:inline-flex}
-.hv-chip small{font-size:12px;color:var(--hv-ink-3)}
+.hv-chip small{font-size:var(--hv-fs-1);color:var(--hv-ink-3)}
 .hv-merv{position:relative;display:inline-flex}
-.hv-mer{position:absolute;bottom:42px;right:0;min-width:170px;padding:6px;display:flex;flex-direction:column;border-radius:14px;background:var(--hv-pop);z-index:5}
-.hv-mer button{text-align:left;padding:8px 12px;border-radius:9px;font-size:13px}
-.hv-mer button:hover{background:var(--hv-glass-2)}
-.hv-skriv{position:relative;z-index:3;flex:none;width:100%;max-width:780px;margin:12px auto 0;padding:13px 12px 10px 18px;border-radius:20px;background:var(--hv-glass-2);border:1px solid var(--hv-glass-line);backdrop-filter:blur(26px) saturate(160%);-webkit-backdrop-filter:blur(26px) saturate(160%);box-shadow:inset 0 1px 0 var(--hv-glass-hi),var(--hv-shadow)}
-.hv-skriv textarea{display:block;width:100%;height:24px;resize:none;border:0;outline:0;background:none;color:var(--hv-ink);font:15px/1.55 var(--f-body);padding:0}
+.hv-mer{position:absolute;bottom:42px;right:0;min-width:170px;padding:var(--hv-s2);display:flex;flex-direction:column;border-radius:var(--hv-r2);background:var(--hv-pop);border:1px solid var(--hv-line-2);box-shadow:var(--hv-shadow);z-index:5}
+.hv-mer button{text-align:left;padding:var(--hv-s2) var(--hv-s3);border-radius:var(--hv-r1);font-size:var(--hv-fs-2)}
+.hv-skriv{position:relative;z-index:3;flex:none;width:100%;max-width:780px;margin:var(--hv-s3) auto 0;padding:var(--hv-s3) var(--hv-s3) var(--hv-s2) var(--hv-s4);border-radius:var(--hv-r2);background:var(--hv-glass-2);border:1px solid var(--hv-line-2);box-shadow:var(--hv-shadow);transition:border-color var(--hv-t-snabb) var(--hv-ease)}
+/* Fokus syns på hela rutan, inte som en ring inne i den (beställaren 2026-11-16). */
+.hv-skriv:focus-within{border-color:var(--hv-brand)}
+.hv-skriv textarea{display:block;width:100%;height:24px;resize:none;border:0;outline:0;background:none;color:var(--hv-ink);font:var(--hv-fs-4)/1.5 var(--f-body);padding:0}
 .hv .hv-skriv textarea:focus-visible{outline:0}
 .hv-skriv textarea::placeholder{color:var(--hv-ink-3)}
-.hv-srad{display:flex;align-items:center;gap:6px;margin-top:8px;margin-left:-8px}
-.hv-tips{margin-right:auto;height:28px;padding:0 8px;border-radius:8px;font-size:12.5px;color:var(--hv-ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .15s,background .15s}
-.hv-tips:hover{color:var(--hv-ink);background:var(--hv-glass)}
+.hv-srad{display:flex;align-items:center;gap:var(--hv-s1);margin-top:var(--hv-s2);margin-left:-8px}
+.hv-tips{margin-right:auto;height:28px;padding:0 var(--hv-s2);border-radius:var(--hv-r1);font-size:var(--hv-fs-1);color:var(--hv-ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hv:not([data-hvlage="hem"]) .hv-tips{visibility:hidden}
-.hv-ikonk{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:var(--hv-ink-2)}
-.hv-ikonk:hover,.hv-ikonk.pa{background:var(--hv-glass);color:var(--hv-ink)}
-.hv-ikonk.pa{color:var(--hv-danger)}
+.hv-ikonk{width:34px;height:34px;border-radius:var(--hv-r1);display:grid;place-items:center;color:var(--hv-ink-2)}
+.hv-ikonk.pa{background:var(--hv-glass);color:var(--hv-danger)}
 .hv-ikonk svg{width:16px;height:16px}
-.hv-bilagor{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
-.hv-bil{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 4px 0 10px;border-radius:8px;background:var(--hv-glass);border:1px solid var(--hv-glass-line);font-size:12.5px;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hv-bil button{width:20px;height:20px;border-radius:6px;color:var(--hv-ink-3)}
-.hv-bil button:hover{background:var(--hv-glass-2);color:var(--hv-ink)}
-.hv-qfil{display:block;margin-top:4px;font-size:12px;color:var(--hv-ink-3)}
-.hv-send{width:34px;height:34px;border-radius:50%;background:var(--hv-brand);color:var(--hv-on-brand);display:grid;place-items:center;transition:transform .15s var(--hv-ease)}
-.hv-send:hover{transform:scale(1.07)}
+.hv-bilagor{display:flex;flex-wrap:wrap;gap:var(--hv-s2);margin:0 0 var(--hv-s2)}
+.hv-bil{display:inline-flex;align-items:center;gap:var(--hv-s2);height:28px;padding:0 var(--hv-s1) 0 var(--hv-s3);border-radius:var(--hv-r1);background:var(--hv-glass);border:1px solid var(--hv-glass-line);font-size:var(--hv-fs-1);max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hv-bil button{width:20px;height:20px;border-radius:var(--hv-r1);color:var(--hv-ink-3)}
+.hv-qfil{display:block;margin-top:var(--hv-s1);font-size:var(--hv-fs-1);color:var(--hv-ink-3)}
+.hv-send{width:34px;height:34px;border-radius:50%;background:var(--hv-brand);color:var(--hv-on-brand);display:grid;place-items:center}
 .hv-send svg{width:16px;height:16px;stroke-width:2.2}
 
 /* Arket: ett öppnat kort tar ytan. Nav talar först. */
-.hv-ark{padding-top:8px}
-.hv-arkhuvud{display:grid;grid-template-columns:28px 1fr auto;grid-template-rows:minmax(34px,auto);gap:12px;align-items:center;margin-bottom:12px}
+.hv-ark{padding-top:var(--hv-s2)}
+.hv-arkhuvud{display:grid;grid-template-columns:28px 1fr auto;grid-template-rows:minmax(34px,auto);gap:var(--hv-s3);align-items:center;margin-bottom:var(--hv-s3)}
 .hv-arkhuvud>svg{align-self:start}
-.hv-arkhuvud p{margin:0;font-size:15px}
+.hv-arkhuvud p{margin:0;font-size:var(--hv-fs-4);text-wrap:balance}
 .hv-arkhuvud p b{font-weight:600}
 .hv-arkhuvud kbd{font-family:var(--f-mono);padding:0;border:0;border-radius:0;background:none}
-.hv-arkyta{flex:1;min-height:0;padding:18px 20px;display:flex;flex-direction:column;overflow:hidden}
-.hv-rull{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;margin:0 -12px;padding:0 12px;scrollbar-width:thin;scrollbar-color:var(--hv-line) transparent}
+.hv-arkyta{flex:1;min-height:0;padding:var(--hv-s5);display:flex;flex-direction:column;overflow:hidden}
+.hv-rull{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;margin:0 -12px;padding:0 var(--hv-s3);scrollbar-width:thin;scrollbar-color:var(--hv-line) transparent}
 /* Min dag: dagens form överst (möten fyllda, uppgifter i luckorna), sedan genomgången uppifrån och ned. */
 .hv-dag{flex:1;min-height:0;display:flex;flex-direction:column}
-.hv-dbar{position:relative;flex:none;height:10px;border-radius:5px;background:var(--hv-line)}
-.hv-dbar i{position:absolute;top:0;bottom:0;min-width:5px;border-radius:3px;background:var(--hv-brand);transition:background .3s,opacity .3s}
+.hv-dbar{position:relative;flex:none;height:10px;border-radius:99px;background:var(--hv-line)}
+.hv-dbar i{position:absolute;top:0;bottom:0;min-width:5px;border-radius:99px;background:var(--hv-brand);transition:background var(--hv-t) var(--hv-ease),opacity var(--hv-t) var(--hv-ease)}
 .hv-dbar i.upg{background:color-mix(in srgb,var(--hv-brand) 40%,transparent)}
 .hv-dbar i.gjord{opacity:.3}
 .hv-dbar u{position:absolute;top:-5px;bottom:-5px;width:2px;margin-left:-1px;border-radius:1px;background:var(--hv-signal)}
-.hv-dskala{position:relative;flex:none;height:14px;margin:7px 0 14px;font:10.5px var(--f-mono);color:var(--hv-ink-3)}
+.hv-dskala{position:relative;flex:none;height:14px;margin:var(--hv-s2) 0 var(--hv-s4);font:var(--hv-fs-mono) var(--f-mono);color:var(--hv-ink-3)}
 .hv-dskala span{position:absolute;transform:translateX(-50%)}
 .hv-dskala span:first-child{transform:none}
 .hv-dskala span:last-child{transform:translateX(-100%)}
-.hv-drad{position:relative;z-index:0;display:grid;grid-template-columns:58px 14px minmax(0,1fr) auto;align-items:center;gap:12px;min-height:42px;border-top:1px solid var(--hv-line);font-size:14px}
+.hv-drad{position:relative;z-index:0;display:grid;grid-template-columns:58px 14px minmax(0,1fr) auto;align-items:center;gap:var(--hv-s3);min-height:44px;border-top:1px solid var(--hv-line);font-size:var(--hv-fs-3)}
 .hv-drad:first-child{border-top:0}
-.hv-kl{font:12px/1.3 var(--f-mono);color:var(--hv-ink-3)}
-.hv-kl small{display:block;font-size:10.5px;color:var(--hv-signal)}
-.hv-pk{width:8px;height:8px;border-radius:50%;background:var(--hv-brand);justify-self:center;transition:background .3s,border-color .3s}
+.hv-kl{font:var(--hv-fs-1)/1.3 var(--f-mono);color:var(--hv-ink-3)}
+.hv-kl small{display:block;font-size:var(--hv-fs-mono);color:var(--hv-signal-ink)}
+.hv-pk{width:8px;height:8px;border-radius:50%;background:var(--hv-brand);justify-self:center;transition:background var(--hv-t) var(--hv-ease),border-color var(--hv-t) var(--hv-ease)}
 .hv-drad.upg .hv-pk{background:none;border:1.5px solid var(--hv-ink-3)}
 .hv-drad.upg.het .hv-pk{border-color:var(--hv-danger)}
 .hv-dag.bokad .hv-drad.upg .hv-pk{background:var(--hv-brand);border-color:var(--hv-brand)}
 .hv-dag.bokad .hv-dbar i.upg{background:var(--hv-brand)}
-.hv-vad{display:flex;align-items:baseline;gap:10px;min-width:0;white-space:nowrap}
+.hv-vad{display:flex;align-items:baseline;gap:var(--hv-s3);min-width:0;white-space:nowrap}
 .hv-vad b{font-weight:500;overflow:hidden;text-overflow:ellipsis}
-.hv-vad small{font-size:12.5px;color:var(--hv-ink-3);overflow:hidden;text-overflow:ellipsis}
+.hv-vad small{font-size:var(--hv-fs-1);color:var(--hv-ink-3);overflow:hidden;text-overflow:ellipsis}
 .hv-drad.forbi{color:var(--hv-ink-3)}
 .hv-drad.forbi .hv-vad b{font-weight:400}
 .hv-drad.forbi .hv-pk{opacity:.45}
-.hv-drad.nast{min-height:60px;margin:5px 0;border-top-color:transparent}
-.hv-drad.nast::before{content:"";position:absolute;inset:0 -12px;z-index:-1;border-radius:12px;background:var(--hv-glass-2);border:1px solid var(--hv-glass-line)}
+.hv-drad.nast{min-height:60px;margin:var(--hv-s1) 0;border-top-color:transparent}
+.hv-drad.nast::before{content:"";position:absolute;inset:0 -12px;z-index:-1;border-radius:var(--hv-r1);background:var(--hv-glass-2);border:1px solid var(--hv-glass-line)}
 .hv-drad.nast+.hv-drad,.hv-dnu+.hv-drad{border-top-color:transparent}
 .hv-drad.nast .hv-vad{flex-direction:column;align-items:flex-start;gap:1px}
-.hv-drad.nast .hv-vad b{font-weight:600;font-size:15px}
-.hv-dnu{display:flex;align-items:center;gap:10px;height:24px;font:11px var(--f-mono);color:var(--hv-signal)}
+.hv-drad.nast .hv-vad b{font-weight:600;font-size:var(--hv-fs-4)}
+.hv-dnu{display:flex;align-items:center;gap:var(--hv-s3);height:24px;font:var(--hv-fs-mono) var(--f-mono);color:var(--hv-signal-ink)}
 .hv-dnu::after{content:"";flex:1;height:1px;background:color-mix(in srgb,var(--hv-signal) 45%,transparent)}
-.hv-vecka{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;flex:1;min-height:0}
-.hv-vdag{border-radius:12px;background:var(--hv-glass);border:1px solid var(--hv-line);padding:12px 12px 10px;display:flex;flex-direction:column;min-height:0;text-align:left;transition:background .15s}
-.hv-vdag:hover{background:var(--hv-glass-2)}
+.hv-vecka{display:grid;grid-template-columns:repeat(5,1fr);gap:var(--hv-s3);flex:1;min-height:0}
+.hv-vdag{border-radius:var(--hv-r1);background:none;border:1px solid var(--hv-line-2);padding:var(--hv-s3);display:flex;flex-direction:column;min-height:0;text-align:left}
 .hv-vdag.idagen{border-color:color-mix(in srgb,var(--hv-brand) 55%,transparent)}
-.hv-vdag header{display:flex;align-items:baseline;gap:6px}
+.hv-vdag header{display:flex;align-items:baseline;gap:var(--hv-s2)}
 .hv-vdag header b{font-weight:600}
-.hv-vdag header small{color:var(--hv-brand);font-size:12px}
-.hv-vdag header span{margin-left:auto;font-size:11.5px;color:var(--hv-ink-3)}
-.hv-vdag>small{font-size:12px;color:var(--hv-ink-3);margin:2px 0 8px}
+.hv-vdag header small{color:var(--hv-brand);font-size:var(--hv-fs-1)}
+.hv-vdag header span{margin-left:auto;font-size:var(--hv-fs-1);color:var(--hv-ink-3)}
+.hv-vdag>small{font-size:var(--hv-fs-1);color:var(--hv-ink-3);margin:2px 0 var(--hv-s2)}
 .hv-tid{position:relative;flex:1;min-height:60px;border-left:1px solid var(--hv-line);margin-left:2px}
-.hv-tid i{position:absolute;left:6px;right:0;border-radius:5px;background:color-mix(in srgb,var(--hv-brand) 24%,transparent);border-left:2px solid var(--hv-brand);font:normal 11.5px/1.25 var(--f-body);color:var(--hv-ink);padding:2px 6px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.hv-tid i{position:absolute;left:var(--hv-s2);right:0;border-radius:4px;background:color-mix(in srgb,var(--hv-brand) 24%,transparent);border-left:2px solid var(--hv-brand);font:normal var(--hv-fs-1)/1.25 var(--f-body);color:var(--hv-ink);padding:2px var(--hv-s2);overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .hv-arkfot b{color:var(--hv-ink);font-weight:500}
-.hv-arkfot .hv-lank{display:inline;margin:0;font-size:13px;color:var(--hv-ink-2)}
-.hv-rumtop{position:absolute;top:6px;left:2px;z-index:2;display:flex;gap:8px}
-.hv-rumtop .hv-kn{backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.hv-arkfot .hv-lank{display:inline;margin:0;font-size:var(--hv-fs-2);color:var(--hv-ink-2)}
+.hv-rumtop{position:absolute;top:var(--hv-s2);left:2px;z-index:2;display:flex;gap:var(--hv-s2)}
 .hv-rumtop .hv-kn svg{width:16px;height:16px}
 .hv-kn i{width:6px;height:6px;border-radius:50%;background:var(--hv-danger)}
 .hv-trad{position:absolute;top:-16px;bottom:-123px;left:0;right:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--hv-line) transparent}
-.hv-tcol{width:100%;max-width:780px;margin:0 auto;padding:62px 0 140px;display:flex;flex-direction:column;gap:18px}
-.hv-inl{display:flex;flex-direction:column;gap:18px;scroll-margin-top:62px}
-.hv-kvitto{display:flex;align-items:center;gap:12px;padding:12px 0 2px 40px;font-size:13.5px}
-.hv-kn{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:0 12px;border-radius:9px;font-size:12.5px;font-weight:500;background:var(--hv-glass-2);border:1px solid var(--hv-glass-line);white-space:nowrap;transition:background .15s}
-.hv-kn:hover{background:var(--hv-glass-3)}
-.hv-navs{display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px;width:100%;max-width:820px;margin:0 auto;animation:hvupp .45s var(--hv-ease)}
-:where(.hv-navs) p{margin:0;font-size:15px;line-height:1.55;max-width:680px}
-:where(.hv-navs) p+p{margin-top:14px}
+.hv-tcol{width:100%;max-width:780px;margin:0 auto;padding:62px 0 140px;display:flex;flex-direction:column;gap:var(--hv-s5)}
+.hv-inl{display:flex;flex-direction:column;gap:var(--hv-s5);scroll-margin-top:62px}
+.hv-kvitto{display:flex;align-items:center;gap:var(--hv-s3);padding:var(--hv-s3) 0 2px 40px;font-size:var(--hv-fs-2)}
+.hv-kn{display:inline-flex;align-items:center;gap:var(--hv-s2);min-height:32px;padding:0 var(--hv-s3);border-radius:var(--hv-r1);font-size:var(--hv-fs-2);font-weight:500;background:var(--hv-glass-2);border:1px solid var(--hv-glass-line);white-space:nowrap}
+.hv-navs{display:grid;grid-template-columns:28px minmax(0,1fr);gap:var(--hv-s3);width:100%;max-width:820px;margin:0 auto;animation:hvupp var(--hv-t) var(--hv-ease)}
+:where(.hv-navs) p{margin:0;font-size:var(--hv-fs-4);line-height:1.55;max-width:680px;text-wrap:pretty;font-variant-numeric:normal}
+:where(.hv-navs) p+p{margin-top:var(--hv-s4)}
 :where(.hv-navs) p b{font-weight:600}
 .hv-tank{color:var(--hv-ink-2)}
-.hv-kalla{margin-top:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.hv-chatt{display:flex;flex-direction:column;gap:28px;width:100%;max-width:780px;margin:8px auto 0}
-.hv-tur{display:flex;flex-direction:column;gap:12px}
+.hv-kalla{margin-top:var(--hv-s2);display:flex;align-items:center;gap:var(--hv-s3);flex-wrap:wrap}
+.hv-chatt{display:flex;flex-direction:column;gap:var(--hv-s6);width:100%;max-width:780px;margin:var(--hv-s2) auto 0}
+.hv-tur{display:flex;flex-direction:column;gap:var(--hv-s3)}
 .hv-tur>.hv-kalla{margin-left:42px}
-.hv-q{align-self:flex-end;max-width:70%;margin:0;padding:10px 16px;border-radius:18px 18px 6px 18px;background:var(--hv-glass-2);border:1px solid var(--hv-glass-line);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:var(--hv-shadow);font-size:14.5px;line-height:1.5;overflow-wrap:anywhere;animation:hvupp .4s var(--hv-ease) backwards}
-.hv-siffra{font:inherit;font-weight:600;color:inherit;padding:0 2px;border-radius:4px;border-bottom:1px solid var(--hv-brand);cursor:pointer;transition:background .15s}
-.hv-siffra:hover,.hv-siffra[aria-expanded="true"]{background:var(--hv-brand-soft)}
+.hv-q{align-self:flex-end;max-width:70%;margin:0;padding:var(--hv-s3) var(--hv-s4);border-radius:var(--hv-r2) var(--hv-r2) var(--hv-s1) var(--hv-r2);background:var(--hv-glass-2);border:1px solid var(--hv-glass-line);font-size:var(--hv-fs-4);line-height:1.5;overflow-wrap:anywhere;text-wrap:pretty}
+.hv-siffra{font:inherit;font-weight:600;color:inherit;padding:0 2px;border-radius:4px;border-bottom:1px solid var(--hv-brand);cursor:pointer;transition:background-color var(--hv-t-snabb) var(--hv-ease)}
+.hv-siffra[aria-expanded="true"]{background:var(--hv-brand-soft)}
 .hv-obel{background:none;color:inherit;border-bottom:2px dotted var(--hv-ink-3)}
-.hv-talk{padding-top:10px;border-top:1px solid var(--hv-line)}
-.hv-utk{margin-left:42px;padding:16px 18px;max-width:560px}
-.hv-utk ul{list-style:none;margin:10px 0 14px;padding:0;display:flex;flex-direction:column;gap:8px}
-.hv-utk li{display:flex;justify-content:space-between;gap:16px;font-size:14.5px;overflow-wrap:anywhere}
-.hv-utk li small{flex:none;color:var(--hv-ink-3);font-size:12.5px}
+.hv-talk{padding-top:var(--hv-s3);border-top:1px solid var(--hv-line)}
+.hv-utk{margin-left:42px;padding:var(--hv-s4);max-width:560px}
+.hv-utk ul{list-style:none;margin:var(--hv-s3) 0 var(--hv-s4);padding:0;display:flex;flex-direction:column;gap:var(--hv-s2)}
+.hv-utk li{display:flex;justify-content:space-between;gap:var(--hv-s4);font-size:var(--hv-fs-3);overflow-wrap:anywhere}
+.hv-utk li small{flex:none;color:var(--hv-ink-3);font-size:var(--hv-fs-1)}
 .hv-utk p{margin:0}
-.hv-utkrad{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.hv-utkvarn{margin:0 0 10px!important}
-.hv-cforbr{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px;font-size:13px}
-.hv-cforbr li{display:flex;justify-content:space-between;gap:16px}
+.hv-utkrad{display:flex;align-items:center;gap:var(--hv-s3);flex-wrap:wrap}
+.hv-utkvarn{margin:0 0 var(--hv-s3)!important}
+.hv-cforbr{list-style:none;margin:var(--hv-s3) 0 0;padding:0;display:grid;gap:var(--hv-s2);font-size:var(--hv-fs-2)}
+.hv-cforbr li{display:flex;justify-content:space-between;gap:var(--hv-s4)}
 .hv-cforbr li span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.hv-mono{font:11.5px/1.5 var(--f-mono);letter-spacing:.02em;color:var(--hv-ink-3)}
-.hv-glass{background:var(--hv-glass);border:1px solid var(--hv-glass-line);border-radius:18px;backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);box-shadow:inset 0 1px 0 var(--hv-glass-hi),var(--hv-shadow)}
-.hv-lista{margin-top:14px;padding:6px 18px 14px}
-.hv-lh{display:flex;align-items:center;gap:10px;min-height:46px;flex-wrap:wrap}
-.hv-lh h3{margin:0;font:600 14.5px var(--f-body);letter-spacing:-.01em}
-.hv-marke{font-size:11.5px;font-weight:600;color:var(--hv-brand);border:1px solid color-mix(in srgb,var(--hv-brand) 40%,transparent);border-radius:10px;padding:1px 8px;white-space:nowrap}
-.hv-lh .hv-end{font-size:12.5px;color:var(--hv-ink-3)}
-.hv-val3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:6px 0 14px}
-.hv-vl{display:flex;flex-direction:column;gap:5px;text-align:left;padding:13px 14px;border-radius:12px;background:var(--hv-glass-2);border:1px solid var(--hv-glass-line);transition:background .15s,transform .15s var(--hv-ease)}
-.hv-vl:hover{background:var(--hv-glass-3)}
-.hv-vl:active{transform:scale(.985)}
-.hv-vl b{font-weight:600;font-size:13.5px}
-.hv-vl small{font-size:12px;color:var(--hv-ink-2);line-height:1.45}
-.hv-lagerad,.hv-facit{margin:0;padding:10px 0;border-top:1px solid var(--hv-line);font-size:13.5px;line-height:1.5;color:var(--hv-ink-2);max-width:none}
-.hv-lf{display:flex;align-items:center;gap:12px;padding-top:14px;border-top:1px solid var(--hv-line);flex-wrap:wrap}
-.hv-lbl{font-size:12.5px;color:var(--hv-ink-3)}
-.hv-hoger{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
-.hv-egen{padding:12px 0;border-top:1px solid var(--hv-line)}
-.hv-egen label{display:block;font-size:12.5px;color:var(--hv-ink-2);margin-bottom:6px}
-.hv-egen div{display:flex;gap:8px}
-.hv-egen input,.hv-form :is(input,select,textarea){flex:1;min-width:0;min-height:32px;padding:5px 10px;border-radius:9px;border:1px solid var(--hv-line-2);background:var(--hv-glass);color:var(--hv-ink);font:13.5px var(--f-body)}
+.hv-mono{font:var(--hv-fs-mono)/1.5 var(--f-mono);letter-spacing:.02em;color:var(--hv-ink-3)}
+.hv-glass{background:var(--hv-glass);border:1px solid var(--hv-glass-line);border-radius:var(--hv-r2)}
+.hv-lista{margin-top:var(--hv-s4);padding:var(--hv-s2) var(--hv-s4) var(--hv-s4)}
+.hv-lh{display:flex;align-items:center;gap:var(--hv-s3);min-height:48px;flex-wrap:wrap}
+.hv-lh h3{margin:0;font:600 var(--hv-fs-3) var(--f-body);letter-spacing:-.01em}
+.hv-marke{font-size:var(--hv-fs-1);font-weight:600;color:var(--hv-brand);border:1px solid color-mix(in srgb,var(--hv-brand) 40%,transparent);border-radius:var(--hv-r1);padding:1px var(--hv-s2);white-space:nowrap}
+.hv-lh .hv-end{font-size:var(--hv-fs-1);color:var(--hv-ink-3)}
+.hv-val3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--hv-s3);margin:var(--hv-s2) 0 var(--hv-s4)}
+.hv-vl{display:flex;flex-direction:column;gap:var(--hv-s1);text-align:left;padding:var(--hv-s3) var(--hv-s4);border-radius:var(--hv-r1);background:var(--hv-glass-2);border:1px solid var(--hv-glass-line)}
+.hv-vl b{font-weight:600;font-size:var(--hv-fs-2)}
+.hv-vl small{font-size:var(--hv-fs-1);color:var(--hv-ink-2);line-height:1.45}
+.hv-lagerad,.hv-facit{margin:0;padding:var(--hv-s3) 0;border-top:1px solid var(--hv-line);font-size:var(--hv-fs-2);line-height:1.5;color:var(--hv-ink-2);max-width:none;text-wrap:pretty}
+.hv-lf{display:flex;align-items:center;gap:var(--hv-s3);padding-top:var(--hv-s4);border-top:1px solid var(--hv-line);flex-wrap:wrap}
+.hv-lbl{font-size:var(--hv-fs-1);color:var(--hv-ink-3)}
+.hv-hoger{margin-left:auto;display:flex;gap:var(--hv-s2);flex-wrap:wrap}
+.hv-egen{padding:var(--hv-s3) 0;border-top:1px solid var(--hv-line)}
+.hv-egen label{display:block;font-size:var(--hv-fs-1);color:var(--hv-ink-2);margin-bottom:var(--hv-s2)}
+.hv-egen div{display:flex;gap:var(--hv-s2)}
+.hv-egen input,.hv-form :is(input,select,textarea){flex:1;min-width:0;min-height:36px;padding:var(--hv-s1) var(--hv-s3);border-radius:var(--hv-r1);border:1px solid var(--hv-line-3);background:var(--hv-glass);color:var(--hv-ink);font:var(--hv-fs-2) var(--f-body)}
 .hv-form select option{color:#13201C;background:#fff}
-.hv-br{display:grid;grid-template-columns:110px minmax(0,1fr);gap:14px;padding:11px 0;border-top:1px solid var(--hv-line);font-size:13.5px;line-height:1.45}
-.hv-br>span{font-size:12.5px;color:var(--hv-ink-3)}
-.hv-blind{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--hv-line)}
-.hv-blind+.hv-blind{border:0;padding-top:5px}
-.hv-grupp{display:flex;align-items:baseline;gap:8px;padding:18px 0 8px;font-size:12.5px;font-weight:500;color:var(--hv-ink-2)}
+.hv-br{display:grid;grid-template-columns:110px minmax(0,1fr);gap:var(--hv-s4);padding:var(--hv-s3) 0;border-top:1px solid var(--hv-line);font-size:var(--hv-fs-2);line-height:1.45}
+.hv-br>span{font-size:var(--hv-fs-1);color:var(--hv-ink-3)}
+.hv-blind{display:flex;align-items:center;gap:var(--hv-s3);flex-wrap:wrap;padding-top:var(--hv-s3);border-top:1px solid var(--hv-line)}
+.hv-blind+.hv-blind{border:0;padding-top:var(--hv-s1)}
+.hv-grupp{display:flex;align-items:baseline;gap:var(--hv-s2);padding:var(--hv-s4) 0 var(--hv-s2);font-size:var(--hv-fs-1);font-weight:500;color:var(--hv-ink-2)}
 .hv-grupp:first-child{padding-top:0}
 .hv-grupp small{font-weight:400;color:var(--hv-ink-3)}
-.hv-sak{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:12px;height:60px;border-top:1px solid var(--hv-line);overflow:hidden}
+.hv-sak{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:var(--hv-s3);height:60px;border-top:1px solid var(--hv-line);overflow:hidden}
 .hv-rull.hv-tom .hv-lugn{border-top:0;min-height:60px}
 .hv-sak b,.hv-sak small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hv-sak b{font-weight:500;font-size:14.5px}
-.hv-sak small{font-size:12.5px;color:var(--hv-ink-3)}
-.hv-ur{display:grid;grid-template-columns:26px minmax(0,1fr) 64px 64px 72px 52px;column-gap:14px;align-items:center;padding:10px 0;border-top:1px solid var(--hv-line);font-size:13.5px}
+.hv-sak b{font-weight:500;font-size:var(--hv-fs-3)}
+.hv-sak small{font-size:var(--hv-fs-1);color:var(--hv-ink-3)}
+.hv-ur{display:grid;grid-template-columns:26px minmax(0,1fr) 64px 64px 72px 52px;column-gap:var(--hv-s4);align-items:center;padding:var(--hv-s3) 0;border-top:1px solid var(--hv-line);font-size:var(--hv-fs-2)}
 .hv-ur>b{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hv-ur>span.num{text-align:right;color:var(--hv-ink-2)}
-.hv-urh{border-top:0;padding:6px 0 4px;font-size:11.5px;color:var(--hv-ink-3)}
+.hv-urh{border-top:0;padding:var(--hv-s2) 0 var(--hv-s1);font-size:var(--hv-fs-1);color:var(--hv-ink-3)}
 .hv-urh>span{text-align:right}
 /* Skiss 9: en rad per person med kedjan. Raden fälls ut med förklaringen. */
-.hv-tr{display:grid;grid-template-columns:26px 84px 128px 70px minmax(0,1fr) 14px;column-gap:14px;align-items:center;padding:11px 0;border-top:1px solid var(--hv-line);cursor:pointer;animation:hvupp .45s var(--hv-ease) both}
-.hv-tr>b{font-weight:500;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hv-tr .o{font-size:12.5px;color:var(--hv-ink-2)}
-.hv-tr .l{font-size:12.5px;color:var(--hv-ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hv-tr{display:grid;grid-template-columns:26px 84px 128px 70px minmax(0,1fr) 14px;column-gap:var(--hv-s4);align-items:center;padding:var(--hv-s3) 0;border-top:1px solid var(--hv-line);cursor:pointer}
+.hv-tr>b{font-weight:500;font-size:var(--hv-fs-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hv-tr .o{font-size:var(--hv-fs-1);color:var(--hv-ink-2)}
+.hv-tr .l{font-size:var(--hv-fs-1);color:var(--hv-ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hv-tr .l b{font-weight:500;color:var(--hv-ink)}
-.hv-tr>svg{width:14px;height:14px;color:var(--hv-ink-3);transform:rotate(-90deg);transition:transform .2s var(--hv-ease)}
+.hv-tr>svg{width:14px;height:14px;color:var(--hv-ink-3);transform:rotate(-90deg);transition:transform var(--hv-t) var(--hv-ease)}
 .hv-tr.oppen>svg{transform:none}
 .hv-kedja{display:flex;gap:2px}
-.hv-kedja i{flex:1;height:6px;border-radius:3px;background:var(--hv-line-2)}
+.hv-kedja i{flex:1;height:6px;border-radius:99px;background:var(--hv-line-2)}
 .hv-kedja i.ned{background:var(--hv-signal)}
 .hv-kedja i.upp{background:var(--hv-brand)}
-.hv-tv{grid-column:2/-1;display:none;padding-top:7px;font-size:12.5px;line-height:1.5;color:var(--hv-ink-2);max-width:68ch}
-.hv-tv em{display:block;font-style:normal;color:var(--hv-ink-3);margin-top:3px}
+.hv-tv{grid-column:2/-1;display:none;padding-top:var(--hv-s2);font-size:var(--hv-fs-1);line-height:1.5;color:var(--hv-ink-2);max-width:68ch;text-wrap:pretty}
+.hv-tv em{display:block;font-style:normal;color:var(--hv-ink-3);margin-top:var(--hv-s1)}
 .hv-tr.oppen .hv-tv{display:block}
-.hv-blind button{font:11.5px var(--f-mono);color:var(--hv-ink-2);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--hv-line)}
-.hv-mskala{display:flex;justify-content:space-between;gap:12px;margin:8px 0 8px;font-size:12px;color:var(--hv-ink-3)}
+.hv-blind button{font:var(--hv-fs-1) var(--f-mono);color:var(--hv-ink-2);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--hv-line)}
+.hv-mskala{display:flex;justify-content:space-between;gap:var(--hv-s3);margin:var(--hv-s2) 0;font-size:var(--hv-fs-1);color:var(--hv-ink-3)}
 .hv-mskala b{color:var(--hv-ink);font-weight:550}
-.hv-or{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:14px;align-items:baseline;padding:11px 0;border-top:1px solid var(--hv-line);font-size:13.5px}
-.hv-or>span:first-child{font-size:12.5px;color:var(--hv-ink-3)}
-.hv-or small{display:block;font-size:12px;color:var(--hv-ink-3)}
+.hv-or{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:var(--hv-s4);align-items:baseline;padding:var(--hv-s3) 0;border-top:1px solid var(--hv-line);font-size:var(--hv-fs-2)}
+.hv-or>span:first-child{font-size:var(--hv-fs-1);color:var(--hv-ink-3)}
+.hv-or small{display:block;font-size:var(--hv-fs-1);color:var(--hv-ink-3)}
 .hv-kr{font-weight:550;text-align:right;white-space:nowrap}
 .hv-or.hv-sum{font-weight:600}
 .hv-or.hv-sum small{font-weight:400}
-.hv-or.hv-sum .hv-kr{font-size:15px;font-weight:600}
+.hv-or.hv-sum .hv-kr{font-size:var(--hv-fs-4);font-weight:600}
 .hv-or.hv-vantar{color:var(--hv-ink-2)}
-.hv-lank{display:block;margin-top:2px;font-size:12px;color:var(--hv-ink-3);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--hv-line-2)}
-.hv-lank:hover{color:var(--hv-ink)}
-.hv-ar{display:grid;grid-template-columns:22px minmax(0,1.1fr) minmax(0,1fr) 164px;gap:14px;align-items:center;padding:12px 0;border-top:1px solid var(--hv-line);animation:hvupp .45s var(--hv-ease) both}
-.hv-tk{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12.5px;font-weight:600;line-height:1}
+.hv-lank{display:block;margin-top:2px;font-size:var(--hv-fs-1);color:var(--hv-ink-3);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--hv-line-2)}
+.hv-ar{display:grid;grid-template-columns:22px minmax(0,1.1fr) minmax(0,1fr) 164px;gap:var(--hv-s4);align-items:center;padding:var(--hv-s3) 0;border-top:1px solid var(--hv-line)}
+.hv-tk{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:var(--hv-fs-1);font-weight:600;line-height:1}
 .hv-tk.upp{background:var(--hv-brand-soft);color:var(--hv-brand-ink)}
-.hv-tk.ned{background:color-mix(in srgb,var(--hv-signal) 22%,transparent);color:var(--hv-signal)}
+.hv-tk.ned{background:color-mix(in srgb,var(--hv-signal) 22%,transparent);color:var(--hv-signal-ink)}
 .hv-tk.vet{border:1.5px dashed var(--hv-ink-3)}
-.hv-ar b{display:block;font-weight:500;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hv-ar small{display:block;font-size:12px;color:var(--hv-ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hv-at{justify-self:end;font-size:12.5px;color:var(--hv-ink-3);text-align:right}
-.hv-at .hv-btn{min-height:30px;height:30px;font-size:12.5px;color:var(--hv-ink)}
+.hv-ar b{display:block;font-weight:500;font-size:var(--hv-fs-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hv-ar small{display:block;font-size:var(--hv-fs-1);color:var(--hv-ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hv-at{justify-self:end;font-size:var(--hv-fs-1);color:var(--hv-ink-3);text-align:right}
+.hv-at .hv-btn{min-height:32px;height:32px;font-size:var(--hv-fs-1);color:var(--hv-ink)}
 .hv-egenrad{color:var(--hv-ink-2);font-style:italic}
-.hv-fe{font-size:12.5px;line-height:1.4}
-.hv-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 14px;padding:14px 0 2px;border-top:1px solid var(--hv-line)}
-.hv-form h4{grid-column:1/-1;margin:0;font:600 14px var(--f-body)}
-.hv-form label{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--hv-ink-2)}
+.hv-fe{font-size:var(--hv-fs-1);line-height:1.4}
+.hv-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--hv-s3) var(--hv-s4);padding:var(--hv-s4) 0 2px;border-top:1px solid var(--hv-line)}
+.hv-form h4{grid-column:1/-1;margin:0;font:600 var(--hv-fs-3) var(--f-body)}
+.hv-form label{display:flex;flex-direction:column;gap:var(--hv-s1);font-size:var(--hv-fs-1);color:var(--hv-ink-2)}
 .hv-form .hv-not{grid-column:1/-1;margin:0}
 .hv-bred2{grid-column:1/-1}
-.hv-form textarea{resize:vertical;min-height:54px;line-height:1.45}
-.hv-ferr{margin:0;font-size:12.5px;color:var(--hv-danger)}
-.hv-fk{display:flex;justify-content:flex-end;gap:8px}
-.hv-arkfot{display:flex;align-items:center;gap:12px;min-height:45px;flex:none;padding-top:14px;margin-top:14px;border-top:1px solid var(--hv-line);font-size:13px;color:var(--hv-ink-2)}
-.hv-arkfot .hv-end{margin-left:auto;display:flex;gap:8px}
+.hv-form textarea{resize:vertical;min-height:56px;line-height:1.45}
+.hv-ferr{margin:0;font-size:var(--hv-fs-1);color:var(--hv-danger)}
+.hv-fk{display:flex;justify-content:flex-end;gap:var(--hv-s2)}
+.hv-arkfot{display:flex;align-items:center;gap:var(--hv-s3);min-height:45px;flex:none;padding-top:var(--hv-s4);margin-top:var(--hv-s4);border-top:1px solid var(--hv-line);font-size:var(--hv-fs-2);color:var(--hv-ink-2)}
+.hv-arkfot .hv-end{margin-left:auto;display:flex;gap:var(--hv-s2)}
 .hv-arkfot .hv-kn{color:var(--hv-ink)}
-.hv-kvi{display:inline-flex;align-items:center;gap:10px;color:var(--hv-ink);animation:hvupp .35s var(--hv-ease)}
+.hv-kvi{display:inline-flex;align-items:center;gap:var(--hv-s3);color:var(--hv-ink)}
 .hv-ok{width:20px;height:20px;border-radius:50%;background:var(--hv-brand);color:var(--hv-on-brand);display:grid;place-items:center;flex:none}
 .hv-ok svg{width:11px;height:11px;stroke-width:2.6}
 /* Hela listan: källan bakom raden, radens meny och tangentbordets markering. Veckan och Golvet. */
 .hv-kn>svg{width:13px;height:13px}
 .hv-kn[aria-pressed="true"]{background:var(--hv-brand-soft);color:var(--hv-brand-ink);border-color:transparent}
 .hv-sakt{display:block;max-width:100%;text-align:left}
-.hv-sakt:hover b{text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--hv-line-2)}
-.hv-sakk{display:inline-flex;align-items:center;gap:4px}
+.hv-sakk{display:inline-flex;align-items:center;gap:var(--hv-s1)}
 .hv-sak.hv-fel b{color:var(--hv-ink-2)}
 .hv .upg-nyprick{margin-right:7px;vertical-align:middle}
 .hv-sak.sel{background:var(--hv-glass-2);box-shadow:-12px 0 0 var(--hv-glass-2),12px 0 0 var(--hv-glass-2)}
-.hv-flagga{font-size:12px;font-weight:550;color:var(--hv-signal);text-align:right}
+.hv-flagga{font-size:var(--hv-fs-1);font-weight:550;color:var(--hv-signal-ink);text-align:right}
 .hv-gr{align-items:center}
-.hv-grh{display:inline-flex;align-items:center;gap:12px}
+.hv-grh{display:inline-flex;align-items:center;gap:var(--hv-s3)}
 .hv .hv-push .tlink{color:var(--hv-brand-ink);text-decoration:underline;text-underline-offset:3px;padding:0;margin-left:6px}
 /* Rutan Nya hemmet i Inställningar (ligger utanför fönstret, i Navs vanliga färger). */
 .hv-ihj{font-size:12.5px;line-height:1.45}
@@ -9441,48 +9432,82 @@ button.hv-kfot:hover,.hv-tal:hover .hv-kfot{color:var(--hv-ink)}
 .hv-ifolk label{display:inline-flex;align-items:center;gap:6px;font-size:13.5px}
 .hv-ifolk p{flex-basis:100%;margin:2px 0 0;color:var(--ink-3)}
 .hv-iin{width:112px;flex:none;text-align:right}
-@media (max-height:700px){.hv-rad{min-height:44px;height:44px}.hv-hero{padding-top:24px}.hv-hero h1{font-size:34px}.hv-ftxt{margin-top:8px}}
+/* Interaktionslägen. Hover bara där en mus finns, så att den inte fastnar efter ett tryck på pekskärm. Vila, hover, tryck och fokus
+   byter bara yta, kant och färg på 120 ms, och trycket flyttar med transform. */
+.hv :is(.hv-card.hv-tal,.hv-btn,.hv-chip,.hv-kn,.hv-ikonk,.hv-lg,.hv-stamp,.hv-vdag,.hv-vl,.hv-lyssna,.hv-tips,.hv-send,.hv-mer button,.hv-bil button){transition:transform var(--hv-t-snabb) var(--hv-ease),background-color var(--hv-t-snabb) var(--hv-ease),border-color var(--hv-t-snabb) var(--hv-ease),color var(--hv-t-snabb) var(--hv-ease)}
+@media (hover:hover){
+  .hv-lg:hover{background:var(--hv-glass-2)}
+  .hv-stamp.inne:hover,.hv-vdag:hover,.hv-mer button:hover,.hv-card.hv-tal:hover{background:var(--hv-glass-2)}
+  .hv-lyssna:hover{background:var(--hv-glass-2);color:var(--hv-ink)}
+  .hv-btn:hover,.hv-chip:hover,.hv-vl:hover{background:var(--hv-glass-3)}
+  .hv-kn:not([aria-pressed="true"]):hover{background:var(--hv-glass-3)}
+  .hv-btn.hv-gor:hover{background:color-mix(in srgb,var(--hv-brand) 88%,var(--hv-ink))}
+  button.hv-kfot:hover,.hv-tal:hover .hv-kfot{color:var(--hv-ink)}
+  .hv-tips:hover{color:var(--hv-ink);background:var(--hv-glass)}
+  .hv-ikonk:not(.pa):hover{background:var(--hv-glass);color:var(--hv-ink)}
+  .hv-bil button:hover{background:var(--hv-glass-2);color:var(--hv-ink)}
+  .hv-siffra:hover{background:var(--hv-brand-soft)}
+  .hv-sakt:hover b{text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--hv-line-2)}
+  .hv-lank:hover{color:var(--hv-ink)}
+}
+.hv-btn:active,.hv-chip:active,.hv-kn:active,.hv-ikonk:active,.hv-card.hv-tal:active,.hv-mer button:active{background:var(--hv-glass-3)}
+.hv-btn.hv-gor:active{background:color-mix(in srgb,var(--hv-brand) 88%,var(--hv-ink))}
+.hv-card.hv-tal:active,.hv-btn:active,.hv-chip:active,.hv-kn:active,.hv-ikonk:active,.hv-lg:active,.hv-stamp:active,.hv-vdag:active,.hv-vl:active,.hv-lyssna:active,.hv-tips:active,.hv-send:active,.hv-mer button:active,.hv-bil button:active,.hv-meny:active{transform:scale(.98)}
+.hv button:disabled:active{transform:none}
+@media (max-height:700px){.hv-rad{min-height:44px;height:44px}.hv-hero{padding-top:var(--hv-s5)}.hv-hero h1{font-size:var(--hv-fs-h2)}.hv-ftxt{margin-top:var(--hv-s2)}}
 @media (max-width:1100px){.hv-lgt,.hv-datum small{display:none}}
 @media (max-width:900px){.hv-val3{grid-template-columns:1fr}.hv-form{grid-template-columns:1fr}.hv-ar{grid-template-columns:22px minmax(0,1fr)}.hv-fe,.hv-at{grid-column:2;justify-self:start}}
-@media (max-width:900px){body:has(.main.hvmode) .bnav{display:none}.hv-meny{display:inline-grid}}
+@media (max-width:900px){body.hvbody .bnav{display:none}.hv-meny{display:inline-grid}}
 @media (max-width:860px){
-  .hv-fonster{padding:10px 16px 0}
+  .hv-fonster{padding:var(--hv-s3) var(--hv-s4) 0}
   .hv-inre::after{left:-16px;right:-16px;bottom:0}
   .hv-hemlager{overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none}
   .hv-hemlager::-webkit-scrollbar{display:none}
   .hv-datum,.hv-lgbar{display:none}
-  .hv-hero{padding:14px 2px 0}
-  .hv-hero h1{font-size:26px}
-  .hv-hero p{margin-top:6px;font-size:13.5px}
-  .hv-kort{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px}
-  .hv-card{padding:11px 12px 10px;border-radius:14px}
-  .hv-chead{margin-bottom:6px;gap:6px}
-  .hv-chead h2{font-size:12px}
-  .hv-rad{grid-template-columns:8px minmax(0,1fr);gap:8px;height:32px;min-height:32px}
-  .hv-rad>b{font-size:13px}
+  .hv-hero{padding:var(--hv-s4) 2px 0}
+  .hv-hero h1{font-size:var(--hv-fs-h2)}
+  .hv-hero p{margin-top:var(--hv-s2);font-size:var(--hv-fs-3);white-space:normal;overflow:visible;align-items:flex-start}
+  .hv-hero p>span{overflow:visible}
+  .hv-kort{grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--hv-s2);margin-top:var(--hv-s4)}
+  .hv-card{padding:var(--hv-s3);border-radius:var(--hv-r2)}
+  .hv-chead{margin-bottom:var(--hv-s2);gap:var(--hv-s2);flex-wrap:wrap}
+  .hv-chead .hv-meta{margin-left:auto}
+  .hv-chead h2{font-size:var(--hv-fs-1)}
+  .hv-rad{grid-template-columns:8px minmax(0,1fr);gap:var(--hv-s2);height:44px;min-height:44px}
+  .hv-rad>b{font-size:var(--hv-fs-2)}
   .hv-rad .hv-btn{display:none}
-  .hv-lugn{font-size:13px}
-  .hv-stor{gap:4px;margin-top:2px}
-  .hv-stor b{font-size:34px}
-  .hv-stor span{font-size:12.5px}
-  .hv-ftxt{margin-top:6px;font-size:12.5px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-  .hv-frad{gap:8px;padding-top:8px;flex-wrap:wrap}
-  .hv-frad .hv-btn{min-height:28px;padding:0 10px;font-size:12px}
-  .hv-kfot{padding-top:6px;font-size:11.5px}
-  .hv-matare{margin-top:8px}
-  .hv-genv{overflow-x:auto;flex-wrap:nowrap;justify-content:flex-start;scrollbar-width:none;margin:0 -16px;padding:12px 16px 2px}
+  .hv-lugn{font-size:var(--hv-fs-2)}
+  .hv-stor{gap:var(--hv-s1);margin-top:2px}
+  .hv-stor b{font-size:var(--hv-fs-h2)}
+  .hv-stor span{font-size:var(--hv-fs-1)}
+  .hv-ftxt{margin-top:var(--hv-s2);font-size:var(--hv-fs-2);line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .hv-frad{gap:var(--hv-s2);padding-top:var(--hv-s2);flex-wrap:wrap}
+  .hv-frad .hv-btn{min-height:40px;padding:0 var(--hv-s3);font-size:var(--hv-fs-1)}
+  .hv-kfot{padding-top:var(--hv-s2);font-size:var(--hv-fs-1)}
+  .hv-matare{margin-top:var(--hv-s2)}
+  .hv-genv{overflow-x:auto;flex-wrap:nowrap;justify-content:flex-start;scrollbar-width:none;margin:0 -16px;padding:var(--hv-s3) var(--hv-s4) 2px}
   .hv-genv::-webkit-scrollbar{display:none}
-  .hv-chip{flex:none;height:32px;padding:0 13px}
+  .hv-chip{flex:none;height:40px;padding:0 var(--hv-s4)}
   .hv-merv{display:contents}
-  .hv-genv .hv-mer{position:static;flex-direction:row;gap:8px;min-width:0;padding:0;background:none;border:0;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
-  .hv-genv .hv-mer button{flex:none;height:32px;padding:0 13px;border-radius:12px;font-size:13px;white-space:nowrap;background:var(--hv-glass-2);border:1px solid var(--hv-glass-line)}
-  .hv-skriv{max-width:none;width:auto;margin:6px -16px 0;border-radius:20px 20px 0 0;border-bottom:0;padding:12px 12px calc(10px + env(safe-area-inset-bottom)) 16px}
+  .hv-genv .hv-mer{position:static;flex-direction:row;gap:var(--hv-s2);min-width:0;padding:0;background:none;border:0;box-shadow:none}
+  .hv-genv .hv-mer button{flex:none;height:40px;padding:0 var(--hv-s4);border-radius:var(--hv-r1);font-size:var(--hv-fs-2);white-space:nowrap;background:var(--hv-glass-2);border:1px solid var(--hv-glass-line)}
+  .hv-skriv{max-width:none;width:auto;margin:var(--hv-s2) -16px 0;border-radius:var(--hv-r2) var(--hv-r2) 0 0;border-bottom:0;padding:var(--hv-s3) var(--hv-s3) calc(var(--hv-s3) + env(safe-area-inset-bottom)) var(--hv-s4)}
   .hv-skriv textarea{font-size:16px}
+  /* Tryckytor på minst 40 px. */
+  .hv-meny,.hv-lg,.hv-stamp,.hv-ikonk,.hv-send,.hv-tips{height:40px}
+  .hv-meny,.hv-ikonk,.hv-send{width:40px}
+  .hv-btn,.hv-kn,.hv-egen input,.hv-form :is(input,select,textarea){min-height:40px}
+  .hv-at .hv-btn{min-height:40px;height:40px}
+  .hv-lyssna{height:40px;margin:-8px 0}
+  .hv-bil{height:32px}
+  .hv-bil button{width:28px;height:28px}
+  .hv-prow{grid-template-columns:26px minmax(0,1fr) auto}
+  .hv-prow .hv-dt{display:none}
   .hv-trad{top:-10px;bottom:-96px}
   .hv-tcol{padding:52px 0 120px}
-  .hv-arkyta{padding:14px}
+  .hv-arkyta{padding:var(--hv-s4)}
   .hv-arkhuvud kbd{display:none}
-  .hv-vecka{grid-template-columns:1fr;gap:8px;overflow-y:auto;align-content:start}
+  .hv-vecka{grid-template-columns:1fr;gap:var(--hv-s2);overflow-y:auto;align-content:start}
   .hv-tid{min-height:0;margin:4px 0 0;border-left:0;display:flex;flex-direction:column;gap:4px}
   .hv-tid i{position:static;white-space:normal}
   .hv-dial{width:560px;height:560px;right:-200px;top:-160px}
@@ -9492,6 +9517,72 @@ button.hv-kfot:hover,.hv-tal:hover .hv-kfot{color:var(--hv-ink)}
   .hv-navs>svg{display:none}
 }
 @media (prefers-reduced-motion:reduce){.hv *,.hv *::before,.hv *::after{animation:none!important;transition:none!important}}
+/* ---------- Lyft: kort och tråd ---------- */
+/* Väntar på dig: radens titel är en knapp som öppnar hela listan vid just den raden. Den ser ut som titeln. */
+.hv-rad>.hv-radt{min-width:0;text-align:left;border-radius:6px}
+.hv-radt>b{display:block;font-weight:500;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hv .hv-radt:focus-visible{outline-offset:-2px}
+/* Hälsningens delar leder vidare: läget till Väntar på dig, mötet till Min dag. */
+.hv-herok{border-radius:4px;text-align:left}
+.hv-radt:hover>b,.hv-herok:hover{text-decoration:underline;text-decoration-color:var(--hv-line-2);text-decoration-thickness:1px;text-underline-offset:3px}
+.hv-radt:active,.hv-herok:active{opacity:.7}
+.hv-radt:disabled,.hv-herok:disabled{cursor:default;opacity:.5;text-decoration:none}
+@media (max-width:860px){
+  .hv-radt>b{font-size:13px}
+  /* Läget bryts i stället för att kapa kundnamnet. Lyssna står kvar till höger. */
+  .hv-hero p{white-space:normal;align-items:flex-start}
+  .hv-hero p>span{overflow:visible}
+}
+/* Chatten: Stopp i Skickas plats, stegen ovanför svaret, raden under svaret och Nytt svar. Täckande ytor och tunn linje.
+   Rörelse bara i opacity och transform, och ingen alls vid prefers-reduced-motion (regeln ovan stänger av den i .hv). */
+.hv-send.hv-stopp{background:var(--hv-ink);color:var(--hv-base)}
+.hv-send.hv-stopp svg{fill:currentColor;stroke-width:0}
+.hv-send:active{transform:scale(.94)}
+.hv-skriv textarea.hv-hog{overflow-y:auto}
+@keyframes hvsyns{from{opacity:0}}
+/* Frågar… syns först efter 200 ms: ett snabbt svar blinkar inte förbi en väntetext. */
+.hv-vant{animation:hvsyns .18s var(--hv-ease) .2s backwards}
+.hv-svar{animation:hvsyns .2s var(--hv-ease)}
+.hv-steg{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:1.45;color:var(--hv-ink-2)}
+.hv-steg li{display:grid;grid-template-columns:16px minmax(0,1fr) auto;column-gap:10px;align-items:start;animation:hvsyns .18s var(--hv-ease)}
+.hv-steg li>i{width:16px;height:19px;display:grid;place-items:center}
+.hv-steg li>i svg{width:13px;height:13px;stroke-width:2.2}
+.hv-steg li>span{min-width:0;overflow-wrap:anywhere}
+.hv-steg li>span>small{display:block;font-size:12px;color:var(--hv-ink-3)}
+.hv-steg li>small{font-size:12px;color:var(--hv-ink-3)}
+.hv-steg-gar>i::before{content:"";width:7px;height:7px;border-radius:50%;border:1.5px solid var(--hv-ink-3)}
+.hv-steg-ok>i{color:var(--hv-brand-ink)}
+.hv-steg-fel>i::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--hv-danger)}
+.hv-steg-ej>i::before{content:"";width:7px;height:1.5px;border-radius:1px;background:var(--hv-ink-3)}
+.hv-stegrad{margin:0 0 10px}
+.hv-stegrad .hv-steg{margin:8px 0 0 4px;padding-left:10px;border-left:1px solid var(--hv-line)}
+.hv-stegk{display:inline-flex;align-items:center;gap:6px;min-height:28px;margin-left:-6px;padding:0 10px 0 6px;border-radius:8px;font-size:12.5px;color:var(--hv-ink-3)}
+.hv-stegk svg{width:14px;height:14px;transform:rotate(-90deg);transition:transform .15s var(--hv-ease)}
+.hv-stegk[aria-expanded="true"] svg{transform:none}
+.hv-stegk:hover{color:var(--hv-ink);background:var(--hv-line)}
+.hv-stegk:active{opacity:.7}
+.hv-atg{display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin:-6px 0 0 36px}
+.hv-atgk{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:0 10px;border-radius:8px;border:1px solid transparent;font-size:12.5px;color:var(--hv-ink-2)}
+.hv-atgk svg{width:14px;height:14px}
+.hv-atgk:hover{color:var(--hv-ink);background:var(--hv-glass-2);border-color:var(--hv-line)}
+.hv-atgk:active{transform:scale(.97)}
+.hv-atgtid{margin-left:auto;font-size:12px;color:var(--hv-ink-3)}
+.hv-nere{position:sticky;bottom:136px;align-self:center;display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 14px 0 10px;border-radius:16px;background:var(--hv-base);border:1px solid var(--hv-line-2);box-shadow:var(--hv-shadow);font-size:12.5px;font-weight:500;color:var(--hv-ink);animation:hvsyns .15s var(--hv-ease)}
+.hv-nere[hidden]{display:none}
+.hv-nere svg{width:14px;height:14px}
+.hv-nere:hover{border-color:var(--hv-ink-3)}
+.hv-nere:active{transform:scale(.97)}
+/* Godkänn-kortet: kvittot per rad. En bock för det som är gjort, en röd punkt där det stannade. */
+.hv-utk li>span>i{display:inline-grid;place-items:center;width:14px;height:14px;margin-right:8px;vertical-align:-2px}
+.hv-utk li>span>i svg{width:13px;height:13px;stroke-width:2.2}
+.hv-utk-gjord>span{color:var(--hv-ink-2)}
+.hv-utk-gjord .hv-ok{color:var(--hv-brand-ink)}
+.hv-utkx::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--hv-danger)}
+@media (max-width:860px){
+  .hv-nere{bottom:108px}
+  .hv-atg{margin-left:0}
+  .hv-atgtid{flex-basis:100%;margin-left:10px}
+}
 </style>
 
 <div class="proto" role="region" aria-label="Prototypinställningar">
@@ -10348,6 +10439,7 @@ function render(){
   // Nya hemmet (hv): bara för den som står i hem.nytt. S.hv finns först när blocket NYA HEMMET har körts.
   const hvNytt = S.view === 'hem' && !!S.hv && hvPa();
   document.getElementById('main').classList.toggle('hvmode', hvNytt);
+  document.body.classList.toggle('hvbody', hvNytt);
   if (S.view === 'kalender'){
     wrap.innerHTML = `${renderKalView()}`;
     renderRail(); renderBnav(); renderPill(); renderTodo(); renderPanel(); renderFokus(); renderEnITaget(); renderPlayer();
@@ -34827,7 +34919,13 @@ S.hv = S.hv || {ark:null, id:null, fi:0, data:{}, laddar:{}, fel:'', kvitto:null
 S.hv.chatt = S.hv.chatt || [];
 // Ljust eller mörkt väljs i Inställningar och gäller hela Nav. Hemmet har ingen egen tonknapp.
 const hvTema = () => S.theme === 'light' ? 'ljus' : S.theme === 'dark' ? 'mork' : (prfDatornMorkt() ? 'mork' : 'ljus');
-const hvTal = n => Math.round(n).toLocaleString('sv-SE');
+// Språk och valuta för hemmets tal står här och bara här, med svenskt förval. Nav skickar ännu ingen egen inställning för dem.
+const HVLOK = {sprak:'sv-SE', valuta:'kr'};
+const hvTal = n => Math.round(n).toLocaleString(HVLOK.sprak);
+// Ett tal i ett kortshuvud står bara när det är över noll, och som 99+ när det är fler.
+const hvAntal = n => !n ? '' : n > 99 ? '99+' : String(n);
+// Rullning följer personens val: utan rörelse hoppar tråden i stället för att glida.
+const hvGlid = () => typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
 const hvOrd = n => ['Noll', 'En', 'Två', 'Tre', 'Fyra', 'Fem', 'Sex', 'Sju', 'Åtta', 'Nio', 'Tio'][n] || String(n);
 const hvAndel = x => Math.max(0, Math.min(1, x));
 // Urtavlan är fönstrets grund, som i skissen: en ring, sextio streck och navets sex ekrar.
@@ -34871,15 +34969,14 @@ function hvHemlager(){
     ${hvGenv()}
   </div>`;
 }
-// Tråden: ← Hem och hur mycket som brinner står överst, som i skissen. Båda går hem.
+// Tråden: ← Hem och hur mycket som brinner står överst, som i skissen. ← Hem går hem, talet öppnar Väntar på dig.
 P.hvvanster = '<path d="M19 12H5.5M11 6l-6 6 6 6"/>';
 P.hvmik = '<rect x="9" y="3.5" width="6" height="10.5" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/>';
 P.hvupp = '<path d="M12 19V5.5M6 11l6-6 6 6"/>';
 P.hvmeny = '<path d="M4 8h16M4 16h16"/>';
 function hvRumtop(){
-  ndHemSynk();
-  const n = ndHemRad.filter(r => r.nar === 'nu' && !hvDold(r)).length;
-  return `<div class="hv-rumtop"><button class="hv-kn" data-hvstang>${I('hvvanster')}Hem</button><button class="hv-kn" data-hvstang><i${n ? '' : ' style="background:var(--hv-brand)"'}></i><span>${n ? `${n} brinner` : 'Inget brinner'}</span></button></div>`;
+  const n = hvRakna().nu;
+  return `<div class="hv-rumtop"><button class="hv-kn" data-hvstang>${I('hvvanster')}Hem</button><button class="hv-kn" data-hvark="vantar"><i${n ? '' : ' style="background:var(--hv-brand)"'}></i><span>${n ? `${n} brinner` : 'Inget brinner'}</span></button></div>`;
 }
 const HVINL = {team:() => hvArkTeam(), andrat:() => hvArkAndrat(), forslag:() => hvArkForslag(), manad:() => hvArkManad(), golvet:() => hvArkGolvet(), coachning:() => hvTradCoach(), chatt:t => hvArkChatt(t.id)};
 // Coachning i tråden: det gamla hemmets coachningskort i Navs röst, ur samma uträkningar (cnLaget, cnFlaggor, cnPuls).
@@ -34913,21 +35010,58 @@ function hvTradCoach(){
 }
 function hvTrad(){
   const H = S.hv, fokus = H.trad.filter(t => hvSamma(t, H.ark, H.id)).pop();
-  return `<div class="hv-lager hv-trad" id="hvTrad"><div class="hv-tcol" aria-live="polite">${H.trad.map(t => {
-    // Bara det inlägg som är öppet visar ett fel, ett formulär och ett kvitto. De andra visar sin data.
-    const f = t === fokus, spar = {fel:H.fel, form:H.form, id:H.id};
-    if (!f) Object.assign(H, {fel:'', form:null});
+  // Medan ett svar strömmar är tråden upptagen (aria-busy): en skärmläsare läser det som kommit när svaret är klart,
+  // inte varje steg för sig. Nytt svar står längst ned när läsaren har rullat upp och något har kommit under.
+  const nere = `<button class="hv-nere" data-hvnere${H.nere ? '' : ' hidden'}>${I('chev')}Nytt svar</button>`;
+  return `<div class="hv-lager hv-trad" id="hvTrad"><div class="hv-tcol" aria-live="polite" aria-busy="${!!H.strom}">${H.trad.map(t => {
+    // Bara det inlägg som är öppet visar ett formulär och ett kvitto. Ett fel visar varje inlägg för sig, med Försök igen,
+    // så att inget inlägg står kvar på Laddar när dess hämtning gick fel medan ett annat var öppet.
+    const f = t === fokus, spar = {fel:H.fel, form:H.form, id:H.id}, egetFel = (H.felInl || {})[hvInlNyckel(t.sort, t.id)] || '';
+    if (!f) Object.assign(H, {fel:egetFel, form:null});
+    else if (!H.fel) H.fel = egetFel;
     H.id = t.id;
     let inne; try { inne = (HVINL[t.sort] || (() => ''))(t); } finally { Object.assign(H, spar); }
     return `<div class="hv-inl" data-hvnr="${t.nr}" data-hvinl="${esc(t.sort)}"${t.id ? ` data-hvinlid="${esc(t.id)}"` : ''}>${inne}${f && t.sort !== 'chatt' ? hvKvitto() : ''}</div>`;
-  }).join('')}</div></div>`;
+  }).join('')}${nere}</div></div>`;
 }
 // Ett nytt inlägg visas från början, som i skissen. Ett svar som strömmar in följs till slutet.
 function hvVisaNytt(){
   const nr = S.hv.visaNr; if (!nr) return; S.hv.visaNr = null;
-  requestAnimationFrame(() => { const t = document.getElementById('hvTrad'), el = t && t.querySelector(`[data-hvnr="${nr}"]`); if (t && el) t.scrollTo({top:el.offsetTop - 62, behavior:'smooth'}); });
+  requestAnimationFrame(() => { const t = document.getElementById('hvTrad'), el = t && t.querySelector(`[data-hvnr="${nr}"]`); if (t && el) t.scrollTo({top:el.offsetTop - 62, behavior:hvGlid()}); });
 }
-function hvRulla(){ requestAnimationFrame(() => { const t = document.getElementById('hvTrad'); if (t) t.scrollTo({top:t.scrollHeight, behavior:'smooth'}); }); }
+// Tråden följer ett svar bara när läsaren står vid botten (S.hv.folj, satt när frågan ställs). Hjulet uppåt, ett finger
+// på tråden eller tangenterna uppåt släpper (hvTangent och lyssnarna nedan), och att rulla tillbaka till botten följer
+// igen. Avståndet till botten avgör bara att följa igen, aldrig att släppa: växande text får inte släppa följandet.
+// Under strömmen hoppar tråden; en glidning per händelse hinner aldrig ikapp.
+const hvVidBotten = (el, marg = 50) => !!el && el.scrollHeight - el.scrollTop - el.clientHeight <= marg;
+function hvNere(pa){
+  S.hv.nere = !!pa;
+  const b = document.querySelector('.hv-nere'); if (b) b.hidden = !pa;
+}
+function hvRulla(){
+  requestAnimationFrame(() => {
+    const t = document.getElementById('hvTrad'); if (!t) return;
+    if (S.hv.folj !== false){ t.scrollTop = t.scrollHeight; hvNere(false); }
+    else if (!hvVidBotten(t)) hvNere(true);
+  });
+}
+// När svaret kommer fälls stegen ihop och svaret visas från frågan, om det inte ryms ovanför skrivrutan.
+function hvVisaSvar(nr){
+  requestAnimationFrame(() => {
+    const t = document.getElementById('hvTrad'), el = t && t.querySelector(`[data-hvnr="${nr}"]`); if (!t || !el) return;
+    if (S.hv.folj === false){ if (!hvVidBotten(t)) hvNere(true); return; }
+    t.scrollTo({top:Math.min(el.offsetTop - 62, t.scrollHeight - t.clientHeight), behavior:hvGlid()});
+    hvNere(false);
+  });
+}
+function hvTillBotten(){
+  const t = document.getElementById('hvTrad'); S.hv.folj = true; hvNere(false);
+  if (t) t.scrollTo({top:t.scrollHeight, behavior:hvGlid()});
+}
+const hvITraden = e => !!(e.target && e.target.closest && e.target.closest('#hvTrad'));
+document.addEventListener('wheel', e => { if (e.deltaY < 0 && hvPa() && hvITraden(e)) S.hv.folj = false; }, {passive:true, capture:true});
+document.addEventListener('touchmove', e => { if (hvPa() && hvITraden(e)) S.hv.folj = false; }, {passive:true, capture:true});
+document.addEventListener('scroll', e => { if (hvPa() && e.target && e.target.id === 'hvTrad' && hvVidBotten(e.target)){ S.hv.folj = true; if (S.hv.nere) hvNere(false); } }, true);
 // Genvägarna står längst ned i hemmets lager, precis ovanför skrivrutan, som i skissen.
 // Frågan står först när chatten svarar: Förbered före ett möte i dag, annars Vem ska jag ringa nu? (skissens SNABB).
 // Möten bär samma tal som Möten har i menyn. Mer har Golvet, Teamet i november och Coachning, och allt öppnas i tråden.
@@ -34939,8 +35073,8 @@ function hvGenv(){
     : `<button class="hv-chip hv-fraga" data-hvforbered="Vem ska jag ringa nu?"><span>${hubMark(15)}</span><span>Vem ska jag ringa nu?</span></button>`;
   const mt = ndKopplad('moten') ? hvMotenTal() : 0;
   const stat = S.role === 'chef' && ndKopplad('moten') && typeof ndMsChef === 'function' ? '<button class="hv-chip" data-hvstat>Min statistik</button>' : '';
-  const mer = [ND.hem.golvet ? '<button data-hvark="golvet">Golvet</button>' : '', ND.hem.team ? `<button data-hvark="team">Teamet i ${esc(ND.hem.team.manadsnamn)}</button>` : '', ndKopplad('coachning') ? '<button data-hvark="coachning">Coachning</button>' : ''].join('');
-  return `<div class="hv-genv">${fraga}<button class="hv-chip" data-hvark="dag">Min dag</button><button class="hv-chip" data-hvark="vecka">Veckan som kommer</button>${ndKopplad('moten') ? `<button class="hv-chip" data-go="/moten">Möten${mt ? ` <small class="num">${mt}</small>` : ''}</button>` : ''}${stat}${mer ? `<span class="hv-merv"><button class="hv-chip" data-hvmer aria-expanded="${!!H.mer}">Mer</button>${H.mer ? `<div class="hv-mer hv-glass" role="menu">${mer}</div>` : ''}</span>` : ''}</div>`;
+  const mer = [ND.hem.golvet ? '<button role="menuitem" data-hvark="golvet">Golvet</button>' : '', ND.hem.team ? `<button role="menuitem" data-hvark="team">Teamet i ${esc(ND.hem.team.manadsnamn)}</button>` : '', ndKopplad('coachning') ? '<button role="menuitem" data-hvark="coachning">Coachning</button>' : ''].join('');
+  return `<div class="hv-genv">${fraga}<button class="hv-chip" data-hvark="dag">Min dag</button><button class="hv-chip" data-hvark="vecka">Veckan som kommer</button>${ndKopplad('moten') ? `<button class="hv-chip" data-go="/moten">Möten${mt ? ` <small class="num">${mt}</small>` : ''}</button>` : ''}${stat}${mer ? `<span class="hv-merv"><button class="hv-chip" data-hvmer aria-haspopup="menu" aria-expanded="${!!H.mer}">Mer</button>${H.mer ? `<div class="hv-mer hv-glass" role="menu" aria-label="Mer">${mer}</div>` : ''}</span>` : ''}</div>`;
 }
 // Överraden: hur många som är på plats (klick visar laget), datum och Stämpla in. Ingen egen ruta.
 function hvTopp(){
@@ -34954,14 +35088,15 @@ function hvTopp(){
   const stamp = !stamplar ? '' : inne ? `<button class="hv-stamp inne" data-act="ut" aria-label="Du är instämplad sedan ${sist ? hm(sist.t) : ''}. Stämpla ut.">${I('check')}Inne${sist ? ' sedan ' + hm(sist.t) : ''} · Stämpla ut</button>` : `<button class="hv-stamp" data-act="in">Stämpla in</button>`;
   return `<div class="hv-topp"><button class="hv-meny" data-rlsmer aria-haspopup="dialog" aria-expanded="${!!S.rlsMer}" aria-label="Meny">${I('hvmeny')}</button>${lag}<div class="hv-lgh"><span class="hv-datum">${esc(ndHemLangt(kIdag()))}<small>v.${ndVecka(kIdag())}</small></span>${stamp}</div>${dra}</div>`;
 }
-// Hälsningen och en rad om läget: hur mycket som brinner, och nästa möte i dag.
+// Hälsningen och en rad om läget: hur mycket som brinner, och nästa möte i dag. Talen är kortens tal (hvRakna),
+// och varje del leder dit den handlar om: läget till Väntar på dig, mötet till Min dag. Utan kalendern sägs inget om möten.
 function hvHero(){
-  ndHemSynk();
-  const nu = ndHemRad.filter(r => r.nar === 'nu' && !hvDold(r)).length;
-  const lage = nu === 0 ? 'Inget brinner.' : nu === 1 ? 'En sak brinner.' : `${hvOrd(nu)} saker brinner.`;
-  const kal = ndHemKal(kIdag()).filter(e => e.s >= now()), n = kal[0];
-  const dag = n ? `${kal.length === 1 ? 'Ett möte' : `${hvOrd(kal.length)} möten`} kvar i dag, nästa ${hm(n.s).replace(':', '.')} med ${esc(n.t)}.` : 'Inga fler möten i dag.';
-  return `<div class="hv-hero"><h1>${MODES[S.mode].halsning}, ${esc(ME[S.role].fornamn)}</h1><p><span><b>${lage}</b> ${dag}</span><button class="hv-lyssna" data-listen aria-label="${S.speaking ? 'Sluta läsa upp' : 'Lyssna på dagen i korthet'}">${S.speaking ? '<i class="hv-stopp"></i>Sluta' : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5l12 7-12 7z"/></svg>Lyssna'}</button></p></div>`;
+  const R = hvRakna();
+  const lage = R.nu ? (R.nu === 1 ? 'En sak brinner.' : `${hvOrd(R.nu)} saker brinner.`) : R.idag ? (R.idag === 1 ? 'En sak väntar i dag.' : `${hvOrd(R.idag)} saker väntar i dag.`) : 'Inget brinner.';
+  const kal = ndKopplad('kalender') ? ndHemKal(kIdag()).filter(e => e.s >= now()) : null, n = kal && kal[0];
+  const dag = !kal ? '' : n ? `${kal.length === 1 ? 'Ett möte' : `${hvOrd(kal.length)} möten`} kvar i dag, <button class="hv-herok" data-hvark="dag">nästa ${hm(n.s).replace(':', '.')} med ${esc(n.t)}</button>.` : 'Inga fler möten i dag.';
+  const forst = R.rader.length ? `<button class="hv-herok" data-hvark="vantar"><b>${lage}</b></button>` : `<b>${lage}</b>`;
+  return `<div class="hv-hero"><h1>${MODES[S.mode].halsning}, ${esc(ME[S.role].fornamn)}</h1><p><span>${forst}${dag ? ' ' + dag : ''}</span><button class="hv-lyssna" data-listen aria-label="${S.speaking ? 'Sluta läsa upp' : 'Lyssna på dagen i korthet'}">${S.speaking ? '<i class="hv-stopp"></i>Sluta' : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5l12 7-12 7z"/></svg>Lyssna'}</button></p></div>`;
 }
 
 /* ---------- Väntar på dig: en lista, på två ställen (kortet och hela listan) ---------- */
@@ -34977,14 +35112,23 @@ function hvPrick(r){
   const t = TASKS.find(x => 'upg-' + x.id === r.id);
   return t && t.ndNytt && t.ndNytt.length ? ndNyPrick(t) : '';
 }
-function hvVantar(){
+// Ett ställe räknar det som väntar, ur samma mängd som hemmet visar (utan det bortvalda). Hälsningen, kortet,
+// trådens överrad och hela listan säger därför samma tal.
+function hvRakna(){
   ndHemSynk();
-  const alla = hvSaker(), rader = alla.filter(r => !hvDold(r)), visa = rader.filter(r => r.nar !== 'vanta').slice(0, 3), fler = alla.length - visa.length;
-  const vanta = alla.filter(r => r.nar === 'vanta').length, fot = !fler ? 'Hela listan' : fler === vanta ? `${vanta} till som kan vänta` : `${fler} till`;
+  const alla = hvSaker(), rader = alla.filter(r => !hvDold(r)), antal = nar => rader.filter(r => r.nar === nar).length;
+  return {alla, rader, nu:antal('nu'), idag:antal('idag'), vanta:antal('vanta'), dolda:alla.length - rader.length};
+}
+// Kortet visar det som ska göras nu och i dag, högst tre rader. Talet i huvudet räknar samma sak, och foten resten.
+// Raden öppnar hela listan vid just den raden, så att den går att nå också där knappen inte får plats (mobilen).
+function hvVantar(){
+  const R = hvRakna(), visa = R.rader.filter(r => r.nar !== 'vanta').slice(0, 3), fler = R.rader.length - visa.length;
+  const fot = !fler ? 'Hela listan' : !visa.length && fler === R.vanta ? `${R.vanta} kan vänta` : fler === R.vanta ? `${R.vanta} till som kan vänta` : `${fler} till`;
+  const lugn = R.vanta ? 'Inget brinner och inget ska göras i dag.' : 'Inget väntar på dig just nu.';
   return `<section class="hv-card" aria-label="Väntar på dig">
-    <div class="hv-chead"><h2>Väntar på dig</h2><span class="hv-meta num">${rader.length || ''}</span></div>
-    ${visa.length ? visa.map(r => `<div class="hv-rad"><i class="hv-heat ${r.nar === 'nu' ? 'hot' : ''}" aria-hidden="true"></i><b>${hvPrick(r)}${esc(r.t)}</b>${hvRadKnapp(r)}</div>`).join('') : `<div class="hv-lugn">${I('check')}Inget väntar på dig just nu.</div>`}
-    ${alla.length ? `<button class="hv-kfot" data-hvark="vantar">${fot}</button>` : ''}
+    <div class="hv-chead"><h2>Väntar på dig</h2><span class="hv-meta num">${hvAntal(R.nu + R.idag)}</span></div>
+    ${visa.length ? visa.map(r => `<div class="hv-rad"><i class="hv-heat ${r.nar === 'nu' ? 'hot' : ''}" aria-hidden="true"></i><button class="hv-radt" data-hvrad="${esc(r.id)}"><b>${hvPrick(r)}${esc(r.t)}</b></button>${hvRadKnapp(r)}</div>`).join('') : `<div class="hv-lugn">${I('check')}${lugn}</div>`}
+    ${R.alla.length ? `<button class="hv-kfot" data-hvark="vantar">${fot}</button>` : ''}
   </section>`;
 }
 
@@ -35001,7 +35145,7 @@ function hvForeslar(){
     <div class="hv-chead">${mark}<h2>Nav föreslår</h2><span class="hv-meta hv-end num">${o.length > 1 ? `${i + 1} av ${o.length}` : ''}</span></div>
     <div class="hv-stor"><b class="num">${esc(k.tal)}</b><span>${esc(k.vad)}</span></div>
     <p class="hv-ftxt">${esc(k.text)}</p>
-    <div class="hv-frad"><button class="hv-btn hv-gor" data-hvforslag="${esc(f.id)}">${esc(k.knapp)}</button>${o.length > 1 ? `<button class="hv-kfot" data-hvnasta>${o.length - 1} förslag till</button>` : ''}</div>
+    <div class="hv-frad"><button class="hv-btn hv-gor" data-hvforslag="${esc(f.id)}">${esc(k.knapp)}</button>${o.length > 1 ? `<button class="hv-kfot" data-hvnasta>${i === o.length - 1 ? 'Till det första' : 'Nästa förslag'}</button>` : ''}</div>
   </section>`;
 }
 
@@ -35014,7 +35158,9 @@ function hvMatare(T, bred){
 function hvTeam(){
   const T = ND.hem.team, m = String(T.text.stort).match(/^(-?\d+)\s*(.*)$/);
   const bi = [T.vantar ? `${T.vantar} väntar` : '', T.makulerade ? `${T.makulerade} ${T.makulerade === 1 ? 'makulerad' : 'makulerade'}` : ''].filter(Boolean).join(' · ');
-  return `<section class="hv-card hv-tal" aria-label="Teamet i ${esc(T.manadsnamn)}" data-hvark="team" role="button" tabindex="0">
+  // Kortet är en knapp, och en knapps namn ersätter innehållet: namnet bär därför samma tal som ritas.
+  const namn = `Teamet i ${T.manadsnamn}: ${m ? `${m[1]} ${m[2]}` : `${T.netto} order`}, dag ${T.takt.gatt} av ${T.takt.totalt}${bi ? `, ${bi}` : ''}. Visa uträkningen`;
+  return `<section class="hv-card hv-tal" aria-label="${esc(namn)}" data-hvark="team" role="button" tabindex="0">
     <div class="hv-chead"><h2>Teamet i ${esc(T.manadsnamn)}</h2><span class="hv-meta hv-end num" title="${T.takt.gatt} av ${T.takt.totalt} arbetsdagar">dag ${T.takt.gatt} av ${T.takt.totalt}</span></div>
     <div class="hv-stor"><b class="num">${m ? m[1] : T.netto}</b><span>${esc(m ? m[2] : 'order')}</span></div>
     ${hvMatare(T, false)}
@@ -35039,16 +35185,18 @@ function hvStegMatare(M, bred){
 // Utan provisionens data finns inga tal att visa. Utkastets exempelmotor får aldrig stå som riktiga tal
 // (det gamla hemmet döljer sitt provisionskort i samma läge).
 const hvManadSaknas = () => !ndKopplad('provision') || !ndP();
-const HVMANADSAKNAS = 'Provisionen går inte att läsa just nu.';
+// Två skäl som går att skilja åt här: vyn Provision är inte kopplad, eller dess data kom inte med när sidan lästes.
+const hvManadOrsak = () => !ndKopplad('provision') ? 'Provisionen är inte kopplad till hemmet än.' : 'Provisionen går inte att läsa just nu.';
 function hvDinManad(){
   if (hvManadSaknas()){ const man = pvManNamn(PVMAN); return `<section class="hv-card hv-tal" aria-label="Din ${esc(man)}">
     <div class="hv-chead"><h2>Din ${esc(man)}</h2></div>
-    <div class="hv-lugn hv-lugn2"><span>${HVMANADSAKNAS}</span><small>Jag visar hellre inga tal än fel tal.</small></div>
+    <div class="hv-lugn hv-lugn2"><span>${hvManadOrsak()}</span></div>
   </section>`; }
   const M = hvManad(), u = M.u;
-  const stor = M.kronor ? `<b class="num">${hvTal(u.summa)}</b><span>kr i provision</span>` : `<b class="num">${u.antal.netto}</b><span>order i ${esc(M.man)}</span>`;
+  const stor = M.kronor ? `<b class="num">${hvTal(u.summa)}</b><span>${esc(HVLOK.valuta)} i provision</span>` : `<b class="num">${u.antal.netto}</b><span>order i ${esc(M.man)}</span>`;
   const rad = [M.vant ? `${M.vant} order väntar på godkännande.` : '', u.nasta ? `${M.till} order till nästa steg.` : ''].filter(Boolean).join(' ');
-  return `<section class="hv-card hv-tal" aria-label="Din ${esc(M.man)}" data-hvark="manad" role="button" tabindex="0">
+  const namn = `Din ${M.man}: ${M.kronor ? `${hvTal(u.summa)} ${HVLOK.valuta} i provision` : `${u.antal.netto} order`}${rad ? `. ${rad.slice(0, -1)}` : ''}. Visa uträkningen`;
+  return `<section class="hv-card hv-tal" aria-label="${esc(namn)}" data-hvark="manad" role="button" tabindex="0">
     <div class="hv-chead"><h2>Din ${esc(M.man)}</h2><span class="hv-meta hv-end num">${u.antal.netto} order</span></div>
     <div class="hv-stor">${stor}</div>
     ${hvStegMatare(M, false)}
@@ -35061,11 +35209,12 @@ function hvDinManad(){
 // Talen och texten kommer färdiga från servern (andratKort, forslagforma.ts). Utan mätning står inget tal.
 function hvAndrat(){
   const F = ND.hem.forslag || {}, a = F.andrat || [], K = F.andratKort || {foljs:0, nastaDom:null, stort:null, text:''};
-  if (!a.length && !K.foljs) return `<section class="hv-card hv-tal" aria-label="Det som ändrats" data-hvark="andrat" role="button" tabindex="0">
+  if (!a.length && !K.foljs) return `<section class="hv-card hv-tal" aria-label="Det som ändrats: inget följs än. Berätta om en ändring" data-hvark="andrat" role="button" tabindex="0">
     <div class="hv-chead"><h2>Det som ändrats</h2></div>
     <div class="hv-frad"><span class="hv-kfot">Berätta om en ändring</span></div>
   </section>`;
-  return `<section class="hv-card hv-tal" aria-label="Det som ändrats" data-hvark="andrat" role="button" tabindex="0">
+  const namn = `Det som ändrats: ${[K.foljs ? `${K.foljs} följs` : '', K.stort ? `${K.stort.tal} ${K.stort.vad}` : '', K.nastaDom ? `nästa dom ${frKort(K.nastaDom)}` : ''].filter(Boolean).join(', ') || 'inget mätt än'}. Visa översynen`;
+  return `<section class="hv-card hv-tal" aria-label="${esc(namn)}" data-hvark="andrat" role="button" tabindex="0">
     <div class="hv-chead"><h2>Det som ändrats</h2>${K.foljs ? `<span class="hv-meta hv-end num">${K.foljs} följs</span>` : ''}</div>
     ${K.stort ? `<div class="hv-stor"><b class="num">${esc(K.stort.tal)}</b><span>${esc(K.stort.vad)}</span></div>` : ''}
     ${K.text ? `<p class="hv-ftxt">${esc(K.text)}</p>` : ''}
@@ -35079,16 +35228,45 @@ const hvChattPa = () => !!(ND && ND.hem && ND.hem.chatt);
 // och varje svar bär sin egen källrad. Tala finns bara där webbläsaren har taligenkänning.
 const HVTIPS = 'Vad måste jag göra för att sälja mer?';
 const hvKanTala = () => !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+// Medan ett svar pågår är Skicka en Stopp-knapp (samma plats, samma storlek), och Esc gör samma sak.
+// Bifoga och tipset finns bara när chatten svarar: sökrutan tar inga filer, och tipset är en fråga till AI.
+// Rutan växer med texten upp till 160 px. Höjden står i läget, så att en omritning inte krymper den.
+P.hvstopp = '<rect x="7.5" y="7.5" width="9" height="9" rx="2"/>';
+P.hvkopiera = '<rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/>';
+P.hvomstart = '<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4.5v4h4"/>';
+const HVQMAX = 160;
 function hvSkriv(){
-  const H = S.hv, bil = H.bilagor || [];
-  const om = hvChattPa() ? 'Svaren skrivs av AI ur Navs tal. Talen sätter Nav in.' + (typeof ND.hem.chattAnvant === 'number' ? ` ${ND.hem.chattAnvant} % av månadens AI-utrymme är använt.` : '') : 'Svaren kommer ur Navs sökruta, inte från AI.';
+  const H = S.hv, bil = H.bilagor || [], chatt = hvChattPa();
+  const om = chatt ? 'Svaren skrivs av AI ur Navs tal. Talen sätter Nav in.' + (typeof ND.hem.chattAnvant === 'number' ? ` ${ND.hem.chattAnvant} % av månadens AI-utrymme är använt.` : '') : 'Svaren kommer ur Navs sökruta, inte från AI.';
+  const send = H.strom ? `<button type="button" class="hv-send hv-stopp" data-hvstopp aria-label="Stoppa svaret" title="Stoppa svaret (esc)">${I('hvstopp')}</button>` : `<button class="hv-send" aria-label="Skicka">${I('hvupp')}</button>`;
+  const hojd = H.qh ? ` style="height:${H.qh}px"${H.qh >= HVQMAX ? ' class="hv-hog"' : ''}` : '';
   return `<form class="hv-skriv" data-hvskriv title="${esc(om)}">
     ${bil.length ? `<div class="hv-bilagor">${bil.map((b, i) => `<span class="hv-bil">${esc(b.namn)}<button type="button" data-hvbilx="${i}" aria-label="Ta bort ${esc(b.namn)}">×</button></span>`).join('')}</div>` : ''}
-    <textarea id="hvQ" rows="1" placeholder="Fråga Nav eller be om något…" aria-label="Skriv till Nav" data-hvfalt="q">${esc(H.q || '')}</textarea>
-    <div class="hv-srad"><button type="button" class="hv-ikonk" data-hvbifoga aria-label="Bifoga">${I('plus')}</button><button type="button" class="hv-tips" data-hvtips>Prova: ${HVTIPS}</button>${hvKanTala() ? `<button type="button" class="hv-ikonk${H.talar ? ' pa' : ''}" data-hvtala aria-label="${H.talar ? 'Sluta lyssna' : 'Tala'}" aria-pressed="${!!H.talar}">${I('hvmik')}</button>` : ''}<button class="hv-send" aria-label="Skicka">${I('hvupp')}</button></div>
-    <input type="file" id="hvFil" hidden multiple accept="image/png,image/jpeg,image/webp,application/pdf" data-hvfil>
+    <textarea id="hvQ" rows="1" placeholder="${chatt ? 'Fråga Nav eller be om något…' : 'Sök i Nav…'}" aria-label="${chatt ? 'Skriv till Nav' : 'Sök i Nav'}" data-hvfalt="q"${hojd}>${esc(H.q || '')}</textarea>
+    <div class="hv-srad">${chatt ? `<button type="button" class="hv-ikonk" data-hvbifoga aria-label="Bifoga">${I('plus')}</button><button type="button" class="hv-tips" data-hvtips>Prova: ${HVTIPS}</button>` : ''}${hvKanTala() ? `<button type="button" class="hv-ikonk${H.talar ? ' pa' : ''}" data-hvtala aria-label="${H.talar ? 'Sluta lyssna' : 'Tala'}" aria-pressed="${!!H.talar}">${I('hvmik')}</button>` : ''}${send}</div>
+    ${chatt ? '<input type="file" id="hvFil" hidden multiple accept="image/png,image/jpeg,image/webp,application/pdf" data-hvfil>' : ''}
   </form>`;
 }
+// Rutans höjd följer texten. Den sätts direkt på fältet och sparas i läget till nästa omritning.
+function hvHojd(el){
+  if (!el || !el.style) return;
+  el.style.height = 'auto';
+  const h = Math.min(el.scrollHeight || 0, HVQMAX);
+  S.hv.qh = h > 24 ? h : 0;
+  el.style.height = S.hv.qh ? S.hv.qh + 'px' : '';
+  el.classList.toggle('hv-hog', S.hv.qh >= HVQMAX);
+}
+// En halvskriven fråga står kvar i fliken (sessionStorage) och överlever en omladdning. Utan lagring finns den bara i läget.
+const HVUTKAST = 'nav2-hvutkast';
+function hvUtkast(v){
+  try {
+    if (v === undefined){ const s = sessionStorage.getItem(HVUTKAST); return typeof s === 'string' ? s : ''; }
+    if (v) sessionStorage.setItem(HVUTKAST, v); else sessionStorage.removeItem(HVUTKAST);
+    return v;
+  } catch(_){ return ''; }
+}
+if (!S.hv.q) S.hv.q = hvUtkast();
+const hvPekskarm = () => typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
 // Bifoga: högst tre filer, bilder eller PDF, högst 3 MB tillsammans (samma gräns som rutten, lasBilagor).
 const HVBILSORT = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'], HVBILMAX = 3 * 1024 * 1024;
 function hvLaggFiler(filer){
@@ -35098,19 +35276,41 @@ function hvLaggFiler(filer){
   if (fel){ toast(`Filen går inte att skicka: ${fel.name} är varken en bild (PNG, JPEG, WEBP) eller en PDF.`); return; }
   const summa = nu.reduce((a, b) => a + Math.floor(b.data.length * 3 / 4), 0) + nya.reduce((a, f) => a + f.size, 0);
   if (summa > HVBILMAX){ toast('Filen går inte att skicka: filerna får vara högst 3 MB tillsammans.'); return; }
+  // Medan filerna läses går frågan inte att skicka (hvFraga säger det), så att ingen fråga går iväg utan sin fil.
+  H.laser = true;
   Promise.all(nya.map(f => new Promise((ja, nej) => { const l = new FileReader(); l.onload = () => ja({sort:f.type, namn:f.name, data:String(l.result).split(',')[1] || ''}); l.onerror = nej; l.readAsDataURL(f); })))
-    .then(b => { H.bilagor = [...(H.bilagor || []), ...b]; render(); })
-    .catch(() => toast('Filen gick inte att läsa.'));
+    .then(b => { H.laser = false; H.bilagor = [...(H.bilagor || []), ...b]; render(); })
+    .catch(() => { H.laser = false; toast('Filen gick inte att läsa.'); });
 }
-// Tala: taligenkänning på svenska skriver in i rutan. Ett nytt tryck stoppar.
+// En fil som klistras in i rutan eller släpps på den bifogas, som med Bifoga. Bara när chatten svarar.
+document.addEventListener('paste', e => {
+  if (!hvPa() || S.view !== 'hem' || !hvChattPa() || !e.target || e.target.id !== 'hvQ') return;
+  const filer = [...((e.clipboardData && e.clipboardData.files) || [])]; if (!filer.length) return;
+  e.preventDefault(); hvLaggFiler(filer);
+}, true);
+document.addEventListener('dragover', e => { if (hvPa() && S.view === 'hem' && hvChattPa() && e.target && e.target.closest && e.target.closest('.hv-skriv')) e.preventDefault(); }, true);
+document.addEventListener('drop', e => {
+  if (!hvPa() || S.view !== 'hem' || !hvChattPa() || !e.target || !e.target.closest || !e.target.closest('.hv-skriv')) return;
+  const filer = [...((e.dataTransfer && e.dataTransfer.files) || [])]; if (!filer.length) return;
+  e.preventDefault(); hvLaggFiler(filer);
+}, true);
+// Tala: taligenkänning skriver in i rutan, på språket i HVLOK. Ett nytt tryck eller Esc stoppar, och mikrofonen
+// stängs när hemmet lämnas. Hörde den inget, eller finns ingen mikrofon, säger rutan det.
 let hvRek = null;
+const HVTALFEL = {'not-allowed':'Nav får inte använda mikrofonen. Tillåt den i webbläsaren.', 'service-not-allowed':'Nav får inte använda mikrofonen. Tillåt den i webbläsaren.', 'no-speech':'Jag hörde inget. Tryck på Tala och försök igen.', 'audio-capture':'Ingen mikrofon hittades.', 'network':'Taligenkänningen nås inte just nu. Skriv frågan i stället.'};
 function hvTala(){
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SR) return;
   if (hvRek){ hvRek.stop(); return; }
   const r = new SR(), fore = String(S.hv.q || '').trim();
-  r.lang = 'sv-SE'; r.interimResults = true;
-  r.onresult = e => { let t = ''; for (const x of e.results) t += x[0].transcript; S.hv.q = (fore ? fore + ' ' : '') + t; const q = document.getElementById('hvQ'); if (q) q.value = S.hv.q; };
-  r.onerror = e => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') toast('Nav får inte använda mikrofonen. Tillåt den i webbläsaren.'); };
+  r.lang = HVLOK.sprak; r.interimResults = true;
+  r.onresult = e => {
+    if (S.view !== 'hem'){ r.stop(); return; }
+    let t = ''; for (const x of e.results) t += x[0].transcript;
+    S.hv.q = (fore ? fore + ' ' : '') + t; hvUtkast(S.hv.q);
+    const q = document.getElementById('hvQ'); if (q){ q.value = S.hv.q; hvHojd(q); }
+    const v = document.querySelector('.hv'); if (v) v.classList.toggle('hv-skriver', hvLage() === 'hem' && !!S.hv.q.trim());
+  };
+  r.onerror = e => { if (HVTALFEL[e.error]) toast(HVTALFEL[e.error]); };
   r.onend = () => { hvRek = null; S.hv.talar = false; if (S.view === 'hem') render(); };
   hvRek = r; S.hv.talar = true; render();
   try { r.start(); } catch(_){ hvRek = null; S.hv.talar = false; render(); }
@@ -35121,10 +35321,11 @@ function hvSok(q){
   i.value = q; palSel = 0; PS.cur = null; drawPal(q);
 }
 function hvFraga(){
-  const q = String(S.hv.q || '').trim(); if (!q) return;
+  // En tom ruta skickar ingenting. Fokus läggs i rutan, så att trycket ändå leder någonstans.
+  const q = String(S.hv.q || '').trim(); if (!q){ const el = document.getElementById('hvQ'); if (el) el.focus(); return; }
   if (hvChattPa()) return hvChattFraga(q);
   if ((S.hv.bilagor || []).length){ toast('Filer går bara att skicka när chatten är påslagen.'); return; }
-  S.hv.q = '';
+  S.hv.q = ''; S.hv.qh = 0; hvUtkast('');
   hvSok(q);
 }
 
@@ -35135,52 +35336,150 @@ function hvFraga(){
    i fliken och sparas inte här.
    Svarar rutten nej (avstängd, tak, avböjt) säger rutan varför och erbjuder sökrutan. */
 const hvChattRen = t => String(t || '').replace(/⟦(?:t\d+|obelagt):([^⟧]*)⟧/g, '$1');
-async function hvChattFraga(q){
+// Strömmen (route.ts) är rader "data: <json>" med en tom rad mellan händelserna. hvSseDela tar det som har kommit
+// och ger de hela händelserna och resten, som väntar på nästa bit. \n\n och \r\n\r\n skiljer båda händelser åt.
+// När strömmen är slut (slut) tolkas också det sista, så att en händelse utan avslutande tom rad inte tappas.
+function hvSseDela(buf, slut){
+  const delar = String(buf).split(/\r?\n\r?\n/), rest = slut ? '' : delar.pop(), ut = [];
+  for (const d of delar){
+    const data = d.split(/\r?\n/).filter(r => r.startsWith('data:')).map(r => r.slice(5).replace(/^ /, '')).join('\n');
+    if (!data) continue;
+    try { ut.push(JSON.parse(data)); } catch(_){ continue; }
+  }
+  return {ut, rest};
+}
+// Hela frågan får 130 s i klienten, längre än ruttens 120 (maxDuration). Rutten säger själv till före dess (kod tid),
+// så vakten tar bara en ström som har tystnat utan att stängas.
+const HVCHATTMS = 130000;
+// Felkoderna (samtal.ts, route.ts) avgör vad felraden erbjuder: Försök igen när samma fråga kan gå nästa gång,
+// Ändra frågan när den behöver bli smalare, och Sök i stället när AI inte svarar på den alls.
+const HVKODIGEN = ['tillfalligt', 'ofullstandigt', 'tomt', 'pagar', 'nat', 'vakt', 'stoppad'];
+const HVKODANDRA = ['tid', 'steg', 'langt', 'for-stor', 'fil'];
+function hvChattFraga(q){
   const H = S.hv, T = H.chatt;
-  if (T.some(t => t.laddar)){ toast('Vänta på svaret först.'); return; }
-  H.q = '';
-  const historia = T.filter(t => t.svar).slice(-3).map(t => ({fraga:t.fraga, svar:hvChattRen(t.svar.text)}));
+  if (H.strom){ toast('Nav svarar fortfarande. Esc stoppar svaret.'); return; }
+  if (H.laser){ toast('Filen läses fortfarande. Skicka om en stund.'); return; }
+  H.q = ''; H.qh = 0; hvUtkast('');
   const bilagor = H.bilagor || []; H.bilagor = [];
-  const tur = {fraga:q, filer:bilagor.map(b => b.namn), hamtar:[], svar:null, fel:'', laddar:true, visa:null, lage:[]};
+  // Filerna sparas på turen, så att Försök igen skickar samma fråga med samma filer.
+  const tur = {fraga:q, filer:bilagor.map(b => b.namn), bilagor, steg:[], svar:null, fel:'', kod:'', laddar:true, visa:null, lage:[]};
   T.push(tur);
-  // Frågan blir ett inlägg i tråden, efter det som redan ligger där.
+  // Frågan blir ett inlägg i tråden, efter det som redan ligger där, och tråden följer svaret.
   const inl = {sort:'chatt', id:String(T.length - 1), nr:++hvNr};
   (H.trad = H.trad || []).push(inl);
-  Object.assign(H, {ark:'chatt', id:inl.id, kvitto:null, fel:'', form:null, meny:null, mer:false});
-  const rita = () => { if (S.view === 'hem' && hvLage() === 'trad'){ render(); hvRulla(); } };
-  rita();
+  Object.assign(H, {ark:'chatt', id:inl.id, kvitto:null, fel:'', form:null, meny:null, mer:false, folj:true});
+  hvSkrivFokus();
+  return hvChattKor(tur);
+}
+// Försök igen ställer samma fråga i samma tur: inget nytt inlägg, och samtalet före turen följer med.
+// Bara den sista turen, och inte när ett kort i den redan har börjat göras.
+function hvChattIgen(i){
+  const H = S.hv, T = H.chatt, tur = T[i];
+  if (!tur || H.strom || i !== T.length - 1 || tur.lage.some(l => l && (l.gor || l.gjorda.length))) return;
+  Object.assign(H, {ark:'chatt', id:String(i), kvitto:null, fel:'', folj:true});
+  hvSkrivFokus();
+  return hvChattKor(tur);
+}
+// Ändra frågan lägger frågan i rutan igen. Filerna följer inte med när felet gällde dem.
+function hvChattAndra(i){
+  const tur = S.hv.chatt[i]; if (!tur || S.hv.strom) return;
+  S.hv.q = tur.fraga; hvUtkast(tur.fraga);
+  if (tur.kod !== 'fil' && tur.kod !== 'for-stor' && (tur.bilagor || []).length && !(S.hv.bilagor || []).length) S.hv.bilagor = tur.bilagor;
+  render(); hvSkrivFokus(true);
+}
+function hvSkrivFokus(slut){
+  if (hvPekskarm()) return;
+  requestAnimationFrame(() => { const el = document.getElementById('hvQ'); if (!el) return; el.focus({preventScroll:true}); if (slut && el.setSelectionRange) el.setSelectionRange(el.value.length, el.value.length); });
+}
+function hvChattHandelse(tur, h){
+  if (!h || typeof h !== 'object') return;
+  if (h.h === 'hamtar') tur.steg.push({nr:typeof h.anrop === 'number' ? h.anrop : null, verktyg:String(h.verktyg || ''), text:String(h.text || ''), ok:null, ms:0, kalla:''});
+  else if (h.h === 'klart'){ const s = tur.steg.find(x => x.nr === h.anrop && x.ok === null); if (s) Object.assign(s, {ok:!!h.ok, ms:+h.ms || 0, kalla:String(h.text || '')}); }
+  else if (h.h === 'svar') tur.svar = h;
+  else if (h.h === 'avbojt' || h.h === 'fel'){ tur.fel = String(h.text || 'Chatten svarar inte just nu.'); tur.kod = h.h === 'avbojt' ? 'avbojt' : String(h.kod || ''); }
+}
+async function hvChattKor(tur){
+  const H = S.hv, T = H.chatt, i = T.indexOf(tur);
+  const historia = T.slice(0, i).filter(t => t.svar).slice(-3).map(t => ({fraga:t.fraga, svar:hvChattRen(t.svar.text)}));
+  const ctl = new AbortController();
+  Object.assign(tur, {steg:[], svar:null, fel:'', kod:'', laddar:true, stoppad:false, visa:null, lage:[], start:Date.now(), ms:0, stegOppen:false, kopierat:false});
+  H.strom = {tur, ctl};
+  const vakt = setTimeout(() => hvChattStopp('vakt'), HVCHATTMS);
+  hvChattRita(true);
   try {
-    const res = await fetch('/nav2/chatt', {method:'POST', credentials:'same-origin', headers:{'content-type':'application/json'}, body:JSON.stringify({fraga:q, historia, ...(bilagor.length ? {bilagor} : {})})});
+    const res = await fetch('/nav2/chatt', {method:'POST', credentials:'same-origin', headers:{'content-type':'application/json'}, signal:ctl.signal, body:JSON.stringify({fraga:tur.fraga, historia, ...(tur.bilagor.length ? {bilagor:tur.bilagor} : {})})});
+    if (tur.stoppad) return;
     if (!res.ok || !res.body || !String(res.headers.get('content-type') || '').includes('event-stream')){
-      let d = null; try { d = await res.json(); } catch(_){}
+      let d = null; try { d = await res.json(); } catch(_){ d = null; }
       if (res.status === 409){
-        // Avstängd sedan sidan lästes: rutan svarar som sökrutan, och säger varför.
-        ND.hem.chatt = false; T.pop(); H.trad = H.trad.filter(t => t !== inl);
-        if (H.ark === 'chatt' && H.id === inl.id) Object.assign(H, {ark:null, id:null});
+        // Avstängd sedan sidan lästes: rutan svarar som sökrutan, och säger varför. Turen tas bort bara när den är den sista.
+        ND.hem.chatt = false;
+        const sist = T[T.length - 1] === tur;
+        if (sist){
+          T.pop(); H.trad = H.trad.filter(t => !(t.sort === 'chatt' && t.id === String(i)));
+          if (H.ark === 'chatt' && H.id === String(i)) Object.assign(H, {ark:null, id:null});
+        } else Object.assign(tur, {fel:(d && d.fel) || 'Chatten är inte påslagen.', kod:'av'});
+        H.strom = null; tur.laddar = false;
         if (S.view === 'hem') render();
-        toast((d && d.fel) || 'Chatten är inte påslagen.'); hvSok(q); return;
+        toast(((d && d.fel) || 'Chatten är inte påslagen.') + (tur.filer.length ? ' Filerna följde inte med till sökrutan.' : '')); hvSok(tur.fraga); return;
       }
       tur.fel = (d && d.fel) || (res.status === 401 ? 'Du är utloggad. Logga in och fråga igen.' : 'Chatten svarar inte just nu.');
+      tur.kod = (d && d.kod) || (res.status === 401 ? 'ut' : res.status >= 500 ? 'tillfalligt' : '');
     } else {
       const las = res.body.getReader(), dek = new TextDecoder(); let buf = '';
       for (;;){
-        const {done, value} = await las.read(); if (done) break;
-        buf += dek.decode(value, {stream:true});
-        let i;
-        while ((i = buf.indexOf('\n\n')) >= 0){
-          const rad = buf.slice(0, i); buf = buf.slice(i + 2);
-          if (!rad.startsWith('data: ')) continue;
-          let h; try { h = JSON.parse(rad.slice(6)); } catch(_){ continue; }
-          if (h.h === 'hamtar') tur.hamtar.push(String(h.text || ''));
-          else if (h.h === 'svar') tur.svar = h;
-          else if (h.h === 'avbojt' || h.h === 'fel') tur.fel = String(h.text || 'Chatten svarar inte just nu.');
-          rita();
-        }
+        const {done, value} = await las.read();
+        if (tur.stoppad) return;
+        buf += done ? dek.decode() : dek.decode(value, {stream:true});
+        const {ut, rest} = hvSseDela(buf, done); buf = rest;
+        ut.forEach(h => hvChattHandelse(tur, h));
+        if (done || tur.svar || tur.fel) break;
+        hvChattRita();
       }
-      if (!tur.svar && !tur.fel) tur.fel = 'Svaret bröts. Försök igen.';
+      if (!tur.svar && !tur.fel){ tur.fel = 'Svaret bröts innan det var klart. Försök igen.'; tur.kod = 'ofullstandigt'; }
     }
-  } catch(_){ tur.fel = 'Nav svarade inte. Kontrollera nätet och försök igen.'; }
-  tur.laddar = false; rita();
+  } catch(_){
+    // Ett stopp avbryter hämtningen med ett fel: det är inget nätfel, och ett svar som redan kommit står kvar.
+    if (!tur.stoppad && !tur.svar){ tur.fel = 'Nav svarade inte. Kontrollera nätet och försök igen.'; tur.kod = 'nat'; }
+  } finally {
+    clearTimeout(vakt);
+    if (H.strom && H.strom.tur === tur) H.strom = null;
+    if (tur.laddar){ tur.laddar = false; tur.ms = Date.now() - tur.start; tur.narMin = now(); }
+  }
+  hvChattRita(true, tur);
+}
+// Stopp (knappen eller Esc) avbryter hämtningen direkt. Rutten gör då inget nytt anrop och kör inga fler verktyg.
+// Det som redan hämtats står kvar som steg. Vakten (130 s) stoppar på samma sätt men säger att det tog för lång tid.
+function hvChattStopp(skal){
+  const H = S.hv, s = H.strom; if (!s) return;
+  const tur = s.tur;
+  Object.assign(tur, {stoppad:true, laddar:false, ms:Date.now() - tur.start, narMin:now()});
+  if (skal === 'vakt') Object.assign(tur, {fel:'Svaret tog för lång tid. Försök igen.', kod:'vakt'});
+  else if (!tur.svar && !tur.fel) tur.kod = 'stoppad';
+  H.strom = null;
+  s.ctl.abort();
+  hvChattRita(true);
+  if (skal !== 'vakt') hvSkrivFokus();
+}
+// Under strömmen ritas tråden om högst var 50:e ms. Det sista (svaret, felet, stoppet) ritas alltid direkt.
+let hvRitaT = null;
+function hvChattRita(nu, tur){
+  if (!nu){ if (hvRitaT === null) hvRitaT = setTimeout(() => { hvRitaT = null; hvChattRita(true); }, 50); return; }
+  if (hvRitaT !== null){ clearTimeout(hvRitaT); hvRitaT = null; }
+  // Skrivrutan (Skicka eller Stopp) står i alla tre lägena, så hemmet ritas om var man än står. Bara tråden rullar.
+  if (S.view !== 'hem') return;
+  render();
+  if (hvLage() !== 'trad') return;
+  const inl = tur && tur.svar ? (S.hv.trad || []).find(t => t.sort === 'chatt' && t.id === String(S.hv.chatt.indexOf(tur))) : null;
+  if (inl) hvVisaSvar(inl.nr); else hvRulla();
+}
+// Kopiera tar svarets text, utan Navs märken för talen.
+async function hvKopiera(i){
+  const t = S.hv.chatt[i]; if (!t || !t.svar) return;
+  try { await navigator.clipboard.writeText(hvChattRen(t.svar.text)); }
+  catch(_){ toast('Texten gick inte att kopiera. Markera den och kopiera själv.'); return; }
+  t.kopierat = true; render();
+  setTimeout(() => { t.kopierat = false; if (S.view === 'hem') render(); }, 1500);
 }
 function hvChattText(t, ti){
   return esc(t.svar.text).replace(/⟦(t\d+|obelagt):([^⟧]*)⟧/g, (_m, id, v) => id === 'obelagt'
@@ -35192,26 +35491,66 @@ function hvChattText(t, ti){
 // till Navs vanliga rutt som den inloggade: samma behörighet och samma logg som när personen gör det för hand.
 // Efter Godkänn står ett kvitto, och Ångra när det går att ångra. Går det inte säger kortet det före Godkänn.
 const hvKortLage = (t, n) => t.lage[n] || (t.lage[n] = {gjorda:[], gor:false, slut:''});
+// Kvittot står per rad när varje rad är ett steg (rader och steg lika många, som i verktyg.ts): gjord, gick inte eller
+// inte gjord än. Annars bara antalet. Felet står kvar på kortet (l.fel) tills nästa tryck, och knappen säger då
+// att den gör resten. Ett kort som förbereddes för mer än 30 minuter sedan säger när, före Godkänn.
+const hvKortGammalt = t => typeof t.narMin === 'number' && (now() - t.narMin > 30 || now() < t.narMin);
 function hvChattKort(t, i){
-  return (t.svar.kort || []).map((k, n) => { const l = hvKortLage(t, n), av = l.gor ? ' disabled' : '', nr = i + ':' + n;
+  return (t.svar.kort || []).map((k, n) => { const l = hvKortLage(t, n), av = l.gor ? ' disabled' : '', nr = i + ':' + n, alla = k.steg.length, gj = l.gjorda.length;
+    const perRad = k.rader.length === alla && l.slut !== 'avbrutet' && l.slut !== 'angrat';
+    const radLage = j => !perRad ? '' : j < gj ? 'gjord' : l.fel && j === gj && l.slut !== 'klart' ? 'fel' : '';
+    const fel = l.fel ? `${gj || alla > 1 ? `Steg ${gj + 1} av ${alla} gick inte: ` : ''}${l.fel}` : '';
+    const nar = !l.slut && !gj && hvKortGammalt(t) ? `<p class="hv-tank hv-utkvarn">Förberett kl. ${esc(hm(t.narMin).replace(':', '.'))}. Läget kan ha ändrats sedan dess.</p>` : '';
     const fot = l.slut === 'avbrutet' ? '<p class="hv-tank">Avbrutet. Inget är gjort.</p>'
       : l.slut === 'angrat' ? '<p class="hv-tank">Ångrat.</p>'
-      : l.slut === 'klart' ? `<p class="hv-utkrad"><span class="hv-kvi"><i class="hv-ok">${I('check')}</i><span>${esc(k.klart || 'Klart.')}</span></span>${l.gjorda.length && l.gjorda.every(g => g.angra) ? `<button class="hv-kn" data-hvchattangra="${nr}"${av}>Ångra</button>` : ''}</p>`
-      : `${k.varning ? `<p class="hv-tank hv-utkvarn">${esc(k.varning)}</p>` : ''}<p class="hv-utkrad"><button class="hv-kn" data-hvchattgodkann="${nr}"${av}>Godkänn</button>${l.gjorda.length ? '' : `<button class="hv-kn" data-hvchattavbryt="${nr}"${av}>Avbryt</button>`}<span class="hv-tank">${l.gjorda.length ? `${l.gjorda.length} av ${k.steg.length} är gjorda.` : 'Inget är gjort än.'}</span></p>`;
+      : l.slut === 'klart' ? `<p class="hv-utkrad"><span class="hv-kvi"><i class="hv-ok">${I('check')}</i><span>${esc(k.klart || 'Klart.')}</span></span>${gj && l.gjorda.every(g => g.angra) ? `<button class="hv-kn" data-hvchattangra="${nr}"${av}>${l.gor ? 'Ångrar…' : 'Ångra'}</button>` : ''}${l.fel ? `<span class="hv-tank" role="status">${esc(l.fel)}</span>` : ''}</p>`
+      : `${nar}${k.varning ? `<p class="hv-tank hv-utkvarn">${esc(k.varning)}</p>` : ''}<p class="hv-utkrad"><button class="hv-kn hv-godk" data-hvchattgodkann="${nr}" aria-label="${esc(`${gj ? 'Gör resten' : 'Godkänn'}: ${k.rubrik}`)}"${av}>${l.gor ? 'Sparar…' : gj ? 'Gör resten' : 'Godkänn'}</button>${gj ? '' : `<button class="hv-kn" data-hvchattavbryt="${nr}"${av}>Avbryt</button>`}<span class="hv-tank" role="status">${gj ? `${gj} av ${alla} är gjorda.` : 'Inget är gjort än.'}${fel ? ` ${esc(fel)}` : ''}</span></p>`;
     return `<div class="hv-glass hv-utk"><b>${esc(k.rubrik)}</b>
-    <ul>${k.rader.map(x => `<li><span>${esc(x.text)}</span><small>${esc([x.dag ? frKort(x.dag) : '', x.not].filter(Boolean).join(' · '))}</small></li>`).join('')}</ul>
+    <ul>${k.rader.map((x, j) => { const r = radLage(j); return `<li${r ? ` class="hv-utk-${r}"` : ''}><span>${r === 'gjord' ? `<i class="hv-ok" role="img" aria-label="Gjord">${I('check')}</i>` : r === 'fel' ? '<i class="hv-utkx" role="img" aria-label="Gick inte"></i>' : ''}${esc(x.text)}</span><small>${esc([x.dag ? frKort(x.dag) : '', x.not].filter(Boolean).join(' · '))}</small></li>`; }).join('')}</ul>
     ${fot}
   </div>`; }).join('');
+}
+// Stegen ovanför svaret: medan frågan pågår de tre senaste, öppna, med en ring för det som pågår och en bock för det som
+// är klart. När svaret kommit en enda rad, t.ex. Tre steg · 4,2 s, som fälls ut. Bara steg som rutten har skickat.
+const hvSek = ms => `${(ms / 1000).toLocaleString(HVLOK.sprak, {minimumFractionDigits:1, maximumFractionDigits:1})} s`;
+function hvChattSteg(t, i){
+  const st = t.steg || [];
+  if (!st.length) return t.laddar ? '<p class="hv-tank hv-vant">Frågar…</p>' : '';
+  // Ett steg är klart bara när rutten sa det (klart), eller, för kontrollen av talen som inte har något klart, när
+  // svaret kom. Ett steg som aldrig blev klart (stopp, fel) säger det, utan bock.
+  const rad = s => { const lage = s.ok === false ? 'fel' : s.ok || (s.nr === null && t.svar) ? 'ok' : t.laddar ? 'gar' : 'ej';
+    return `<li class="hv-steg-${lage}"><i aria-hidden="true">${lage === 'ok' ? I('check') : ''}</i><span>${esc(s.text)}${s.kalla && (!t.laddar || s.ok === false) ? `<small>${esc(s.kalla)}</small>` : lage === 'ej' ? '<small>Blev inte klart.</small>' : ''}</span>${s.ms ? `<small class="num">${hvSek(s.ms)}</small>` : ''}</li>`; };
+  if (t.laddar) return `<ol class="hv-steg">${st.slice(-3).map(rad).join('')}</ol>`;
+  const fel = st.filter(s => s.ok === false).length;
+  const sam = `${st.length === 1 ? 'Ett' : hvOrd(st.length)} steg${fel ? `, ${fel === 1 ? 'ett' : hvOrd(fel).toLowerCase()} gick inte` : ''}${t.ms ? ` · ${hvSek(t.ms)}` : ''}`;
+  return `<div class="hv-stegrad"><button class="hv-stegk" data-hvchattsteg="${i}" aria-expanded="${!!t.stegOppen}">${I('chev')}<span>${sam}</span></button>${t.stegOppen ? `<ol class="hv-steg">${st.map(rad).join('')}</ol>` : ''}</div>`;
+}
+// Under svaret: Kopiera och Försök igen, och en väg till det svaret läste när det finns i hemmet (bara för verktyg
+// som svarade). Inga påhittade följdfrågor. Försök igen bara på den sista turen, och inte när ett kort har börjat göras.
+const HVVIDARE = {las_vantar:['vantar', 'Öppna Väntar på dig'], las_provision:['manad', 'Öppna Din månad']};
+function hvChattAtg(t, i){
+  const T = S.hv.chatt, sist = i === T.length - 1, rord = t.lage.some(l => l && (l.gor || l.gjorda.length));
+  const vidare = [...new Set(t.steg.filter(s => s.ok && HVVIDARE[s.verktyg]).map(s => s.verktyg))]
+    .filter(v => v !== 'las_provision' || (!ND.hem.team && !hvManadSaknas()))
+    .map(v => `<button class="hv-atgk" data-hvark="${HVVIDARE[v][0]}">${esc(HVVIDARE[v][1])}</button>`).join('');
+  return `<div class="hv-atg"><button class="hv-atgk" data-hvchattkop="${i}" aria-live="polite">${I(t.kopierat ? 'check' : 'hvkopiera')}${t.kopierat ? 'Kopierat' : 'Kopiera'}</button>${sist && !rord ? `<button class="hv-atgk" data-hvchattigen="${i}">${I('hvomstart')}Försök igen</button>` : ''}${vidare}${typeof t.narMin === 'number' ? `<span class="hv-atgtid num">kl. ${esc(hm(t.narMin).replace(':', '.'))}</span>` : ''}</div>`;
+}
+// Felraden säger vad som hände, och knappen vad man gör: samma fråga igen, en smalare fråga eller sökrutan.
+function hvChattFel(t, i){
+  const sist = i === S.hv.chatt.length - 1;
+  if (t.stoppad && !t.fel) return `<p>Du stoppade svaret.</p>${sist ? `<p class="hv-utkrad"><button class="hv-kn" data-hvchattigen="${i}">Försök igen</button></p>` : ''}`;
+  if (!t.fel) return '';
+  const k = t.kod, igen = sist && (HVKODIGEN.includes(k) || !k), andra = HVKODANDRA.includes(k), sok = !k || (!igen && !andra);
+  const kn = [igen ? `<button class="hv-kn" data-hvchattigen="${i}">Försök igen</button>` : '', andra ? `<button class="hv-kn" data-hvchattandra="${i}">Ändra frågan</button>` : '', sok ? `<button class="hv-kn" data-hvchattsok="${i}">Sök i stället</button>` : ''].join('');
+  return `<p role="alert">${esc(t.fel)}</p>${kn ? `<p class="hv-utkrad">${kn}</p>` : ''}`;
 }
 function hvArkChatt(nr){
   const alla = S.hv.chatt || [], visa = nr === null || nr === undefined ? alla.map((t, i) => i) : [+nr];
   return `<div class="hv-chatt">${visa.filter(i => alla[i]).map(i => { const t = alla[i];
     const s = t.svar, k = s && t.visa ? (s.tal || []).find(x => x.id === t.visa) : null;
-    const hamtar = t.hamtar.map(h => `<p class="hv-tank">${esc(h)}</p>`).join('') + (t.laddar && !t.hamtar.length ? '<p class="hv-tank">Frågar…</p>' : '');
     const obel = s && s.obelagda ? `<p class="hv-tank">${s.obelagda === 1 ? 'Det markerade talet kunde jag inte belägga.' : 'De markerade talen kunde jag inte belägga.'}</p>` : '';
     const kalla = k ? `<p class="hv-talk"><span class="hv-mono">${esc(k.om || 'Källan går inte att visa.')}</span></p>` : '';
-    const fel = t.fel ? `<p>${esc(t.fel)}</p><p><button class="hv-kn" data-hvchattsok="${i}">Sök i stället</button></p>` : '';
-    return `<div class="hv-tur"><p class="hv-q">${esc(t.fraga)}${(t.filer || []).length ? `<small class="hv-qfil">${t.filer.map(esc).join(' · ')}</small>` : ''}</p>${hvNavSager(`${hamtar}${s ? hvChattText(t, i) + obel + kalla : ''}${fel}`)}${s && (s.kort || []).length ? hvChattKort(t, i) : ''}${s ? hvKalla(s.kalla || 'Skrivet av AI') : ''}</div>`;
+    return `<div class="hv-tur"><p class="hv-q">${esc(t.fraga)}${(t.filer || []).length ? `<small class="hv-qfil">${t.filer.map(esc).join(' · ')}</small>` : ''}</p>${hvNavSager(`${hvChattSteg(t, i)}${s ? `<div class="hv-svar">${hvChattText(t, i)}${obel}${kalla}</div>` : ''}${hvChattFel(t, i)}`)}${s && (s.kort || []).length ? hvChattKort(t, i) : ''}${s ? hvKalla(s.kalla || 'Skrivet av AI') + hvChattAtg(t, i) : ''}</div>`;
   }).join('')}</div>`;
 }
 // Stegen körs ett i taget. Faller ett står knappen kvar, och nästa tryck gör bara det som saknas.
@@ -35222,17 +35561,18 @@ const hvKortFor = (i, n) => { const t = (S.hv.chatt || [])[i], k = t && t.svar &
 async function hvChattGodkann(i, n){
   const x = hvKortFor(i, n); if (!x || x.l.gor || x.l.slut) return;
   const {k, l} = x;
-  l.gor = true; render();
-  let fel = '';
-  for (const s of k.steg.slice(l.gjorda.length)){
-    const r = ndSvar(await ndSkriv(s.vag, s.body, {knapp:null}));
-    if (!r || r.fel || !r.ok){ fel = (r && r.fel) || 'Det gick inte att spara.'; break; }
-    l.gjorda.push({vag:s.vag, angra:s.angra ? hvKortFyll(s.angra, r) : null});
-  }
-  l.gor = false;
+  // Ett fel (också ett kast i rutten) står på kortet, och knappen släpps alltid igen (finally).
+  l.gor = true; l.fel = ''; render();
+  try {
+    for (const s of k.steg.slice(l.gjorda.length)){
+      let r; try { r = ndSvar(await ndSkriv(s.vag, s.body, {knapp:null})); } catch(_){ r = null; }
+      if (!r || r.fel || !r.ok){ l.fel = (r && r.fel) || 'Det gick inte att spara.'; break; }
+      l.gjorda.push({vag:s.vag, angra:s.angra ? hvKortFyll(s.angra, r) : null});
+    }
+  } finally { l.gor = false; }
   if (l.gjorda.length >= k.steg.length) l.slut = 'klart';
   if (l.gjorda.length) hvKortOmlas(k);
-  if (fel) toast(l.gjorda.length ? `${l.gjorda.length} av ${k.steg.length} är gjorda. ${fel}` : fel);
+  if (l.fel && S.view !== 'hem') toast(l.gjorda.length ? `${l.gjorda.length} av ${k.steg.length} är gjorda. ${l.fel}` : l.fel);
   if (S.view === 'hem') render();
 }
 function hvChattAvbryt(i, n){
@@ -35243,17 +35583,18 @@ function hvChattAvbryt(i, n){
 async function hvChattAngra(i, n){
   const x = hvKortFor(i, n); if (!x || x.l.gor || x.l.slut !== 'klart' || !x.l.gjorda.every(g => g.angra)) return;
   const {k, l} = x;
-  l.gor = true; render();
-  let fel = '';
-  while (l.gjorda.length){
-    const g = l.gjorda[l.gjorda.length - 1], r = ndSvar(await ndSkriv(g.vag, g.angra, {knapp:null}));
-    if (!r || r.fel || !r.ok){ fel = (r && r.fel) || 'Det gick inte att ångra.'; break; }
-    l.gjorda.pop();
-  }
-  l.gor = false;
-  if (!l.gjorda.length) l.slut = 'angrat';
+  l.gor = true; l.fel = ''; render();
+  try {
+    while (l.gjorda.length){
+      const g = l.gjorda[l.gjorda.length - 1];
+      let r; try { r = ndSvar(await ndSkriv(g.vag, g.angra, {knapp:null})); } catch(_){ r = null; }
+      if (!r || r.fel || !r.ok){ l.fel = `${(r && r.fel) || 'Det gick inte att ångra.'} ${l.gjorda.length} av ${k.steg.length} står kvar.`; break; }
+      l.gjorda.pop();
+    }
+  } finally { l.gor = false; }
+  if (!l.gjorda.length){ l.slut = 'angrat'; l.fel = ''; }
   hvKortOmlas(k);
-  if (fel) toast(fel);
+  if (l.fel && S.view !== 'hem') toast(l.fel);
   if (S.view === 'hem') render();
 }
 /* ---------- Arket: ett öppnat kort tar ytan ---------- */
@@ -35264,27 +35605,35 @@ function hvOppna(ark, id){
   render(); hvVisaNytt();
 }
 function hvStang(){ Object.assign(S.hv, {ark:null, id:null, kvitto:null, fel:'', form:null, meny:null}); render(); }
-// Genomgången hämtas när kortet öppnas. Varje ark har sin egen hämtning: en efterhämtning för ett ark får aldrig
+// Genomgången hämtas när kortet öppnas. Varje ark (och varje förslag) har sin egen hämtning: en efterhämtning för ett ark får aldrig
 // kasta ett annat arks svar. Ett svar gäller bara om det är arkets senaste, och ett fel visas bara i det ark
-// det hör till, och bara om det arket fortfarande är öppet.
+// det hör till, och bara om det arket fortfarande är öppet. Felet sparas också på inlägget (H.felInl), så att ett
+// inlägg i tråden som inte är öppet visar sitt eget fel med Försök igen i stället för att stå kvar på Laddar.
+// Ett förslag sparas också under sitt id: två förslag i tråden visar var sitt möte.
 let hvLopnr = 0;
 const hvOppet = (ark, id) => S.hv.ark === ark && (S.hv.id || null) === (id || null);
+const hvInlNyckel = (ark, id) => ark + ':' + (id || '');
 async function hvHamta(ark, id){
-  const H = S.hv, nr = ++hvLopnr;
-  H.laddar = {...(H.laddar || {}), [ark]:nr};
+  const H = S.hv, nr = ++hvLopnr, nyckel = hvInlNyckel(ark, id);
+  H.laddar = {...(H.laddar || {}), [nyckel]:nr};
   if (hvOppet(ark, id)) H.fel = '';
+  if (H.felInl && H.felInl[nyckel]){ H.felInl = {...H.felInl}; delete H.felInl[nyckel]; }
   let s;
   try { s = await ndLas('/nav2/forslag?las=' + ark + (id ? '&id=' + encodeURIComponent(id) : '')); } catch(_){ s = {ok:false}; }
-  if (H.laddar[ark] !== nr) return;
-  H.laddar[ark] = null;
+  if (H.laddar[nyckel] !== nr) return;
+  H.laddar[nyckel] = null;
   const fel = !s || !s.ok || !s.data || s.data.fel ? ((s && s.data && s.data.fel) || (s && s.fel) || 'Nav svarade inte.') : '';
-  if (!fel) H.data[ark] = {...s.data, id:id || null};
-  else if (hvOppet(ark, id)) H.fel = fel;
-  if (S.view === 'hem' && H.ark === ark) render();
+  if (!fel){ H.data[ark] = {...s.data, id:id || null}; if (id) H.data[nyckel] = H.data[ark]; }
+  else {
+    H.felInl = {...(H.felInl || {}), [nyckel]:fel};
+    if (hvOppet(ark, id)) H.fel = fel;
+  }
+  if (S.view === 'hem' && (H.ark === ark || (H.trad || []).some(t => t.sort === ark))) render();
 }
 const hvNavSager = inne => `<div class="hv-navs">${hubMark(28)}<div>${inne}</div></div>`;
-const hvLaddar = text => hvNavSager(`<p class="hv-tank">${esc(text)}…</p>`);
-const hvFel = () => hvNavSager(`<p>${esc(S.hv.fel)}</p><p><button class="hv-kn" data-hvigen>Försök igen</button></p>`);
+// Laddar läses upp som ett läge (status), ett fel som något som behöver göras (alert).
+const hvLaddar = text => hvNavSager(`<p class="hv-tank" role="status">${esc(text)}…</p>`);
+const hvFel = () => hvNavSager(`<p role="alert">${esc(S.hv.fel)}</p><p><button class="hv-kn" data-hvigen>Försök igen</button></p>`);
 const hvKalla = text => `<div class="hv-kalla"><span class="hv-mono">${esc(text)}</span></div>`;
 // Ett ark tar ytan: Navs märke, en mening om läget och Stäng, sedan ytan i glas med sin egen fot.
 function hvArk(){
@@ -35304,15 +35653,16 @@ const hvKvitto = () => S.hv.kvitto ? `<div class="hv-kvitto" aria-live="polite">
 // Foten säger hur lång tid det som brinner tar, men bara när varje sak som brinner har en uppskattning (uppgiftens est).
 const hvMin = r => { if (!String(r.id).startsWith('upg-')) return null; const t = TASKS.find(x => 'upg-' + x.id === r.id); return t && t.est ? +t.est : null; };
 function hvArkVantar(){
-  ndHemSynk();
-  const rader = hvSaker(), brinn = rader.filter(x => x.nar === 'nu');
+  // Rubriken räknar som hemmet (utan det bortvalda) och säger hur många rader som är dolda där. Listan visar alla.
+  const R = hvRakna(), rader = R.alla, brinn = R.rader.filter(x => x.nar === 'nu');
+  const dolda = R.dolda ? ` ${R.dolda === 1 ? 'En rad är dold' : `${hvOrd(R.dolda)} rader är dolda`} på hemmet.` : '';
   const sak = (x, k) => `<div class="hv-sak${S.selRad === x.id ? ' sel' : ''}" data-id="${esc(x.id)}"><i class="hv-heat${k === 'nu' ? ' hot' : ''}" aria-hidden="true"></i><div>${x.ga ? `<button class="hv-sakt" data-hvga="${esc(x.id)}"><b>${hvPrick(x)}${esc(x.t)}</b></button>` : `<b>${hvPrick(x)}${esc(x.t)}</b>`}<small>${esc(x.why || (x.d || []).join(' · '))}</small></div>${hvRadKnapp(x)}</div>`;
   const lista = [['nu', 'Nu'], ['idag', 'Senare i dag'], ['vanta', 'Kan vänta']].map(([k, l]) => {
     const r = rader.filter(x => x.nar === k);
     return r.length ? `<div class="hv-grupp">${l}<small class="num">${r.length}</small></div>${r.map(x => sak(x, k)).join('')}` : '';
   }).join('');
   const min = brinn.map(hvMin), tid = brinn.length && min.every(m => m) ? `Det som brinner tar ungefär ${min.reduce((a, m) => a + m, 0)} min.` : '';
-  const text = rader.length ? `${rader.length === 1 ? 'En sak' : `${hvOrd(rader.length)} saker`} väntar på dig. <b>${!brinn.length ? 'Inget brinner.' : brinn.length === 1 ? 'En sak brinner.' : `${hvOrd(brinn.length)} saker brinner.`}</b>` : 'Inget väntar på dig just nu.';
+  const text = (R.rader.length ? `${R.rader.length === 1 ? 'En sak' : `${hvOrd(R.rader.length)} saker`} väntar på dig. <b>${!brinn.length ? 'Inget brinner.' : brinn.length === 1 ? 'En sak brinner.' : `${hvOrd(brinn.length)} saker brinner.`}</b>` : 'Inget väntar på dig just nu.') + dolda;
   return [text, `<div class="hv-rull${rader.length ? '' : ' hv-tom'}">${lista}${rader.length ? '' : `<div class="hv-lugn">${I('check')}Inget väntar på dig just nu.</div>`}</div>`, tid, '<button class="hv-kn" data-view="uppgifter">Alla uppgifter</button>'];
 }
 // Min dag (skiss 9): kalendern och det som väntar på samma linje. Mötena står på sina tider, och det som väntar
@@ -35369,22 +35719,39 @@ function hvArkDag(){
 async function hvBokaDag(){
   const plan = S.hv.dagPlan || []; if (!plan.length || S.hv.sparar) return;
   S.hv.sparar = true;
-  const fore = [];
-  for (const p of plan){
-    const t = TASKS.find(x => String(x.id) === p.id); if (!t) continue;
-    const s = await ndUpgPost('planera', {id:p.id, dag:kIdag(), tid:p.tid}, {ladda:false, tyst:true});
-    if (!s || !s.ok) break;
-    fore.push({id:p.id, dag:t.due || null, tid:t.tid || null});
+  // Kvittot säger hur många som blev bokade. Stannar det halvvägs står det, och Ångra gäller de bokade.
+  const fore = [], alla = plan.filter(p => TASKS.some(x => String(x.id) === p.id)).length;
+  try {
+    for (const p of plan){
+      const t = TASKS.find(x => String(x.id) === p.id); if (!t) continue;
+      let s; try { s = await ndUpgPost('planera', {id:p.id, dag:kIdag(), tid:p.tid}, {ladda:false, tyst:true}); } catch(_){ s = null; }
+      if (!s || !s.ok) break;
+      fore.push({id:p.id, dag:t.due || null, tid:t.tid || null});
+    }
+  } finally { S.hv.sparar = false; }
+  if (fore.length){
+    S.hv.dagBokad = fore;
+    S.hv.kvitto = {text:fore.length === alla ? 'Tiden för uppgifterna är bokad i din kalender.' : `${fore.length} av ${alla} uppgifter är bokade i din kalender. Resten gick inte att boka.`, dag:true};
+    ndOmlas('upg');
   }
-  S.hv.sparar = false;
-  if (fore.length){ S.hv.dagBokad = fore; S.hv.kvitto = {text:'Tiden för uppgifterna är bokad i din kalender.', dag:true}; ndOmlas('upg'); }
   else toast('Tiden gick inte att boka. Försök igen.');
   render();
 }
+// Ångra lägger tillbaka den gamla tiden för var och en. Det som inte gick att ångra står kvar, med Ångra.
 async function hvAngraDag(){
-  const fore = S.hv.dagBokad || []; S.hv.dagBokad = null; S.hv.kvitto = null;
-  for (const f of fore) await ndUpgPost('planera', {id:f.id, dag:f.dag, tid:f.tid}, {ladda:false, tyst:true});
-  ndOmlas('upg'); toast('Ångrat. Uppgifterna har sina gamla tider.'); render();
+  const fore = S.hv.dagBokad || []; if (!fore.length || S.hv.sparar) return;
+  S.hv.sparar = true;
+  const kvar = [];
+  try {
+    for (const f of fore){
+      let s; try { s = await ndUpgPost('planera', {id:f.id, dag:f.dag, tid:f.tid}, {ladda:false, tyst:true}); } catch(_){ s = null; }
+      if (!s || !s.ok) kvar.push(f);
+    }
+  } finally { S.hv.sparar = false; }
+  ndOmlas('upg');
+  if (!kvar.length){ S.hv.dagBokad = null; S.hv.kvitto = null; toast('Ångrat. Uppgifterna har sina gamla tider.'); }
+  else { S.hv.dagBokad = kvar; S.hv.kvitto = {text:`Ångrade ${fore.length - kvar.length} av ${fore.length}. ${kvar.length === 1 ? 'En uppgift' : `${hvOrd(kvar.length)} uppgifter`} har kvar den nya tiden.`, dag:true}; }
+  render();
 }
 // Veckan som kommer (skiss 9): fem dagar, kalenderns poster på sin tid, och det som ska bli klart i veckan.
 // Samma uträkningar som det gamla hemmets vecka (ndHemVecka, ndHemKal, ndHemBorta). I dag öppnar Min dag.
@@ -35427,7 +35794,7 @@ const HVVAL = {
   'lat-sta':['Låt stå', 'Mötet ligger kvar som det är.']
 };
 function hvArkForslag(){
-  const H = S.hv, d = H.data.forslag, f = d && d.id === H.id ? d.forslag : null;
+  const H = S.hv, d = H.data[hvInlNyckel('forslag', H.id)] || H.data.forslag, f = d && d.id === H.id ? d.forslag : null;
   if (H.fel) return hvFel();
   if (!f) return hvLaddar('Hämtar mötet');
   const oppet = f.lage === 'oppet';
@@ -35488,7 +35855,7 @@ function hvArkTeam(){
 }
 // Uträkningen bakom Din månad: order för order, samma tal som lönen bygger på. Väntande order står för sig, märkta.
 function hvArkManad(){
-  if (hvManadSaknas()) return hvNavSager(`<p>${HVMANADSAKNAS} Jag visar hellre inga tal än fel tal.</p>`);
+  if (hvManadSaknas()) return hvNavSager(`<p>${hvManadOrsak()} Jag visar hellre inga tal än fel tal.</p>`);
   const M = hvManad(), u = M.u, t = pvTakt(u);
   const rader = (u.rader || []).map((r, i) => `<div class="hv-or"><span class="num">${r.dag ? esc(oDat(r.dag)) : ''}</span><div>${esc(r.text)}${r.sub ? `<small>${esc(r.sub)}</small>` : ''}<button class="hv-lank" data-hvfraga="${i}">Stämmer inte? Fråga om raden</button></div><span class="hv-kr num">${M.kronor ? kr(r.belopp) : ''}</span></div>`).join('');
   const vantar = (u.vantar || []).map(o => `<div class="hv-or hv-vantar"><span></span><div>#${esc(o.nr)} ${esc(o.bolag || '')}<small>väntar på godkännande · fryses vid godkännandet</small></div><span class="hv-kr num">${M.kronor ? '≈ ' + oKr(oProv(o)) : ''}</span></div>`).join('');
@@ -35559,7 +35926,8 @@ async function hvValj(val){
   const H = S.hv, id = H.id; if (!id || H.sparar) return;
   if (val === 'flytta'){
     // Flytta öppnas som i Möten. Valet sparas av Mötens rutt när flytten är gjord.
-    const f = H.data.forslag && H.data.forslag.forslag, k = f && ndMo() && ndMo().kort.find(x => x.mote && x.mote.id === f.mote);
+    // Det öppna förslagets egen data: med två förslag i tråden får valet aldrig gälla det andras möte.
+    const d = H.data[hvInlNyckel('forslag', id)] || H.data.forslag, f = d && d.id === id && d.forslag, k = f && ndMo() && ndMo().kort.find(x => x.mote && x.mote.id === f.mote);
     if (!k){ toast('Mötet går inte att öppna härifrån. Flytta det i Möten.'); return; }
     Object.assign(H, {inaktuell:true, ark:null, id:null});
     moGa(); ndMoDialog('flyttat', k);
@@ -35589,11 +35957,13 @@ async function hvAngra(id){
   else { toast(text); render(); }
   ndOmlas('hv');
 }
-async function hvKommentar(id){
-  const text = String(S.hv.kom || '').trim(); if (!text) return;
-  const s = await hvPost('kommentar', {forslag:id, text}); if (!s) return;
-  if (hvOppet('forslag', id)){ S.hv.kom = ''; S.hv.kvitto = {text:s.ok, angra:null}; await hvHamta('forslag', id); }
-  else toast(s.ok);
+function hvKommentar(id){
+  const text = String(S.hv.kom || '').trim(); if (!text) return null;
+  return hvEnGang('kommentar:' + id, async () => {
+    const s = await hvPost('kommentar', {forslag:id, text}); if (!s) return;
+    if (hvOppet('forslag', id)){ S.hv.kom = ''; S.hv.kvitto = {text:s.ok, angra:null}; await hvHamta('forslag', id); }
+    else toast(s.ok);
+  });
 }
 async function hvAndringSpara(){
   const H = S.hv, F = H.form; if (!F || H.sparar) return;
@@ -35609,35 +35979,53 @@ async function hvAndringSpara(){
   ndOmlas('hv');
 }
 // "Stämmer inte? Fråga om raden": raden går i klartext till kön för fel, som det gamla hemmets Stämmer inte.
-async function hvFragaOmRad(i){
-  if (hvManadSaknas()) return;
-  const u = hvManad().u, r = (u.rader || [])[i]; if (!r) return;
-  const s = await ndHemPost('flagga', {rad:'manad-' + i, var:'manad', text:`${r.text}${r.sub ? ' · ' + r.sub : ''} · ${kr(r.belopp)}`});
-  if (s){ S.hv.kvitto = {text:'Frågan är skickad, med raden bifogad.', angra:null}; render(); }
+// Ett tryck sparar en gång: ett andra tryck på samma sak medan det första pågår gör ingenting. Grattis växlar,
+// så utan spärren skulle ett dubbelklick skicka och ta tillbaka. Spärren släpps alltid (finally).
+const hvUpptagen = new Set();
+async function hvEnGang(nyckel, gor){
+  if (hvUpptagen.has(nyckel)) return null;
+  hvUpptagen.add(nyckel);
+  try { return await gor(); } finally { hvUpptagen.delete(nyckel); }
+}
+function hvFragaOmRad(i){
+  if (hvManadSaknas()) return null;
+  const u = hvManad().u, r = (u.rader || [])[i]; if (!r) return null;
+  return hvEnGang('fraga:' + i, async () => {
+    const s = await ndHemPost('flagga', {rad:'manad-' + i, var:'manad', text:`${r.text}${r.sub ? ' · ' + r.sub : ''} · ${kr(r.belopp)}`});
+    if (s){ S.hv.kvitto = {text:'Frågan är skickad, med raden bifogad.', angra:null}; render(); }
+  });
 }
 // Stämmer inte och Visa inte här går till hemmets rutt, som i det gamla hemmet. Raden eller sorten står kvar i hela listan.
-async function hvFlagga(id){
-  const r = ndHemRad.find(x => x.id === id); if (!r) return;
+function hvFlagga(id){
+  const r = ndHemRad.find(x => x.id === id); if (!r) return null;
   S.hv.meny = null;
-  const s = await ndHemPost('flagga', {rad:r.id, text:String(r.bt || r.t).replace(/[{}]/g, '')});
-  if (!s){ render(); return; }
-  S.flagged.add(r.id); S.hv.kvitto = {text:s.ok, angra:null}; render();
+  return hvEnGang('flagga:' + id, async () => {
+    const s = await ndHemPost('flagga', {rad:r.id, text:String(r.bt || r.t).replace(/[{}]/g, '')});
+    if (!s){ render(); return; }
+    S.flagged.add(r.id); S.hv.kvitto = {text:s.ok, angra:null}; render();
+  });
 }
-async function hvDolj(sort){
+function hvDolj(sort){
   S.hv.meny = null;
-  const s = await ndHemPost('dolj', {sort});
-  if (!s){ render(); return; }
-  S.hiddenKinds.add(sort); S.hv.kvitto = {text:`Nav visar inte ${KIND_LABEL[sort] || sort} på hemmet längre. De står kvar i hela listan.`, angra:null, visa:sort}; render();
+  return hvEnGang('sort:' + sort, async () => {
+    const s = await ndHemPost('dolj', {sort});
+    if (!s){ render(); return; }
+    S.hiddenKinds.add(sort); S.hv.kvitto = {text:`Nav visar inte ${KIND_LABEL[sort] || sort} på hemmet längre. De står kvar i hela listan.`, angra:null, visa:sort}; render();
+  });
 }
-async function hvVisa(sort){
-  const s = await ndHemPost('visa', {sort});
-  if (!s){ render(); return; }
-  S.hiddenKinds.delete(sort); S.hv.kvitto = null; render();
+function hvVisa(sort){
+  return hvEnGang('sort:' + sort, async () => {
+    const s = await ndHemPost('visa', {sort});
+    if (!s){ render(); return; }
+    S.hiddenKinds.delete(sort); S.hv.kvitto = null; render();
+  });
 }
 // Grattis: en gång per person och order, igen tar tillbaka. Golvet läses om direkt.
-async function hvGrattis(id){
-  const s = await ndHemPost('grattis', {order:id}); if (!s) return;
-  S.hv.kvitto = {text:s.ok, angra:null}; ndHemLive(); render();
+function hvGrattis(id){
+  return hvEnGang('grattis:' + id, async () => {
+    const s = await ndHemPost('grattis', {order:id}); if (!s) return;
+    S.hv.kvitto = {text:s.ok, angra:null}; ndHemLive(); render();
+  });
 }
 function hvFormOppna(typ){
   const d = S.hv.data.andrat || {};
@@ -35647,9 +36035,21 @@ function hvFormOppna(typ){
 }
 ndOmlasAnmal('hv', {delar:['hem', 'uppgifter', 'moten', 'kalender']});
 
+// Ritar om och lämnar fokus och markören där de stod (skrivrutan tappar dem annars när Mer stängs av ett klick i den).
+function hvRitaBehall(){
+  const a = document.activeElement, id = a && a.id, pos = a && typeof a.selectionStart === 'number' ? a.selectionStart : null;
+  render();
+  const b = id && document.getElementById(id);
+  if (b && b !== document.activeElement){ b.focus(); if (pos !== null && b.setSelectionRange) b.setSelectionRange(pos, pos); }
+}
 function hvKlick(e){
   if (!hvPa() || S.view !== 'hem') return;
-  const t = e.target.closest && e.target.closest('[data-hvtr], [data-hvunderlag], [data-hvboka], [data-hvangradag], [data-hvbifoga], [data-hvtips], [data-hvtala], [data-hvbilx], [data-hvstang], [data-hvtal], [data-hvchattsok], [data-hvchattgodkann], [data-hvchattavbryt], [data-hvchattangra], [data-hvgor], [data-hvforslag], [data-hvnasta], [data-hvval], [data-hvangra], [data-hvdra], [data-hvmer], [data-hvstat], [data-hvforbered], [data-hvigen], [data-hvfraga], [data-hvform], [data-hvformx], [data-hvmeny], [data-hvflagga], [data-hvdolj], [data-hvvisa], [data-hvga], [data-hvgratt], [data-hvark]');
+  const t = e.target.closest && e.target.closest('[data-hvtr], [data-hvunderlag], [data-hvboka], [data-hvangradag], [data-hvbifoga], [data-hvtips], [data-hvtala], [data-hvbilx], [data-hvstang], [data-hvtal], [data-hvchattsok], [data-hvstopp], [data-hvnere], [data-hvchattigen], [data-hvchattandra], [data-hvchattkop], [data-hvchattsteg], [data-hvchattgodkann], [data-hvchattavbryt], [data-hvchattangra], [data-hvgor], [data-hvforslag], [data-hvnasta], [data-hvval], [data-hvangra], [data-hvdra], [data-hvmer], [data-hvstat], [data-hvforbered], [data-hvigen], [data-hvfraga], [data-hvform], [data-hvformx], [data-hvmeny], [data-hvflagga], [data-hvdolj], [data-hvvisa], [data-hvga], [data-hvgratt], [data-hvrad], [data-hvark]');
+  // Mer och Laget stängs av ett klick utanför dem, som en meny brukar. Klicket går ändå vidare dit det skulle.
+  if ((S.hv.mer || S.hv.dra) && !(e.target.closest && e.target.closest('.hv-merv, .hv-dra, [data-hvdra]'))){
+    // Omritningen väntar en bildruta, så att klicket hinner göra sitt först (fokus i skrivrutan, Lyssna, en länk).
+    S.hv.mer = false; S.hv.dra = false; requestAnimationFrame(hvRitaBehall);
+  }
   // En väg ut ur hemmet (kalendern, uppgifterna, en inställning) stänger arket, så att Hem är hemmet nästa gång. Klicket går vidare som vanligt.
   if (!t){ if (S.hv.ark && e.target.closest && e.target.closest('.hv [data-view], .hv [data-go]')) Object.assign(S.hv, {ark:null, id:null, kvitto:null, form:null, meny:null}); return; }
   // Kort som är en enda knapp (data-hvark) får inte svälja knapparna inuti sig.
@@ -35669,6 +36069,13 @@ function hvKlick(e){
   if (d.hvbilx !== undefined){ S.hv.bilagor = (S.hv.bilagor || []).filter((_b, i) => i !== +d.hvbilx); render(); return; }
   if (d.hvtal){ const [ti, id] = d.hvtal.split(':'), tur = S.hv.chatt[+ti]; if (tur){ tur.visa = tur.visa === id ? null : id; render(); } return; }
   if (d.hvchattsok !== undefined){ const tur = S.hv.chatt[+d.hvchattsok]; if (tur) hvSok(tur.fraga); return; }
+  // Stopp står där Skicka stod: ett dubbelklick på Skicka får inte stoppa frågan det just skickade. Esc stoppar alltid.
+  if (d.hvstopp !== undefined){ if (S.hv.strom && Date.now() - S.hv.strom.tur.start > 400) hvChattStopp(); return; }
+  if (d.hvnere !== undefined){ hvTillBotten(); return; }
+  if (d.hvchattigen !== undefined){ hvChattIgen(+d.hvchattigen); return; }
+  if (d.hvchattandra !== undefined){ hvChattAndra(+d.hvchattandra); return; }
+  if (d.hvchattkop !== undefined){ hvKopiera(+d.hvchattkop); return; }
+  if (d.hvchattsteg !== undefined){ const tur = S.hv.chatt[+d.hvchattsteg]; if (tur){ tur.stegOppen = !tur.stegOppen; render(); } return; }
   if (d.hvchattgodkann){ hvChattGodkann(...d.hvchattgodkann.split(':').map(Number)); return; }
   if (d.hvchattavbryt){ hvChattAvbryt(...d.hvchattavbryt.split(':').map(Number)); return; }
   if (d.hvchattangra){ hvChattAngra(...d.hvchattangra.split(':').map(Number)); return; }
@@ -35678,7 +36085,11 @@ function hvKlick(e){
   if (d.hvval){ hvValj(d.hvval); return; }
   if (d.hvangra){ hvAngra(d.hvangra); return; }
   if (d.hvdra !== undefined){ S.hv.dra = !S.hv.dra; render(); return; }
-  if (d.hvmer !== undefined){ S.hv.mer = !S.hv.mer; render(); if (S.hv.mer) requestAnimationFrame(() => { const r = document.querySelector('.hv-genv'); if (r && r.scrollWidth > r.clientWidth) r.scrollLeft = r.scrollWidth; }); return; }
+  // Mer öppnas med fokus på första valet, så att pilarna och Escape fungerar direkt (hvTangent).
+  if (d.hvmer !== undefined){ S.hv.mer = !S.hv.mer; render(); if (S.hv.mer) requestAnimationFrame(() => { const r = document.querySelector('.hv-genv'); if (r && r.scrollWidth > r.clientWidth) r.scrollLeft = r.scrollWidth; const f = document.querySelector('.hv-mer [role="menuitem"]'); if (f) f.focus(); }); return; }
+  // En rad i kortet Väntar på dig öppnar hela listan vid just den raden, med fokus på radens knapp. Tangentbordets
+  // index (sel, J/K/E/Enter) sätts till samma rad, så att E och Enter gäller raden som är markerad.
+  if (d.hvrad){ const id = d.hvrad; S.selRad = id; hvOppna('vantar'); requestAnimationFrame(() => { const rader = [...document.querySelectorAll('.irow, .hv-sak[data-id]')], r = rader.find(x => x.dataset.id === id); if (!r) return; sel = rader.indexOf(r); r.scrollIntoView({block:'center', behavior:hvGlid()}); const b = r.querySelector('[data-hvgor]'); if (b) b.focus({preventScroll:true}); }); return; }
   if (d.hvstat !== undefined){ S.moStat = true; S.moTillbaka = null; ndGa('/moten'); return; }
   if (d.hvforbered){ hvChattFraga(d.hvforbered); return; }
   if (d.hvigen !== undefined){ hvHamta(S.hv.ark, S.hv.id); render(); return; }
@@ -35706,7 +36117,7 @@ document.addEventListener('submit', e => {
 document.addEventListener('input', e => {
   const n = e.target && e.target.dataset && e.target.dataset.hvfalt; if (!n || !hvPa()) return;
   if (n === 'q' || n === 'kom') S.hv[n] = e.target.value;
-  if (n === 'q'){ const v = document.querySelector('.hv'); if (v) v.classList.toggle('hv-skriver', hvLage() === 'hem' && !!e.target.value.trim()); }
+  if (n === 'q'){ hvUtkast(e.target.value); hvHojd(e.target); const v = document.querySelector('.hv'); if (v) v.classList.toggle('hv-skriver', hvLage() === 'hem' && !!e.target.value.trim()); }
   else if (S.hv.form){ S.hv.form[n] = e.target.value; S.hv.form.fel = ''; if (n === 'matt') render(); }
 });
 document.addEventListener('change', e => {
@@ -35719,11 +36130,49 @@ document.addEventListener('change', e => {
 const hvOvanpa = () => !!(document.getElementById('pal') || S.panel || S.todoOpen || S.bellOpen || S.prfRuta || S.fokusMode || S.keysOverlay || S.whenPick || S.overFor || S.returnFor || S.editing);
 function hvTangent(e){
   if (!hvPa() || S.view !== 'hem') return;
-  // Enter i skrivrutan skickar, Skift+Enter ger en ny rad.
-  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.target && e.target.id === 'hvQ'){ e.preventDefault(); hvFraga(); return; }
+  const iQ = !!(e.target && e.target.id === 'hvQ');
+  // Enter i skrivrutan skickar, Skift+Enter ger en ny rad. Medan ett ord sätts ihop (IME, keyCode 229) hör Enter till
+  // ordet. På en pekskärm ger Enter en ny rad, och Skicka skickar.
+  if (e.key === 'Enter' && !e.shiftKey && iQ){
+    if (e.isComposing || e.keyCode === 229 || hvPekskarm()) return;
+    e.preventDefault(); hvFraga(); return;
+  }
+  // Pil upp i en tom ruta tar fram den senaste frågan, för att ändra den och skicka igen.
+  if (e.key === 'ArrowUp' && iQ && !e.target.value && !hvOvanpa()){
+    const T = S.hv.chatt, t = T[T.length - 1];
+    if (t){ e.preventDefault(); S.hv.q = t.fraga; e.target.value = t.fraga; hvUtkast(t.fraga); hvHojd(e.target); }
+    return;
+  }
+  // Esc stoppar ett svar som pågår och en diktering, före allt annat. Fokus står kvar i rutan.
+  if (e.key === 'Escape' && S.hv.strom && !hvOvanpa()){ e.preventDefault(); hvChattStopp(); return; }
+  if (e.key === 'Escape' && hvRek && !hvOvanpa()){ e.preventDefault(); hvRek.stop(); return; }
+  // Läsaren rullar uppåt i tråden med tangenterna: tråden slutar följa svaret (hvRulla).
+  if ((e.key === 'PageUp' || e.key === 'Home' || e.key === 'ArrowUp') && hvITraden(e)) S.hv.folj = false;
   // Ett kort som är en knapp öppnas med Enter och mellanslag.
   if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.matches && e.target.matches('.hv-card[data-hvark]')){ e.preventDefault(); hvOppna(e.target.dataset.hvark); return; }
   if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.matches && e.target.matches('.hv-tr[data-hvtr]')){ e.preventDefault(); const o = S.hv.trOppen || new Set(), id = e.target.dataset.hvtr; o.has(id) ? o.delete(id) : o.add(id); S.hv.trOppen = o; render(); return; }
+  // J och K flyttar fokus mellan raderna i kortet Väntar på dig, och Enter öppnar raden (knappens eget klick).
+  // I hela listan har Navs vanliga tangenter raderna (.hv-sak), och där görs inget här.
+  if ((e.key === 'j' || e.key === 'k') && !e.metaKey && !e.ctrlKey && !e.altKey && hvLage() === 'hem' && !hvOvanpa() && !(e.target && e.target.matches && e.target.matches('input, textarea, select, [contenteditable]'))){
+    const rader = [...document.querySelectorAll('.hv-radt')]; if (!rader.length) return;
+    const i = rader.indexOf(document.activeElement), ny = i < 0 ? 0 : Math.max(0, Math.min(rader.length - 1, i + (e.key === 'j' ? 1 : -1)));
+    e.preventDefault(); rader[ny].focus(); return;
+  }
+  // I Mer flyttar pilarna mellan valen. Escape stänger Mer eller Laget först, och fokus går tillbaka till knappen.
+  const iMer = e.target && e.target.closest && e.target.closest('.hv-mer');
+  if (iMer && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Home' || e.key === 'End')){
+    const val = [...iMer.querySelectorAll('[role="menuitem"]')], i = val.indexOf(e.target), n = val.length;
+    const ny = e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : (i + (e.key === 'ArrowDown' ? 1 : -1) + n) % n;
+    if (n){ e.preventDefault(); val[ny].focus(); }
+    return;
+  }
+  if (e.key === 'Escape' && (S.hv.mer || S.hv.dra) && !hvOvanpa()){
+    e.preventDefault();
+    const knapp = S.hv.mer ? '[data-hvmer]' : '[data-hvdra]';
+    S.hv.mer = false; S.hv.dra = false; render();
+    requestAnimationFrame(() => { const b = document.querySelector('.hv ' + knapp); if (b) b.focus(); });
+    return;
+  }
   if (e.key === 'Escape' && S.hv.ark && !hvOvanpa() && !String(S.hv.q || '').trim()){ if (S.hv.form){ S.hv.form = null; render(); } else hvStang(); }
 }
 // Lyssnaren hör tangenten före Navs vanliga (capture). Annars har den vanliga redan stängt paletten eller panelen
@@ -35739,9 +36188,9 @@ const HVINST = [
   ['forslag.grans-person', 'gransPerson', 'Gräns för trendregeln', 'Gäller när lagets 20 senaste möten jämförs med de 40 före. Regeln säger inget till någon än. Förvalt 0,01.'],
   ['forslag.grans-motvikt', 'gransMotvikt', 'Gräns för motvikten', 'När motvikten räknas som sämre. Generös med flit: motvikten är en broms, inte ett påstående. Förvalt 0,2.']
 ];
-const hvInstFolk = () => ((ND.moten && (ND.moten.kollegor || ND.moten.saljare)) || []).slice().sort((a, b) => String(a.namn).localeCompare(String(b.namn), 'sv'));
+const hvInstFolk = () => ((ND.moten && (ND.moten.kollegor || ND.moten.saljare)) || []).slice().sort((a, b) => String(a.namn).localeCompare(String(b.namn), HVLOK.sprak));
 // Chatten har ingen brytare här: den slås på först när provet av modellen är kört och godkänt. Rutan säger läget och vad som saknas.
-function hvDollar(v){ return Number(v).toLocaleString('sv-SE', {minimumFractionDigits: Number.isInteger(+v) ? 0 : 2, maximumFractionDigits: 2}); }
+function hvDollar(v){ return Number(v).toLocaleString(HVLOK.sprak, {minimumFractionDigits: Number.isInteger(+v) ? 0 : 2, maximumFractionDigits: 2}); }
 function hvChattLage(){
   const C = ND && ND.hem && ND.hem.chattLage; if (!C) return '';
   const u = C.utrymme;

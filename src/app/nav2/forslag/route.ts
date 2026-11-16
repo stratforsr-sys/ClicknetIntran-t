@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { LAGE_KOL, REGEL_OBEKRAFTAT, arChefFor, lasGenomgang, lasInst, lasKrets, motesInfo, type LageRad } from "@/lib/nav2/forslag";
 import { farAndraForslagInst, nyckelDelar, oppetLage, provaForslagInst, FORSLAG_NYCKLAR, type Val } from "@/lib/nav2/forslagforma";
-import { dagText, textKvitto } from "@/lib/nav2/hemtext";
+import { dagText, felkod, textFel, textKvitto } from "@/lib/nav2/hemtext";
 import { teamGenomgang } from "@/lib/nav2/hem-team";
 import { MATT, type MattNyckel } from "@/lib/nav2/matt";
 import { lokalDag } from "@/lib/nav2/motesflode";
@@ -45,6 +45,13 @@ const LASNINGAR = ["forslag", "andrat", "facit", "team"];
 type Svar = { ok?: string; fel?: string; [k: string]: unknown };
 const svar = (data: Svar, status = 200) => NextResponse.json(data, { status, headers: { "Cache-Control": "private, no-store, max-age=0" } });
 
+/** Ett oväntat fel: hela texten i loggen med en kod, kort svenska och samma kod till klienten. */
+const krasch = (e: unknown, sort: "lasa" | "spara") => {
+  const kod = felkod();
+  console.error(`nav2/forslag ${kod}: ${e instanceof Error ? e.message : String(e)}`);
+  return svar({ fel: textFel(sort, kod), felkod: kod }, 500);
+};
+
 export async function GET(request: Request) {
   const user = await getCurrentUser();
   if (!user?.employee) return svar({ fel: "Du måste vara inloggad." }, 401);
@@ -55,7 +62,7 @@ export async function GET(request: Request) {
     const g = vad === "team" ? await teamGenomgang(user) : await lasGenomgang(user, vad, url.searchParams.get("id"));
     return svar(g.data, g.status);
   } catch (e) {
-    return svar({ fel: e instanceof Error ? e.message : "Något gick fel." }, 500);
+    return krasch(e, "lasa");
   }
 }
 
@@ -264,6 +271,6 @@ export async function POST(request: Request) {
         return svar({ fel: "Okänd handling." }, 400);
     }
   } catch (e) {
-    return svar({ fel: e instanceof Error ? e.message : "Något gick fel." }, 500);
+    return krasch(e, "spara");
   }
 }

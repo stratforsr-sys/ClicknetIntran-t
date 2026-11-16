@@ -491,6 +491,9 @@ async function forberedUppfoljning(input: Record<string, unknown>, c: Ctx): Prom
   };
 }
 
+/** Beskedet Claude får när ett verktyg inte gick att läsa, eller inte svarade i tid. */
+export const VERKTYGSFEL = "Det gick inte att läsa just nu.";
+
 /**
  * Kör ett verktyg. `anrop` är verktygsanropets nummer i frågan (från ett), det
  * som hänvisningen `{{t:<anrop>.<fält>}}` pekar på. Ett fel blir ett svar med
@@ -522,8 +525,10 @@ export async function korVerktyg(namn: string, input: unknown, c: Ctx, anrop: nu
       }
       default: return { svar: { ...marke, fel: "Okänt verktyg." } };
     }
-  } catch {
-    return { svar: { ...marke, fel: "Det gick inte att läsa just nu." } };
+  } catch (e) {
+    // Claude får samma raka besked som förut. Felet självt hamnar i serverns logg, så att någon kan se vad som föll.
+    console.error(`chatt: verktyget ${namn} föll: ${e instanceof Error ? e.message : String(e)}`);
+    return { svar: { ...marke, fel: VERKTYGSFEL } };
   }
 }
 

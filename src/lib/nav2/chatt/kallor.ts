@@ -44,7 +44,8 @@ export function skapaKallor(user: CurrentUser): Kallor {
       }),
     // Två dygn före periodens första dag, så att ett möte nära midnatt inte faller bort på tidszonen.
     moten: (franDag) => en(`moten:${franDag}`, () => lasStatMoten(supabaseAdmin(), new Date(Date.parse(`${franDag}T00:00:00Z`) - 2 * 864e5).toISOString())),
-    order: (krets, franManad) => lasOrder(supabaseAdmin(), krets, franManad),
+    // Kretsen sorteras i nyckeln: samma personer i en annan ordning är samma läsning.
+    order: (krets, franManad) => en(`order:${franManad}:${krets ? [...krets].sort().join(",") : "alla"}`, () => lasOrder(supabaseAdmin(), krets, franManad)),
     forslag: () =>
       en("forslag", async () => {
         const f = await byggForslag(await supabaseServer(), user);

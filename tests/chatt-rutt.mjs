@@ -186,7 +186,8 @@ async function anropa(roller, id, kropp, o = {}) {
     if (o.stang) {
       // Personen stänger fliken medan Claude svarar.
       await res.body.cancel();
-      for (let i = 0; i < 100 && !db.skrivningar.some((x) => x.text === "update nav_chatt_logg"); i++) await new Promise((r) => setTimeout(r, 5));
+      // Raden märks först "stoppas"; provet väntar på den slutliga rättningen.
+      for (let i = 0; i < 100 && !db.skrivningar.some((x) => x.text === "update nav_chatt_logg" && x.rad?.stop_reason !== "stoppas"); i++) await new Promise((r) => setTimeout(r, 5));
     } else text = await res.text();
     if ((res.headers.get("content-type") ?? "").includes("event-stream")) rader = text.split("\n\n").filter(Boolean).map((l) => JSON.parse(l.replace(/^data: /, "")));
     else try { data = JSON.parse(text); } catch { /* inte JSON */ }
@@ -262,7 +263,9 @@ rubrik("Frågan räknas också när personen stänger fliken");
 {
   const sen = async () => { await new Promise((r) => setTimeout(r, 30)); return textsvar("Inget väntar."); };
   const r = await anropa(["salesperson"], S, FRAGA, { ai: [sen], stang: true });
-  ok("Claude anropades, och raden rättas till den verkliga kostnaden fast ingen lyssnar", r.ai.length === 1 && r.logg.length === 1 && r.loggId[0] === "rad-1" && r.logg[0].stop_reason === "end_turn" && Math.abs(r.logg[0].kostnad_usd - kostnadUsd("claude-sonnet-5-5", USAGE)) < 1e-12, visa(r) + " " + JSON.stringify(r.logg));
+  const sista = r.logg.at(-1) ?? {};
+  ok("Claude anropades, och raden rättas till den verkliga kostnaden fast ingen lyssnar", r.ai.length === 1 && r.logg.length === 2 && r.loggId.every((id) => id === "rad-1") && sista.stop_reason === "end_turn" && Math.abs(sista.kostnad_usd - kostnadUsd("claude-sonnet-5-5", USAGE)) < 1e-12, visa(r) + " " + JSON.stringify(r.logg));
+  ok("raden slutar spärra nästa fråga när personen stänger, utan att röra kostnaden", r.logg[0].stop_reason === "stoppas" && !("kostnad_usd" in r.logg[0]), JSON.stringify(r.logg[0]));
 }
 
 rubrik("Ett svar: verktyget hämtar, servern sätter in talen");
@@ -452,8 +455,18 @@ rubrik("Avböjande, avbrott och fel");
   const varv = Array.from({ length: 12 }, (_x, i) => verktygstur("las_vantar", {}, `tu_${i}`));
   const v = await anropa(["salesperson"], S, FRAGA, { ai: varv });
   ok("verktygsvarven har ett tak", v.ai.length === 6 && v.rader.at(-1)?.h === "fel" && v.logg.length === 1, `ai=${v.ai.length}`);
-  const f = await anropa(["salesperson"], S, FRAGA, { ai: [new Error("529 overloaded")] });
-  ok("ett fel från Anthropic blir ett rakt besked, och loggas", f.rader.at(-1)?.h === "fel" && !/529|overloaded/.test(f.rader.at(-1).text) && f.logg.length === 1 && f.logg[0].stop_reason === "fel" && f.logg[0].kostnad_usd === 0, JSON.stringify(f.rader));
+  // Anthropics SDK sätter `status` på ett svar som kom tillbaka. Ett sådant fel kostade inget.
+  const f = await anropa(["salesperson"], S, FRAGA, { ai: [Object.assign(new Error("529 overloaded"), { status: 529 })] });
+  ok("ett fel från Anthropic blir ett rakt besked, och loggas med sin status och utan kostnad", f.rader.at(-1)?.h === "fel" && f.rader.at(-1).kod === "tillfalligt" && f.rader.at(-1).text === "Chatten är tillfälligt upptagen. Försök igen om en stund." && !/529|overloaded/.test(f.rader.at(-1).text) && f.logg.length === 1 && f.logg[0].stop_reason === "fel:529" && f.logg[0].kostnad_usd === 0, JSON.stringify([f.rader, f.logg]));
+  // Utan status föll anropet på vägen (nätet, klientens tidsgräns): Anthropic kan ha tagit betalt, så reservationen står kvar.
+  const natet = await anropa(["salesperson"], S, FRAGA, { ai: [Object.assign(new Error("Request timed out."), { name: "APIConnectionTimeoutError" })] });
+  ok("ett anrop som föll utan svar loggas med det reserverade beloppet, inte med noll", natet.rader.at(-1)?.kod === "tillfalligt" && natet.logg[0]?.stop_reason === "fel" && Math.abs(natet.logg[0].kostnad_usd - maxFragaUsd("okand", 2000, 6)) < 1e-12, JSON.stringify(natet.logg));
+  const bugg = await anropa(["salesperson"], S, FRAGA, { ai: [new Error("något annat")] });
+  ok("ett okänt fel ger det allmänna beskedet, och räknas också som okänd kostnad", bugg.rader.at(-1)?.kod === "ai" && bugg.rader.at(-1).text === "Chatten svarar inte just nu. Jag svarar som sökrutan i stället." && Math.abs(bugg.logg[0]?.kostnad_usd - maxFragaUsd("okand", 2000, 6)) < 1e-12, JSON.stringify([bugg.rader, bugg.logg]));
+  const pdf = { sort: "application/pdf", namn: "offert.pdf", data: Buffer.from("%PDF-1.4 x").toString("base64") };
+  const trasig = await anropa(["salesperson"], S, { ...FRAGA, bilagor: [pdf] }, { ai: [Object.assign(new Error("Could not process PDF"), { status: 400 })] });
+  ok("ett 400 på en fråga med fil säger att filen inte gick att läsa", trasig.rader.at(-1)?.kod === "fil" && trasig.rader.at(-1).text === "Filen gick inte att läsa. Försök med en annan fil, eller fråga utan den." && trasig.logg[0]?.stop_reason === "fel:400" && trasig.logg[0].kostnad_usd === 0, JSON.stringify([trasig.status, trasig.rader, trasig.text]));
+  ok("bilagans sista block bär cachemärket när det går till Claude", trasig.ai[0]?.messages?.at(-1)?.content?.[0]?.cache_control?.type === "ephemeral" && trasig.ai[0].messages.at(-1).content.at(-1).type === "text", JSON.stringify(trasig.ai[0]?.messages?.at(-1)?.content?.map((b) => [b.type, b.cache_control])));
   const h = await anropa(["salesperson"], S, FRAGA, { inst: [...PA, { key: "chatt.modell", value: "claude-haiku-5-5" }], prov: [{ modell: "claude-haiku-5-5", avtryck: avtryck(), godkand: true }], ai: [textsvar("Inget väntar.")] });
   ok("Haiku har ingen reservmodell på servern, så den skickas inte med", h.status === 200 && h.ai[0]?.model === "claude-haiku-5-5" && !("fallbacks" in h.ai[0]) && !("betas" in h.ai[0]), JSON.stringify(Object.keys(h.ai[0] ?? {})));
 }
@@ -619,6 +632,123 @@ rubrik("Klockan: hela frågan hinner bli klar innan rutten stängs");
   ok("ett avbrutet anrop lämnar det reserverade beloppet", loggKostnadUsd({ kostnadUsd: 0.01, ofullstandig: true }, 0.3) === 0.3);
   ok("annars den verkliga kostnaden", loggKostnadUsd({ kostnadUsd: 0.01, ofullstandig: false }, 0.3) === 0.01);
   ok("och aldrig mindre än det som faktiskt mättes", loggKostnadUsd({ kostnadUsd: 0.5, ofullstandig: true }, 0.3) === 0.5);
+}
+
+rubrik("Fart och robusthet: verktygen samtidigt, en frist per verktyg, stopp och raka fel");
+{
+  const { korSamtal, fragetur, felFranAi, VERKTYG_MS, FRIST_MS } = await import("../src/lib/nav2/chatt/samtal.ts");
+  const { VERKTYGSFEL } = await import("../src/lib/nav2/chatt/verktyg.ts");
+  const turer = [{ role: "user", content: fragetur({ idag: "2026-11-16", klocka: "09.00", fornamn: "Sara", roller: ["salesperson"], fraga: "Vad väntar, och vad står i kalendern?" }) }];
+  const vila = (ms) => new Promise((r) => setTimeout(r, ms));
+  const tva = { stop_reason: "tool_use", usage: USAGE, content: [{ type: "tool_use", id: "tu_a", name: "las_vantar", input: {} }, { type: "tool_use", id: "tu_b", name: "las_dag", input: { dag: "2026-11-16" } }] };
+  const klientAv = (svar, fragor) => ({ beta: { messages: { stream: (p) => { fragor.push(JSON.parse(JSON.stringify(p))); return { finalMessage: async () => { const s = svar.shift(); return typeof s === "function" ? await s() : s; } }; } } } });
+  ok("ett verktyg har en egen frist, kortare än hela frågans", VERKTYG_MS > 0 && VERKTYG_MS < FRIST_MS);
+
+  // 1. Två verktyg i samma varv körs samtidigt, och svaren läggs tillbaka i Claudes ordning.
+  const ordning = [];
+  const kallor1 = {
+    vantar: async () => { await vila(80); ordning.push("vantar"); return { sammanfattning: "Inget väntar.", rader: [] }; },
+    dag: async () => { await vila(10); ordning.push("dag"); return { poster: [], uppgifter: [] }; },
+  };
+  const f1 = [];
+  const h1 = [];
+  const t0 = Date.now();
+  const r1 = await korSamtal({ klient: klientAv([tva, textsvar("Inget väntar och dagen är tom.")], f1), modell: "claude-sonnet-5-5", turer, ctx: { mig: S, idag: "2026-11-16", kallor: kallor1 }, sand: (h) => h1.push(h) });
+  const ms1 = Date.now() - t0;
+  const svaren = f1[1]?.messages?.at(-1)?.content ?? [];
+  ok("verktygen i ett varv körs samtidigt: det snabba blev klart först", ordning.join(",") === "dag,vantar" && ms1 < 1000, `${ordning} ${ms1} ms`);
+  ok("svaren går tillbaka i Claudes ordning, med Claudes nummer", svaren.map((x) => x.tool_use_id).join(",") === "tu_a,tu_b" && JSON.parse(svaren[0].content)._anrop === 1 && JSON.parse(svaren[1].content)._anrop === 2 && JSON.parse(svaren[0].content)._verktyg === "las_vantar", JSON.stringify(svaren));
+  ok("hänvisningarna pekar på samma anrop som förut", r1.svar.map((s) => s._anrop).join(",") === "1,2" && r1.anrop.map((a) => a.namn).join(",") === "las_vantar,las_dag");
+  const typer = h1.map((h) => (h.h === "klart" || h.h === "hamtar" ? `${h.h}${h.anrop ?? ""}` : h.h)).join(",");
+  ok("förloppet: båda hämtas, varje blir klart med sitt nummer i den ordning de blev klara, sedan svaret", typer === "hamtar1,hamtar2,klart2,klart1,svar", typer);
+  const klart1 = h1.find((h) => h.h === "klart" && h.anrop === 1);
+  ok("klart bär källraden och tiden, inget tal ur luften", klart1?.ok === true && klart1.text === "Väntar på dig · data per 2026-11-16" && Number.isFinite(klart1.ms) && klart1.ms >= 0, JSON.stringify(klart1));
+  ok("loggen får veta att verktygen svarade och hur lång tid de tog", r1.anrop.every((a) => a.ok === true && Number.isFinite(a.ms)), JSON.stringify(r1.anrop));
+
+  // 2. Ett verktyg som hänger längre än sin egen frist ger Claude samma fel som ett som föll, och frågan går vidare.
+  const f2 = [];
+  const h2 = [];
+  const r2 = await korSamtal({ klient: klientAv([tva, textsvar("Kalendern är tom; det som väntar gick inte att läsa.")], f2), modell: "claude-sonnet-5-5", turer, ctx: { mig: S, idag: "2026-11-16", kallor: { vantar: () => new Promise(() => {}), dag: kallor1.dag } }, sand: (h) => h2.push(h), verktygMs: 30 });
+  const hang = JSON.parse(f2[1]?.messages?.at(-1)?.content?.[0]?.content ?? "{}");
+  ok("ett verktyg som hänger svarar efter sin frist med samma fel Claude redan känner", hang.fel === VERKTYGSFEL && hang._anrop === 1 && hang._verktyg === "las_vantar" && f2.length === 2 && r2.stopp === "end_turn", JSON.stringify([hang, r2.stopp]));
+  ok("det andra verktyget svarade ändå", JSON.parse(f2[1]?.messages?.at(-1)?.content?.[1]?.content ?? "{}").fel === undefined);
+  ok("personen ser vilket som inte gick att läsa, och loggen likaså", h2.some((h) => h.h === "klart" && h.anrop === 1 && h.ok === false && h.text === VERKTYGSFEL) && r2.anrop[0].ok === false && r2.anrop[1].ok === true, JSON.stringify(h2));
+  ok("en kort verktygsfrist ändrar inte hela frågans", r2.ofullstandig === false && h2.at(-1)?.h === "svar");
+
+  // 3. Personen slutar lyssna: anropet som pågår blir klart och räknas, men inga verktyg och inget nytt anrop.
+  const stopp = new AbortController();
+  const f3 = [];
+  const h3 = [];
+  const lasta3 = [];
+  const r3 = await korSamtal({ klient: klientAv([async () => { stopp.abort(); return tva; }, textsvar("Ska aldrig skickas.")], f3), modell: "claude-sonnet-5-5", turer, ctx: { mig: S, idag: "2026-11-16", kallor: { vantar: async () => { lasta3.push("vantar"); return { sammanfattning: "", rader: [] }; }, dag: async () => { lasta3.push("dag"); return { poster: [], uppgifter: [] }; } } }, sand: (h) => h3.push(h), avbruten: stopp.signal });
+  ok("stoppad fråga: inga verktyg körs och Claude anropas inte igen", f3.length === 1 && lasta3.length === 0 && r3.stopp === "avbruten" && r3.anrop.length === 0, JSON.stringify({ n: f3.length, lasta3, stopp: r3.stopp }));
+  ok("anropet som hann bli klart räknas med sin verkliga kostnad", Math.abs(r3.kostnadUsd - kostnadUsd("claude-sonnet-5-5", USAGE)) < 1e-12 && r3.ofullstandig === false);
+  ok("sista händelsen säger att frågan stoppades", h3.at(-1)?.h === "fel" && h3.at(-1).kod === "avbruten" && h3.filter((h) => h.h === "fel").length === 1, JSON.stringify(h3));
+
+  // 4. Efter den sista händelsen kommer inget mer, inte heller från ett verktyg som blir klart för sent.
+  const h4 = [];
+  await korSamtal({ klient: klientAv([tva], []), modell: "claude-sonnet-5-5", turer, ctx: { mig: S, idag: "2026-11-16", kallor: { vantar: () => new Promise(() => {}), dag: async () => { await vila(60); return { poster: [], uppgifter: [] }; } } }, sand: (h) => h4.push(h), fristMs: 30 });
+  await vila(80);
+  ok("fristen tar slut mitt i verktygen: felet är sista händelsen", h4.at(-1)?.h === "fel" && h4.at(-1).kod === "tid" && h4.filter((h) => ["svar", "fel", "avbojt"].includes(h.h)).length === 1, JSON.stringify(h4));
+
+  // 5. Felen sorteras till besked personen kan göra något med.
+  ok("429 och 529 är tillfälligt", felFranAi({ status: 429 }, false).kod === "tillfalligt" && felFranAi({ status: 529 }, false).kod === "tillfalligt" && felFranAi({ status: 503 }, false).kod === "tillfalligt");
+  ok("ett avbrott på nätet är tillfälligt, utan status", felFranAi(Object.assign(new Error("Connection error."), { name: "APIConnectionError" }), false).kod === "tillfalligt" && felFranAi({ name: "APIConnectionError" }, false).status === null);
+  ok("400 med en fil gäller filen, utan fil är det ett allmänt fel", felFranAi({ status: 400, message: "bad" }, true).kod === "fil" && felFranAi({ status: 400, message: "bad" }, false).kod === "ai");
+  ok("för stor fråga sägs som det är", felFranAi({ status: 413 }, false).kod === "for-stor" && felFranAi({ status: 400, message: "prompt is too long: 250000 tokens" }, true).kod === "for-stor");
+  ok("en felaktig nyckel röjs inte", felFranAi({ status: 401, message: "invalid x-api-key" }, false).kod === "ai" && !/nyckel|key/i.test(felFranAi({ status: 401 }, false).text));
+}
+
+rubrik("Rutten: stopp, en fråga i taget och en ström som alltid stängs");
+{
+  // Personen stänger fliken medan Claude väljer verktyg: verktygen körs aldrig, och raden rättas till det som mättes.
+  const sen = async () => { await new Promise((r) => setTimeout(r, 30)); return verktygstur("las_matt", { matt: "moten.hallna-av-alla", vem: "laget", period: "forra-veckan" }); };
+  const r = await anropa(["team_lead"], TL, FRAGA, { ai: [sen, textsvar("Ska aldrig skickas.")], stang: true });
+  ok("stängd flik mitt i ett varv: inget nytt anrop, inga verktyg, raden rättas", r.ai.length === 1 && r.lasta.length === 0 && r.logg.length === 2 && r.logg[0].stop_reason === "stoppas" && r.logg.at(-1).stop_reason === "avbruten" && Math.abs(r.logg.at(-1).kostnad_usd - kostnadUsd("claude-sonnet-5-5", USAGE)) < 1e-12, visa(r) + " " + JSON.stringify(r.logg));
+
+  const nar = (sek) => new Date(Date.now() - sek * 1000).toISOString();
+  const pagar = (id, sek) => ({ id, employee_id: S, miljo: "lokal", stop_reason: "pagar", nar: nar(sek) });
+  const dubbel = await anropa(["salesperson"], S, FRAGA, { ai: [textsvar("Inget väntar.")], extra: { nav_chatt_logg: [pagar("rad-0", 5)] } });
+  ok("en andra fråga medan den förra pågår: 429 med beskedet, och inget går till Claude", dubbel.status === 429 && dubbel.data?.kod === "pagar" && dubbel.data.fel === "Din förra fråga pågår fortfarande. Försök igen när den är klar." && !dubbel.data.tak && dubbel.ai.length === 0, visa(dubbel));
+  ok("den stoppade frågans rad står kvar utan kostnad", dubbel.logg.length === 1 && dubbel.loggId[0] === "rad-1" && dubbel.logg[0].stop_reason === "dubbel" && dubbel.logg[0].kostnad_usd === 0, JSON.stringify(dubbel.logg));
+  const fast = await anropa(["salesperson"], S, FRAGA, { ai: [textsvar("Inget väntar.")], extra: { nav_chatt_logg: [pagar("rad-0", 200)] } });
+  ok("en rad som fastnat för länge sedan stoppar ingen", fast.status === 200 && fast.ai.length === 1 && fast.svar, visa(fast));
+  const stoppad = await anropa(["salesperson"], S, FRAGA, { ai: [textsvar("Inget väntar.")], extra: { nav_chatt_logg: [{ ...pagar("rad-0", 5), stop_reason: "stoppas" }] } });
+  ok("en fråga personen stoppade spärrar inte nästa, fast anropet ännu inte är klart", stoppad.status === 200 && stoppad.ai.length === 1, visa(stoppad));
+  const annan = await anropa(["salesperson"], S, FRAGA, { ai: [textsvar("Inget väntar.")], extra: { nav_chatt_logg: [{ ...pagar("rad-0", 5), employee_id: X }] } });
+  ok("en annan persons fråga stoppar inte min", annan.status === 200 && annan.ai.length === 1, visa(annan));
+  const tak = await anropa(["salesperson"], S, FRAGA, { reservation: { ...UTRYMME, ok: false, skal: "person" } });
+  ok("en nådd gräns bär sin kod, utöver det gamla fältet", tak.status === 429 && tak.data?.tak === true && tak.data.kod === "tak");
+
+  const vanlig = await anropa(["team_lead"], TL, FRAGA, { ai: [verktygstur("las_matt", { matt: "moten.hallna-av-alla", vem: "laget", period: "forra-veckan" }), textsvar("Laget höll {{t:1.antal}} möten.")] });
+  const slutIdx = vanlig.rader.findIndex((h) => ["svar", "fel", "avbojt"].includes(h.h));
+  ok("strömmen: hämtar, klart, och svaret sist", vanlig.rader.map((h) => h.h).join(",") === "hamtar,klart,svar" && slutIdx === vanlig.rader.length - 1 && vanlig.rader[0].anrop === 1 && vanlig.rader[0].verktyg === "las_matt" && vanlig.rader[1].anrop === 1, JSON.stringify(vanlig.rader.map((h) => [h.h, h.anrop])));
+
+  // Kastar loggen ändå stängs strömmen, och personen har redan fått sitt svar.
+  const db = attrapp({ nav_setting: PA, nav_chatt_prov: PROV }, { nav_chatt_reservera: () => ({ ...UTRYMME, ok: true, id: "rad-1" }) });
+  const fraga = db.from;
+  let loggen = 0;
+  // Första gången är spärren mot dubbla frågor, andra gången rättningen av raden: den kastar.
+  db.from = (t) => { if (t === "nav_chatt_logg" && ++loggen > 1) throw new Error("loggen föll"); return fraga(t); };
+  globalThis.__rutt = { db, user: { employee: { id: S, first_name: "Prov", last_name: "Person", team_id: null }, roles: ["salesperson"], permissions: [] } };
+  globalThis.__ai.svar = [textsvar("Inget väntar.")];
+  globalThis.__kallor = () => kallor(["salesperson"], S, []);
+  const res = await POST(new Request("https://nav.test/nav2/chatt", { method: "POST", headers: { origin: "https://nav.test", "content-type": "application/json" }, body: JSON.stringify(FRAGA) }));
+  const text = await Promise.race([res.text(), new Promise((r) => setTimeout(() => r("hängde"), 2000))]);
+  ok("kastar loggen stängs strömmen ändå, efter svaret", text !== "hängde" && /"h":"svar"/.test(text), text.slice(0, 200));
+}
+
+rubrik("Källorna: order läses en gång per fråga");
+{
+  const lasningar = [];
+  const db = attrapp({ sales_order: [] });
+  globalThis.__rutt = { db: { ...db, from: (t) => { lasningar.push(t); return db.from(t); } }, user: null };
+  const { skapaKallor } = await import("../src/lib/nav2/chatt/kallor.ts");
+  const k = skapaKallor({ employee: { id: S }, roles: ["sales_manager"], permissions: [] });
+  await Promise.all([k.order([S, TL], "2026-10"), k.order([TL, S], "2026-10"), k.order([S, TL], "2026-10")]);
+  await k.order(null, "2026-10");
+  await k.order([S, TL], "2026-11");
+  ok("samma krets och månad läses en gång, i vilken ordning personerna än står", lasningar.filter((t) => t === "sales_order").length === 3, JSON.stringify(lasningar));
 }
 
 rubrik("Provet av modellerna: frågorna, rättningen och skriptet som väntar");

@@ -313,6 +313,25 @@ export function lasUtrymme(v: unknown): Utrymme | null {
   return { personUsd, foretagUsd, takPersonUsd, takForetagUsd };
 }
 
+/** Beskedet när personens förra fråga inte är klar. */
+export const PAGAR_BESKED = "Din förra fråga pågår fortfarande. Försök igen när den är klar.";
+
+/**
+ * En fråga i taget per person. Varje fråga reserverar sin rad (`stop_reason` "pagar") i tur och ordning, och läser
+ * sedan personens pågående rader. Finns en annan som reserverades före min väntar min: av två frågor stoppas aldrig
+ * båda. Två som läser samtidigt kan båda gå igenom, som utan spärren. En rad äldre än `maxMs` har fastnat (funktionen
+ * dog innan raden rättades) och räknas inte.
+ */
+export function forePagar(rader: unknown, min: string, nu: number, maxMs: number): boolean {
+  if (!Array.isArray(rader)) return false;
+  const lista = (rader as { id?: unknown; nar?: unknown }[]).flatMap((r) => {
+    const t = typeof r?.nar === "string" ? Date.parse(r.nar) : NaN;
+    return typeof r?.id === "string" && Number.isFinite(t) && nu - t < maxMs ? [{ id: r.id, t }] : [];
+  });
+  const jag = lista.find((r) => r.id === min)?.t ?? nu;
+  return lista.some((r) => r.id !== min && (r.t < jag || (r.t === jag && r.id < min)));
+}
+
 /** Beskedet när en gräns är nådd. Skrivrutan svarar då som sökrutan och säger varför. */
 export const takBesked = (skal: unknown): string =>
   skal === "foretag" ? "Företaget har använt månadens AI-utrymme. Det fylls på den 1:a." : "Du har använt månadens AI-utrymme. Det fylls på den 1:a.";
@@ -399,13 +418,17 @@ export function lasBilagor(x: unknown): { ok: true; bilagor: Bilaga[] } | { ok: 
   return { ok: true, bilagor: ut };
 }
 
-/** Bilagorna som block i frågans tur: en bild som image, en PDF som document. Texten kommer efter. */
+/**
+ * Bilagorna som block i frågans tur: en bild som image, en PDF som document. Texten kommer efter. Den sista bär ett
+ * cachemärke: bilagan skickas om i varje varv, och från andra varvet läses den ur cachen till en tiondel av priset.
+ * Märket ändrar inget av det Claude läser.
+ */
 export function bilageBlock(bilagor: readonly Bilaga[]): Record<string, unknown>[] {
-  return bilagor.map((b) =>
-    b.sort === "application/pdf"
-      ? { type: "document", source: { type: "base64", media_type: b.sort, data: b.data } }
-      : { type: "image", source: { type: "base64", media_type: b.sort, data: b.data } },
-  );
+  return bilagor.map((b, n) => ({
+    type: b.sort === "application/pdf" ? "document" : "image",
+    source: { type: "base64", media_type: b.sort, data: b.data },
+    ...(n === bilagor.length - 1 ? { cache_control: { type: "ephemeral" } } : {}),
+  }));
 }
 
 /**

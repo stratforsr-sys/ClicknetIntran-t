@@ -301,3 +301,20 @@ export function textAndel(k: NAv, bokade: { fore: number; efter: number }, verb 
 export function textTrendSaknas(har: number, behover: number): string {
   return `För att jämföra laget med sig självt behöver jag ${behover} avgjorda möten. Jag har ${har}.`;
 }
+
+/**
+ * Felet till den som läser: kort svenska och en kod att slå upp i loggen. Själva felet (databasens eller
+ * tjänstens text) skrivs bara i loggen, aldrig till klienten. `kod` är fem tecken, 0–9 och a–f.
+ */
+export function textFel(sort: "lasa" | "spara", kod: string): string {
+  return `${sort === "lasa" ? "Det gick inte att läsa just nu." : "Det gick inte att spara just nu."} Försök igen. Felkod ${kod}.`;
+}
+
+/** En felkod på fem tecken ur en slumpad uuid. */
+export const felkod = (): string => globalThis.crypto.randomUUID().replace(/-/g, "").slice(0, 5);
+
+/** "Norr", "Norr och Syd", "Norr, Syd och Väst". Null när listan är tom. */
+export function textLagnamn(namn: readonly string[]): string | null {
+  if (!namn.length) return null;
+  return namn.length === 1 ? namn[0] : `${namn.slice(0, -1).join(", ")} och ${namn[namn.length - 1]}`;
+}

@@ -134,13 +134,15 @@ function hem({ chef, forslag = 1, andrat = ANDRAT, andratKort = AKORT, rader = n
     ndOmlasAnmal: () => {}, ndOmlas: () => Promise.resolve(true), render: () => {}, toast: () => {},
     document: { addEventListener: () => {}, getElementById: () => null, querySelector: () => null }, window: { addEventListener: () => {}, scrollTo: () => {} },
     localStorage: { getItem: (k) => (k === "nav2-hvton" ? hvton : null), setItem: () => {} },
-    openPal: () => { anrop.push(["pal"]); }, TextDecoder,
+    openPal: () => { anrop.push(["pal"]); }, TextDecoder, AbortController,
   };
-  kor(block, g, ["hvHem", "hvVantar", "hvForeslar", "hvTeam", "hvDinManad", "hvAndrat", "hvArk", "hvSkriv", "hvInstRuta", "hvPa", "hvFlagga", "hvDolj", "hvVisa", "hvGrattis", "hvHamta", "hvOppna", "hvValj", "hvTangent", "hvFraga", "hvChattGodkann", "hvChattAngra", "hvKlick", "hvStang", "hvPlaneraDag"]);
+  kor(block, g, ["hvHem", "hvVantar", "hvForeslar", "hvTeam", "hvDinManad", "hvAndrat", "hvArk", "hvSkriv", "hvInstRuta", "hvPa", "hvFlagga", "hvDolj", "hvVisa", "hvGrattis", "hvHamta", "hvOppna", "hvValj", "hvTangent", "hvFraga", "hvChattGodkann", "hvChattAngra", "hvKlick", "hvStang", "hvPlaneraDag", "hvSseDela", "hvVidBotten", "hvChattStopp", "hvChattIgen", "hvBokaDag", "hvAngraDag", "hvKopiera"]);
   g.anrop = anrop;
   return g;
 }
-const kort = (h, etikett) => h.match(new RegExp(`<section class="hv-card[^"]*" aria-label="${etikett}"[\\s\\S]*?</section>`))?.[0] ?? "";
+// Ett kort som är en knapp bär sina tal i namnet ("Teamet i november: 19 av 46 order, …"): rubriken står först, och ensam eller före ett kolon.
+const kort = (h, etikett) => h.match(new RegExp(`<section class="hv-card[^"]*" aria-label="${etikett}(?::[^"]*)?"[\\s\\S]*?</section>`))?.[0] ?? "";
+const namnet = (k) => k.match(/^<section[^>]*aria-label="([^"]*)"/)?.[1] ?? "";
 const stor = (k) => k.match(/<div class="hv-stor">([\s\S]*?)<\/div>/)?.[1] ?? "";
 
 rubrik("Chefens hem: fyra kort");
@@ -164,7 +166,7 @@ rubrik("Väntar på dig: samma lista som i dag, det som brinner först");
 {
   const g = hem({ chef: true });
   const k = kort(g.hvHem(), "Väntar på dig");
-  const titlar = [...k.matchAll(/<b>([^<]*)<\/b><button/g)].map((m) => m[1]);
+  const titlar = [...k.matchAll(/<button class="hv-radt" data-hvrad="[^"]*"><b>([^<]*)<\/b><\/button><button/g)].map((m) => m[1]);
   ok("tre rader som i skissen: det som brinner och det senare i dag, hetast överst", titlar.length === 3 && titlar[0] === "Carl är sjukanmäld" && titlar[1] === "Sätt utfall på 2 möten" && titlar[2] === "Ring tillbaka Mälarö Frakt", titlar.join(" | "));
   ok("en varm punkt på det som brinner, och bara där", (k.match(/hv-heat hot/g) || []).length === 2);
   ok("ett klick löser saken: knappen bär radens id", k.includes('data-hvgor="r1"') && k.includes(">Bekräfta</button>"));
@@ -181,7 +183,10 @@ rubrik("Nav föreslår (skiss 9, punkt 14 och 15)");
   ok("Navs märke i huvudet", ett.includes('<i class="hv-heat nav"><svg data-nav="15"></svg></i><h2>Nav föreslår</h2>'));
   ok("ingen bläddring när det bara finns ett", !ett.includes("data-hvnasta") && !ett.includes("1 av 1"));
   const tva = kort(hem({ chef: false, forslag: 2 }).hvHem(), "Nav föreslår");
-  ok("två förslag: 1 av 2 och 1 förslag till", tva.includes(">1 av 2<") && /data-hvnasta>1 förslag till</.test(tva), tva);
+  ok("två förslag: 1 av 2 och ett steg som heter Nästa förslag", tva.includes(">1 av 2<") && /data-hvnasta>Nästa förslag</.test(tva) && !/förslag till/.test(tva), tva);
+  const sist = hem({ chef: false, forslag: 3 }); sist.S.hv.fi = 2;
+  const sk = kort(sist.hvHem(), "Nav föreslår");
+  ok("på det sista förslaget säger knappen att den går till det första", sk.includes(">3 av 3<") && /data-hvnasta>Till det första</.test(sk), sk);
   const tom = kort(hem({ chef: true, forslag: 0, pa: false, inst: { pa: false, farBrytare: true } }).hvHem(), "Nav föreslår");
   ok("tomt: bock och Inga förslag just nu., inget om avstängt", /<div class="hv-lugn"><svg data-i="check"><\/svg>Inga förslag just nu\.<\/div>/.test(tom) && !/avstängda|trendregeln|avgjorda möten/.test(tom), tom);
 }
@@ -208,7 +213,9 @@ rubrik("Din månad: bara det provisionsmotorn har räknat");
   ok("kortets tal är godkänd provision", /<b class="num">14[\s ]500<\/b><span>kr i provision<\/span>/.test(stor(k)), stor(k));
   ok("väntande order står som antal", k.includes("1 order väntar på godkännande."), k);
   ok("väntande kronor står aldrig i kortet", !/16[\s ]500/.test(k) && !/2[\s ]000/.test(k) && !k.includes("≈"), k);
-  ok("avståndet till nästa steg står i order", k.includes("3 order till nästa steg.") && !/500 kr/.test(k), k);
+  // 500 kr är nästa stegs belopp. Det får inte stå någonstans på kortet; 14 500 kr (med hårt mellanslag före 500) är provisionen.
+  ok("avståndet till nästa steg står i order", k.includes("3 order till nästa steg.") && !/(?<!\d[\s\u00a0])500\s?kr/.test(k), k);
+  ok("kortets namn för skärmläsaren bär samma tal som ritas", namnet(k) === "Din november: 14\u00a0500 kr i provision. 1 order väntar på godkännande. 3 order till nästa steg. Visa uträkningen", namnet(k));
   ok("mätaren har ett fack per order, och den väntande är ljusare", (k.match(/<i class="pa"><\/i>/g) || []).length === 2 && (k.match(/<i class="vant"><\/i>/g) || []).length === 1 && (k.match(/<i class=""><\/i>/g) || []).length === 2, k.match(/<div class="hv-matare[\s\S]*?<\/div>/)?.[0]);
   ok("prognosen i kronor står inte på kortet", !/30[\s ]500/.test(k) && !/[Pp]rognos/.test(k), k);
   ok("aldrig du förlorar, aldrig en jämförelse med kollegor", !/förlorar|kollegor|före månadsskiftet/i.test(k));
@@ -449,7 +456,9 @@ rubrik("Rådgivarens fynd: klicken, hämtningarna, Escape och exempeldata");
   ok("och uträkningen visar inga exempelrader", !a.includes("Hagmans Rör") && !/14[\s ]500/.test(a) && a.includes("Provisionen går inte att läsa just nu."), a.slice(0, 1200));
   const ej = hem({ chef: false });
   ej.ndKopplad = (vy) => vy !== "provision";
-  ok("samma sak när vyn Provision inte är kopplad", kort(ej.hvHem(), "Din november").includes("Provisionen går inte att läsa just nu."));
+  const ejk = kort(ej.hvHem(), "Din november");
+  ok("när vyn Provision inte är kopplad står just det, utan tal", ejk.includes("Provisionen är inte kopplad till hemmet än.") && !ejk.includes("går inte att läsa") && !/\d/.test(ejk.replace(/<[^>]*>/g, "")), ejk);
+  ok("kortet säger skälet och inget mer: ingen kommentar om varför Nav hellre tiger", !k.includes("Jag visar hellre") && !ejk.includes("Jag visar hellre"));
 
   // 8. Formuläret listar bara dem läsaren får berätta om.
   const f = hem({ chef: true });
@@ -639,7 +648,7 @@ rubrik("Rättelser efter klickprovet 2026-11-15");
 {
   const h = hem({ chef: true }).hvHem();
   ok("Nästa att göra är ihopfälld i det nya hemmet, som i skissen", /const min = pillHv\(\) \? !S\.hvPillUt : S\.pillMin;/.test(html) && /if \(d\.pillmin !== undefined && pillHv\(\)\)\{ S\.hvPillUt = !S\.hvPillUt;/.test(html));
-  ok("utfälld lyfts den över skrivrutan", /body:has\(\.main\.hvmode\) \.todopill:not\(\.min\)\{bottom:/.test(html));
+  ok("utfälld lyfts den över skrivrutan", /body\.hvbody \.todopill:not\(\.min\)\{bottom:/.test(html));
   const tk = kort(h, "Teamet i november");
   ok("Teamets rubrik får plats på en rad: dagarna står kort", /<span class="hv-meta hv-end num"[^>]*>dag 10 av 21<\/span>/.test(tk) && tk.includes('title="10 av 21 arbetsdagar"'), tk.match(/<div class="hv-chead">[\s\S]*?<\/div>/)?.[0]);
   ok("veckonumret efter datumet", h.includes("Måndag 16 november<small>v.47</small>"));
@@ -698,34 +707,34 @@ rubrik("Menyraden går ihop med fönstrets topp (klickprovet 2026-11-16)");
 
 rubrik("Skiss 9 exakt: hälsningen (punkt 6 och 7)");
 {
-  ok(".hv-hero p på en rad med gap 10", regel(".hv-hero p") === "display:flex;align-items:center;gap:10px;margin:8px 0 0;font-size:15.5px;color:var(--hv-ink-2);white-space:nowrap;overflow:hidden", regel(".hv-hero p"));
+  ok(".hv-hero p på en rad med gap 12", regel(".hv-hero p") === "display:flex;align-items:center;gap:var(--hv-s3);margin:var(--hv-s2) 0 0;font-size:var(--hv-fs-4);color:var(--hv-ink-2);white-space:nowrap;overflow:hidden", regel(".hv-hero p"));
   ok(".hv-hero p>span klipps med …", regel(".hv-hero p>span") === "overflow:hidden;text-overflow:ellipsis", regel(".hv-hero p>span"));
-  ok("låg skärm: padding-top 24", /\.hv-hero\{padding-top:24px\}/.test(media("(max-height:700px)")), media("(max-height:700px)"));
+  ok("låg skärm: padding-top 24", /\.hv-hero\{padding-top:var\(--hv-s5\)\}/.test(media("(max-height:700px)")), media("(max-height:700px)"));
 }
 
 rubrik("Skiss 9 exakt: korten (punkt 8–12, 20, 39 och 40)");
 {
   ok("korten följer innehållet", /min-height:0\}?$/.test(regel(".hv-card")) && !/\.hv-card\{min-height/.test(media("(max-height:700px)")), regel(".hv-card"));
-  ok("kortets huvud på baslinjen", regel(".hv-chead") === "display:flex;align-items:baseline;gap:8px;margin-bottom:10px", regel(".hv-chead"));
+  ok("kortets huvud på baslinjen", regel(".hv-chead") === "display:flex;align-items:baseline;gap:var(--hv-s2);margin-bottom:var(--hv-s3)", regel(".hv-chead"));
   ok("Navs märke i huvudet centrerat", regel(".hv-chead .hv-heat.nav") === "align-self:center", regel(".hv-chead .hv-heat.nav"));
-  ok("texten 14,5 px, högst 46 tecken bred", regel(".hv-ftxt") === "margin:12px 0 0;font-size:14.5px;line-height:1.5;color:var(--hv-ink-2);max-width:46ch", regel(".hv-ftxt"));
+  ok("texten 14 px, högst 46 tecken bred", regel(".hv-ftxt") === "margin:var(--hv-s3) 0 0;font-size:var(--hv-fs-3);line-height:1.5;color:var(--hv-ink-2);max-width:46ch;text-wrap:pretty", regel(".hv-ftxt"));
   ok("kortfoten är ink-3, i talkorten ink-2", /color:var\(--hv-ink-3\)/.test(regel(".hv-kfot")) && /color:var\(--hv-ink-2\)/.test(regel(".hv-tal .hv-frad .hv-kfot") || ""), regel(".hv-kfot"));
   ok("raderna 48 px, 44 på låg skärm", /height:48px/.test(regel(".hv-rad")) && /\.hv-rad\{min-height:44px;height:44px\}/.test(media("(max-height:700px)")));
-  ok("låg skärm: texten närmare talet", /\.hv-ftxt\{margin-top:8px\}/.test(media("(max-height:700px)")));
+  ok("låg skärm: texten närmare talet", /\.hv-ftxt\{margin-top:var\(--hv-s2\)\}/.test(media("(max-height:700px)")));
   ok("två kolumner först under 860", !media("(max-width:1180px)").includes(".hv-kort") && (html.match(/\.hv-kort\{grid-template-columns:repeat\(2/g) || []).length === 1 && /\.hv-kort\{grid-template-columns:repeat\(2/.test(media("(max-width:860px)")));
-  ok("det lugna läget: bock, linje överst, ingen egen höjd", regel(".hv-lugn") === "flex:1;display:flex;align-items:center;gap:10px;color:var(--hv-ink-2);border-top:1px solid var(--hv-line)", regel(".hv-lugn"));
-  ok("mörka färger som skissen", /--hv-ink-3:#7C8E86;/.test(regel(".hv")) && /--hv-pop:rgba\(16,31,26,\.84\);/.test(regel(".hv")));
+  ok("det lugna läget: bock, linje överst, ingen egen höjd, mitt i ytan", regel(".hv-lugn") === "flex:1;display:flex;align-items:center;justify-content:center;gap:var(--hv-s3);color:var(--hv-ink-2);text-align:center;border-top:1px solid var(--hv-line)", regel(".hv-lugn"));
+  ok("mörka färger som skissen", /--hv-ink-3:#7C8E86;/.test(regel(".hv")) && /--hv-pop:color-mix\(in srgb,var\(--hv-ink\) 9%,var\(--hv-base\)\);/.test(regel(".hv")));
   const lj = regel('.hv[data-hvtema="ljus"]');
-  ok("ljusa färger som skissen", /--hv-ink-3:#66746D;/.test(lj) && /--hv-pop:rgba\(255,255,255,\.88\);/.test(lj) && /--hv-signal:#D98A1C;/.test(lj) && /--hv-danger:#C4473C;/.test(lj), lj);
+  ok("ljusa färger som skissen", /--hv-ink-3:#5A6862;/.test(lj) && /--hv-pop:#FFFFFF;/.test(lj) && /--hv-signal-ink:#8A5200;/.test(lj) && /--hv-signal:#D98A1C;/.test(lj) && /--hv-danger:#C4473C;/.test(lj), lj);
   const tom = kort(hem({ chef: true, rader: [] }).hvHem(), "Väntar på dig");
   ok("Väntar tomt: bock och skissens text", /<div class="hv-lugn"><svg data-i="check"><\/svg>Inget väntar på dig just nu\.<\/div>/.test(tom), tom);
 }
 
 rubrik("Skiss 9 exakt: Nästa att göra (punkt 28)");
 {
-  ok("ihopfälld är den 46 px och står 28 px från kanterna", regel("body:has(.main.hvmode) .todopill.min") === "right:28px;bottom:calc(28px + env(safe-area-inset-bottom,0px));padding:0;width:46px;height:46px;box-shadow:0 0 0 1px rgba(255,255,255,.14),0 8px 22px rgba(19,32,28,.22)", regel("body:has(.main.hvmode) .todopill.min"));
-  ok("talet 600 11px", regel("body:has(.main.hvmode) .todopill.min .pmin") === "width:46px;height:46px;font:600 11px var(--f-body)");
-  ok("ringen 38 px, 4 px in", regel("body:has(.main.hvmode) .todopill.min .pmin svg") === "inset:4px;width:38px;height:38px");
+  ok("ihopfälld är den 46 px och står 28 px från kanterna", regel("body.hvbody .todopill.min") === "right:28px;bottom:calc(28px + env(safe-area-inset-bottom,0px));padding:0;width:46px;height:46px;box-shadow:0 0 0 1px rgba(255,255,255,.14),0 8px 22px rgba(19,32,28,.22)", regel("body.hvbody .todopill.min"));
+  ok("talet 600 11px", regel("body.hvbody .todopill.min .pmin") === "width:46px;height:46px;font:600 11px var(--f-body)");
+  ok("ringen 38 px, 4 px in", regel("body.hvbody .todopill.min .pmin svg") === "inset:4px;width:38px;height:38px");
 }
 
 rubrik("Skiss 9 exakt: fönstret, arken och tråden (punkt 29, 30 och 37)");
@@ -753,7 +762,7 @@ rubrik("Skiss 9 exakt: fönstret, arken och tråden (punkt 29, 30 och 37)");
   t.hvOppna("team"); t.hvOppna("andrat");
   const th = t.hvHem();
   ok("Teamet och sedan Ändrat ligger båda i tråden, i den ordningen", t.S.hv.trad.map((x) => x.sort).join() === "team,andrat" && th.indexOf('data-hvinl="team"') < th.indexOf('data-hvinl="andrat"'), t.S.hv.trad.map((x) => x.sort).join());
-  ok("överst i tråden: ← Hem och hur mycket som brinner", /<div class="hv-rumtop"><button class="hv-kn" data-hvstang><svg[^>]*>[\s\S]*?<\/svg>Hem<\/button><button class="hv-kn" data-hvstang><i><\/i><span>2 brinner<\/span><\/button><\/div>/.test(th), th.match(/<div class="hv-rumtop">[\s\S]*?<\/div>/)?.[0]);
+  ok("överst i tråden: ← Hem och hur mycket som brinner", /<div class="hv-rumtop"><button class="hv-kn" data-hvstang><svg[^>]*>[\s\S]*?<\/svg>Hem<\/button><button class="hv-kn" data-hvark="vantar"><i><\/i><span>2 brinner<\/span><\/button><\/div>/.test(th), th.match(/<div class="hv-rumtop">[\s\S]*?<\/div>/)?.[0]);
   t.hvStang();
   ok("Hem tömmer inte tråden", t.S.hv.ark === null && t.S.hv.trad.length === 2 && !t.hvHem().includes("hv-rumtop"));
   const lugn = hem({ chef: true, rader: [] }); lugn.hvOppna("team");
@@ -795,7 +804,7 @@ await (async () => {
   ok("utan taligenkänning ingen Tala", !sk.includes("data-hvtala"));
   g.window.webkitSpeechRecognition = function () {};
   ok("med taligenkänning finns Tala", /<button type="button" class="hv-ikonk" data-hvtala aria-label="Tala" aria-pressed="false">/.test(g.hvSkriv()));
-  ok("raden börjar 8 px ut, som i skissen", regel(".hv-srad") === "display:flex;align-items:center;gap:6px;margin-top:8px;margin-left:-8px");
+  ok("raden börjar 8 px ut, som i skissen", regel(".hv-srad") === "display:flex;align-items:center;gap:var(--hv-s1);margin-top:var(--hv-s2);margin-left:-8px");
   ok("tipset syns bara på hemmet", /\.hv:not\(\[data-hvlage="hem"\]\) \.hv-tips\{visibility:hidden\}/.test(html));
   g.S.hv.bilagor = [{ sort: "image/png", namn: "bild <1>.png", data: "AAAA" }];
   ok("en bilaga står som ett chip med ×", /<div class="hv-bilagor"><span class="hv-bil">bild &lt;1&gt;\.png<button type="button" data-hvbilx="0" aria-label="Ta bort bild &lt;1&gt;\.png">×<\/button><\/span><\/div>/.test(g.hvSkriv()), g.hvSkriv());
@@ -916,31 +925,31 @@ rubrik("Skiss 9 exakt: mobil som Claude (punkt 41, F6)");
 {
   const M = media("(max-width:860px)");
   const mob = (sel) => M.match(new RegExp(`[\\s}]${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\{([^}]*)\\}`))?.[1] ?? "";
-  ok("fönstret: 100dvh kvar, kant 16 och ingen luft under skrivrutan", mob(".hv-fonster") === "padding:10px 16px 0", mob(".hv-fonster"));
-  ok("skrivrutan längst ned i full bredd, bara övre hörnen rundade, säker kant", mob(".hv-skriv") === "max-width:none;width:auto;margin:6px -16px 0;border-radius:20px 20px 0 0;border-bottom:0;padding:12px 12px calc(10px + env(safe-area-inset-bottom)) 16px", mob(".hv-skriv"));
+  ok("fönstret: 100dvh kvar, kant 16 och ingen luft under skrivrutan", mob(".hv-fonster") === "padding:var(--hv-s3) var(--hv-s4) 0", mob(".hv-fonster"));
+  ok("skrivrutan längst ned i full bredd, bara övre hörnen rundade, säker kant", mob(".hv-skriv") === "max-width:none;width:auto;margin:var(--hv-s2) -16px 0;border-radius:var(--hv-r2) var(--hv-r2) 0 0;border-bottom:0;padding:var(--hv-s3) var(--hv-s3) calc(var(--hv-s3) + env(safe-area-inset-bottom)) var(--hv-s4)", mob(".hv-skriv"));
   ok("skrivfältet 16 px, så att telefonen inte zoomar", mob(".hv-skriv textarea") === "font-size:16px", mob(".hv-skriv textarea"));
   ok("genvägarna i en rad som går att svepa", /^overflow-x:auto;flex-wrap:nowrap;justify-content:flex-start;scrollbar-width:none;/.test(mob(".hv-genv")), mob(".hv-genv"));
-  ok("genvägarnas rad går ut till kanten", /margin:0 -16px;padding:12px 16px 2px/.test(mob(".hv-genv")), mob(".hv-genv"));
+  ok("genvägarnas rad går ut till kanten", /margin:0 -16px;padding:var\(--hv-s3\) var\(--hv-s4\) 2px/.test(mob(".hv-genv")), mob(".hv-genv"));
   ok("ingen rullist under genvägarna", mob(".hv-genv::-webkit-scrollbar") === "display:none");
   ok("chippen krymper inte", /flex:none/.test(mob(".hv-chip")), mob(".hv-chip"));
-  ok("Mer fälls ut i samma rad, inte som en ruta som klipps", mob(".hv-merv") === "display:contents" && mob(".hv-genv .hv-mer") === "position:static;flex-direction:row;gap:8px;min-width:0;padding:0;background:none;border:0;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none", mob(".hv-genv .hv-mer"));
-  ok("Mers val ser ut som chippen", /^flex:none;height:32px;padding:0 13px;border-radius:12px;/.test(mob(".hv-genv .hv-mer button")), mob(".hv-genv .hv-mer button"));
-  ok("korten två och två, som på datorn fast mindre", mob(".hv-kort") === "grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px", mob(".hv-kort"));
-  ok("korten: mindre kant och radie", mob(".hv-card") === "padding:11px 12px 10px;border-radius:14px", mob(".hv-card"));
-  ok("rubriken 12 px", mob(".hv-chead h2") === "font-size:12px" && mob(".hv-chead") === "margin-bottom:6px;gap:6px");
-  ok("det stora talet 34 px", mob(".hv-stor b") === "font-size:34px" && mob(".hv-stor span") === "font-size:12.5px" && mob(".hv-stor") === "gap:4px;margin-top:2px");
-  ok("Väntar: rader 32 px, utan knappar", mob(".hv-rad") === "grid-template-columns:8px minmax(0,1fr);gap:8px;height:32px;min-height:32px" && mob(".hv-rad>b") === "font-size:13px" && mob(".hv-rad .hv-btn") === "display:none");
-  ok("texten högst tre rader", mob(".hv-ftxt") === "margin-top:6px;font-size:12.5px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden", mob(".hv-ftxt"));
-  ok("foten och knappen mindre", mob(".hv-frad") === "gap:8px;padding-top:8px;flex-wrap:wrap" && mob(".hv-frad .hv-btn") === "min-height:28px;padding:0 10px;font-size:12px" && mob(".hv-kfot") === "padding-top:6px;font-size:11.5px");
-  ok("hälsningen mindre, fortfarande en rad", mob(".hv-hero") === "padding:14px 2px 0" && mob(".hv-hero h1") === "font-size:26px" && mob(".hv-hero p") === "margin-top:6px;font-size:13.5px");
+  ok("Mer fälls ut i samma rad, inte som en ruta som klipps", mob(".hv-merv") === "display:contents" && mob(".hv-genv .hv-mer") === "position:static;flex-direction:row;gap:var(--hv-s2);min-width:0;padding:0;background:none;border:0;box-shadow:none", mob(".hv-genv .hv-mer"));
+  ok("Mers val ser ut som chippen", /^flex:none;height:40px;padding:0 var\(--hv-s4\);border-radius:var\(--hv-r1\);/.test(mob(".hv-genv .hv-mer button")), mob(".hv-genv .hv-mer button"));
+  ok("korten två och två, som på datorn fast mindre", mob(".hv-kort") === "grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--hv-s2);margin-top:var(--hv-s4)", mob(".hv-kort"));
+  ok("korten: mindre kant och radie", mob(".hv-card") === "padding:var(--hv-s3);border-radius:var(--hv-r2)", mob(".hv-card"));
+  ok("rubriken 12 px", mob(".hv-chead h2") === "font-size:var(--hv-fs-1)" && mob(".hv-chead") === "margin-bottom:var(--hv-s2);gap:var(--hv-s2);flex-wrap:wrap");
+  ok("det stora talet 28 px", mob(".hv-stor b") === "font-size:var(--hv-fs-h2)" && mob(".hv-stor span") === "font-size:var(--hv-fs-1)" && mob(".hv-stor") === "gap:var(--hv-s1);margin-top:2px");
+  ok("Väntar: rader 44 px, utan knappar", mob(".hv-rad") === "grid-template-columns:8px minmax(0,1fr);gap:var(--hv-s2);height:44px;min-height:44px" && mob(".hv-rad>b") === "font-size:var(--hv-fs-2)" && mob(".hv-rad .hv-btn") === "display:none");
+  ok("texten högst tre rader", mob(".hv-ftxt") === "margin-top:var(--hv-s2);font-size:var(--hv-fs-2);line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden", mob(".hv-ftxt"));
+  ok("foten och knappen mindre", mob(".hv-frad") === "gap:var(--hv-s2);padding-top:var(--hv-s2);flex-wrap:wrap" && mob(".hv-frad .hv-btn") === "min-height:40px;padding:0 var(--hv-s3);font-size:var(--hv-fs-1)" && mob(".hv-kfot") === "padding-top:var(--hv-s2);font-size:var(--hv-fs-1)");
+  ok("hälsningen mindre, och beskedet får brytas på två rader", mob(".hv-hero") === "padding:var(--hv-s4) 2px 0" && mob(".hv-hero h1") === "font-size:var(--hv-fs-h2)" && mob(".hv-hero p") === "margin-top:var(--hv-s2);font-size:var(--hv-fs-3);white-space:normal;overflow:visible;align-items:flex-start" && mob(".hv-hero p>span") === "overflow:visible");
   ok("hemmet rullar om det inte ryms", mob(".hv-hemlager") === "overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none");
-  ok("Veckan blir en lista per dag", mob(".hv-vecka") === "grid-template-columns:1fr;gap:8px;overflow-y:auto;align-content:start" && mob(".hv-tid") === "min-height:0;margin:4px 0 0;border-left:0;display:flex;flex-direction:column;gap:4px" && mob(".hv-tid i") === "position:static;white-space:normal");
-  ok("arket: mindre kant, inget esc", mob(".hv-arkyta") === "padding:14px" && mob(".hv-arkhuvud kbd") === "display:none");
+  ok("Veckan blir en lista per dag", mob(".hv-vecka") === "grid-template-columns:1fr;gap:var(--hv-s2);overflow-y:auto;align-content:start" && mob(".hv-tid") === "min-height:0;margin:4px 0 0;border-left:0;display:flex;flex-direction:column;gap:4px" && mob(".hv-tid i") === "position:static;white-space:normal");
+  ok("arket: mindre kant, inget esc", mob(".hv-arkyta") === "padding:var(--hv-s4)" && mob(".hv-arkhuvud kbd") === "display:none");
   ok("tråden under skrivrutan", mob(".hv-trad") === "top:-10px;bottom:-96px" && mob(".hv-tcol") === "padding:52px 0 120px");
   ok("gamla mobilreglerna borta: en kolumn och 96 px luft", !M.includes("grid-template-columns:1fr;gap:12px;margin-top:20px") && !M.includes("padding:14px 16px 96px"));
   // Som i Claude: ingen flikrad nere, en menyknapp uppe till vänster som öppnar Navs meny.
-  ok("Navs flikrad döljs på hemmet i telefonen, menyknappen syns", /@media \(max-width:900px\)\{body:has\(\.main\.hvmode\) \.bnav\{display:none\}\.hv-meny\{display:inline-grid\}\}/.test(html));
-  ok("menyknappen är dold på datorn", regel(".hv-meny") === "display:none;place-items:center;width:36px;height:36px;margin-left:-8px;border-radius:10px;color:var(--hv-ink)", regel(".hv-meny"));
+  ok("Navs flikrad döljs på hemmet i telefonen, menyknappen syns", /@media \(max-width:900px\)\{body\.hvbody \.bnav\{display:none\}\.hv-meny\{display:inline-grid\}\}/.test(html));
+  ok("menyknappen är dold på datorn", regel(".hv-meny") === "display:none;place-items:center;width:36px;height:36px;margin-left:-8px;border-radius:var(--hv-r1);color:var(--hv-ink)", regel(".hv-meny"));
   const g = hem({ chef: true });
   const h = g.hvHem();
   ok("menyknappen först i överraden", /<div class="hv-topp"><button class="hv-meny" data-rlsmer aria-haspopup="dialog" aria-expanded="false" aria-label="Meny"><svg/.test(h), h.slice(h.indexOf("hv-topp") - 12, h.indexOf("hv-topp") + 200));
@@ -948,7 +957,34 @@ rubrik("Skiss 9 exakt: mobil som Claude (punkt 41, F6)");
   ok("menyknappen säger när menyn är öppen", g.hvHem().includes('class="hv-meny" data-rlsmer aria-haspopup="dialog" aria-expanded="true"'));
   ok("ikonen: två streck", /P\.hvmeny = '<path d="M4 8h16M4 16h16"\/>';/.test(html));
   ok("menyn stängs med fokus på den knapp som syns", /function rlsArkStang\(\)\{ S\.rlsMer = false; rlsArkRita\(\); const m = \[\.\.\.document\.querySelectorAll\('\[data-rlsmer\]'\)\]\.find\(b => b\.offsetParent\);/.test(html));
-  ok("Mer rullar fram de nya valen i raden", /if \(d\.hvmer !== undefined\)\{ S\.hv\.mer = !S\.hv\.mer; render\(\); if \(S\.hv\.mer\) requestAnimationFrame\(\(\) => \{ const r = document\.querySelector\('\.hv-genv'\); if \(r && r\.scrollWidth > r\.clientWidth\) r\.scrollLeft = r\.scrollWidth; \}\); return; \}/.test(html));
+  ok("Mer rullar fram de nya valen i raden", /if \(d\.hvmer !== undefined\)\{ S\.hv\.mer = !S\.hv\.mer; render\(\); if \(S\.hv\.mer\) requestAnimationFrame\(\(\) => \{ const r = document\.querySelector\('\.hv-genv'\); if \(r && r\.scrollWidth > r\.clientWidth\) r\.scrollLeft = r\.scrollWidth; const f = document\.querySelector\('\.hv-mer \[role="menuitem"\]'\); if \(f\) f\.focus\(\); \}\); return; \}/.test(html));
+}
+
+rubrik("Stilen: täckande ytor, få tider, tydliga lägen (lyft av hemvyn)");
+{
+  const start = html.indexOf("/* ===================== Nya hemmet (prefix hv)");
+  const slut = html.indexOf("@media (prefers-reduced-motion:reduce)", start);
+  const css = html.slice(start, html.indexOf("\n", slut));
+  const tokens = regel(".hv") ?? "";
+  ok("inget glas: ingen backdrop-filter i hemmets stil", !/backdrop-filter/.test(css));
+  ok("ingen :has på body, hvbody ligger på body i stället", !/body:has\(/.test(css) && /document\.body\.classList\.toggle\('hvbody', hvNytt\)/.test(html));
+  ok("urtavlan står still: ingen evig rotation", !/hvrot|animation:[^;}]*infinite/.test(css) && !/\.hv-dial g\{/.test(css));
+  ok("bakgrunden är platt: inga gradienter utom tonen under tråden", (css.match(/(?:radial|linear)-gradient/g) || []).length === 1 && /\.hv-inre::after\{[^}]*linear-gradient\(transparent,var\(--hv-base\) 72%\)/.test(css));
+  ok("tokens: typsteg, avstånd, radie och tider finns", /--hv-fs-1:12px;[^}]*--hv-fs-4:16px;/.test(tokens) && /--hv-s1:4px;[^}]*--hv-s6:32px;/.test(tokens) && /--hv-r1:8px; --hv-r2:16px;/.test(tokens) && /--hv-t-snabb:120ms; --hv-t:180ms; --hv-t-lugn:250ms;/.test(tokens));
+  ok("ingen transition: all och inga tider utanför 120 till 250 ms", !/transition:\s*all/.test(css) && !/(?:transition|animation)[^;}]*\s\.?\d*\.?\d+m?s(?![\w-])[^;}]*/.test(css.replace(/var\(--hv-t[a-z-]*\)/g, "").replace(/visibility 0s/g, "")), (css.match(/(?:transition|animation):[^;}]*/g) || []).filter((x) => /\d(?:ms|s)\b/.test(x.replace(/var\([^)]*\)/g, "").replace(/visibility 0s/g, ""))).join(" | "));
+  const hov = css.slice(css.indexOf("@media (hover:hover){"));
+  const hovSlut = hov.indexOf("\n}\n");
+  ok("hover bara där en mus finns", css.includes("@media (hover:hover){") && hovSlut > 0 && !/:hover/.test(css.replace(hov.slice(0, hovSlut), "").replace("@media (hover:hover)", "")) && (hov.slice(0, hovSlut).match(/:hover/g) || []).length > 10);
+  ok("tryck: scale(.98) på kort, chips och knappar, och ytan blir djupare", /\.hv-card\.hv-tal:active[^{]*\.hv-chip:active[^{]*\{transform:scale\(\.98\)\}/.test(css) && /\.hv-btn:active,\.hv-chip:active[^{]*\{background:var\(--hv-glass-3\)\}/.test(css));
+  ok("skrivrutan visar fokus på hela rutan", /\.hv-skriv:focus-within\{border-color:var\(--hv-brand\)\}/.test(css));
+  ok("hemlagret lämnar tabbordningen när man skriver", /\.hv-skriver \.hv-hemlager\{opacity:0;visibility:hidden;pointer-events:none;/.test(css) && !/\.hv-skriver \.hv-hemlager\{[^}]*transform/.test(css));
+  ok("fältkanten har 3:1 mot ytan", /--hv-line-3:#5E7068/.test(tokens) && /--hv-line-3:#85938B/.test(regel('.hv[data-hvtema="ljus"]') ?? "") && /\.hv-egen input,\.hv-form :is\(input,select,textarea\)\{[^}]*border:1px solid var\(--hv-line-3\)/.test(css));
+  ok("signalfärgen som text har egen, läsbar ton i ljust läge", /--hv-signal-ink:#8A5200/.test(regel('.hv[data-hvtema="ljus"]') ?? "") && !/color:var\(--hv-signal\)/.test(css));
+  ok("tal står tabulärt och rubriker balanseras", /font-variant-numeric:tabular-nums/.test(tokens) && /\.hv :is\(h1,h2,h3,h4\)\{text-wrap:balance\}/.test(css) && /text-wrap:pretty/.test(css));
+  const M = media("(max-width:860px)");
+  const mob = (sel) => M.match(new RegExp(`[\\s}]${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\{([^}]*)\\}`))?.[1] ?? "";
+  ok("telefon: tryckytorna är minst 40 px", /height:40px/.test(mob(".hv-chip")) && /min-height:40px/.test(mob(".hv-btn,.hv-kn,.hv-egen input,.hv-form :is(input,select,textarea)")) && /^height:40px$/.test(mob(".hv-meny,.hv-lg,.hv-stamp,.hv-ikonk,.hv-send,.hv-tips")) && /width:40px/.test(mob(".hv-meny,.hv-ikonk,.hv-send")));
+  ok("telefon: personlistan får plats utan anteckningen", mob(".hv-prow") === "grid-template-columns:26px minmax(0,1fr) auto" && mob(".hv-prow .hv-dt") === "display:none");
 }
 
 rubrik("Skiss 9 exakt: menyraden (punkt 42)");
@@ -995,6 +1031,331 @@ rubrik("Menyraden exakt som skissen, utfälld och smal (klickprovet 2026-11-16, 
   ok("smal Hovra: raden Sidopanel syns inte men tar sin plats", /\n\s*body\.prf-rail-hovra #rail:not\(\.rls-ut\) \.rls-fot\{opacity:0;pointer-events:none\}/.test(bred));
 }
 
+rubrik("Lyftet: korten räknar ur samma mängd, och allt man ser leder vidare");
+{
+  // Ett mål som svarar olika på olika väljare, som en riktig DOM-nod (closest ger null när väljaren inte träffar).
+  const mal = (traff, dataset = {}) => ({ closest: (sel) => (sel.split(",").some((s) => traff.includes(s.trim())) ? { dataset } : null) });
+  const klick = (g, target) => g.hvKlick({ target, preventDefault() {}, stopPropagation() {} });
+
+  // js-kort-3: talet i huvudet räknar det som syns (nu och i dag), utan det bortvalda.
+  const g = hem({ chef: true });
+  const k = kort(g.hvHem(), "Väntar på dig");
+  ok("talet i huvudet är det som ska göras nu och i dag (3), inte allt (5)", /<h2>Väntar på dig<\/h2><span class="hv-meta num">3<\/span>/.test(k), k.slice(0, 300));
+  const dold = hem({ chef: true }); dold.S.flagged = new Set(["r1"]); dold.S.hiddenKinds = new Set(["utbildning"]);
+  const dk = kort(dold.hvHem(), "Väntar på dig"), dh = dold.hvHem();
+  ok("det bortvalda räknas inte: 2 i huvudet, och foten räknar ur samma mängd", /<span class="hv-meta num">2<\/span>/.test(dk) && /data-hvark="vantar">1 till som kan vänta</.test(dk) && !dk.includes("Carl är sjukanmäld"), dk);
+  ok("hälsningen säger samma sak som kortet", dh.includes("<b>En sak brinner.</b>"), dh.match(/<div class="hv-hero">[\s\S]*?<\/p>/)?.[0]);
+  dold.S.hv.ark = "vantar";
+  const da = dold.hvHem();
+  ok("hela listan visar allt, räknar som hemmet och säger hur mycket som är dolt", da.includes('<p id="hvArktext">Tre saker väntar på dig. <b>En sak brinner.</b> Två rader är dolda på hemmet.</p>') && da.includes('data-id="r1"') && da.includes('data-id="r5"'), da.match(/<p id="hvArktext">[\s\S]*?<\/p>/)?.[0]);
+  const bara = hem({ chef: true, rader: [{ id: "v1", nar: "vanta", heat: 1, bkind: "rutin", t: "Granska rutinen", act: { l: "Granska" } }, { id: "v2", nar: "vanta", heat: 1, bkind: "rutin", t: "Läs kursen", act: { l: "Öppna" } }] });
+  const bk = kort(bara.hvHem(), "Väntar på dig");
+  ok("bara sådant som kan vänta: ingen siffra, en mening som fakta och foten 2 kan vänta", /<span class="hv-meta num"><\/span>/.test(bk) && bk.includes("Inget brinner och inget ska göras i dag.") && /data-hvark="vantar">2 kan vänta</.test(bk), bk);
+  const manga = Array.from({ length: 120 }, (_x, i) => ({ id: `m${i}`, nar: "nu", heat: 1, bkind: "uppgift", t: `Sak ${i}`, act: { l: "Klar" } }));
+  ok("över 99 står 99+", /<span class="hv-meta num">99\+<\/span>/.test(kort(hem({ chef: true, rader: manga }).hvHem(), "Väntar på dig")));
+
+  // js-kort-1: raden går att trycka på också där knappen inte får plats, och öppnar hela listan vid raden.
+  ok("varje rad i kortet har en titel som är en knapp", (k.match(/<button class="hv-radt" data-hvrad="r[0-9]">/g) || []).length === 3);
+  ok("titelknappen ser ut som titeln (egen regel) och kapas med … på smal skärm", /\.hv-radt>b\{display:block;font-weight:500;font-size:14\.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis\}/.test(html) && /@media \(max-width:860px\)\{\s*\.hv-radt>b\{font-size:13px\}/.test(html));
+  const r = hem({ chef: true });
+  klick(r, mal(["[data-hvrad]"], { hvrad: "r4" }));
+  ok("ett tryck på raden öppnar hela listan med raden vald", r.S.hv.ark === "vantar" && r.S.selRad === "r4" && /class="hv-sak sel" data-id="r4"/.test(r.hvHem()));
+
+  // js-kort-7 och forskningens punkt 18: hälsningen bär kortens tal och leder dit den handlar om.
+  const h = hem({ chef: true }).hvHem();
+  ok("läget i hälsningen öppnar Väntar på dig, mötet öppnar Min dag", /<button class="hv-herok" data-hvark="vantar"><b>Två saker brinner\.<\/b><\/button>/.test(h) && /<button class="hv-herok" data-hvark="dag">nästa 11\.00 med PEGU Byggservice<\/button>\./.test(h), h.match(/<div class="hv-hero">[\s\S]*?<\/p>/)?.[0]);
+  const idag = hem({ chef: true, rader: [{ id: "i1", nar: "idag", heat: 1, bkind: "uppgift", t: "Ring", act: { l: "Klar" } }] }).hvHem();
+  ok("inget brinner men något ska göras i dag: det står", idag.includes("<b>En sak väntar i dag.</b>"));
+  const utanKal = hem({ chef: true }); utanKal.ndKopplad = (vy) => vy !== "kalender";
+  const uh = utanKal.hvHem().match(/<div class="hv-hero">[\s\S]*?<\/p>/)?.[0] ?? "";
+  ok("utan kalendern påstås inget om möten", !/möte/i.test(uh.replace(/<button class="hv-lyssna[\s\S]*$/, "")), uh);
+  ok("på smal skärm bryts läget i stället för att kapas", /@media \(max-width:860px\)\{[\s\S]*?\.hv-hero p\{white-space:normal;align-items:flex-start\}\s*\.hv-hero p>span\{overflow:visible\}/.test(html.slice(html.indexOf("Lyft: kort och tråd"))));
+  ok("Lyftets stilar ligger i stilblocket och använder ingen backdrop-filter", html.indexOf("/* ---------- Lyft: kort och tråd ---------- */") > 0 && html.indexOf("/* ---------- Lyft: kort och tråd ---------- */") < html.indexOf("</style>") && !/backdrop-filter/.test(html.slice(html.indexOf("Lyft: kort och tråd"), html.indexOf("</style>"))));
+
+  // js-kort-9: ett kort som är en knapp bär sina tal i namnet.
+  const c = hem({ chef: true }).hvHem();
+  ok("Teamet: namnet bär talet, dagen och motvikten", namnet(kort(c, "Teamet i november")) === "Teamet i november: 19 av 46 order, dag 10 av 21, 1 väntar · 1 makulerad. Visa uträkningen", namnet(kort(c, "Teamet i november")));
+  ok("Det som ändrats: namnet bär talen", namnet(kort(c, "Det som ändrats")) === "Det som ändrats: 4 följs, 2 av 52 möten uteblev, nästa dom 27 nov. Visa översynen", namnet(kort(c, "Det som ändrats")));
+
+  // js-kort-10: Mer och Laget stängs med Escape och av ett klick utanför, och Mer är en meny.
+  const m = hem({ chef: true }); m.S.hv.mer = true;
+  const mh = m.hvHem();
+  ok("Mer är en meny med val", /data-hvmer aria-haspopup="menu" aria-expanded="true">Mer</.test(mh) && (mh.match(/role="menuitem" data-hvark=/g) || []).length === 3);
+  m.hvTangent({ key: "Escape", target: {}, preventDefault() {} });
+  ok("Escape stänger Mer", m.S.hv.mer === false);
+  const d = hem({ chef: true }); d.S.hv.dra = true;
+  d.hvTangent({ key: "Escape", target: {}, preventDefault() {} });
+  ok("Escape stänger Laget", d.S.hv.dra === false);
+  const u = hem({ chef: true }); u.S.hv.mer = true;
+  klick(u, mal([]));
+  ok("ett klick utanför stänger Mer", u.S.hv.mer === false);
+  const i = hem({ chef: true }); i.S.hv.dra = true;
+  klick(i, mal([".hv-dra"]));
+  ok("ett klick i lagrutan stänger den inte", i.S.hv.dra === true);
+  const a = hem({ chef: true }); Object.assign(a.S.hv, { ark: "andrat", mer: true });
+  a.hvTangent({ key: "Escape", target: {}, preventDefault() {} });
+  ok("Escape stänger Mer först, inte arket under", a.S.hv.mer === false && a.S.hv.ark === "andrat");
+
+  // js-kort-2: ett inlägg som inte är öppet fastnar aldrig på Laddar.
+  const t = hem({ chef: true });
+  const losa = {};
+  t.ndLas = (url) => new Promise((klar) => { losa[/las=team/.test(url) ? "team" : "andrat"] = klar; });
+  let ritat = 0; t.render = () => { ritat++; };
+  t.hvOppna("team"); t.hvOppna("andrat");
+  losa.andrat({ ok: true, data: { farLaget: true, krets: null, kalla: "Räknat av regler", matt: [], andrat: [] } });
+  await Promise.resolve(); await Promise.resolve();
+  const fore = ritat;
+  losa.team({ ok: false, data: { fel: "Lagets tal gick inte att läsa." } });
+  await Promise.resolve(); await Promise.resolve();
+  const th = t.hvHem(), team = th.match(/<div class="hv-inl" data-hvnr="\d+" data-hvinl="team">[\s\S]*?(?=<div class="hv-inl")/)?.[0] ?? "";
+  ok("svaret för ett inlägg som inte är öppet ritas ändå", ritat > fore);
+  ok("och dess fel står i inlägget, med Försök igen", team.includes("Lagets tal gick inte att läsa.") && team.includes("data-hvigen") && !team.includes("Läser order"), team.slice(0, 400));
+  ok("det öppna inlägget har inget fel", !t.S.hv.fel);
+
+  const f = hem({ chef: false, forslag: 2 });
+  const fl = {};
+  f.ndLas = (url) => new Promise((klar) => { fl[url.match(/id=(\w+)/)[1]] = klar; });
+  f.hvOppna("forslag", "f0"); f.hvOppna("forslag", "f1");
+  fl.f1({ ok: true, data: { forslag: { ...FORSLAG(2)[1], lage: "oppet", mitt: true } } });
+  fl.f0({ ok: true, data: { forslag: { ...FORSLAG(2)[0], lage: "oppet", mitt: true } } });
+  await Promise.resolve(); await Promise.resolve();
+  const fh = f.hvHem();
+  ok("två förslag i tråden visar var sitt möte, inget står kvar på Hämtar", !fh.includes("Hämtar mötet") && (fh.match(/data-hvinl="forslag"/g) || []).length === 2, fh.match(/Hämtar mötet/g)?.length);
+
+  // Valet i det äldre av två förslag gäller det förslagets möte, inte det som hämtades sist.
+  const flytt = [];
+  Object.assign(f, { ndMo: () => ({ kort: [{ mote: { id: "m0" } }, { mote: { id: "m1" } }] }), moGa: () => {}, ndMoDialog: (_v, k2) => { flytt.push(k2.mote.id); } });
+  Object.assign(f.S.hv, { ark: "forslag", id: "f0" });
+  f.S.hv.data.forslag = f.S.hv.data["forslag:f1"];   // f1 hämtades sist
+  ok("båda förslagen ligger kvar under sina id", f.S.hv.data["forslag:f0"].forslag.mote === "m0" && f.S.hv.data["forslag:f1"].forslag.mote === "m1");
+  await f.hvValj("flytta");
+  ok("Flytta i det äldre förslaget öppnar just det mötet", flytt.join() === "m0", flytt.join());
+
+  // Ett klick i skrivrutan stänger också Mer (och ritar om i nästa bildruta, med fokus kvar).
+  const q = hem({ chef: true }); q.S.hv.mer = true;
+  klick(q, { closest: (sel) => (/textarea/.test(sel) ? {} : null) });
+  ok("ett klick i skrivrutan stänger Mer", q.S.hv.mer === false);
+  ok("omritningen behåller fokus och markör", /function hvRitaBehall\(\)\{[\s\S]*?b\.focus\(\); if \(pos !== null && b\.setSelectionRange\) b\.setSelectionRange\(pos, pos\);/.test(block) && block.includes("requestAnimationFrame(hvRitaBehall)"));
+
+  // Forskningens punkt 16: J och K flyttar mellan raderna i kortet, utan att röra Navs vanliga tangenter.
+  const jk = hem({ chef: true });
+  const knappar = [0, 1, 2].map((n) => ({ n, focus() { jk.document.activeElement = this; } }));
+  jk.document = { ...jk.document, activeElement: null, querySelectorAll: (sel) => (sel === ".hv-radt" ? knappar : []) };
+  const tang = (key, extra = {}) => { let stopp = false; jk.hvTangent({ key, target: { matches: () => false }, preventDefault() { stopp = true; }, ...extra }); return stopp; };
+  tang("j");
+  ok("J ger fokus åt första raden", jk.document.activeElement === knappar[0]);
+  tang("j"); tang("j"); tang("j");
+  ok("J stannar på sista raden", jk.document.activeElement === knappar[2]);
+  tang("k");
+  ok("K går upp", jk.document.activeElement === knappar[1]);
+  ok("Cmd+K är paletten, inte en rad", tang("k", { metaKey: true }) === false && jk.document.activeElement === knappar[1]);
+  jk.S.hv.ark = "vantar";
+  ok("i hela listan lämnas J åt Navs vanliga tangenter", tang("j") === false && jk.document.activeElement === knappar[1]);
+
+  // Forskningens punkt 13: rullningen följer personens val om rörelse.
+  ok("tråden glider bara när rörelse är tillåten", /const hvGlid = \(\) => typeof window\.matchMedia === 'function' && window\.matchMedia\('\(prefers-reduced-motion: reduce\)'\)\.matches \? 'auto' : 'smooth';/.test(html) && !/behavior:'smooth'/.test(block));
+}
+
+rubrik("Lyftet: chattens klient (stopp, försök igen, stegen, rullningen och strömmen)");
+{
+  const enc = new TextEncoder();
+  const rad = (h) => `data: ${JSON.stringify(h)}\n\n`;
+  // En ström av färdiga bitar (godtyckligt kapade), som rutten skickar dem.
+  const bitar = (delar) => ({ ok: true, status: 200, headers: { get: () => "text/event-stream; charset=utf-8" }, body: { getReader() { let i = 0; return { read: async () => (i < delar.length ? { done: false, value: enc.encode(delar[i++]) } : { done: true }) }; } } });
+  // En ström som ger ett steg och sedan väntar tills frågan stoppas, som fetch gör: läsningen kastar när signalen avbryts.
+  const hanger = (init) => ({ ok: true, status: 200, headers: { get: () => "text/event-stream" }, body: { getReader() { let i = 0; return { read: () => (i++ === 0 ? Promise.resolve({ done: false, value: enc.encode(rad({ h: "hamtar", text: "Hämtar det som väntar på dig.", anrop: 1, verktyg: "las_vantar" })) }) : new Promise((_ja, nej) => { init.signal.addEventListener("abort", () => nej(Object.assign(new Error("Aborted"), { name: "AbortError" }))); })) }; } } });
+  const SV = { h: "svar", text: "Du har ⟦t1:3⟧ saker som väntar.", tal: [{ id: "t1", varde: 3, om: "Väntar på dig · data per 2026-11-16" }], obelagda: 0, kalla: "Skrivet av AI ur Navs tal", kort: [] };
+  const vanta = (ms = 5) => new Promise((k) => setTimeout(k, ms));
+  const chatt = () => { const g = hem({ chef: false }); g.ND.hem.chatt = true; return g; };
+
+  // Strömmens tolkning: \r\n, en händelse kapad mitt i, och den sista utan avslutande tom rad.
+  const d = chatt();
+  const del1 = d.hvSseDela('data: {"h":"hamtar","text":"A"}\r\n\r\ndata: {"h":"kla', false);
+  ok("strömmen delas på \\r\\n\\r\\n, och en kapad händelse väntar på resten", del1.ut.length === 1 && del1.ut[0].text === "A" && del1.rest === 'data: {"h":"kla', JSON.stringify(del1));
+  const del2 = d.hvSseDela(del1.rest + 'rt","anrop":1,"ok":true}\n\ndata: {"h":"svar","text":"B"}', true);
+  ok("när strömmen är slut tolkas också det sista, utan tom rad efter", del2.ut.length === 2 && del2.ut[0].h === "klart" && del2.ut[1].text === "B" && del2.rest === "", JSON.stringify(del2));
+  ok("en rad som inte är JSON hoppas över, utan att resten faller", d.hvSseDela("data: {trasig\n\ndata: {\"h\":\"svar\",\"text\":\"C\"}\n\n", false).ut.map((x) => x.text).join() === "C");
+  d.fetch = async () => bitar([rad({ h: "hamtar", text: "Hämtar det som väntar på dig.", anrop: 1, verktyg: "las_vantar" }).slice(0, 20), rad({ h: "hamtar", text: "Hämtar det som väntar på dig.", anrop: 1, verktyg: "las_vantar" }).slice(20) + rad({ h: "klart", anrop: 1, ok: true, text: "Väntar på dig · data per 2026-11-16", ms: 420 }), JSON.stringify(SV).replace(/^/, "data: ")]);
+  d.S.hv.q = "Vad väntar?";
+  await d.hvFraga();
+  const dh = d.hvHem();
+  ok("ett svar utan tom rad sist och en händelse kapad över två bitar ger ändå svaret", d.S.hv.chatt[0].svar && !d.S.hv.chatt[0].fel && dh.includes('data-hvtal="0:t1"'), d.S.hv.chatt[0].fel);
+
+  // Stegen: öppna medan frågan pågår, en rad när svaret kommit, som fälls ut med källraden.
+  ok("när svaret kommit står stegen som en enda rad med antal och tid", /<button class="hv-stegk" data-hvchattsteg="0" aria-expanded="false"><svg[^>]*>[\s\S]*?<\/svg><span>Ett steg( · \d+,\d s)?<\/span><\/button>/.test(dh), dh.slice(dh.indexOf("hv-stegrad"), dh.indexOf("hv-stegrad") + 300));
+  ok("och stegens text ligger inte kvar som lös text ovanför svaret", !dh.includes("Hämtar det som väntar på dig."));
+  d.hvKlick({ target: { closest: () => ({ dataset: { hvchattsteg: "0" } }) }, preventDefault() {}, stopPropagation() {} });
+  const dut = d.hvHem();
+  ok("ett tryck fäller ut stegen, med källraden och data per", dut.includes('aria-expanded="true"') && dut.includes("Hämtar det som väntar på dig.") && dut.includes("Väntar på dig · data per 2026-11-16") && dut.includes("0,4 s"));
+  ok("under svaret: Kopiera, Försök igen och en väg till det svaret läste", dut.includes('data-hvchattkop="0"') && dut.includes('data-hvchattigen="0"') && dut.includes('<button class="hv-atgk" data-hvark="vantar">Öppna Väntar på dig</button>'));
+
+  // Kopiera tar texten utan Navs märken.
+  const kopierat = [];
+  d.navigator = { clipboard: { writeText: async (t) => { kopierat.push(t); } } };
+  await d.hvKopiera(0);
+  ok("Kopiera tar svarets text utan märken, och knappen säger Kopierat", kopierat[0] === "Du har 3 saker som väntar." && d.hvHem().includes("Kopierat"), JSON.stringify(kopierat));
+
+  // Stopp: Skicka blir Stopp medan svaret pågår, och Esc stoppar.
+  const s = chatt();
+  let signal = null;
+  s.fetch = async (_url, init) => { signal = init.signal; return hanger(init); };
+  s.S.hv.q = "Vad väntar på mig?";
+  const p = s.hvFraga();
+  await vanta();
+  const under = s.hvHem();
+  ok("medan svaret pågår är Skicka en Stopp-knapp, och tråden är upptagen", /<button type="button" class="hv-send hv-stopp" data-hvstopp aria-label="Stoppa svaret"/.test(under) && !under.includes('aria-label="Skicka"') && under.includes('aria-busy="true"'));
+  ok("medan verktyget kör står steget öppet, med en ring för det som pågår", under.includes('<li class="hv-steg-gar">') && under.includes("Hämtar det som väntar på dig."));
+  s.toast = (t) => s.anrop.push(["toast", t]);
+  s.S.hv.q = "en till";
+  s.hvFraga();
+  ok("en ny fråga medan svaret pågår skickas inte, och rutan säger hur man stoppar", s.S.hv.chatt.length === 1 && s.anrop.some((a) => a[0] === "toast" && /Esc stoppar svaret/.test(a[1])));
+  let hindrad = false;
+  s.hvTangent({ key: "Escape", target: { id: "hvQ", value: "en till" }, preventDefault() { hindrad = true; } });
+  await p; await vanta();
+  const efter = s.hvHem(), st = s.S.hv.chatt[0];
+  ok("Esc stoppar svaret: hämtningen avbryts och turen säger det, utan nätfel", hindrad && signal.aborted && st.stoppad && !st.laddar && efter.includes("Du stoppade svaret.") && !/Nav svarade inte/.test(efter), JSON.stringify({ hindrad, ab: signal && signal.aborted, st: { stoppad: st.stoppad, laddar: st.laddar, fel: st.fel } }));
+  ok("efter stoppet är Skicka tillbaka, och tråden är inte upptagen", efter.includes('<button class="hv-send" aria-label="Skicka">') && !efter.includes("data-hvstopp") && efter.includes('aria-busy="false"') && s.S.hv.strom === null);
+  ok("efter stoppet står Esc åt arket igen (tråden stängs inte av samma tryck)", s.S.hv.ark === "chatt");
+  st.stegOppen = true;
+  const stegEfter = s.hvHem();
+  ok("ett steg som aldrig blev klart får ingen bock efter stoppet", stegEfter.includes('<li class="hv-steg-ej">') && stegEfter.includes("Blev inte klart.") && !stegEfter.includes("hv-steg-ok"), stegEfter.slice(stegEfter.indexOf("hv-stegrad"), stegEfter.indexOf("hv-stegrad") + 500));
+  st.stegOppen = false;
+
+  // Går man hem medan svaret pågår ritas hemmet ändå om när svaret kommit, så att Stopp blir Skicka igen.
+  const hemma = chatt();
+  let gr2; const grind2 = new Promise((k2) => { gr2 = k2; });
+  hemma.fetch = async () => ({ ok: true, status: 200, headers: { get: () => "text/event-stream" }, body: { getReader() { let i = 0; return { read: async () => { if (i === 1) await grind2; return i++ < 1 ? { done: false, value: enc.encode(rad(SV)) } : { done: true }; } }; } } });
+  let ritat = 0;
+  hemma.render = () => { ritat++; };
+  hemma.S.hv.q = "Vad väntar?";
+  const ph = hemma.hvFraga();
+  hemma.S.hv.ark = null; hemma.S.hv.id = null;
+  const fore = ritat;
+  gr2(); await ph;
+  ok("svaret ritar om hemmet också när man har gått hem under tiden", ritat > fore && hemma.S.hv.strom === null && hemma.hvSkriv().includes('aria-label="Skicka"'));
+  ok("ett dubbelklick på Skicka stoppar inte frågan det just skickade", /if \(S\.hv\.strom && Date\.now\(\) - S\.hv\.strom\.tur\.start > 400\) hvChattStopp\(\);/.test(block));
+
+  // Försök igen: samma tur, inget nytt inlägg, och samtalet före turen följer med (men inte turen själv).
+  const skickat = [];
+  s.fetch = async (_url, init) => { skickat.push(JSON.parse(init.body)); return bitar([rad(SV)]); };
+  s.hvKlick({ target: { closest: () => ({ dataset: { hvchattigen: "0" } }) }, preventDefault() {}, stopPropagation() {} });
+  await vanta();
+  const igen = s.hvHem();
+  ok("Försök igen ställer samma fråga i samma tur, utan dubblett", skickat.length === 1 && skickat[0].fraga === "Vad väntar på mig?" && skickat[0].historia.length === 0 && s.S.hv.chatt.length === 1 && (igen.match(/class="hv-tur"/g) || []).length === 1 && s.S.hv.trad.filter((t) => t.sort === "chatt").length === 1 && igen.includes('data-hvtal="0:t1"') && !igen.includes("Du stoppade svaret."), JSON.stringify(skickat));
+
+  // Filerna sparas på turen och följer med Försök igen.
+  const f = chatt();
+  const fskick = [];
+  f.fetch = async (_url, init) => { fskick.push(JSON.parse(init.body)); return fskick.length === 1 ? { ok: false, status: 503, headers: { get: () => "application/json" }, json: async () => ({ fel: "Chatten är tillfälligt upptagen. Försök igen om en stund.", kod: "tillfalligt" }) } : bitar([rad(SV)]); };
+  f.S.hv.bilagor = [{ sort: "image/png", namn: "kvitto.png", data: "AAAA" }];
+  f.S.hv.q = "Vad står här?";
+  await f.hvFraga();
+  const ff = f.hvHem();
+  ok("ett tillfälligt fel erbjuder Försök igen, och säger vad som hände", ff.includes("Chatten är tillfälligt upptagen.") && ff.includes('data-hvchattigen="0"') && !ff.includes("data-hvchattsok"), ff.slice(ff.indexOf("hv-tur"), ff.indexOf("hv-tur") + 700));
+  await f.hvChattIgen(0);
+  ok("Försök igen skickar samma filer igen", fskick.length === 2 && fskick[1].bilagor?.length === 1 && fskick[1].bilagor[0].namn === "kvitto.png" && f.S.hv.chatt.length === 1 && f.S.hv.chatt[0].svar);
+  ok("Försök igen går inte när ett svar pågår eller på en äldre tur", (() => { f.S.hv.chatt.push({ ...f.S.hv.chatt[0], lage: [] }); const n = fskick.length; f.hvChattIgen(0); return fskick.length === n; })());
+  f.S.hv.chatt.pop();
+
+  // Felkoderna avgör knappen.
+  const kod = async (k, text) => { const g = chatt(); g.fetch = async () => bitar([rad({ h: "fel", text, kod: k })]); g.S.hv.q = "fråga"; await g.hvFraga(); return g.hvHem(); };
+  const langt = await kod("langt", "Svaret blev för långt och bröts. Försök med en smalare fråga.");
+  ok("för långt: Ändra frågan, inte samma fråga igen", langt.includes('data-hvchattandra="0"') && !langt.includes('data-hvchattigen="0"') && langt.includes('<p role="alert">Svaret blev för långt'));
+  const tomt = await kod("tomt", "Jag fick inget svar. Försök igen.");
+  ok("inget svar: Försök igen", tomt.includes('data-hvchattigen="0"') && !tomt.includes("data-hvchattsok"));
+  const ai = await kod("ai", "Chatten svarar inte just nu. Jag svarar som sökrutan i stället.");
+  ok("AI svarar inte: Sök i stället", ai.includes('data-hvchattsok="0"') && !ai.includes('data-hvchattigen'));
+  const json = async (status, data) => { const g = chatt(); g.fetch = async () => ({ ok: false, status, headers: { get: () => "application/json" }, json: async () => data }); g.S.hv.q = "fråga"; await g.hvFraga(); return g.hvHem(); };
+  const tak = await json(429, { fel: "Du har använt månadens AI-utrymme. Det fylls på den 1:a.", tak: true, kod: "tak" });
+  ok("gränsen nådd (kod tak): bara Sök i stället", tak.includes('data-hvchattsok="0"') && !tak.includes("data-hvchattigen") && !tak.includes("data-hvchattandra"));
+  const pagar = await json(429, { fel: "Din förra fråga pågår fortfarande. Försök igen när den är klar.", kod: "pagar" });
+  ok("förra frågan pågår (kod pagar): bara Försök igen", pagar.includes('data-hvchattigen="0"') && !pagar.includes("data-hvchattsok") && pagar.includes("Din förra fråga pågår fortfarande."));
+  const a = chatt();
+  a.fetch = async () => bitar([rad({ h: "fel", text: "Frågan blev för stor för chatten.", kod: "for-stor" })]);
+  a.S.hv.bilagor = [{ sort: "application/pdf", namn: "stor.pdf", data: "AAAA" }];
+  a.S.hv.q = "Läs den här";
+  await a.hvFraga();
+  a.hvKlick({ target: { closest: () => ({ dataset: { hvchattandra: "0" } }) }, preventDefault() {}, stopPropagation() {} });
+  ok("Ändra frågan lägger frågan i rutan igen, utan filen som var för stor", a.S.hv.q === "Läs den här" && (a.S.hv.bilagor || []).length === 0);
+  const nat = chatt();
+  nat.fetch = async () => { throw new Error("nätet"); };
+  nat.S.hv.q = "hej";
+  await nat.hvFraga();
+  ok("nätfel: rutan säger det och erbjuder samma fråga igen", /Nav svarade inte/.test(nat.hvHem()) && nat.hvHem().includes('data-hvchattigen="0"') && nat.S.hv.chatt[0].kod === "nat");
+
+  // Rullningen: följer bara vid botten, och tangenterna uppåt i tråden släpper.
+  ok("vid botten inom 50 px", d.hvVidBotten({ scrollHeight: 1000, scrollTop: 900, clientHeight: 60 }) === true && d.hvVidBotten({ scrollHeight: 1000, scrollTop: 800, clientHeight: 60 }) === false && d.hvVidBotten(null) === false);
+  d.S.hv.folj = true;
+  d.hvTangent({ key: "PageUp", target: { closest: (sel) => (sel === "#hvTrad" ? {} : null), matches: () => false }, preventDefault() {} });
+  ok("Page Up i tråden släpper följandet", d.S.hv.folj === false);
+  d.S.hv.q = "en fråga till";
+  d.fetch = async () => bitar([rad(SV)]);
+  await d.hvFraga();
+  ok("en ny fråga följer igen", d.S.hv.folj === true);
+  ok("Nytt svar finns i tråden men är dold tills något kommit under", /<button class="hv-nere" data-hvnere hidden>/.test(d.hvHem()));
+  d.S.hv.nere = true;
+  ok("och syns när läsaren står ovanför det som kommit", /<button class="hv-nere" data-hvnere>/.test(d.hvHem()));
+  ok("Nytt svar och Stopp går att klicka (väljaren i hvKlick)", /\[data-hvstopp\], \[data-hvnere\], \[data-hvchattigen\], \[data-hvchattandra\], \[data-hvchattkop\], \[data-hvchattsteg\]/.test(block));
+
+  // Skrivrutan: Enter under en ordkomposition skickar inte, och pil upp tar fram den senaste frågan.
+  const e = chatt();
+  let ehamtat = 0;
+  e.fetch = async () => { ehamtat++; return bitar([rad(SV)]); };
+  e.S.hv.q = "hej";
+  e.hvTangent({ key: "Enter", keyCode: 229, target: { id: "hvQ" }, preventDefault() {} });
+  ok("Enter medan ett ord sätts ihop (IME) skickar inte", ehamtat === 0 && e.S.hv.q === "hej");
+  await e.hvTangent({ key: "Enter", target: { id: "hvQ" }, preventDefault() {} });
+  await vanta();
+  const falt = { id: "hvQ", value: "", style: {}, classList: { toggle() {} } };
+  e.hvTangent({ key: "ArrowUp", target: falt, preventDefault() {} });
+  ok("Enter skickar, och pil upp i en tom ruta tar fram frågan", ehamtat === 1 && falt.value === "hej" && e.S.hv.q === "hej");
+  ok("utan chatt säger rutan att den söker, utan Bifoga och tips", (() => { const g = hem({ chef: false }); const sk = g.hvSkriv(); return sk.includes('placeholder="Sök i Nav…"') && !sk.includes("data-hvbifoga") && !sk.includes("data-hvtips") && !sk.includes('id="hvFil"'); })());
+
+  // Godkänn: ett kast i rutten släpper knappen, felet står på kortet och raderna säger var det stannade.
+  const KORT2 = { rubrik: "Lägg upp 2 uppgifter", klart: "Uppgifterna är upplagda.", varning: null, rader: [{ text: "Ring A", dag: null, not: "" }, { text: "Ring B", dag: null, not: "" }],
+    steg: [{ vag: "/nav2/uppgifter", body: { handling: "skapa", titel: "Ring A" }, angra: null }, { vag: "/nav2/uppgifter", body: { handling: "skapa", titel: "Ring B" }, angra: null }] };
+  const k = chatt();
+  k.fetch = async () => bitar([rad({ h: "svar", text: "Förberett.", tal: [], obelagda: 0, kalla: "Skrivet av AI", kort: [KORT2] })]);
+  let kn = 0;
+  k.ndSkriv = async () => { kn++; if (kn === 2) throw new Error("nätet"); return { ok: "Sparat.", id: "x" + kn }; };
+  k.ndSvar = (x) => x; k.ndOmlas = () => Promise.resolve(true); k.NDOMLAS = {};
+  k.S.hv.q = "Lägg upp det";
+  await k.hvFraga();
+  await k.hvChattGodkann(0, 0);
+  const kh = k.hvHem(), lage = k.S.hv.chatt[0].lage[0];
+  ok("kastar rutten släpps knappen, och kortet säger vilket steg som inte gick", lage.gor === false && kh.includes("1 av 2 är gjorda.") && kh.includes("Steg 2 av 2 gick inte: Det gick inte att spara.") && kh.includes(">Gör resten<") && !kh.includes("disabled"), kh.slice(kh.indexOf("hv-utk"), kh.indexOf("hv-utk") + 900));
+  ok("kvittot per rad: den första är gjord, den andra stannade", /<li class="hv-utk-gjord"><span><i class="hv-ok" role="img" aria-label="Gjord">[\s\S]*?Ring A/.test(kh) && /<li class="hv-utk-fel"><span><i class="hv-utkx" role="img" aria-label="Gick inte"><\/i>Ring B/.test(kh));
+  ok("Försök igen erbjuds inte när ett kort har börjat göras", !kh.includes('data-hvchattigen="0"'));
+  await k.hvChattGodkann(0, 0);
+  ok("nästa tryck gör resten och felet försvinner", kn === 3 && k.S.hv.chatt[0].lage[0].slut === "klart" && !k.hvHem().includes("gick inte"));
+
+  // Dubbelklick: ett andra tryck medan det första sparar gör ingenting.
+  const gr = hem({ chef: true });
+  let gratt = 0, slapp;
+  gr.ndHemPost = (h) => { if (h === "grattis") gratt++; return new Promise((r) => { slapp = () => r({ ok: "Grattis skickat." }); }); };
+  const g1 = gr.hvGrattis("o1"), g2 = gr.hvGrattis("o1");
+  slapp(); await g1; await g2;
+  ok("Grattis två gånger i rad skickas en gång", gratt === 1);
+  gr.ndHemPost = async (h) => { if (h === "grattis") gratt++; return { ok: "Grattis tillbakatagen." }; };
+  await gr.hvGrattis("o1");
+  ok("och spärren släpps när svaret kommit", gratt === 2);
+
+  // Min dag: kvittot säger hur många som blev bokade, och Ångra hur många som ångrades.
+  const md = hem({ chef: false });
+  md.TASKS = [{ id: "7", due: null, tid: null }, { id: "8", due: "2026-11-18", tid: "10:00" }, { id: "9", due: null, tid: null }];
+  md.S.hv.dagPlan = [{ id: "7", tid: "09:00" }, { id: "8", tid: "10:00" }, { id: "9", tid: "11:00" }];
+  let mdn = 0;
+  md.ndUpgPost = async () => (++mdn === 3 ? { fel: "nej" } : { ok: true });
+  await md.hvBokaDag();
+  ok("stannar bokningen halvvägs säger kvittot 2 av 3", md.S.hv.kvitto && md.S.hv.kvitto.text === "2 av 3 uppgifter är bokade i din kalender. Resten gick inte att boka." && md.S.hv.dagBokad.length === 2, JSON.stringify(md.S.hv.kvitto));
+  mdn = 0;
+  md.ndUpgPost = async () => (++mdn === 2 ? null : { ok: true });
+  await md.hvAngraDag();
+  ok("går Ångra bara delvis står det, och Ångra gäller det som är kvar", /^Ångrade 1 av 2\. En uppgift har kvar den nya tiden\.$/.test(md.S.hv.kvitto?.text || "") && md.S.hv.dagBokad.length === 1, JSON.stringify(md.S.hv.kvitto));
+
+  // Språket står på ett ställe.
+  ok("taligenkänningen, dollarbeloppen och namnordningen använder HVLOK", block.includes("r.lang = HVLOK.sprak") && block.includes("toLocaleString(HVLOK.sprak, {minimumFractionDigits") && block.includes("localeCompare(String(b.namn), HVLOK.sprak)") && !/'sv-SE'\)|, 'sv'\)/.test(block.replace("const HVLOK = {sprak:'sv-SE'", "")));
+}
 
 console.log(fel ? `\n\x1b[31m${fel} prov föll.\x1b[0m` : "\n\x1b[32mAlla prov gick igenom.\x1b[0m");
 process.exit(fel ? 1 : 0);

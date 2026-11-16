@@ -10,7 +10,7 @@
  */
 import {
   KALLRAD, textObekraftat, textKortObekraftade, textKortForslag, textAndratInledning, textKvitto, textFacit, textFacitKort, textTakt, textTaktFacit, textTaktKort,
-  textAndringDom, textTrendSaknas, textTrodde, textAndel, textDom, narText, manadsnamn, gangerText,
+  textAndringDom, textTrendSaknas, textTrodde, textAndel, textDom, narText, manadsnamn, gangerText, textFel, felkod, textLagnamn,
 } from "../src/lib/nav2/hemtext.ts";
 
 let fel = 0;
@@ -147,6 +147,17 @@ console.log("\n\x1b[1mLagets öppna rader, hos chefen\x1b[0m");
   lika("ett möte med val", textLagetsOppna(1, 0, "i dag"), "Obekräftade möten i dag: 1. Valet är gjort.");
   lika("olika dagar: ingen dag i raden", textLagetsOppna(4, 4, null), "Obekräftade möten: 4, alla utan val.");
 }
+
+// Fel till den som läser: kort svenska och en kod, aldrig databasens egen text.
+const kod = felkod();
+ok("felkoden är fem tecken 0–9 och a–f", /^[0-9a-f]{5}$/.test(kod));
+ok("två felkoder skiljer sig (nästan alltid)", new Set(Array.from({ length: 20 }, felkod)).size > 15);
+lika("läsfel", textFel("lasa", "a1b2c"), "Det gick inte att läsa just nu. Försök igen. Felkod a1b2c.");
+lika("sparfel", textFel("spara", "a1b2c"), "Det gick inte att spara just nu. Försök igen. Felkod a1b2c.");
+lika("ett lag", textLagnamn(["Norr"]), "Norr");
+lika("två lag", textLagnamn(["Norr", "Syd"]), "Norr och Syd");
+lika("tre lag", textLagnamn(["Norr", "Syd", "Väst"]), "Norr, Syd och Väst");
+lika("inga lag", textLagnamn([]), null);
 
 console.log(fel ? `\n\x1b[31m${fel} fel\x1b[0m\n` : "\n\x1b[32mAllt stämmer\x1b[0m\n");
 process.exit(fel ? 1 : 0);

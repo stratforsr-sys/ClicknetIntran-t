@@ -33,7 +33,7 @@ registerHooks({
       return stubb("export const supabaseServer = async () => globalThis.__rutt.db; export const supabaseAdmin = () => globalThis.__rutt.db;");
     }
     if (spec === "@/lib/fel-server") return stubb("export const skrivFel = async (f) => { (globalThis.__fel ??= []).push(f); return true; };");
-    if (spec === "@/lib/notishandelse-server") return stubb("export const notifiera = async () => {};");
+    if (spec === "@/lib/notishandelse-server") return stubb("export const notifiera = async (n) => { (globalThis.__notis ??= []).push(n); if (globalThis.__notisKastar) throw new Error('notisen föll'); };");
     if (spec === "@/lib/auth") {
       const aktaAuth = pathToFileURL(join(rot, "src", "lib", "auth.ts")).href;
       return stubb(`export * from ${JSON.stringify(aktaAuth)}; export const getCurrentUser = async () => globalThis.__rutt.user;`);
@@ -440,6 +440,81 @@ rubrik("Din månad: Fråga om raden");
   ok("raden göms inte i någon sammanfattning", !r.skrivningar.some((s) => s.text.includes("nav_preference")), r.skrivningar.map((s) => s.text).join(", "));
   const gammal = await kor({ handling: "flagga", rad: "upg-1", text: "En uppgift är försenad." });
   ok("Stämmer inte i sammanfattningen fungerar som förut", gammal.status === 200 && gammal.fel[0].body.includes("Din dag i korthet") && gammal.skrivningar.some((s) => s.text === "upsert nav_preference"), JSON.stringify([gammal.fel, gammal.skrivningar.map((s) => s.text)]));
+}
+
+rubrik("Grattis på Golvet: en läsning av ordern, samma krets som Golvet");
+{
+  const { POST: hemPost } = await import("../src/app/nav2/hem/route.ts");
+  const ORD = "a0000000-0000-4000-8000-000000000001";
+  const nu = new Date().toISOString();
+  const igar = new Date(Date.now() - 2 * 864e5).toISOString();
+  const kor = async (mig, o = {}) => {
+    const db = attrapp({
+      sales_order: [{ id: ORD, salesperson_id: B, company_name: "PROV Hagby Glas", status: "signerad", approved_at: nu, ...(o.order ?? {}) }],
+      order_grattis: o.grattis ?? [],
+      employee: tabeller().employee,
+      team: tabeller().team,
+      nav_setting: [],
+      ...(o.extra ?? {}),
+    });
+    globalThis.__notis = [];
+    globalThis.__notisKastar = !!o.notisKastar;
+    globalThis.__rutt = { db, user: { employee: { id: mig, first_name: "Hanna", last_name: "Prov", team_id: o.lag === undefined ? LAG : o.lag }, roles: o.roller ?? ["salesperson"], permissions: [] } };
+    const res = await hemPost(new Request("https://nav.test/nav2/hem", { method: "POST", headers: { origin: "https://nav.test", "content-type": "application/json" }, body: JSON.stringify({ handling: "grattis", order: ORD }) }));
+    return { status: res.status, data: await res.json(), lista: db.skrivningar.map((s) => s.text).join(", "), notis: globalThis.__notis };
+  };
+  const r = await kor(H);
+  ok("en kollega i laget gratulerar: sparas med upsert och säljaren får en pling", r.status === 200 && r.lista === "upsert order_grattis" && r.notis.length === 1 && r.notis[0].till === B, JSON.stringify(r));
+  const igen = await kor(H, { grattis: [{ order_id: ORD, employee_id: H, created_at: nu }] });
+  ok("igen tar bort Grattis, ingen ny pling", igen.status === 200 && igen.lista === "delete order_grattis" && igen.notis.length === 0, JSON.stringify(igen));
+  const egen = await kor(B);
+  ok("sin egen order: 400 och inget sparas", egen.status === 400 && egen.lista === "", JSON.stringify(egen));
+  const annat = await kor(X, { lag: null });
+  ok("utan lag och utan bolagsroll: ordern står inte på Golvet, inget sparas", annat.status === 404 && annat.lista === "", JSON.stringify(annat));
+  const chef = await kor(X, { lag: null, roller: ["sales_manager"] });
+  ok("säljchef utan lag ser hela bolaget och får gratulera", chef.status === 200 && chef.lista === "upsert order_grattis", JSON.stringify(chef));
+  const gammal = await kor(H, { order: { approved_at: igar } });
+  ok("godkänd i förrgår: står inte på Golvet", gammal.status === 404 && gammal.lista === "", JSON.stringify(gammal));
+  const vantar = await kor(H, { order: { status: "inskickad" } });
+  ok("inte godkänd: står inte på Golvet", vantar.status === 404 && vantar.lista === "", JSON.stringify(vantar));
+  const notisFoll = await kor(H, { notisKastar: true });
+  ok("plingen föll: Grattis är sparat och svaret är ändå 200", notisFoll.status === 200 && notisFoll.lista === "upsert order_grattis", JSON.stringify(notisFoll));
+  const sparFel = await kor(H, { extra: { "order_grattis!fel": { message: "duplicate key value violates unique constraint" } } });
+  ok("sparfel: kort svenska, aldrig databasens text", sparFel.status === 500 && !/duplicate|constraint/.test(sparFel.data.fel ?? ""), JSON.stringify(sparFel.data));
+  globalThis.__notisKastar = false;
+}
+
+rubrik("Golvet: bara laget, sida för sida, och inget Golvet utan lag");
+{
+  const { GET: hemGet } = await import("../src/app/nav2/hem/route.ts");
+  const LAG2 = "c0000000-0000-4000-8000-0000000000a2", Y = "b0000000-0000-4000-8000-000000000009";
+  const manad = `${new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()).slice(0, 7)}-01`;
+  const order = (n, vem, o = {}) => Array.from({ length: n }, (_x, i) => ({
+    id: `d${String(i).padStart(7, "0")}-0000-4000-8000-${vem.slice(-12)}`, salesperson_id: vem, package_id: null, term_months: null, signed_on: manad, period_month: manad,
+    status: "signerad", order_value: 100, buyout_amount: null, finance_amount: null, cancel_period_month: null, approved_at: null, company_name: "PROV", ...o,
+  }));
+  const las = async (mig, o = {}) => {
+    const db = attrapp({
+      sales_order: o.order ?? [],
+      sales_target: [],
+      sales_package: [],
+      order_grattis: [],
+      employee: [...tabeller().employee, { id: Y, first_name: "Ylva", last_name: "Prov", status: "active", team_id: LAG2 }],
+      team: [{ id: LAG2, name: "Andra-laget", lead_id: TL }, { id: LAG, name: "Prov-laget", lead_id: TL }],
+      nav_setting: [],
+    });
+    globalThis.__rutt = { db, user: { employee: { id: mig, first_name: "Prov", last_name: "Person", team_id: o.lag ?? null }, roles: o.roller ?? ["salesperson"], permissions: [] } };
+    const res = await hemGet(new Request("https://nav.test/nav2/hem?golvet=1", { headers: { origin: "https://nav.test" } }));
+    return { status: res.status, data: await res.json() };
+  };
+  const utan = await las(X, { order: order(3, B) });
+  ok("säljare utan lag: inget Golvet, aldrig bolagets order", utan.status === 200 && utan.data.golvet === null && utan.data.golvetUtanLag === true, JSON.stringify(utan.data).slice(0, 300));
+  const chef = await las(X, { roller: ["sales_manager"], order: [...order(3, B), ...order(2, Y)] });
+  ok("säljchef utan lag: hela bolaget", chef.data.golvet?.lag === null && chef.data.golvet?.antal === 5 && chef.data.golvetUtanLag === false, JSON.stringify(chef.data).slice(0, 300));
+  const mang = await las(H, { lag: LAG, order: order(1200, B) });
+  ok("1200 order i månaden räknas alla (REST kapar vid 1000 utan sidor)", mang.data.golvet?.antal === 1200 && mang.data.golvet?.lag === "Prov-laget", JSON.stringify(mang.data.golvet ?? mang.data).slice(0, 300));
+  const ledare = await las(TL, { roller: ["team_lead"], order: [...order(3, B), ...order(2, Y), ...order(4, X)] });
+  ok("den som leder två lag utan eget: båda lagen, båda namnen, inga andras order", ledare.data.golvet?.lag === "Andra-laget och Prov-laget" && ledare.data.golvet?.antal === 5, JSON.stringify(ledare.data.golvet ?? ledare.data).slice(0, 300));
 }
 
 rubrik("Mötet flyttas av den som håller det");
