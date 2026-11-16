@@ -5,6 +5,30 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-16 · Klickprovet, del 1: menyraden går ihop med fönstrets topp och är byggd som skiss 9
+
+Beställaren såg previewn (126b121): "den går inte ihop med toppen av fönstret". Orsaken var att provremsans höjd satt
+fast i stilen. Provremsan (`.proto`, 34 px) finns bara i utkastet, men rälsen (`top:34px`,
+`height:calc(100vh - 34px)`), den fästa att göra-panelen och kalendern (`.ol`) räknade med den också i den riktiga
+Nav, där remsan är dold. Det gav en glipa på 34 px överst. Höjden är nu en variabel, `--proto-h`, som är 34 px i
+utkastet och 0 i den riktiga Nav (`body.nd-riktig`). Kalenderns höjd i mobilen (`100vh - 34px - 64px`) är lämnad
+som den var och provas i mobilbredd.
+
+Menyraden mättes sedan mot skiss 9 i Chrome, utfälld och smal, och byggdes om efter skissens mått:
+
+- **Utfälld:** märket med undertext, klockan, sökrutan, raderna (vikt 400, den aktiva 550), gruppernas rubriker,
+  prickarna och profilen. Raden Sidopanel har tre lägesrutor, ritade som i skissen.
+- **Smal (Hopfälld, och Hovra innan den fälls ut):** bara ikonerna syns, och tal och rubriker är dolda. Hopfälld
+  behåller knappen Fäll ut. Hovra fäller ut med en skugga. Det finns ingen inre rörelse, eftersom `renderRail` byter
+  DOM.
+
+Två mindre fynd rättades samtidigt. Min dag skrev "om 12.4 min" när klockan hade sekunder; nu står hela minuter.
+Arkens huvudrad är nu som skissen (ikonen 28 px, rubriken, Stäng esc utan ram).
+
+I `tests/nav2-hemvy.mjs` finns fyra nya avsnitt, och vart och ett föll först. Stilen lades in i previewen för hand och
+mättes mot skissen pixel för pixel före pushen. Kvar av klickprovet: Veckan (veckodagen står två gånger, och möten
+som börjar samtidigt ritas ovanpå varandra), Möten, Min statistik, Mer, mörk ton och mobilbredd.
+
 ## 2026-11-16 · Hemvyn: byggd exakt som skiss 9, chatten och förslagen påslagna, på grenen `hemvy-chatt`
 
 Beställaren gick igenom 42 skillnader mellan previewn och skiss 9 och beslutade om varje (se planen

@@ -647,6 +647,16 @@ rubrik("Skiss 9 exakt: överraden (punkt 1, 2 och 4)");
 // Regeln för en väljare i hemmets CSS, exakt som den står (första träffen utanför @media när inget annat sägs).
 const regel = (sel, i = html) => { const m = i.match(new RegExp(`(?:^|\\n|\\})${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\{([^}]*)\\}`)); return m ? m[1] : null; };
 const media = (villkor) => { const start = html.indexOf(`@media ${villkor}{`); if (start < 0) return ""; let d = 0, j = start; for (; j < html.length; j++) { if (html[j] === "{") d++; else if (html[j] === "}") { d--; if (d === 0) break; } } return html.slice(start, j + 1); };
+rubrik("Menyraden går ihop med fönstrets topp (klickprovet 2026-11-16)");
+{
+  // Rälsen stod top:34px och 100vh − 34px för utkastets provremsa (.proto), som är dold i den riktiga Nav.
+  // Rälsen slutade då 34 px under fönstrets överkant. Remsans höjd är nu en variabel som är noll i den riktiga Nav.
+  ok("remsans höjd är en variabel: 34 px i utkastet, 0 i den riktiga Nav", /(?:^|[;\s])--proto-h:34px(?:;|\s|$)/.test(regel(":root") ?? "") && /(?:^|;)--proto-h:0px(?:;|$)/.test(regel("body.nd-riktig") ?? ""), regel("body.nd-riktig"));
+  ok("rälsen står under remsan och fyller resten av höjden", /position:sticky;top:var\(--proto-h\);height:calc\(100vh - var\(--proto-h\)\)/.test(regel("#rail.rls") ?? "") && /position:sticky;top:var\(--proto-h\);height:calc\(100vh - var\(--proto-h\)\)/.test(regel(".rail") ?? ""));
+  ok("den fästa att göra-panelen och hopplänken likaså", /top:var\(--proto-h\)/.test(regel("#todoPanel.pinned") ?? "") && /top:calc\(var\(--proto-h\) \+ 10px\)/.test(regel("#rail .rls-hopp") ?? ""));
+  ok("inget annat räknar längre med remsans 34 px på bred skärm", !/(?:top:34px|100vh - 34px\))/.test(html.replace(/\.ol\{height:calc\(100vh - 34px - 64px\)\}/, "")));
+}
+
 rubrik("Skiss 9 exakt: hälsningen (punkt 6 och 7)");
 {
   ok(".hv-hero p på en rad med gap 10", regel(".hv-hero p") === "display:flex;align-items:center;gap:10px;margin:8px 0 0;font-size:15.5px;color:var(--hv-ink-2);white-space:nowrap;overflow:hidden", regel(".hv-hero p"));
@@ -692,7 +702,11 @@ rubrik("Skiss 9 exakt: fönstret, arken och tråden (punkt 29, 30 och 37)");
   ok("på hemmet ligger genvägarna i scenen och skrivrutan efter den", scen.includes('class="hv-genv"') && h.indexOf('class="hv-scen"') < h.indexOf("data-hvskriv"));
   g.hvOppna("vantar");
   const a = g.hvHem();
-  ok("ett ark har Navs märke, texten och Stäng esc", /<div class="hv-arkhuvud"><svg data-nav="28"><\/svg><p id="hvArktext">[\s\S]*?<\/p><button class="hv-kn" data-hvstang>Stäng <kbd class="hv-mono">esc<\/kbd><\/button><\/div>/.test(a), a.match(/<div class="hv-arkhuvud">[\s\S]*?<\/div>/)?.[0]);
+  // Klickprovet 2026-11-16: Navs kbd-ruta gav esc ram och luft (knappen 102 px mot skissens 88), och raden var 30 px
+  // mot skissens 34 (märket står i ett block som är 34 högt), så arket började 4 px för högt.
+  ok("Stäng esc: esc är ren mono-text som i skissen, ingen ruta", /^font-family:var\(--f-mono\);padding:0;border:0;border-radius:0;background:none$/.test(regel(".hv-arkhuvud kbd") ?? ""), regel(".hv-arkhuvud kbd"));
+  ok("arkhuvudet är 34 px högt med märket överst, som skissen", /grid-template-rows:minmax\(34px,auto\)/.test(regel(".hv-arkhuvud") ?? "") && regel(".hv-arkhuvud>svg") === "align-self:start", regel(".hv-arkhuvud"));
+  ok("ett ark har Navs märke, texten och Stäng esc",/<div class="hv-arkhuvud"><svg data-nav="28"><\/svg><p id="hvArktext">[\s\S]*?<\/p><button class="hv-kn" data-hvstang>Stäng <kbd class="hv-mono">esc<\/kbd><\/button><\/div>/.test(a), a.match(/<div class="hv-arkhuvud">[\s\S]*?<\/div>/)?.[0]);
   ok("arkets yta är glas i full bredd", a.includes('<div class="hv-arkyta hv-glass">'));
   ok("i ett ark syns inga genvägar, men skrivrutan", !a.includes('class="hv-genv"') && a.includes("data-hvskriv"));
   ok("det gamla ‹ Hem finns inte", !/hv-arktopp|hv-bak/.test(html));
@@ -810,6 +824,16 @@ rubrik("Skiss 9 exakt: Min dag (punkt 23)");
   ok("en rad per sak, nästa markerad, nu-linjen", /<div class="hv-dnu">09:41 nu<\/div>/.test(a) && /class="hv-drad upg nast het"/.test(a) && /class="hv-drad mote forbi"/.test(a));
   ok("nästa möte kan förberedas", /data-hvforbered="Förbered mitt möte 11\.00 med PEGU Byggservice">Förbered<\/button>/.test(a));
   ok("foten: det som kan vänta, och Boka tiden i kalendern", a.includes('<button class="hv-lank" data-hvark="vantar">En sak kan vänta och ligger inte i dag</button>') && a.includes('<button class="hv-kn" data-hvboka>Boka tiden i kalendern</button>'));
+
+  // Klickprovet 2026-11-16: klockan har sekunder (now() = 498,8), och raden stod "om 41.19933333333336 min".
+  const s = hem({ chef: true, rader: [] });
+  s.now = () => 618.8;
+  s.ndHemKal = () => [{ s: 660, e: 705, t: "PEGU Byggservice" }, { s: 810, e: 855, t: "Veckomöte" }];
+  s.ND.hem.dag = { start: 480, slut: 1020, rast: 60 };
+  s.hvOppna("dag");
+  const sa = s.hvHem();
+  ok("med sekunder i klockan: hela minuter till nästa", sa.includes("<small>om 41 min</small>"), sa.match(/<small>om [^<]*<\/small>/)?.[0]);
+  ok("och hela minuter i luften", sa.includes("<b>Allt ryms, med 4 h 11 min över.</b>"), sa.match(/<b>Allt ryms[^<]*<\/b>/)?.[0]);
 }
 
 rubrik("Skiss 9 exakt: Teamet i månaden (punkt 16 och 34–36)");
@@ -890,6 +914,38 @@ rubrik("Skiss 9 exakt: menyraden (punkt 42)");
   ok("profilen längst ned i rälsen på det nya hemmet: bokstav, namn, roll och upp/ned", /S\.view === 'hem' && typeof hvPa === 'function' && hvPa\(\) \? rlsProfil\(\) : ''/.test(html) && /class="rls-prof" id="prfKnapp"[^>]*data-prfmeny/.test(html) && /<i aria-hidden="true">\$\{esc\(String\(vis\)\[0\] \|\| ''\)\}<\/i><span>\$\{esc\(vis\)\}<small>/.test(html));
   ok("profilmenyn öppnas uppåt från rälsen", /if \(k\.closest\('#rail'\)\)\{ el\.style\.top = \(r\.top \+ scrollY - el\.offsetHeight - 6\) \+ 'px'; el\.style\.left = r\.left \+ 'px'; return; \}/.test(html));
 }
+
+rubrik("Menyraden exakt som skissen, utfälld och smal (klickprovet 2026-11-16, skissen rad 53–113)");
+{
+  const R = (sel) => html.match(new RegExp(`\\n${sel.replace(/[.*+?^${}()|[\]\\#]/g, "\\$&")}\\{([^}]*)\\}`))?.[1] ?? "";
+  // Rälsens block (det finns fler @media (min-width:901px) i filen).
+  const bred = (() => { const start = html.indexOf("@media (min-width:901px){\n  body:is(.prf-rail-hopfalld,.prf-rail-hovra) .app"); if (start < 0) return ""; let d = 0, j = start; for (; j < html.length; j++) { if (html[j] === "{") d++; else if (html[j] === "}") { d--; if (d === 0) break; } } return html.slice(start, j + 1); })();
+  const X = ":is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) ";
+  const S = (sel) => bred.match(new RegExp(`\\n\\s*${(X + sel).replace(/[.*+?^${}()|[\]\\#]/g, "\\$&")}\\{([^}]*)\\}`))?.[1] ?? null;
+  // Utfälld: mätt i skissen mot previewn. Märket 18,18, klockan 194,13 30×30, sökrutan 12,67, listan från 107 med rader
+  // kant i kant (33 px), gruppens rubrik 36 px, profilen 38 och raden Sidopanel 31 px med 6 över.
+  ok("rälsen: inget mellanrum mellan delarna, skissens bakgrund och hovring", /;gap:0;/.test(R("#rail.rls")) && /--rls-bg:var\(--surface-2\)/.test(html) && /--rls-hov:var\(--line\)/.test(html) && !/--rls-hov:color-mix/.test(html), R("#rail.rls"));
+  ok("märket: 6 px in, 12 px under, ordbilden 20 + 21 px hög", R("#rail .rls-topp") === "display:flex;align-items:center;padding:0 2px 12px 6px" && /margin-bottom:6px/.test(R("#rail .rls-brand svg")) && /display:block;font-size:11\.5px;line-height:21px/.test(R("#rail .rls-wm small")) && /^display:block;/.test(R("#rail .rls-wm")), R("#rail .rls-topp"));
+  ok("klockan: 30 px, 194 från vänster och 13 från toppen", /^position:absolute;left:194px;top:13px;width:30px;height:30px;border-radius:8px$/.test(R("#rail .rls-bell")), R("#rail .rls-bell"));
+  ok("sökrutan: 10 px till listan", /margin-bottom:10px/.test(R("#rail .rls-sok")), R("#rail .rls-sok"));
+  ok("listan: ingen rullist, raderna kant i kant, markeringen i rälsens kant", /margin:0 -12px;padding:0 12px 8px;display:flex;flex-direction:column;gap:0;/.test(R("#rail .rls-lista")) && /scrollbar-width:none/.test(R("#rail .rls-lista")) && R("#rail .rls-lista::-webkit-scrollbar") === "display:none" && /gap:0$/.test(R("#rail .rls-g")) && /gap:0;padding-top:0$/.test(R("#rail .rls-gin")), R("#rail .rls-lista"));
+  ok("gruppens rubrik: 36 px, 14 8 5 10 i kant, 11,5 px i 500", /height:36px;padding:14px 8px 5px 10px;[^}]*font-size:11\.5px;font-weight:500;line-height:17px/.test(R("#rail .rls-gh")), R("#rail .rls-gh"));
+  ok("raden i 400, den aktiva i 550 med ikonen i bläck", /font-weight:400;/.test(R("#rail .rls-i")) && /font-weight:550;/.test(R("#rail .rls-i.rls-akt")) && R("#rail .rls-i.rls-akt svg") === "color:var(--ink)");
+  ok("pricken 6 px i radens kant", /margin:0 0 0 auto;width:6px;height:6px/.test(R("#rail .rls-p")), R("#rail .rls-p"));
+  ok("markeringen: 19 px hög, mitt för raden", /height:19px/.test(R("#rail .rls-pip")) && html.includes("(m.offsetHeight - 19) / 2"));
+  ok("raden Sidopanel: 6 px över, 8 7 0 8 i kant (rutorna på 128, 160, 192), 12 px text", /^display:flex;align-items:center;gap:8px;padding:8px 7px 0 8px;margin-top:6px;border-top:1px solid var\(--line\);font-size:12px;color:var\(--ink-3\)$/.test(R("#rail .rls-fot")) && R("#rail .rls-ft") === "flex:1", R("#rail .rls-fot"));
+  ok("lägena som tre små rutor med ett streck", /width:24px;height:22px;border-radius:5px;border:1px solid var\(--line-2\)/.test(R("#rail .rls-lage button")) && R("#rail .rls-lage svg") === "display:none" && /width:8px/.test(R('#rail .rls-lage [data-rlslage="utfalld"]::after')) && /box-shadow:5px 0 0 var\(--line-2\)/.test(R('#rail .rls-lage [data-rlslage="hovra"]::after')) && /background:var\(--surface\);border-color:var\(--ink-3\)/.test(R('#rail .rls-lage button[aria-checked="true"]')), R("#rail .rls-lage button"));
+  ok("Hovra fälls ut som skissen", /transition:width \.22s var\(--ease\) \.04s,box-shadow \.22s/.test(bred) && /box-shadow:14px 0 36px -22px rgba\(6,20,16,\.55\)/.test(bred));
+  // Smal: märket står kvar, klockan 17,52, sökrutan 12,107 40×30 med ram, raderna 40×33 med ikonen 22 in, antalen
+  // dolda, 36 px luft där gruppens rubrik står, profilen 40×38 längst ned och raden Sidopanel osynlig men på sin plats.
+  ok("smal: märket står kvar, klockan 17 från vänster och 52 från toppen", S(".rls-brand") === "min-height:41px" && S(".rls-bell") === "left:17px;top:52px" && S(".rls-topp") === null && S(".rls-ib") === null, S(".rls-bell"));
+  ok("smal: sökrutan en ruta med ram, 40 bred, 40 px under märket", S(".rls-sok") === "width:40px;margin-top:40px" && S(".rls-sok svg") === null, S(".rls-sok"));
+  ok("smal: raderna 40 breda med ikonen kvar på sin plats, antal och prickar dolda", S(".rls-i") === "width:40px" && S(":is(.rls-n,.rls-p)") === "opacity:0" && S(".rls-i svg") === null, S(".rls-i"));
+  ok("smal: grupperna skiljs med luft, inga streck", S(".rls-gh") === "visibility:hidden" && !/border-top:1px solid var\(--line\)\}\n[^\n]*rls-snabb/.test(bred) && !/\.rls-g\+\.rls-g\{/.test(bred) && !/\.rls-snabb\{padding-top:8px/.test(bred));
+  ok("smal: profilen 40 bred, knappen Fäll ut i Hopfälld 40 × 22", S(".rls-prof") === "width:40px;padding:0 7px" && S(".rls-fu") === "width:40px;height:22px" && S(".rls-fot") === "padding:8px 0 0");
+  ok("smal Hovra: raden Sidopanel syns inte men tar sin plats", /\n\s*body\.prf-rail-hovra #rail:not\(\.rls-ut\) \.rls-fot\{opacity:0;pointer-events:none\}/.test(bred));
+}
+
 
 console.log(fel ? `\n\x1b[31m${fel} prov föll.\x1b[0m` : "\n\x1b[32mAlla prov gick igenom.\x1b[0m");
 process.exit(fel ? 1 : 0);

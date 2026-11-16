@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
 <style>
 :root{
-  --bg:#EEF1EC; --surface:#FBFCFA; --surface-2:#F3F6F1; --line:#DCE3DA; --line-2:#C9D3C7;
+  --proto-h:34px; --bg:#EEF1EC; --surface:#FBFCFA; --surface-2:#F3F6F1; --line:#DCE3DA; --line-2:#C9D3C7;
   --ink:#13201C; --ink-2:#47554F; --ink-3:#7A8781;
   --brand:#0E7A5F; --brand-hover:#0B664F; --on-brand:#FFFFFF; --brand-soft:#DDEFE6; --brand-ink:#0A5A46;
   --signal:#D98A1C; --signal-soft:#FBEBD0; --signal-ink:#7A4A06;
@@ -77,7 +77,7 @@ h1,h2,h3{font-family:var(--f-display);margin:0;text-wrap:balance;letter-spacing:
 
 /* ---------- Skal ---------- */
 .app{display:grid;grid-template-columns:236px minmax(0,1fr);min-height:calc(100% - 34px)}
-.rail{position:sticky;top:34px;height:calc(100vh - 34px);overflow-y:auto;padding:18px 12px 24px;display:flex;flex-direction:column;gap:18px;border-right:1px solid var(--line)}
+.rail{position:sticky;top:var(--proto-h);height:calc(100vh - var(--proto-h));overflow-y:auto;padding:18px 12px 24px;display:flex;flex-direction:column;gap:18px;border-right:1px solid var(--line)}
 .brand{display:flex;align-items:center;gap:10px;padding:2px 8px}
 .brand svg{flex:none}
 .brand .wm{font-family:var(--f-display);font-weight:700;font-size:21px;letter-spacing:-.03em;line-height:1}
@@ -779,7 +779,7 @@ kbd{font:500 11px var(--f-mono);padding:2px 6px;border-radius:6px;background:var
 @keyframes pillpulse{0%,100%{box-shadow:var(--shadow-lg),0 0 0 0 rgba(242,178,76,.6)}50%{box-shadow:var(--shadow-lg),0 0 0 10px rgba(242,178,76,0)}}
 .mring{width:26px;height:26px;flex:none}
 .mring svg{width:100%;height:100%}
-#todoPanel.pinned{box-shadow:none;border-left:1px solid var(--line);top:34px;width:360px}
+#todoPanel.pinned{box-shadow:none;border-left:1px solid var(--line);top:var(--proto-h);width:360px}
 body.docked .main{padding-right:384px}
 @media (max-width:1100px){ body.docked .main{padding-right:clamp(16px,3vw,40px)} #todoPanel.pinned{box-shadow:var(--shadow-lg)} }
 .ptitle{flex:1;min-width:0;font:600 17px var(--f-display);color:var(--ink);border:1px solid transparent;border-radius:8px;padding:4px 6px;background:none;outline:none}
@@ -1679,7 +1679,7 @@ button.tidrow:hover{background:var(--surface-2)}
 /* ---------- Kalender (som Outlook) ---------- */
 .main.olmode{padding:0}
 .main.olmode .wrap{max-width:none;gap:0}
-.ol{--f-ol:"Segoe UI Variable Text","Segoe UI",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;--olpane:color-mix(in srgb,var(--surface-2) 60%,var(--bg));--olnow:#D2544B;font-family:var(--f-ol);font-size:13px;display:flex;flex-direction:column;height:calc(100vh - 34px);background:var(--surface);color:var(--ink);position:relative}
+.ol{--f-ol:"Segoe UI Variable Text","Segoe UI",-apple-system,BlinkMacSystemFont,system-ui,sans-serif;--olpane:color-mix(in srgb,var(--surface-2) 60%,var(--bg));--olnow:#D2544B;font-family:var(--f-ol);font-size:13px;display:flex;flex-direction:column;height:calc(100vh - var(--proto-h));background:var(--surface);color:var(--ink);position:relative}
 .ol .num{font-family:var(--f-ol);font-variant-numeric:tabular-nums}
 .ol button{font-family:inherit}
 .ol svg{width:16px;height:16px;flex:none}
@@ -7502,65 +7502,70 @@ textarea.rtn-in{resize:vertical;line-height:1.45}
    kort radie 10 utan skugga. Allt under #rail, så att de gamla .ritem- och .rhead-reglerna inte når hit. */
 :root{
   --rls-w:236px; --rls-s:64px;
-  --rls-bg:color-mix(in srgb,var(--surface) 62%,var(--bg));
-  --rls-hov:color-mix(in srgb,var(--ink) 5.5%,transparent);
+  --rls-bg:var(--surface-2);
+  --rls-hov:var(--line);
   --rls-tip:#13201C; --rls-tip-ink:#F1F5F2; --rls-tip-2:#A9B8B1; --rls-tip-acc:#4FD1A5; --rls-tip-kant:transparent;
 }
 @media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){ --rls-hov:color-mix(in srgb,var(--ink) 7%,transparent); --rls-tip:#1F2C28; --rls-tip-ink:#E8F0EB; --rls-tip-2:#9DAEA6; --rls-tip-acc:#3FC79A; --rls-tip-kant:#33443E; }
+  :root:not([data-theme="light"]){ --rls-hov:var(--line); --rls-tip:#1F2C28; --rls-tip-ink:#E8F0EB; --rls-tip-2:#9DAEA6; --rls-tip-acc:#3FC79A; --rls-tip-kant:#33443E; }
 }
-:root[data-theme="dark"]{ --rls-hov:color-mix(in srgb,var(--ink) 7%,transparent); --rls-tip:#1F2C28; --rls-tip-ink:#E8F0EB; --rls-tip-2:#9DAEA6; --rls-tip-acc:#3FC79A; --rls-tip-kant:#33443E; }
+:root[data-theme="dark"]{ --rls-hov:var(--line); --rls-tip:#1F2C28; --rls-tip-ink:#E8F0EB; --rls-tip-2:#9DAEA6; --rls-tip-acc:#3FC79A; --rls-tip-kant:#33443E; }
 
-#rail.rls{position:sticky;top:34px;height:calc(100vh - 34px);overflow:visible;padding:14px 12px 10px;display:flex;flex-direction:column;gap:10px;background:var(--rls-bg);border-right:1px solid var(--line);z-index:30;min-width:0}
+#rail.rls{position:sticky;top:var(--proto-h);height:calc(100vh - var(--proto-h));overflow:visible;padding:14px 12px 10px;display:flex;flex-direction:column;gap:0;background:var(--rls-bg);border-right:1px solid var(--line);z-index:30;min-width:0}
 #main:focus{outline:none}
 
 /* Hoppa till innehållet: syns bara med fokus (repots X1, WCAG 2.4.1). */
-#rail .rls-hopp{position:fixed;left:12px;top:44px;z-index:96;padding:8px 12px;border-radius:6px;background:var(--brand);color:var(--on-brand);font-weight:550;font-size:13px;transform:translateY(-200%);opacity:0;pointer-events:none}
+#rail .rls-hopp{position:fixed;left:12px;top:calc(var(--proto-h) + 10px);z-index:96;padding:8px 12px;border-radius:6px;background:var(--brand);color:var(--on-brand);font-weight:550;font-size:13px;transform:translateY(-200%);opacity:0;pointer-events:none}
 #rail .rls-hopp:focus-visible{transform:none;opacity:1;pointer-events:auto;outline-offset:2px}
 
 /* Överst: märket (en länk till startsidan) och klockan, sedan sökningen. */
-#rail .rls-topp{display:flex;align-items:center;gap:4px;min-height:36px;padding:0 0 0 4px}
-#rail .rls-brand{display:flex;align-items:center;gap:10px;flex:1;min-width:0;padding:2px 4px 2px 0;border-radius:6px}
-#rail .rls-brand svg{flex:none;display:block}
-#rail .rls-wm{display:flex;flex-direction:column;gap:2px;min-width:0}
-#rail .rls-wm b{font:600 20px/1 var(--f-display);letter-spacing:-.02em;color:var(--ink)}
-#rail .rls-wm small{font-size:11.5px;line-height:1;color:var(--ink-3)}
+#rail .rls-topp{display:flex;align-items:center;padding:0 2px 12px 6px}
+#rail .rls-brand{display:flex;align-items:center;gap:10px;flex:1;min-width:0;padding:0;border-radius:6px}
+/* Skissens märke står i ett inline-block som är 34 px högt; 6 px under märket ger samma läge (18,18). */
+#rail .rls-brand svg{flex:none;display:block;margin-bottom:6px}
+#rail .rls-wm{display:block;min-width:0}
+#rail .rls-wm b{display:block;font:600 20px/1 var(--f-display);letter-spacing:-.02em;color:var(--ink)}
+#rail .rls-wm small{display:block;font-size:11.5px;line-height:21px;color:var(--ink-3)}
 #rail .rls-ib{position:relative;flex:none;width:32px;height:32px;display:grid;place-items:center;border-radius:6px;color:var(--ink-2);transition:background-color .12s,color .12s}
 #rail .rls-ib:hover,#rail .rls-ib[aria-expanded="true"]{background:var(--rls-hov);color:var(--ink)}
 #rail .rls-ib svg{width:18px;height:18px}
+/* Klockan står där skissen har den: 194,13 utfälld och 17,52 smal (rälsen är dess ruta). */
+#rail .rls-bell{position:absolute;left:194px;top:13px;width:30px;height:30px;border-radius:8px}
+#rail .rls-bell svg{width:16px;height:16px}
 #rail .rls-b{position:absolute;top:-4px;right:-5px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--brand);color:var(--on-brand);font:600 10.5px/17px var(--f-body);font-variant-numeric:tabular-nums;text-align:center;box-shadow:0 0 0 2px var(--rls-bg)}
-#rail .rls-sok{display:flex;align-items:center;gap:8px;height:30px;padding:0 8px 0 10px;border-radius:8px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink-3);font-size:13.5px;text-align:left;transition:border-color .12s,color .12s}
+#rail .rls-sok{display:flex;align-items:center;gap:8px;height:30px;padding:0 8px 0 10px;border-radius:8px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink-3);font-size:13.5px;text-align:left;margin-bottom:10px;transition:border-color .12s,color .12s}
 #rail .rls-sok:hover{border-color:var(--line-2);color:var(--ink-2)}
 #rail .rls-sok svg{width:16px;height:16px;flex:none}
 #rail .rls-sok .rls-l{flex:1}
 #rail .rls-sok kbd{font:11px var(--f-mono);color:var(--ink-3);border:1px solid var(--line);border-radius:5px;padding:1px 5px}
 
 /* Listan rullar själv; märket, sökningen och läget står kvar. Kanterna tonar bort när det finns mer. */
-#rail .rls-lista{--rls-mt:0px;--rls-mb:0px;position:relative;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;margin:0 -10px;padding:4px 10px 8px;display:flex;flex-direction:column;gap:14px;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 var(--rls-mt),#000 calc(100% - var(--rls-mb)),transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 var(--rls-mt),#000 calc(100% - var(--rls-mb)),transparent 100%)}
+#rail .rls-lista{--rls-mt:0px;--rls-mb:0px;position:relative;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;margin:0 -12px;padding:0 12px 8px;display:flex;flex-direction:column;gap:0;scrollbar-width:none;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 var(--rls-mt),#000 calc(100% - var(--rls-mb)),transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 var(--rls-mt),#000 calc(100% - var(--rls-mb)),transparent 100%)}
+#rail .rls-lista::-webkit-scrollbar{display:none}
 #rail.rls-mu .rls-lista{--rls-mt:18px}
 #rail.rls-mn .rls-lista{--rls-mb:22px}
-#rail .rls-g{display:flex;flex-direction:column;gap:1px}
+#rail .rls-g{display:flex;flex-direction:column;gap:0}
 
 /* Raden. Den gamla .ritem hade skugga och radie 9; här radie 6 och ingen skugga. */
-#rail .rls-i{display:flex;align-items:center;gap:10px;height:33px;padding:0 10px;border-radius:8px;color:var(--ink-2);font-size:14px;font-weight:450;position:relative;width:100%;text-align:left;box-shadow:none;background:none;transition:background-color .12s,color .12s;outline-offset:-2px}
+#rail .rls-i{display:flex;align-items:center;gap:10px;height:33px;padding:0 10px;border-radius:8px;color:var(--ink-2);font-size:14px;font-weight:400;position:relative;width:100%;text-align:left;box-shadow:none;background:none;transition:background-color .12s,color .12s;outline-offset:-2px}
 #rail .rls-i svg{width:17px;height:17px;flex:none;color:var(--ink-3);transition:color .12s}
 #rail .rls-i:hover{background:var(--rls-hov);color:var(--ink)}
 #rail .rls-i:hover svg{color:var(--ink-2)}
 #rail .rls-i .rls-l{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#rail .rls-i.rls-akt{background:var(--brand-soft);color:var(--ink);font-weight:560;box-shadow:none}
-#rail .rls-i.rls-akt svg{color:var(--brand)}
+#rail .rls-i.rls-akt{background:var(--brand-soft);color:var(--ink);font-weight:550;box-shadow:none}
+#rail .rls-i.rls-akt svg{color:var(--ink)}
 #rail .rls-n{margin-left:auto;min-width:16px;text-align:right;font:500 11px var(--f-mono);font-variant-numeric:tabular-nums;letter-spacing:0;color:var(--ink-3)}
 #rail .rls-akt .rls-n{color:var(--ink-2)}
-#rail .rls-p{margin:0 4px 0 auto;width:7px;height:7px;border-radius:50%;background:var(--brand);flex:none}
+#rail .rls-p{margin:0 0 0 auto;width:6px;height:6px;border-radius:50%;background:var(--brand);flex:none}
 #rail .rls-byt{animation:rlsbyt .3s var(--ease)}
 @keyframes rlsbyt{from{transform:translateY(-4px);opacity:.2}}
 
 /* Markeringen i kanten följer vyn man står på och glider dit man går. */
-#rail .rls-pip{position:absolute;left:0;top:0;width:3px;height:16px;border-radius:0 3px 3px 0;background:var(--brand);transform:translateY(var(--rls-py,0px));opacity:var(--rls-po,0);pointer-events:none}
+#rail .rls-pip{position:absolute;left:0;top:0;width:3px;height:19px;border-radius:0 3px 3px 0;background:var(--brand);transform:translateY(var(--rls-py,0px));opacity:var(--rls-po,0);pointer-events:none}
 #rail.rls-pk .rls-pip{transition:transform .24s var(--ease),opacity .15s}
 
 /* Grupperna: liten grå rubrik, pilen syns när man pekar på rälsen eller när gruppen är stängd. */
-#rail .rls-gh{display:flex;align-items:center;justify-content:flex-start;gap:6px;height:26px;padding:0 8px 0 9px;width:100%;border-radius:6px;color:var(--ink-3);font-size:11.5px;font-weight:550;letter-spacing:.01em;transition:background-color .12s,color .12s;outline-offset:-2px}
+#rail .rls-gh{display:flex;align-items:center;justify-content:flex-start;gap:6px;height:36px;padding:14px 8px 5px 10px;width:100%;border-radius:6px;color:var(--ink-3);font-size:11.5px;font-weight:500;line-height:17px;letter-spacing:0;transition:background-color .12s,color .12s;outline-offset:-2px}
 #rail .rls-gh:hover{color:var(--ink-2);background:var(--rls-hov)}
 #rail .rls-gh .rls-gt{white-space:nowrap}
 #rail .rls-gh.rls-ghakt .rls-gt{color:var(--ink)}
@@ -7572,7 +7577,7 @@ textarea.rtn-in{resize:vertical;line-height:1.45}
 #rail:is(:hover,:focus-within) svg.rls-gc,#rail .rls-g[data-rlsopen="false"] svg.rls-gc{opacity:1}
 #rail .rls-g[data-rlsopen="false"] svg.rls-gc{transform:rotate(-90deg)}
 #rail .rls-gi{display:grid;grid-template-rows:1fr}
-#rail .rls-gin{min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:1px;padding-top:2px}
+#rail .rls-gin{min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:0;padding-top:0}
 #rail .rls-g[data-rlsopen="false"] .rls-gi{grid-template-rows:0fr;visibility:hidden}
 /* Bara när man själv fäller en grupp; inte när Hovra fälls ut eller läget byts. */
 #rail.rls-gtr .rls-gi{transition:grid-template-rows .2s var(--ease)}
@@ -7585,50 +7590,45 @@ textarea.rtn-in{resize:vertical;line-height:1.45}
 #rail .rls-prof span{min-width:0;overflow:hidden;text-overflow:ellipsis}
 #rail .rls-prof small{display:block;font-size:11px;color:var(--ink-3);font-weight:400;line-height:1.1}
 #rail .rls-prof svg{margin-left:auto;color:var(--ink-3);width:14px;height:14px;flex:none}
-/* Läget längst ned: tre ikoner som en radiogrupp (repots Lagesvaljare). */
-#rail .rls-fot{display:flex;align-items:center;gap:8px;min-height:40px;padding:8px 0 0 9px;border-top:1px solid var(--line)}
-#rail .rls-ft{font-size:11.5px;font-weight:550;color:var(--ink-3)}
-#rail .rls-lage{margin-left:auto;display:inline-flex;gap:2px;padding:2px;border-radius:8px;background:var(--rls-hov)}
-#rail .rls-lage button{width:30px;height:26px;display:grid;place-items:center;border-radius:6px;color:var(--ink-3);transition:background-color .12s,color .12s}
-#rail .rls-lage button:hover{color:var(--ink)}
-#rail .rls-lage button[aria-checked="true"]{background:var(--surface);color:var(--ink);box-shadow:0 0 0 1px var(--line)}
-#rail .rls-lage svg{width:16px;height:16px}
+/* Läget längst ned: tre rutor som en radiogrupp (repots Lagesvaljare). Skissens rad är 212 px, en mer än rälsens 211,
+   så rutorna står 7 px från högerkanten för att hamna på skissens 128, 160 och 192. */
+#rail .rls-fot{display:flex;align-items:center;gap:8px;padding:8px 7px 0 8px;margin-top:6px;border-top:1px solid var(--line);font-size:12px;color:var(--ink-3)}
+#rail .rls-ft{flex:1}
+#rail .rls-lage{display:inline-flex;gap:8px}
+/* Lägena som i skissen: tre små rutor, strecket visar hur bred panelen blir. */
+#rail .rls-lage button{position:relative;display:block;width:24px;height:22px;border-radius:5px;border:1px solid var(--line-2)}
+#rail .rls-lage button::after{content:"";position:absolute;top:3px;bottom:3px;left:3px;width:5px;border-radius:1.5px;background:var(--ink-3)}
+#rail .rls-lage button[aria-checked="true"]{background:var(--surface);border-color:var(--ink-3)}
+#rail .rls-lage svg{display:none}
+#rail .rls-lage [data-rlslage="utfalld"]::after{width:8px}
+#rail .rls-lage [data-rlslage="hopfalld"]::after{width:3px}
+#rail .rls-lage [data-rlslage="hovra"]::after{width:3px;box-shadow:5px 0 0 var(--line-2)}
 
 /* ---------- Smal: Hopfälld, och Hovra när musen inte vilar på panelen (bara bred skärm) ---------- */
 @media (min-width:901px){
   body:is(.prf-rail-hopfalld,.prf-rail-hovra) .app{grid-template-columns:var(--rls-s) minmax(0,1fr)}
   body.rls-anim .app{transition:grid-template-columns .22s var(--ease)}
-  body.prf-rail-hovra #rail.rls{width:var(--rls-s);overflow:hidden;z-index:45;transition:width .2s var(--ease)}
-  body.prf-rail-hovra #rail.rls.rls-ut{width:var(--rls-w);box-shadow:12px 0 32px -24px rgba(10,30,24,.45)}
+  body.prf-rail-hovra #rail.rls{width:var(--rls-s);overflow:hidden;z-index:45;transition:width .22s var(--ease) .04s,box-shadow .22s}
+  body.prf-rail-hovra #rail.rls.rls-ut{width:var(--rls-w);box-shadow:14px 0 36px -22px rgba(6,20,16,.55)}
   body.prf-rail-hovra #rail.rls.rls-ut .rls-l,body.prf-rail-hovra #rail.rls.rls-ut .rls-gt{white-space:nowrap}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-topp{flex-direction:column;gap:6px;padding:0}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-brand{flex:none;justify-content:center;padding:2px}
+  /* Smal som skissen (rad 104–113): märket står kvar, klockan flyttar till 17,52, sökrutan blir en ruta 40 px bred med
+     ram, raderna 40 px med ikonen kvar på sin plats, antal och prickar dolda, och gruppens rubrik lämnar sin luft. */
+  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-brand{min-height:41px}
   :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-wm,
   :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-l,
   :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-sok kbd{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-ib{width:44px;height:36px}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-sok{width:44px;height:36px;padding:0;justify-content:center;border-color:transparent;background:none;color:var(--ink-2)}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-prof{width:44px;padding:0 9px}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-prof :is(span,svg){display:none}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-sok:hover{background:var(--rls-hov);color:var(--ink)}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-sok svg{width:18px;height:18px}
-  /* Smal: rullisten skulle ta 10 av 44 px och klippa antalen i ikonernas hörn. Toningarna i kanterna visar att listan fortsätter. */
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-lista{gap:0;scrollbar-width:none}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-lista::-webkit-scrollbar{display:none}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-gin{overflow:visible}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-i{width:44px;height:38px;padding:0;justify-content:center}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-i svg{width:18px;height:18px}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-n{position:absolute;top:2px;right:0;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--line-2);color:var(--ink-2);font:600 10px/16px var(--f-body);text-align:center}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-akt .rls-n{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--brand) 45%,var(--line-2))}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-n.rls-tid{display:none}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-p{position:absolute;top:7px;right:9px;margin:0;box-shadow:0 0 0 2px var(--rls-bg)}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-akt .rls-p{box-shadow:0 0 0 2px var(--brand-soft)}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-gh{display:none}
+  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-bell{left:17px;top:52px}
+  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-sok{width:40px;margin-top:40px}
+  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-i{width:40px}
+  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) :is(.rls-n,.rls-p){opacity:0}
+  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-gh{visibility:hidden}
   :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-gi{grid-template-rows:1fr;visibility:visible;transition:none}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-g+.rls-g{margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-snabb{padding-top:8px;border-top:1px solid var(--line)}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-fot{justify-content:center;padding:8px 0 0}
-  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-fu{width:44px;height:36px}
+  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-prof{width:40px;padding:0 7px}
+  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-prof :is(span,svg){display:none}
+  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-fot{padding:8px 0 0}
+  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-fu{width:40px;height:22px}
+  /* Hovra: raden Sidopanel syns inte förrän panelen fälls ut, men tar sin plats så att profilen står still. */
+  body.prf-rail-hovra #rail:not(.rls-ut) .rls-fot{opacity:0;pointer-events:none}
 }
 @media (max-width:900px){ #rail.rls{display:none} }
 
@@ -7928,6 +7928,8 @@ i.rls-t-utlamnande,.rls-t-utlamnande i{background:var(--info)}
 @media (prefers-reduced-motion:reduce){.sats-rk,.sats-lk,.sats-chev,.brh-val button{transition:none}.sats-puls0,.sats-puls1{animation:none}}
 /* ---------- Nav 2.0 i riktigt läge (prefix nd), v47 ----------
    Samma formspråk: kort med radie 10, en fylld knapp, ikon i en svagt tonad ruta. */
+/* Provremsan finns bara i utkastet; i den riktiga Nav tar den ingen plats, och rälsen går ända upp. */
+body.nd-riktig{--proto-h:0px}
 body.nd-riktig .proto{display:none}
 .nd-ej{display:grid;grid-template-columns:36px minmax(0,1fr);gap:14px;align-items:start;padding:20px 22px;max-width:720px}
 .nd-ik{display:grid;place-items:center;width:36px;height:36px;border-radius:8px;background:color-mix(in srgb,var(--brand) 11%,transparent);color:var(--brand-ink)}
@@ -9177,10 +9179,11 @@ button.hv-kfot:hover,.hv-tal:hover .hv-kfot{color:var(--hv-ink)}
 
 /* Arket: ett öppnat kort tar ytan. Nav talar först. */
 .hv-ark{padding-top:8px}
-.hv-arkhuvud{display:grid;grid-template-columns:28px 1fr auto;gap:12px;align-items:center;margin-bottom:12px}
+.hv-arkhuvud{display:grid;grid-template-columns:28px 1fr auto;grid-template-rows:minmax(34px,auto);gap:12px;align-items:center;margin-bottom:12px}
+.hv-arkhuvud>svg{align-self:start}
 .hv-arkhuvud p{margin:0;font-size:15px}
 .hv-arkhuvud p b{font-weight:600}
-.hv-arkhuvud kbd{font-family:var(--f-mono)}
+.hv-arkhuvud kbd{font-family:var(--f-mono);padding:0;border:0;border-radius:0;background:none}
 .hv-arkyta{flex:1;min-height:0;padding:18px 20px;display:flex;flex-direction:column;overflow:hidden}
 .hv-rull{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;margin:0 -12px;padding:0 12px;scrollbar-width:thin;scrollbar-color:var(--hv-line) transparent}
 /* Min dag: dagens form överst (möten fyllda, uppgifter i luckorna), sedan genomgången uppifrån och ned. */
@@ -26075,7 +26078,7 @@ function rlsPip(){
   if (!m || !m.offsetParent){ rail.style.setProperty('--rls-po', '0'); rlsPipEl = null; return; }
   const ny = !!rlsPipEl && rlsPipEl !== m && (rlsPipEl.dataset.rlsl || rlsPipEl.dataset.rg) !== (m.dataset.rlsl || m.dataset.rg);
   rail.classList.toggle('rls-pk', ny);
-  rail.style.setProperty('--rls-py', Math.round(m.offsetTop + (m.offsetHeight - 16) / 2) + 'px');
+  rail.style.setProperty('--rls-py', Math.round(m.offsetTop + (m.offsetHeight - 19) / 2) + 'px');
   rail.style.setProperty('--rls-po', '1');
   rlsPipEl = m;
 }
@@ -35233,7 +35236,7 @@ function hvPlaneraDag({moten, uppgifter, nu, start, slut, rast}){
   const luft = start === null || start === undefined || !slut || utanTid.length ? null : slut - fran - (rast || 0) - kvar;
   return {rader, utanTid, luft, ryms};
 }
-const hvLangd = x => [x >= 60 && `${Math.floor(x / 60)} h`, x % 60 && `${x % 60} min`].filter(Boolean).join(' ') || '0 min';
+const hvLangd = t => { const x = Math.round(t); return [x >= 60 && `${Math.floor(x / 60)} h`, x % 60 && `${x % 60} min`].filter(Boolean).join(' ') || '0 min'; };
 function hvArkDag(){
   ndHemSynk();
   const D = ND.hem.dag || null, nu = now(), saker = hvSaker();
