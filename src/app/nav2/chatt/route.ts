@@ -67,6 +67,13 @@ export async function POST(request: Request) {
   } catch {
     return json({ fel: "Ogiltig begäran." }, 400);
   }
+  // Stopp sägs också uttryckligen: en avbruten hämtning når inte alltid funktionen, och då skulle den stoppade
+  // frågan spärra nästa tills den är klar. Bara personens egna pågående rader, och kostnaden står kvar reserverad.
+  if (b.stoppa === true) {
+    const { error } = await supabaseAdmin().from("nav_chatt_logg").update({ stop_reason: "stoppas" }).eq("employee_id", mig.id).eq("miljo", chattMiljo()).eq("stop_reason", "pagar");
+    if (error) console.error(`chatt: de stoppade frågornas rader ändrades inte: ${error.message}`);
+    return json({ ok: !error }, 200);
+  }
   // Styrtecken tas bort: Postgres tar inte emot dem i en text, och en fråga som inte går att logga får inte ställas.
   const fraga = String(b.fraga ?? "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim().slice(0, 1000);
   if (fraga.length < 3) return json({ fel: "Frågan är för kort." }, 400);
@@ -106,9 +113,9 @@ export async function POST(request: Request) {
   // En fråga i taget per person, också från två flikar. Gick spärren inte att läsa ställs frågan: den är ett skydd, inte en grind.
   const { data: pagar } = await db.from("nav_chatt_logg").select("id, nar").eq("employee_id", mig.id).eq("miljo", miljo).eq("stop_reason", "pagar").gte("nar", new Date(Date.now() - PAGAR_MS).toISOString()).limit(20);
   if (forePagar(pagar, radId, Date.now(), PAGAR_MS)) {
-    // Raden står kvar, utan kostnad: frågan ställdes men gick aldrig till Claude.
-    const { error } = await db.from("nav_chatt_logg").update({ stop_reason: "dubbel", kostnad_usd: 0, kostnad_kr: 0, ms: 0 }).eq("id", radId);
-    if (error) console.error(`chatt: den dubbla frågans rad rättades inte: ${error.message}`);
+    // Raden tas bort: frågan gick aldrig till Claude, och ska varken kosta eller räknas som en ställd fråga.
+    const { error } = await db.from("nav_chatt_logg").delete().eq("id", radId).eq("stop_reason", "pagar");
+    if (error) console.error(`chatt: den dubbla frågans rad togs inte bort: ${error.message}`);
     return json({ fel: PAGAR_BESKED, kod: "pagar" }, 429);
   }
 

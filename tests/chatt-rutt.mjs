@@ -197,10 +197,11 @@ async function anropa(roller, id, kropp, o = {}) {
   // Loggraden skrivs av reservationen (rpc) och rättas till den verkliga kostnaden när svaret är klart (update).
   const res = db.skrivningar.filter((s) => s.text === "rpc nav_chatt_reservera").map((s) => s.arg);
   const rattad = db.skrivningar.filter((s) => s.text === "update nav_chatt_logg");
+  const borttagna = db.skrivningar.filter((s) => s.text === "delete nav_chatt_logg").map((s) => (s.filter ?? []).find((x) => x[0] === "eq" && x[1] === "id")?.[2] ?? null);
   const logg = rattad.map((s) => s.rad);
   const loggId = rattad.map((s) => (s.filter ?? []).find((x) => x[0] === "eq" && x[1] === "id")?.[2] ?? null);
-  const ovrigt = db.skrivningar.filter((s) => !s.text.startsWith("rpc ") && s.text !== "update nav_chatt_logg").map((s) => s.text);
-  return { status, text: text.slice(0, 600), data, rader, res, logg, loggId, ovrigt, lasta, ai: globalThis.__ai.anrop, svar: rader.find((r) => r.h === "svar") ?? null };
+  const ovrigt = db.skrivningar.filter((s) => !s.text.startsWith("rpc ") && s.text !== "update nav_chatt_logg" && s.text !== "delete nav_chatt_logg").map((s) => s.text);
+  return { status, text: text.slice(0, 600), data, rader, res, logg, loggId, borttagna, ovrigt, lasta, ai: globalThis.__ai.anrop, svar: rader.find((r) => r.h === "svar") ?? null };
 }
 const visa = (r) => `${r.status} ai=${r.ai.length} res=${r.res.length} logg=${r.logg.length} ${r.text.slice(0, 300)}`;
 const FRAGA = { fraga: "Hur gick lagets möten förra veckan?" };
@@ -710,7 +711,9 @@ rubrik("Rutten: stopp, en fråga i taget och en ström som alltid stängs");
   const pagar = (id, sek) => ({ id, employee_id: S, miljo: "lokal", stop_reason: "pagar", nar: nar(sek) });
   const dubbel = await anropa(["salesperson"], S, FRAGA, { ai: [textsvar("Inget väntar.")], extra: { nav_chatt_logg: [pagar("rad-0", 5)] } });
   ok("en andra fråga medan den förra pågår: 429 med beskedet, och inget går till Claude", dubbel.status === 429 && dubbel.data?.kod === "pagar" && dubbel.data.fel === "Din förra fråga pågår fortfarande. Försök igen när den är klar." && !dubbel.data.tak && dubbel.ai.length === 0, visa(dubbel));
-  ok("den stoppade frågans rad står kvar utan kostnad", dubbel.logg.length === 1 && dubbel.loggId[0] === "rad-1" && dubbel.logg[0].stop_reason === "dubbel" && dubbel.logg[0].kostnad_usd === 0, JSON.stringify(dubbel.logg));
+  ok("den avvisade frågans rad tas bort: den kostar inget och räknas inte som en ställd fråga", dubbel.logg.length === 0 && dubbel.borttagna.length === 1 && dubbel.borttagna[0] === "rad-1", JSON.stringify([dubbel.logg, dubbel.borttagna]));
+  const sagt = await anropa(["salesperson"], S, { stoppa: true }, { ai: [textsvar("Ska aldrig skickas.")], extra: { nav_chatt_logg: [pagar("rad-0", 5)] } });
+  ok("ett uttryckligt stopp släpper personens pågående frågor, utan att något går till Claude", sagt.status === 200 && sagt.data?.ok === true && sagt.ai.length === 0 && sagt.res.length === 0 && sagt.logg.length === 1 && sagt.logg[0].stop_reason === "stoppas", visa(sagt));
   const fast = await anropa(["salesperson"], S, FRAGA, { ai: [textsvar("Inget väntar.")], extra: { nav_chatt_logg: [pagar("rad-0", 200)] } });
   ok("en rad som fastnat för länge sedan stoppar ingen", fast.status === 200 && fast.ai.length === 1 && fast.svar, visa(fast));
   const stoppad = await anropa(["salesperson"], S, FRAGA, { ai: [textsvar("Inget väntar.")], extra: { nav_chatt_logg: [{ ...pagar("rad-0", 5), stop_reason: "stoppas" }] } });

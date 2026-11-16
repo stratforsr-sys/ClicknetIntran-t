@@ -553,7 +553,7 @@ async function forsenat({ L, idag }: Ctx): Promise<NdPalSvar> {
   const v = u.uppgifter.filter((x) => x.vy === "egen" && !arStangd(x.lage) && x.due && x.due < idag).sort((a, b) => (a.due ?? "").localeCompare(b.due ?? ""));
   if (!v.length) return svar("Ingen av dina uppgifter är försenad.", [], { follow: ["idag"] });
   const k = kapa(v.map((x): Rad => ["exakt", `${x.t}: frist ${dag(x.due!)}, ${st(dagarMellan(x.due!, idag), "dag", "dagar")} sedan.`, "Uppgifter", undefined, `/uppgifter/${x.id}`]));
-  return svar(`${st(v.length, "uppgift är", "uppgifter är")} försenade.${k.till}`, k.rows, {
+  return svar(`${st(v.length, "uppgift är försenad", "uppgifter är försenade")}.${k.till}`, k.rows, {
     acts: [{ l: "Öppna Uppgifter", open: "/uppgifter" }],
     follow: ["vantar"],
   });

@@ -9090,11 +9090,11 @@ body.hvbody .todopill.min .pmin svg{inset:4px;width:38px;height:38px}
   --hv-t-snabb:120ms; --hv-t:180ms; --hv-t-lugn:250ms; --hv-ease:cubic-bezier(.2,.7,.2,1);
   --hv-base:#0E1B17;
   --hv-glass:color-mix(in srgb,var(--hv-ink) 4%,var(--hv-base)); --hv-glass-2:color-mix(in srgb,var(--hv-ink) 8%,var(--hv-base)); --hv-glass-3:color-mix(in srgb,var(--hv-ink) 12%,var(--hv-base)); --hv-glass-line:rgba(255,255,255,.09); --hv-pop:color-mix(in srgb,var(--hv-ink) 9%,var(--hv-base));
-  --hv-ink:#EDF3F0; --hv-ink-2:#A9B9B2; --hv-ink-3:#7C8E86; --hv-line:rgba(255,255,255,.075); --hv-line-2:rgba(255,255,255,.15); --hv-line-3:#5E7068;
+  --hv-ink:#EDF3F0; --hv-ink-2:#A9B9B2; --hv-ink-3:#8A9C94; --hv-line:rgba(255,255,255,.075); --hv-line-2:rgba(255,255,255,.15); --hv-line-3:#5E7068;
   --hv-brand:#5DC39F; --hv-on-brand:#06211A; --hv-brand-ink:#6FCDAB; --hv-brand-soft:rgba(93,195,159,.15);
   --hv-signal:#E8B15A; --hv-signal-ink:#E8B15A; --hv-danger:#EE8B80;
   --hv-shadow:0 8px 24px rgba(0,0,0,.18); --hv-ring:rgba(93,195,159,.17); --hv-ring-2:rgba(93,195,159,.08); --hv-dialdot:rgba(93,195,159,.12);
-  --hv-p-inne:#5DC39F; --hv-p-sjuk:#E98A7F; --hv-p-ledig:#8DB6E4;
+  --hv-p-inne:#5DC39F; --hv-p-sjuk:#E98A7F; --hv-p-ledig:#8DB6E4; --hv-p-ej:var(--hv-ink-3);
   color:var(--hv-ink);font:var(--hv-fs-3)/1.5 var(--f-body);font-variant-numeric:tabular-nums;
 }
 .hv[data-hvtema="ljus"]{
@@ -9104,7 +9104,7 @@ body.hvbody .todopill.min .pmin svg{inset:4px;width:38px;height:38px}
   --hv-brand:#0E7A5F; --hv-on-brand:#FFFFFF; --hv-brand-ink:#0A5A46; --hv-brand-soft:#DDEFE6;
   --hv-signal:#D98A1C; --hv-signal-ink:#8A5200; --hv-danger:#C4473C;
   --hv-shadow:0 8px 24px rgba(19,32,28,.12); --hv-ring:rgba(14,122,95,.19); --hv-ring-2:rgba(14,122,95,.08); --hv-dialdot:rgba(14,122,95,.14);
-  --hv-p-inne:#0E7A5F; --hv-p-sjuk:#C4473C; --hv-p-ledig:#3A6EA5;
+  --hv-p-inne:#0E7A5F; --hv-p-sjuk:#C4473C; --hv-p-ledig:#3A6EA5; --hv-p-ej:var(--hv-ink-3);
 }
 .hv *{box-sizing:border-box}
 :where(.hv) button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;padding:0;margin:0}
@@ -9449,6 +9449,10 @@ body.hvbody .todopill.min .pmin svg{inset:4px;width:38px;height:38px}
   .hv-siffra:hover{background:var(--hv-brand-soft)}
   .hv-sakt:hover b{text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--hv-line-2)}
   .hv-lank:hover{color:var(--hv-ink)}
+  .hv-radt:hover>b,.hv-herok:hover{text-decoration:underline;text-decoration-color:var(--hv-line-2);text-decoration-thickness:1px;text-underline-offset:3px}
+  .hv-stegk:hover{color:var(--hv-ink);background:var(--hv-line)}
+  .hv-atgk:hover{color:var(--hv-ink);background:var(--hv-glass-2);border-color:var(--hv-line)}
+  .hv-nere:hover{border-color:var(--hv-ink-3)}
 }
 .hv-btn:active,.hv-chip:active,.hv-kn:active,.hv-ikonk:active,.hv-card.hv-tal:active,.hv-mer button:active{background:var(--hv-glass-3)}
 .hv-btn.hv-gor:active{background:color-mix(in srgb,var(--hv-brand) 88%,var(--hv-ink))}
@@ -9518,70 +9522,69 @@ body.hvbody .todopill.min .pmin svg{inset:4px;width:38px;height:38px}
 }
 @media (prefers-reduced-motion:reduce){.hv *,.hv *::before,.hv *::after{animation:none!important;transition:none!important}}
 /* ---------- Lyft: kort och tråd ---------- */
-/* Väntar på dig: radens titel är en knapp som öppnar hela listan vid just den raden. Den ser ut som titeln. */
-.hv-rad>.hv-radt{min-width:0;text-align:left;border-radius:6px}
-.hv-radt>b{display:block;font-weight:500;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Väntar på dig: radens titel är en knapp som öppnar hela listan vid just den raden. Den ser ut som titeln,
+   och hela radens höjd går att trycka på. */
+.hv-rad>.hv-radt{align-self:stretch;display:flex;align-items:center;min-width:0;text-align:left;border-radius:var(--hv-r1)}
+.hv-radt>b{display:block;min-width:0;font-weight:500;font-size:var(--hv-fs-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hv .hv-radt:focus-visible{outline-offset:-2px}
 /* Hälsningens delar leder vidare: läget till Väntar på dig, mötet till Min dag. */
-.hv-herok{border-radius:4px;text-align:left}
-.hv-radt:hover>b,.hv-herok:hover{text-decoration:underline;text-decoration-color:var(--hv-line-2);text-decoration-thickness:1px;text-underline-offset:3px}
+.hv-herok{border-radius:var(--hv-r1);text-align:left}
 .hv-radt:active,.hv-herok:active{opacity:.7}
 .hv-radt:disabled,.hv-herok:disabled{cursor:default;opacity:.5;text-decoration:none}
-@media (max-width:860px){
-  .hv-radt>b{font-size:13px}
-  /* Läget bryts i stället för att kapa kundnamnet. Lyssna står kvar till höger. */
-  .hv-hero p{white-space:normal;align-items:flex-start}
-  .hv-hero p>span{overflow:visible}
-}
 /* Chatten: Stopp i Skickas plats, stegen ovanför svaret, raden under svaret och Nytt svar. Täckande ytor och tunn linje.
    Rörelse bara i opacity och transform, och ingen alls vid prefers-reduced-motion (regeln ovan stänger av den i .hv). */
-.hv-send.hv-stopp{background:var(--hv-ink);color:var(--hv-base)}
-.hv-send.hv-stopp svg{fill:currentColor;stroke-width:0}
-.hv-send:active{transform:scale(.94)}
+.hv-send.hv-stoppa{background:var(--hv-ink);color:var(--hv-base)}
+.hv-send.hv-stoppa svg{fill:currentColor;stroke-width:0}
 .hv-skriv textarea.hv-hog{overflow-y:auto}
 @keyframes hvsyns{from{opacity:0}}
-/* Frågar… syns först efter 200 ms: ett snabbt svar blinkar inte förbi en väntetext. */
-.hv-vant{animation:hvsyns .18s var(--hv-ease) .2s backwards}
-.hv-svar{animation:hvsyns .2s var(--hv-ease)}
-.hv-steg{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:1.45;color:var(--hv-ink-2)}
-.hv-steg li{display:grid;grid-template-columns:16px minmax(0,1fr) auto;column-gap:10px;align-items:start;animation:hvsyns .18s var(--hv-ease)}
-.hv-steg li>i{width:16px;height:19px;display:grid;place-items:center}
-.hv-steg li>i svg{width:13px;height:13px;stroke-width:2.2}
-.hv-steg li>span{min-width:0;overflow-wrap:anywhere}
-.hv-steg li>span>small{display:block;font-size:12px;color:var(--hv-ink-3)}
-.hv-steg li>small{font-size:12px;color:var(--hv-ink-3)}
+/* Frågar… syns först efter en kort stund: ett snabbt svar blinkar inte förbi en väntetext. */
+.hv-vant{animation:hvsyns var(--hv-t) var(--hv-ease) var(--hv-t) backwards}
+.hv-svar{animation:hvsyns var(--hv-t) var(--hv-ease)}
+.hv-tsteg{list-style:none;margin:0 0 var(--hv-s3);padding:0;display:flex;flex-direction:column;gap:var(--hv-s2);font-size:var(--hv-fs-2);line-height:1.45;color:var(--hv-ink-2)}
+.hv-tsteg li{display:grid;grid-template-columns:16px minmax(0,1fr) auto;column-gap:var(--hv-s3);align-items:start;animation:hvsyns var(--hv-t) var(--hv-ease)}
+.hv-tsteg li>i{width:16px;height:19px;display:grid;place-items:center}
+.hv-tsteg li>i svg{width:13px;height:13px;stroke-width:2.2}
+.hv-tsteg li>span{min-width:0;overflow-wrap:anywhere}
+.hv-tsteg li>span>small{display:block;font-size:var(--hv-fs-1);color:var(--hv-ink-3)}
+.hv-tsteg li>small{font-size:var(--hv-fs-1);color:var(--hv-ink-3)}
 .hv-steg-gar>i::before{content:"";width:7px;height:7px;border-radius:50%;border:1.5px solid var(--hv-ink-3)}
 .hv-steg-ok>i{color:var(--hv-brand-ink)}
 .hv-steg-fel>i::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--hv-danger)}
 .hv-steg-ej>i::before{content:"";width:7px;height:1.5px;border-radius:1px;background:var(--hv-ink-3)}
-.hv-stegrad{margin:0 0 10px}
-.hv-stegrad .hv-steg{margin:8px 0 0 4px;padding-left:10px;border-left:1px solid var(--hv-line)}
-.hv-stegk{display:inline-flex;align-items:center;gap:6px;min-height:28px;margin-left:-6px;padding:0 10px 0 6px;border-radius:8px;font-size:12.5px;color:var(--hv-ink-3)}
-.hv-stegk svg{width:14px;height:14px;transform:rotate(-90deg);transition:transform .15s var(--hv-ease)}
+.hv-stegrad{margin:0 0 var(--hv-s3)}
+.hv-stegrad .hv-tsteg{margin:var(--hv-s2) 0 0 var(--hv-s1);padding-left:var(--hv-s3);border-left:1px solid var(--hv-line)}
+.hv-stegk{display:inline-flex;align-items:center;gap:var(--hv-s2);min-height:28px;margin-left:calc(var(--hv-s2) * -1);padding:0 var(--hv-s3) 0 var(--hv-s2);border-radius:var(--hv-r1);font-size:var(--hv-fs-1);color:var(--hv-ink-3);transition:background-color var(--hv-t-snabb) var(--hv-ease),color var(--hv-t-snabb) var(--hv-ease)}
+.hv-stegk svg{width:14px;height:14px;transform:rotate(-90deg);transition:transform var(--hv-t-snabb) var(--hv-ease)}
 .hv-stegk[aria-expanded="true"] svg{transform:none}
-.hv-stegk:hover{color:var(--hv-ink);background:var(--hv-line)}
 .hv-stegk:active{opacity:.7}
-.hv-atg{display:flex;align-items:center;flex-wrap:wrap;gap:4px;margin:-6px 0 0 36px}
-.hv-atgk{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:0 10px;border-radius:8px;border:1px solid transparent;font-size:12.5px;color:var(--hv-ink-2)}
+.hv-atg{display:flex;align-items:center;flex-wrap:wrap;gap:var(--hv-s1);margin:calc(var(--hv-s1) * -1) 0 0 36px}
+.hv-atgk{display:inline-flex;align-items:center;gap:var(--hv-s2);min-height:32px;padding:0 var(--hv-s3);border-radius:var(--hv-r1);border:1px solid transparent;font-size:var(--hv-fs-1);color:var(--hv-ink-2);transition:transform var(--hv-t-snabb) var(--hv-ease),background-color var(--hv-t-snabb) var(--hv-ease),border-color var(--hv-t-snabb) var(--hv-ease),color var(--hv-t-snabb) var(--hv-ease)}
 .hv-atgk svg{width:14px;height:14px}
-.hv-atgk:hover{color:var(--hv-ink);background:var(--hv-glass-2);border-color:var(--hv-line)}
-.hv-atgk:active{transform:scale(.97)}
-.hv-atgtid{margin-left:auto;font-size:12px;color:var(--hv-ink-3)}
-.hv-nere{position:sticky;bottom:136px;align-self:center;display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 14px 0 10px;border-radius:16px;background:var(--hv-base);border:1px solid var(--hv-line-2);box-shadow:var(--hv-shadow);font-size:12.5px;font-weight:500;color:var(--hv-ink);animation:hvsyns .15s var(--hv-ease)}
+.hv-atgk:active{transform:scale(.98)}
+.hv-atgtid{margin-left:auto;font-size:var(--hv-fs-1);color:var(--hv-ink-3)}
+.hv-nere{position:sticky;bottom:136px;align-self:center;display:inline-flex;align-items:center;gap:var(--hv-s2);min-height:32px;padding:0 var(--hv-s4) 0 var(--hv-s3);border-radius:var(--hv-r2);background:var(--hv-base);border:1px solid var(--hv-line-2);box-shadow:var(--hv-shadow);font-size:var(--hv-fs-1);font-weight:500;color:var(--hv-ink);animation:hvsyns var(--hv-t-snabb) var(--hv-ease);transition:transform var(--hv-t-snabb) var(--hv-ease),border-color var(--hv-t-snabb) var(--hv-ease)}
 .hv-nere[hidden]{display:none}
 .hv-nere svg{width:14px;height:14px}
-.hv-nere:hover{border-color:var(--hv-ink-3)}
-.hv-nere:active{transform:scale(.97)}
+.hv-nere:active{transform:scale(.98)}
 /* Godkänn-kortet: kvittot per rad. En bock för det som är gjort, en röd punkt där det stannade. */
-.hv-utk li>span>i{display:inline-grid;place-items:center;width:14px;height:14px;margin-right:8px;vertical-align:-2px}
+.hv-utk li>span>i{display:inline-grid;place-items:center;width:14px;height:14px;margin-right:var(--hv-s2);vertical-align:-2px}
 .hv-utk li>span>i svg{width:13px;height:13px;stroke-width:2.2}
 .hv-utk-gjord>span{color:var(--hv-ink-2)}
 .hv-utk-gjord .hv-ok{color:var(--hv-brand-ink)}
 .hv-utkx::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--hv-danger)}
 @media (max-width:860px){
+  .hv-radt>b{font-size:var(--hv-fs-2)}
+  /* Läget bryts i stället för att kapa kundnamnet. Lyssna står kvar till höger. */
+  .hv-hero p{white-space:normal;align-items:flex-start}
+  .hv-hero p>span{overflow:visible}
   .hv-nere{bottom:108px}
-  .hv-atg{margin-left:0}
-  .hv-atgtid{flex-basis:100%;margin-left:10px}
+  /* Avatarkolumnen är borta här, så allt under svaret börjar vid samma kant som svaret. */
+  .hv-atg,.hv-tur>.hv-kalla,.hv-utk{margin-left:0}
+  .hv-atgtid{flex-basis:100%;margin-left:var(--hv-s3)}
+  .hv-stegk,.hv-atgk,.hv-nere{min-height:40px}
+  /* Textknapparna i hälsningen och kortens fot behåller sin rad, men tryckytan räcker utanför texten. */
+  .hv-herok,button.hv-kfot{position:relative}
+  .hv-herok::after,button.hv-kfot::after{content:"";position:absolute;inset:calc(var(--hv-s3) * -1) calc(var(--hv-s2) * -1)}
 }
 </style>
 
@@ -27773,6 +27776,7 @@ document.addEventListener('click', e => {
   if (!ND) return;
   const b = e.target.closest && e.target.closest('[data-prfut]'); if (!b) return;
   e.preventDefault(); e.stopImmediatePropagation();
+  try { Object.keys(sessionStorage).filter(k => k.indexOf('nav2-hvutkast') === 0).forEach(k => sessionStorage.removeItem(k)); } catch(_){}
   const f = document.createElement('form'); f.method = 'post'; f.action = '/auth/logga-ut'; document.body.appendChild(f); f.submit();
 }, true);
 // Formulär som aldrig ska skickas (förut onsubmit="return false", som navets CSP stoppar).
@@ -34950,7 +34954,8 @@ function hvHem(){
   if (H.inaktuell){ H.inaktuell = false; ndOmlas('hv'); }
   const lage = hvLage();
   if (lage === 'trad' && !H.trad.some(t => hvSamma(t, H.ark, H.id))) H.trad.push({sort:H.ark, id:H.id || null, nr:++hvNr});
-  return `<div class="hv${lage === 'hem' && String(H.q || '').trim() ? ' hv-skriver' : ''}" data-hvtema="${hvTema()}" data-hvlage="${lage}">
+  hvUtkastAter();
+  return `<div class="hv${lage === 'hem' && !hvUtkastVilar && String(H.q || '').trim() ? ' hv-skriver' : ''}" data-hvtema="${hvTema()}" data-hvlage="${lage}">
     <div class="hv-fonster">
       <div class="hv-grund" aria-hidden="true"><svg class="hv-dial" viewBox="0 0 400 400" fill="none"><g>${HVDIAL}</g></svg></div>
       <div class="hv-inre">
@@ -35076,13 +35081,15 @@ function hvGenv(){
   const mer = [ND.hem.golvet ? '<button role="menuitem" data-hvark="golvet">Golvet</button>' : '', ND.hem.team ? `<button role="menuitem" data-hvark="team">Teamet i ${esc(ND.hem.team.manadsnamn)}</button>` : '', ndKopplad('coachning') ? '<button role="menuitem" data-hvark="coachning">Coachning</button>' : ''].join('');
   return `<div class="hv-genv">${fraga}<button class="hv-chip" data-hvark="dag">Min dag</button><button class="hv-chip" data-hvark="vecka">Veckan som kommer</button>${ndKopplad('moten') ? `<button class="hv-chip" data-go="/moten">Möten${mt ? ` <small class="num">${mt}</small>` : ''}</button>` : ''}${stat}${mer ? `<span class="hv-merv"><button class="hv-chip" data-hvmer aria-haspopup="menu" aria-expanded="${!!H.mer}">Mer</button>${H.mer ? `<div class="hv-mer hv-glass" role="menu" aria-label="Mer">${mer}</div>` : ''}</span>` : ''}</div>`;
 }
+// Lagets rad säger läget en gång: en detalj som bara upprepar läget ("inte instämplad" efter Ej instämplad) skrivs inte.
+const hvLagDetalj = (l, d) => { const t = String(d || '').trim(); return t && t.toLowerCase().replace(/^inte /, 'ej ') !== String(LAGE[l].l).toLowerCase() ? t : ''; };
 // Överraden: hur många som är på plats (klick visar laget), datum och Stämpla in. Ingen egen ruta.
 function hvTopp(){
   const H = S.hv, team = S.role === 'chef' ? teamNow() : [], antal = {};
   team.forEach(([, l]) => antal[l] = (antal[l] || 0) + 1);
   const pa = antal.inne || 0;
   const lag = team.length ? `<button class="hv-lg" data-hvdra aria-expanded="${!!H.dra}" aria-label="Laget just nu: ${pa} av ${team.length} på plats. Visa vilka."><b class="num">${pa}<small>/${team.length}</small></b><span class="hv-lgt">på plats</span><span class="hv-lgbar" aria-hidden="true">${['inne', 'sjuk', 'ledig', 'ej'].filter(k => antal[k]).map(k => `<i style="flex:${antal[k]};background:var(--hv-p-${k})"></i>`).join('')}</span>${I('chev')}</button>` : '<span></span>';
-  const dra = H.dra && team.length ? `<div class="hv-dra" role="region" aria-label="Laget just nu">${team.map(([n, l, d]) => `<div class="hv-prow"><span class="hv-av" aria-hidden="true">${esc(String(n)[0] || '')}</span><span>${esc(n)}</span><span class="hv-st"><i style="background:var(--hv-p-${l})"></i>${esc(LAGE[l].l)}</span><span class="hv-dt">${esc(d || '')}</span></div>`).join('')}</div>` : '';
+  const dra = H.dra && team.length ? `<div class="hv-dra" role="region" aria-label="Laget just nu">${team.map(([n, l, d]) => `<div class="hv-prow"><span class="hv-av" aria-hidden="true">${esc(String(n)[0] || '')}</span><span>${esc(n)}</span><span class="hv-st"><i style="background:var(--hv-p-${l})"></i>${esc(LAGE[l].l)}</span><span class="hv-dt">${esc(hvLagDetalj(l, d))}</span></div>`).join('')}</div>` : '';
   // Stämpla in står för alla när stämplingen är på: också den vars roll inte måste stämpla får göra det.
   const stamplar = ndKopplad('tid') && ND.tid && ND.tid.modulPa, inne = stampLage() === 'in', sist = S.events[S.events.length - 1];
   const stamp = !stamplar ? '' : inne ? `<button class="hv-stamp inne" data-act="ut" aria-label="Du är instämplad sedan ${sist ? hm(sist.t) : ''}. Stämpla ut.">${I('check')}Inne${sist ? ' sedan ' + hm(sist.t) : ''} · Stämpla ut</button>` : `<button class="hv-stamp" data-act="in">Stämpla in</button>`;
@@ -35238,7 +35245,7 @@ const HVQMAX = 160;
 function hvSkriv(){
   const H = S.hv, bil = H.bilagor || [], chatt = hvChattPa();
   const om = chatt ? 'Svaren skrivs av AI ur Navs tal. Talen sätter Nav in.' + (typeof ND.hem.chattAnvant === 'number' ? ` ${ND.hem.chattAnvant} % av månadens AI-utrymme är använt.` : '') : 'Svaren kommer ur Navs sökruta, inte från AI.';
-  const send = H.strom ? `<button type="button" class="hv-send hv-stopp" data-hvstopp aria-label="Stoppa svaret" title="Stoppa svaret (esc)">${I('hvstopp')}</button>` : `<button class="hv-send" aria-label="Skicka">${I('hvupp')}</button>`;
+  const send = H.strom ? `<button type="button" class="hv-send hv-stoppa" data-hvstopp aria-label="Stoppa svaret" title="Stoppa svaret (esc)">${I('hvstopp')}</button>` : `<button class="hv-send" aria-label="Skicka">${I('hvupp')}</button>`;
   const hojd = H.qh ? ` style="height:${H.qh}px"${H.qh >= HVQMAX ? ' class="hv-hog"' : ''}` : '';
   return `<form class="hv-skriv" data-hvskriv title="${esc(om)}">
     ${bil.length ? `<div class="hv-bilagor">${bil.map((b, i) => `<span class="hv-bil">${esc(b.namn)}<button type="button" data-hvbilx="${i}" aria-label="Ta bort ${esc(b.namn)}">×</button></span>`).join('')}</div>` : ''}
@@ -35257,15 +35264,24 @@ function hvHojd(el){
   el.classList.toggle('hv-hog', S.hv.qh >= HVQMAX);
 }
 // En halvskriven fråga står kvar i fliken (sessionStorage) och överlever en omladdning. Utan lagring finns den bara i läget.
+// Nyckeln bär personens id: på en delad dator får nästa person aldrig den förras halvskrivna fråga.
 const HVUTKAST = 'nav2-hvutkast';
+const hvUtkastNyckel = () => HVUTKAST + ':' + ((ND && ND.jag && ND.jag.id) || '');
 function hvUtkast(v){
   try {
-    if (v === undefined){ const s = sessionStorage.getItem(HVUTKAST); return typeof s === 'string' ? s : ''; }
-    if (v) sessionStorage.setItem(HVUTKAST, v); else sessionStorage.removeItem(HVUTKAST);
+    if (v === undefined){ const s = sessionStorage.getItem(hvUtkastNyckel()); return typeof s === 'string' ? s : ''; }
+    if (v) sessionStorage.setItem(hvUtkastNyckel(), v); else sessionStorage.removeItem(hvUtkastNyckel());
     return v;
   } catch(_){ return ''; }
 }
-if (!S.hv.q) S.hv.q = hvUtkast();
+// Utkastet läses en gång, när hemmet ritas första gången (då är personen känd). Ett återställt utkast vilar:
+// det står i rutan, men hemmet döljs först när personen själv skriver.
+let hvUtkastLast = false, hvUtkastVilar = false;
+function hvUtkastAter(){
+  if (hvUtkastLast || !ND || !ND.jag) return;
+  hvUtkastLast = true;
+  if (!S.hv.q){ S.hv.q = hvUtkast(); hvUtkastVilar = !!S.hv.q; }
+}
 const hvPekskarm = () => typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
 // Bifoga: högst tre filer, bilder eller PDF, högst 3 MB tillsammans (samma gräns som rutten, lasBilagor).
 const HVBILSORT = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'], HVBILMAX = 3 * 1024 * 1024;
@@ -35286,6 +35302,8 @@ function hvLaggFiler(filer){
 document.addEventListener('paste', e => {
   if (!hvPa() || S.view !== 'hem' || !hvChattPa() || !e.target || e.target.id !== 'hvQ') return;
   const filer = [...((e.clipboardData && e.clipboardData.files) || [])]; if (!filer.length) return;
+  // Celler ur ett kalkylark och text ur ett dokument bär både text och en bild av markeringen: då är det texten som menas.
+  if (e.clipboardData.getData && e.clipboardData.getData('text/plain')) return;
   e.preventDefault(); hvLaggFiler(filer);
 }, true);
 document.addEventListener('dragover', e => { if (hvPa() && S.view === 'hem' && hvChattPa() && e.target && e.target.closest && e.target.closest('.hv-skriv')) e.preventDefault(); }, true);
@@ -35359,7 +35377,7 @@ function hvChattFraga(q){
   const H = S.hv, T = H.chatt;
   if (H.strom){ toast('Nav svarar fortfarande. Esc stoppar svaret.'); return; }
   if (H.laser){ toast('Filen läses fortfarande. Skicka om en stund.'); return; }
-  H.q = ''; H.qh = 0; hvUtkast('');
+  H.q = ''; H.qh = 0; hvUtkast(''); hvUtkastVilar = false;
   const bilagor = H.bilagor || []; H.bilagor = [];
   // Filerna sparas på turen, så att Försök igen skickar samma fråga med samma filer.
   const tur = {fraga:q, filer:bilagor.map(b => b.namn), bilagor, steg:[], svar:null, fel:'', kod:'', laddar:true, visa:null, lage:[]};
@@ -35407,6 +35425,7 @@ async function hvChattKor(tur){
   const vakt = setTimeout(() => hvChattStopp('vakt'), HVCHATTMS);
   hvChattRita(true);
   try {
+    if (hvStoppar){ const v = hvStoppar; hvStoppar = null; await v; if (tur.stoppad) return; }
     const res = await fetch('/nav2/chatt', {method:'POST', credentials:'same-origin', headers:{'content-type':'application/json'}, signal:ctl.signal, body:JSON.stringify({fraga:tur.fraga, historia, ...(tur.bilagor.length ? {bilagor:tur.bilagor} : {})})});
     if (tur.stoppad) return;
     if (!res.ok || !res.body || !String(res.headers.get('content-type') || '').includes('event-stream')){
@@ -35424,7 +35443,7 @@ async function hvChattKor(tur){
         toast(((d && d.fel) || 'Chatten är inte påslagen.') + (tur.filer.length ? ' Filerna följde inte med till sökrutan.' : '')); hvSok(tur.fraga); return;
       }
       tur.fel = (d && d.fel) || (res.status === 401 ? 'Du är utloggad. Logga in och fråga igen.' : 'Chatten svarar inte just nu.');
-      tur.kod = (d && d.kod) || (res.status === 401 ? 'ut' : res.status >= 500 ? 'tillfalligt' : '');
+      tur.kod = (d && d.kod) || (res.status === 401 ? 'ut' : res.status >= 500 ? 'tillfalligt' : res.status === 400 ? (tur.bilagor.length ? 'fil' : 'langt') : '');
     } else {
       const las = res.body.getReader(), dek = new TextDecoder(); let buf = '';
       for (;;){
@@ -35450,6 +35469,7 @@ async function hvChattKor(tur){
 }
 // Stopp (knappen eller Esc) avbryter hämtningen direkt. Rutten gör då inget nytt anrop och kör inga fler verktyg.
 // Det som redan hämtats står kvar som steg. Vakten (130 s) stoppar på samma sätt men säger att det tog för lång tid.
+let hvStoppar = null;
 function hvChattStopp(skal){
   const H = S.hv, s = H.strom; if (!s) return;
   const tur = s.tur;
@@ -35458,6 +35478,8 @@ function hvChattStopp(skal){
   else if (!tur.svar && !tur.fel) tur.kod = 'stoppad';
   H.strom = null;
   s.ctl.abort();
+  // Rutten får veta att frågan är stoppad, så att den inte spärrar nästa. Går beskedet inte fram säger nästa fråga det själv.
+  hvStoppar = fetch('/nav2/chatt', {method:'POST', credentials:'same-origin', keepalive:true, headers:{'content-type':'application/json'}, body:JSON.stringify({stoppa:true})}).catch(() => null);
   hvChattRita(true);
   if (skal !== 'vakt') hvSkrivFokus();
 }
@@ -35520,10 +35542,10 @@ function hvChattSteg(t, i){
   // svaret kom. Ett steg som aldrig blev klart (stopp, fel) säger det, utan bock.
   const rad = s => { const lage = s.ok === false ? 'fel' : s.ok || (s.nr === null && t.svar) ? 'ok' : t.laddar ? 'gar' : 'ej';
     return `<li class="hv-steg-${lage}"><i aria-hidden="true">${lage === 'ok' ? I('check') : ''}</i><span>${esc(s.text)}${s.kalla && (!t.laddar || s.ok === false) ? `<small>${esc(s.kalla)}</small>` : lage === 'ej' ? '<small>Blev inte klart.</small>' : ''}</span>${s.ms ? `<small class="num">${hvSek(s.ms)}</small>` : ''}</li>`; };
-  if (t.laddar) return `<ol class="hv-steg">${st.slice(-3).map(rad).join('')}</ol>`;
+  if (t.laddar) return `<ol class="hv-tsteg">${st.slice(-3).map(rad).join('')}</ol>`;
   const fel = st.filter(s => s.ok === false).length;
   const sam = `${st.length === 1 ? 'Ett' : hvOrd(st.length)} steg${fel ? `, ${fel === 1 ? 'ett' : hvOrd(fel).toLowerCase()} gick inte` : ''}${t.ms ? ` · ${hvSek(t.ms)}` : ''}`;
-  return `<div class="hv-stegrad"><button class="hv-stegk" data-hvchattsteg="${i}" aria-expanded="${!!t.stegOppen}">${I('chev')}<span>${sam}</span></button>${t.stegOppen ? `<ol class="hv-steg">${st.map(rad).join('')}</ol>` : ''}</div>`;
+  return `<div class="hv-stegrad"><button class="hv-stegk" data-hvchattsteg="${i}" aria-expanded="${!!t.stegOppen}">${I('chev')}<span>${sam}</span></button>${t.stegOppen ? `<ol class="hv-tsteg">${st.map(rad).join('')}</ol>` : ''}</div>`;
 }
 // Under svaret: Kopiera och Försök igen, och en väg till det svaret läste när det finns i hemmet (bara för verktyg
 // som svarade). Inga påhittade följdfrågor. Försök igen bara på den sista turen, och inte när ett kort har börjat göras.
@@ -36046,9 +36068,11 @@ function hvKlick(e){
   if (!hvPa() || S.view !== 'hem') return;
   const t = e.target.closest && e.target.closest('[data-hvtr], [data-hvunderlag], [data-hvboka], [data-hvangradag], [data-hvbifoga], [data-hvtips], [data-hvtala], [data-hvbilx], [data-hvstang], [data-hvtal], [data-hvchattsok], [data-hvstopp], [data-hvnere], [data-hvchattigen], [data-hvchattandra], [data-hvchattkop], [data-hvchattsteg], [data-hvchattgodkann], [data-hvchattavbryt], [data-hvchattangra], [data-hvgor], [data-hvforslag], [data-hvnasta], [data-hvval], [data-hvangra], [data-hvdra], [data-hvmer], [data-hvstat], [data-hvforbered], [data-hvigen], [data-hvfraga], [data-hvform], [data-hvformx], [data-hvmeny], [data-hvflagga], [data-hvdolj], [data-hvvisa], [data-hvga], [data-hvgratt], [data-hvrad], [data-hvark]');
   // Mer och Laget stängs av ett klick utanför dem, som en meny brukar. Klicket går ändå vidare dit det skulle.
-  if ((S.hv.mer || S.hv.dra) && !(e.target.closest && e.target.closest('.hv-merv, .hv-dra, [data-hvdra]'))){
+  if (S.hv.mer || S.hv.dra){
+    const iMer = e.target.closest && e.target.closest('.hv-merv'), iLag = e.target.closest && e.target.closest('.hv-dra, [data-hvdra]');
+    const stangMer = S.hv.mer && !iMer, stangLag = S.hv.dra && !iLag;
     // Omritningen väntar en bildruta, så att klicket hinner göra sitt först (fokus i skrivrutan, Lyssna, en länk).
-    S.hv.mer = false; S.hv.dra = false; requestAnimationFrame(hvRitaBehall);
+    if (stangMer || stangLag){ if (stangMer) S.hv.mer = false; if (stangLag) S.hv.dra = false; requestAnimationFrame(hvRitaBehall); }
   }
   // En väg ut ur hemmet (kalendern, uppgifterna, en inställning) stänger arket, så att Hem är hemmet nästa gång. Klicket går vidare som vanligt.
   if (!t){ if (S.hv.ark && e.target.closest && e.target.closest('.hv [data-view], .hv [data-go]')) Object.assign(S.hv, {ark:null, id:null, kvitto:null, form:null, meny:null}); return; }
@@ -36117,7 +36141,7 @@ document.addEventListener('submit', e => {
 document.addEventListener('input', e => {
   const n = e.target && e.target.dataset && e.target.dataset.hvfalt; if (!n || !hvPa()) return;
   if (n === 'q' || n === 'kom') S.hv[n] = e.target.value;
-  if (n === 'q'){ hvUtkast(e.target.value); hvHojd(e.target); const v = document.querySelector('.hv'); if (v) v.classList.toggle('hv-skriver', hvLage() === 'hem' && !!e.target.value.trim()); }
+  if (n === 'q'){ hvUtkastVilar = false; hvUtkast(e.target.value); hvHojd(e.target); const v = document.querySelector('.hv'); if (v) v.classList.toggle('hv-skriver', hvLage() === 'hem' && !!e.target.value.trim()); }
   else if (S.hv.form){ S.hv.form[n] = e.target.value; S.hv.form.fel = ''; if (n === 'matt') render(); }
 });
 document.addEventListener('change', e => {

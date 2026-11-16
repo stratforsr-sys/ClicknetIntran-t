@@ -723,7 +723,7 @@ rubrik("Skiss 9 exakt: korten (punkt 8–12, 20, 39 och 40)");
   ok("låg skärm: texten närmare talet", /\.hv-ftxt\{margin-top:var\(--hv-s2\)\}/.test(media("(max-height:700px)")));
   ok("två kolumner först under 860", !media("(max-width:1180px)").includes(".hv-kort") && (html.match(/\.hv-kort\{grid-template-columns:repeat\(2/g) || []).length === 1 && /\.hv-kort\{grid-template-columns:repeat\(2/.test(media("(max-width:860px)")));
   ok("det lugna läget: bock, linje överst, ingen egen höjd, mitt i ytan", regel(".hv-lugn") === "flex:1;display:flex;align-items:center;justify-content:center;gap:var(--hv-s3);color:var(--hv-ink-2);text-align:center;border-top:1px solid var(--hv-line)", regel(".hv-lugn"));
-  ok("mörka färger som skissen", /--hv-ink-3:#7C8E86;/.test(regel(".hv")) && /--hv-pop:color-mix\(in srgb,var\(--hv-ink\) 9%,var\(--hv-base\)\);/.test(regel(".hv")));
+  ok("mörka färger som skissen", /--hv-ink-3:#8A9C94;/.test(regel(".hv")) && /--hv-pop:color-mix\(in srgb,var\(--hv-ink\) 9%,var\(--hv-base\)\);/.test(regel(".hv")));
   const lj = regel('.hv[data-hvtema="ljus"]');
   ok("ljusa färger som skissen", /--hv-ink-3:#5A6862;/.test(lj) && /--hv-pop:#FFFFFF;/.test(lj) && /--hv-signal-ink:#8A5200;/.test(lj) && /--hv-signal:#D98A1C;/.test(lj) && /--hv-danger:#C4473C;/.test(lj), lj);
   const tom = kort(hem({ chef: true, rader: [] }).hvHem(), "Väntar på dig");
@@ -963,8 +963,9 @@ rubrik("Skiss 9 exakt: mobil som Claude (punkt 41, F6)");
 rubrik("Stilen: täckande ytor, få tider, tydliga lägen (lyft av hemvyn)");
 {
   const start = html.indexOf("/* ===================== Nya hemmet (prefix hv)");
-  const slut = html.indexOf("@media (prefers-reduced-motion:reduce)", start);
-  const css = html.slice(start, html.indexOf("\n", slut));
+  // Hela hemmets stil, också avsnittet Lyft sist i stilblocket.
+  const css = html.slice(start, html.indexOf("/* ===================== Ikoner", start)) + html.slice(html.indexOf("/* ---------- Lyft: kort och tråd ---------- */"), html.indexOf("</style>", html.indexOf("/* ---------- Lyft: kort och tråd ---------- */")));
+  ok("klasserna har en betydelse var: stegmätaren äger hv-steg, lyssna-rutan hv-stopp, och Laget har en färg per läge", !/class="hv-steg"/.test(html) && !/\.hv-steg[ {]/.test(css.replace(/\.hv-matare\.hv-steg/g, "")) && !/hv-send hv-stopp"/.test(html) && /--hv-p-ej:var\(--hv-ink-3\);/.test(regel(".hv")));
   const tokens = regel(".hv") ?? "";
   ok("inget glas: ingen backdrop-filter i hemmets stil", !/backdrop-filter/.test(css));
   ok("ingen :has på body, hvbody ligger på body i stället", !/body:has\(/.test(css) && /document\.body\.classList\.toggle\('hvbody', hvNytt\)/.test(html));
@@ -1056,7 +1057,8 @@ rubrik("Lyftet: korten räknar ur samma mängd, och allt man ser leder vidare");
 
   // js-kort-1: raden går att trycka på också där knappen inte får plats, och öppnar hela listan vid raden.
   ok("varje rad i kortet har en titel som är en knapp", (k.match(/<button class="hv-radt" data-hvrad="r[0-9]">/g) || []).length === 3);
-  ok("titelknappen ser ut som titeln (egen regel) och kapas med … på smal skärm", /\.hv-radt>b\{display:block;font-weight:500;font-size:14\.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis\}/.test(html) && /@media \(max-width:860px\)\{\s*\.hv-radt>b\{font-size:13px\}/.test(html));
+  ok("titelknappen ser ut som titeln (egen regel) och kapas med … på smal skärm", /\.hv-radt>b\{display:block;min-width:0;font-weight:500;font-size:var\(--hv-fs-3\);white-space:nowrap;overflow:hidden;text-overflow:ellipsis\}/.test(html) && /@media \(max-width:860px\)\{\s*\.hv-radt>b\{font-size:var\(--hv-fs-2\)\}/.test(html));
+  ok("hela radens höjd går att trycka på, inte bara texten", /\.hv-rad>\.hv-radt\{align-self:stretch;display:flex;align-items:center;/.test(html));
   const r = hem({ chef: true });
   klick(r, mal(["[data-hvrad]"], { hvrad: "r4" }));
   ok("ett tryck på raden öppnar hela listan med raden vald", r.S.hv.ark === "vantar" && r.S.selRad === "r4" && /class="hv-sak sel" data-id="r4"/.test(r.hvHem()));
@@ -1198,12 +1200,13 @@ rubrik("Lyftet: chattens klient (stopp, försök igen, stegen, rullningen och st
   // Stopp: Skicka blir Stopp medan svaret pågår, och Esc stoppar.
   const s = chatt();
   let signal = null;
-  s.fetch = async (_url, init) => { signal = init.signal; return hanger(init); };
+  const stopp = [];
+  s.fetch = async (_url, init) => { if (JSON.parse(init.body).stoppa){ stopp.push(init); return { ok: true, status: 200, headers: { get: () => "application/json" }, json: async () => ({ ok: true }) }; } signal = init.signal; return hanger(init); };
   s.S.hv.q = "Vad väntar på mig?";
   const p = s.hvFraga();
   await vanta();
   const under = s.hvHem();
-  ok("medan svaret pågår är Skicka en Stopp-knapp, och tråden är upptagen", /<button type="button" class="hv-send hv-stopp" data-hvstopp aria-label="Stoppa svaret"/.test(under) && !under.includes('aria-label="Skicka"') && under.includes('aria-busy="true"'));
+  ok("medan svaret pågår är Skicka en Stopp-knapp, och tråden är upptagen", /<button type="button" class="hv-send hv-stoppa" data-hvstopp aria-label="Stoppa svaret"/.test(under) && !under.includes('aria-label="Skicka"') && under.includes('aria-busy="true"'));
   ok("medan verktyget kör står steget öppet, med en ring för det som pågår", under.includes('<li class="hv-steg-gar">') && under.includes("Hämtar det som väntar på dig."));
   s.toast = (t) => s.anrop.push(["toast", t]);
   s.S.hv.q = "en till";
@@ -1214,6 +1217,7 @@ rubrik("Lyftet: chattens klient (stopp, försök igen, stegen, rullningen och st
   await p; await vanta();
   const efter = s.hvHem(), st = s.S.hv.chatt[0];
   ok("Esc stoppar svaret: hämtningen avbryts och turen säger det, utan nätfel", hindrad && signal.aborted && st.stoppad && !st.laddar && efter.includes("Du stoppade svaret.") && !/Nav svarade inte/.test(efter), JSON.stringify({ hindrad, ab: signal && signal.aborted, st: { stoppad: st.stoppad, laddar: st.laddar, fel: st.fel } }));
+  ok("stoppet sägs också till rutten, så att frågan inte spärrar nästa", stopp.length === 1 && stopp[0].keepalive === true && stopp[0].signal === undefined);
   ok("efter stoppet är Skicka tillbaka, och tråden är inte upptagen", efter.includes('<button class="hv-send" aria-label="Skicka">') && !efter.includes("data-hvstopp") && efter.includes('aria-busy="false"') && s.S.hv.strom === null);
   ok("efter stoppet står Esc åt arket igen (tråden stängs inte av samma tryck)", s.S.hv.ark === "chatt");
   st.stegOppen = true;
