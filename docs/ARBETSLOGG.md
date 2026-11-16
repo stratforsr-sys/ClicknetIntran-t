@@ -6,6 +6,39 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 ---
 
 
+## 2026-11-16 · Avbrottet, provdatabasen och en mellanvara som tål en seg databas
+
+**Avbrottet.** 16.52–ca 17.30 svensk tid fick inloggade "504 MIDDLEWARE_INVOCATION_TIMEOUT" på varje sida.
+Migration 0312 (en annan session) fick PostgREST att läsa om hela schemat. Omladdningen fastnade på
+`SELECT name FROM pg_timezone_names`, som läser hundratals filer från disk: över 100 s, avbruten, omtagen. Disken
+var troligen strypt (Supabase varnade 2026-11-15 för att Disk IO-budgeten tar slut) och Nano (428 MB) håller inte
+filerna i minnet. Under tiden svarade REST 503 PGRST002 och Auth 5–25 s. `select 1` via poolern tog 20 ms: det
+var inte databasen som stod still utan tjänsterna på samma maskin. Ett db-prov och en manuell omladdning från en
+annan session förlängde det. Det släppte av sig självt när all last upphört. statement_timeout=8s på
+authenticator var inte orsaken. Uppgradering av compute är beställarens beslut ("inte nu nu").
+
+**Provdatabasen.** Supabase-projektet `nav-prov` (`xlbtksjbtabpmoozlmje`, eu-west-1, gratis). Byggd med 184
+migrationer i produktionens ordning (`schema_migrations order by applied_at`), inte filnamnens: 0098 kräver
+push_sent från 0121. Ny anslutning per fil, eftersom pg_temp-funktioner annars lever vidare (0061 → 0063).
+Vakten per fil måste vara av vid bygge från noll, men vakten på slutläget gav inga fel. **main kan inte bygga en
+databas från noll:** 0051_personlig_malgrupp och 0303–0308 kördes i produktionen men finns inte på main, och
+0240 kräver 0051:s `matches_audience(text[],uuid[],uuid[])`. De hämtades ur git (kontrollsummor lika med
+produktionen). Byggskript och kopior ligger i `~/.claude/db-skydd/provdatabasen/`. 0061 kräver en ceo:
+testpersonen `PROV Vd` (prov-vd@nav-prov.test, ceo+admin+sales_manager+salesperson, lösenordet i
+`~/.clicknet/nav-prov-konto.txt`). Alla cron-jobb avstängda, `job_target` = `https://nav-prov.invalid`.
+rls.mjs grön. 0312 kördes mot nav-prov av en annan session efteråt. Vercel: `clicknet-nav` ligger nu i teamet
+`zens-team`; Preview (alla grenar) har nav-provs Supabase-nycklar och `NAV2_PG_URL`. Den gamla NAV2_PG_URL
+för nav2-utkast (produktionen) är borttagen. Production är orörd.
+
+**Mellanvaran** (`src/lib/supabase/tidsgrans.ts`, grenen `seg-databas`). Supabase-klienten i mellanvaran får en
+fetch med 8 s tidsgräns. `getUser()` som ger `AuthRetryableFetchError` (tidsgräns, bruten anslutning, 5xx)
+blir 503: en egen sida för adressfältet (meta refresh 20 s, Försök igen, "du behöver inte logga in igen") och kort
+text för RSC, fetch och server actions, aldrig en omdirigering till /logga-in. 401, 403 och saknad session går
+till inloggningen som förut. Dagsstämpeln `registrera_aktivitet` får hålla sidan högst 1,5 s; hinner den inte
+fortsätter den i `waitUntil` och kakan sätts inte. AbortSignal.any/timeout används inte (Edge). Provet
+`tests/seg-databas.mjs` (31/31) kör Supabases riktiga klient mot en låtsad fetch. Kvar: sidorna själva kan
+fortfarande bli långsamma när databasen är seg (funktionens tidsgräns, inte mellanvarans).
+
 ## 2026-11-16 · Möten: vem som höll mötet, utfallet och uppföljningar (0313)
 
 **Beställningen.** Fredrik höll Make your dream, Zen stod som hållare. Fredrik satte Hållet och Offert skickad, och

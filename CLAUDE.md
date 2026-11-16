@@ -42,9 +42,16 @@ previewen, och merga först efter uttryckligt godkännande.
 Preview: `https://clicknet-nav-git-<branch>-zens-projects-6c1be12b.vercel.app`.
 Adressen kräver webbläsare — Vercels deployment protection ger 302 på curl.
 
-**Previewen pekar på PRODUKTIONSDATABASEN.** Det finns ett Supabase-projekt, inte
-ett per miljö. Håll migrationer additiva så `main`-koden aldrig rör de nya
-tabellerna, och stäm av innan testdata skapas.
+**Previewen pekar på PROVDATABASEN** (Supabase-projektet `nav-prov`, sedan
+2026-11-16). Nycklarna ligger i `~/.clicknet/nav-prov.env`, och kontot för att logga
+in på en preview i `~/.clicknet/nav-prov-konto.txt`. En grens migrationer körs mot
+nav-prov innan den provas i previewen. En preview som byggdes före 2026-11-16 18.45
+har produktionens nycklar inbakade tills grenen byggs om.
+
+**Prov körs mot provdatabasen, aldrig mot produktionen.** Läs in nav-prov.env i
+stället för nav.env; hooken `~/.claude/hooks/db-skydd.sh` stoppar prov med
+nav.env. Produktionen är en Nano (428 MB) som 2026-11-16 stod still i 25–50
+minuter efter en migration på strypt disk (ARBETSLOGG samma dag).
 
 ## Inga lokala byggen
 
@@ -63,9 +70,15 @@ migrationen **körts**, inte när branchen mergats — fråga
 databas.
 
 ```
-set -a; . ~/.clicknet/nav.env; set +a
+set -a; . ~/.clicknet/nav-prov.env; set +a   # först provdatabasen
+node scripts/apply-sql.mjs 0047_notishandelser
+set -a; . ~/.clicknet/nav.env; set +a        # sedan produktionen, när Supabase mår bra
 node scripts/apply-sql.mjs 0047_notishandelser
 ```
+
+Varje DDL får PostgREST att läsa om hela schemat. På en seg databas blir REST
+otillgängligt medan det pågår (PGRST002). Kör högst en migration per tio minuter
+mot produktionen, och skicka aldrig `NOTIFY pgrst` för hand.
 
 Varje migration bokförs med checksumma. Skriv satserna omkörbara
 (`drop policy if exists` före `create`).

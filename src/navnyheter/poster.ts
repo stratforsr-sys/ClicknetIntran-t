@@ -14,6 +14,17 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "nav-sager-till-nar-databasen-ar-seg",
+    rubrik: "När databasen inte svarar säger Nav det",
+    ingress: "Om databasen är överbelastad får du en sida som säger vad som händer, i stället för ett felmeddelande. Du behöver inte logga in igen.",
+    text: `Om Nav inte får svar från databasen ser du **Nav får inget svar från databasen just nu**. Det är inte din
+inloggning som strular, och inget du har sparat har försvunnit.
+
+Sidan försöker själv igen efter 20 sekunder. Du kan också trycka **Försök igen**. Det brukar gå över inom några minuter.`,
+    datum: "2026-11-16",
+    roller: [],
+  },
+  {
     slug: "moten-vem-holl-motet",
     rubrik: "Möten: den som höll mötet sätter utfallet",
     ingress: "Höll en kollega mötet i stället för den som stod som hållare? Välj vem som höll det när du sätter Hållet, så svarar rätt person på frågorna och väljer nästa steg. Ett möte efter det första räknas aldrig som ett nytt bokat möte.",

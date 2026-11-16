@@ -1,5 +1,8 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import {
+  SUPABASE_TIDSGRANS_MS, STAMPEL_TIDSGRANS_MS, medTidsgrans, arNatfel, inomTid, villHaSida, segSida, segRubriker,
+} from "./tidsgrans";
 import { SUPABASE_ANON_KEY, SUPABASE_SERVICE_KEY, SUPABASE_URL, isConfigured } from "@/lib/env";
 import { bygCsp } from "@/lib/csp";
 import { nav2Adress, franNav2 } from "@/lib/nav2/vagar";
@@ -49,7 +52,7 @@ async function behoverSteg2(
   const bararen = flaggadForByte && SUPABASE_SERVICE_KEY ? SUPABASE_SERVICE_KEY : token;
 
   try {
-    const svar = await fetch(
+    const svar = await medTidsgrans(fetch, SUPABASE_TIDSGRANS_MS)(
       `${SUPABASE_URL}/rest/v1/employee` +
         `?select=employee_role(role),employee_permission(permission)` +
         `&auth_user_id=eq.${authUserId}&status=eq.active`,
@@ -71,7 +74,7 @@ async function behoverSteg2(
   }
 }
 
-export async function updateSession(request: NextRequest) {
+export async function updateSession(request: NextRequest, event?: NextFetchEvent) {
   // Nytt nonce per svar. Maste satta pa BADE requesten (sa Next kan lasa det
   // nar sidan renderas) och svaret (sa webblasaren far regeln).
   const nonce = btoa(crypto.randomUUID());
@@ -127,6 +130,9 @@ export async function updateSession(request: NextRequest) {
   if (arApi) return fortsatt();
 
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    // Varje anrop till Supabase har en tidsgräns. Utan den väntade mellanvaran
+    // tills Vercel gav upp (504, 2026-11-16). Se ./tidsgrans.ts.
+    global: { fetch: medTidsgrans(fetch, SUPABASE_TIDSGRANS_MS) },
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll: (list) => {
@@ -147,9 +153,26 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user }, error: authFel } = await supabase.auth.getUser();
   const path = request.nextUrl.pathname;
   const isPublic = arPublik(path);
+
+  /**
+   * Supabase svarade inte (tidsgräns, nätfel, 5xx). Det säger ingenting om
+   * inloggningen, så ingen omdirigering till /logga-in: den som loggar in igen
+   * får samma fel och tror att det är lösenordet. I stället 503 med en sida som
+   * säger vad som händer och försöker igen själv, eller ett kort 503 till
+   * navets egna anrop. Publika vägar (inloggningen, hälsokollen) släpps fram
+   * som förut.
+   */
+  if (!user && !isPublic && arNatfel(authFel)) {
+    const sida = villHaSida(request.method, request.headers);
+    const res = new NextResponse(
+      sida ? segSida(nonce, request.nextUrl.pathname + request.nextUrl.search) : "Nav får inget svar från databasen just nu. Försök igen om en stund.",
+      { status: 503, headers: { ...segRubriker(), "content-type": sida ? "text/html; charset=utf-8" : "text/plain; charset=utf-8" } },
+    );
+    return avsluta(res);
+  }
 
   /**
    * Identiteten ar verifierad har och ingen annanstans. Efter den har raden
@@ -282,7 +305,16 @@ export async function updateSession(request: NextRequest) {
   const idag = new Date().toISOString().slice(0, 10);
   if (user && request.cookies.get(AKTIVITETSKAKA)?.value !== idag) {
     try {
-      await supabase.rpc("registrera_aktivitet");
+      // Stämpeln får hålla sidan i högst 1,5 s. Hinner den inte går den klart
+      // i bakgrunden (waitUntil), och kakan sätts inte: nästa begäran försöker
+      // igen, och primärnyckeln gör en andra stämpel till ingenting.
+      // Ett fel i svaret sätter kakan som förut (rpc kastar inte); bara tiden ändrar något.
+      const stampel = Promise.resolve(supabase.rpc("registrera_aktivitet")).then(() => {});
+      const utfall = await inomTid(stampel, STAMPEL_TIDSGRANS_MS);
+      if (!utfall.klar) {
+        event?.waitUntil(stampel.catch(() => {}));
+        throw new Error("dagsstämpeln hann inte");
+      }
       kakor.push({
         name: AKTIVITETSKAKA,
         value: idag,
