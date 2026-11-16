@@ -75,7 +75,11 @@ try {
   await db.query(sql);
   await db.query(sql);
   ok("migrationerna går att köra två gånger", true);
+  // Provet börjar från noll, också när chatten är på (2026-11-16): chatt.pa först, annars nekar spärren att avtalet tas
+  // bort, och inget prov är godkänt. Allt rullas tillbaka efteråt.
+  await db.query(`delete from nav_setting where key = 'chatt.pa'`);
   await db.query(`delete from nav_setting where key like 'chatt.%'`);
+  await db.query(`update nav_chatt_prov set godkand = false where godkand`);
 
   const nyAnstalld = async (etikett) =>
     ett(

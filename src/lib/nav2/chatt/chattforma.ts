@@ -364,3 +364,59 @@ export function efterReserv<T extends { type: string }>(innehall: T[]): T[] {
   if (sista < 0) return innehall;
   return innehall.filter((b, i) => i >= sista || b.type === "text" || b.type === "fallback");
 }
+
+/* ------------------------------------------------------------------------ */
+/* Bifoga: bilder och PDF i en fråga (skiss 9)                               */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * Högst tre filer, högst 3 MB var och 3 MB tillsammans. Taket är Vercels: en begäran får vara högst 4,5 MB,
+ * och filerna går som base64 (en tredjedel större). Bilagorna sparas aldrig: loggen får bara antal och sort.
+ */
+export const BILAGA = { max: 3, maxBytes: 3 * 1024 * 1024, sorter: ["image/png", "image/jpeg", "image/webp", "application/pdf"] } as const;
+export type Bilaga = { sort: (typeof BILAGA.sorter)[number]; namn: string; data: string };
+const SORTNAMN: Record<string, string> = { "image/png": "PNG", "image/jpeg": "JPEG", "image/webp": "WEBP", "application/pdf": "PDF" };
+const bytesAv = (b64: string): number => Math.floor((b64.length * 3) / 4) - (b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0);
+
+export function lasBilagor(x: unknown): { ok: true; bilagor: Bilaga[] } | { ok: false; fel: string } {
+  if (x === undefined || x === null) return { ok: true, bilagor: [] };
+  if (!Array.isArray(x)) return { ok: false, fel: "Filen går inte att skicka: okänt format." };
+  if (x.length > BILAGA.max) return { ok: false, fel: `Filen går inte att skicka: högst ${BILAGA.max} filer per fråga.` };
+  const ut: Bilaga[] = [];
+  let summa = 0;
+  for (const r of x as Record<string, unknown>[]) {
+    const namn = String(r?.namn ?? "filen").replace(/[\u0000-\u001f\u007f]/g, "").slice(0, 120) || "filen";
+    const sort = String(r?.sort ?? "");
+    const data = String(r?.data ?? "");
+    if (!(BILAGA.sorter as readonly string[]).includes(sort)) return { ok: false, fel: `Filen går inte att skicka: ${namn} är varken en bild (PNG, JPEG, WEBP) eller en PDF.` };
+    if (!data || data.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) return { ok: false, fel: `Filen går inte att skicka: ${namn} gick inte att läsa.` };
+    const n = bytesAv(data);
+    if (n > BILAGA.maxBytes) return { ok: false, fel: `Filen går inte att skicka: ${namn} är större än 3 MB.` };
+    summa += n;
+    ut.push({ sort: sort as Bilaga["sort"], namn, data });
+  }
+  if (summa > BILAGA.maxBytes) return { ok: false, fel: "Filen går inte att skicka: filerna är större än 3 MB tillsammans." };
+  return { ok: true, bilagor: ut };
+}
+
+/** Bilagorna som block i frågans tur: en bild som image, en PDF som document. Texten kommer efter. */
+export function bilageBlock(bilagor: readonly Bilaga[]): Record<string, unknown>[] {
+  return bilagor.map((b) =>
+    b.sort === "application/pdf"
+      ? { type: "document", source: { type: "base64", media_type: b.sort, data: b.data } }
+      : { type: "image", source: { type: "base64", media_type: b.sort, data: b.data } },
+  );
+}
+
+/**
+ * Det mesta bilagorna kan kosta, för reservationen: en bild högst 1 600 token, en PDF högst en token per tre byte
+ * och aldrig mer än 100 sidor à 3 000. Bilagan skickas om i varje varv, så kostnaden räknas gånger varven.
+ */
+export function bilagaUsd(modell: string, bilagor: readonly Bilaga[], maxVarv: number): number {
+  if (!bilagor.length) return 0;
+  const token = bilagor.reduce((a, b) => a + (b.sort === "application/pdf" ? Math.min(300_000, Math.ceil(bytesAv(b.data) / 3)) : 1600), 0);
+  return (prisFor(modell, token).inn * token * maxVarv) / 1e6;
+}
+
+/** Det loggen får veta om bilagorna: antal och sort, aldrig namn eller innehåll. */
+export const bilagaLogg = (bilagor: readonly Bilaga[]): string => (bilagor.length ? ` [${bilagor.length} bifogade: ${bilagor.map((b) => SORTNAMN[b.sort]).join(", ")}]` : "");

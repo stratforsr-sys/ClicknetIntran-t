@@ -5,6 +5,51 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-16 · Hemvyn: byggd exakt som skiss 9, chatten och förslagen påslagna, på grenen `hemvy-chatt`
+
+Beställaren gick igenom 42 skillnader mellan previewn och skiss 9 och beslutade om varje (se planen
+`docs/superpowers/plans/2026-11-15-hemvyn-som-skiss-9.md`, avsnittet "Beställarens svar"). Byggt i 16 uppgifter,
+varje med ett prov som föll först (`tests/nav2-hemvy.mjs` avsnitten "Skiss 9 exakt", nya `tests/hemdag.mjs` och
+`tests/kedja.mjs`, utökade `hemtext`, `forslagforma`, `chattforma`):
+
+- **Tonen** följer Inställningar för hela Nav; hemvyns egen tonknapp är borta.
+- **Överraden:** "på plats" ritas alltid (hela laget ur `chef.lag`, också på en söndag: dagsbilden listar bara
+  avvikelser), och Stämpla in syns när stämplingen är på, också för en stämpelfri roll.
+- **Korten:** som skissen. Nav föreslår har `kort {tal, vad, text, knapp}` från servern (`textKortForslag`);
+  talet är 1 (ett obekräftat möte), aldrig ett påhittat belopp. Det som ändrats har `andratKort` (följs, nästa dom,
+  den bästa ändringens tal ur `matt.kort`).
+- **Fönstret** är fast (`100dvh`), arken och tråden rullar inuti, och varje genväg läggs till i en tråd under den
+  förra, som skissen. Escape går hem när rutan är tom.
+- **Min dag:** `hvPlaneraDag` lägger uppgifterna (med `estimate_minutes`) i luckorna mellan mötena inom schemat
+  (`work_schedule`) och rasten (`scheduled_break`, ny `hemdag.ts`); Boka tiden i kalendern sätter uppgiftens tid,
+  med Ångra.
+- **Veckan:** fem dagkolumner; i dag öppnar Min dag, de andra kalendern.
+- **Teamet:** per person kedjan samtal · svar · bokade · hållna · order (`kedja.ts`: färg när ett led ligger
+  utanför personens eget spann två veckor i rad), eget mål ur `sales_target`, orsak bara när den går att visa, och
+  "Varför vet jag inte." annars. Svar-ledet står alltid som "ser jag inte" (F1). Facit "Takten sa / Det blev" och
+  "Till målet" med decimalkomma. Samtalen läses sida för sida (`phone_call`, 70 dagar).
+- **Skrivrutan:** Bifoga skickar bilder och PDF till Claude (`bilageBlock`; högst 3 filer och 3 MB, under Vercels
+  4,5 MB; reservationen räknar med bilagorna, loggen skriver bara antal och sort), Tala med webbläsarens taligenkänning,
+  tipset fyller i en fråga. AI-upplysningen står i rutans title. Avtrycket ändrades inte (`dd3097dba5f0`).
+- **Mer:** Golvet, Teamet i månaden och Coachning öppnas i chattrutan (F2). Statistik väntar: den ska bli en
+  dashboard i chattrutan.
+- **Menyraden** med skissens mått för hela Nav; profilen längst ned på nya hemmet.
+- **Mobilen** som Claude: skrivrutan fast nere i full bredd med säker kant, genvägarna i en svepbar rad (Mer fälls ut
+  i raden), korten två och två och mycket mindre (F6), Veckan som en lista per dag, Navs flikrad dold på hemmet och
+  en menyknapp uppe till vänster som öppnar Navs meny.
+
+Slutgranskningen (egen, utan underagenter) rättade två saker: chefens hem läste 11 578 samtal i tolv sidor i följd
+(0,9–2,3 s), nu vecka för vecka samtidigt (`veckofonster`, 0,5–0,7 s); och `tests/chatt-rutt.mjs` föll strax efter
+midnatt en måndag, för att provet räknade veckan i UTC och rutten i svensk tid (felet fanns redan på basen).
+`tests/chatt-db.mjs` nollställer nu `chatt.pa` och godkända prov i sin transaktion, så att provet går också när
+chatten är på. `Connection terminated unexpectedly` i provet under natten berodde inte på databasen. Datorn sov
+med locket stängt (`pmset -g log`), och poolern stängde den tysta anslutningen. Det gav 25 gröna körningar av 25 när
+datorn var vaken. Kör `npm test` med `caffeinate -i` och locket öppet.
+
+**Påslaget med beställarens ja:** Sonnet-provet godkänt (Zen), `chatt.avtal`, `chatt.pa`, `forslag.pa`.
+Förslagsjobbet kördes för hand en gång (F4): 1 förslag, nattjobbet 0 fel. Main läser inga av nycklarna.
+Kvar: klickprovet i Chrome mot previewn, chattprovet före main (F5), sedan `hem.nytt` bort.
+
 ## 2026-11-15 · Hemvyn: rättad efter beställarens skärmbild, som skiss 9
 
 Beställaren såg previewen (eb30d54) och skrev "jätte buggit". Chrome-tillägget nådde inte sessionen

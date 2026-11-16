@@ -13,6 +13,7 @@ import { KALLRAD, dagText, manadsnamn, textLagetsOppna, textTakt, textTaktKort, 
 import { lokalDag } from "./motesflode";
 import { inomKrets, type StatMote } from "./motesstatforma";
 import { arbetsdagarIManad, taktFacit, taktFacitVid, taktLage, type TaktManad, type TaktTraff } from "./takt";
+import { forklaring, kedja, personVeckor, statusMotMal, tillMalet, veckofonster, type Led, type Orsak, type Status } from "./kedja";
 
 /**
  * Nav 2.0: Teamet i månaden, på servern.
@@ -136,8 +137,17 @@ export async function byggTeam(user: CurrentUser, krets: string[] | null | undef
 /* Genomgången: öppnas när kortet öppnas                                     */
 /* ------------------------------------------------------------------------ */
 
+/** En rad per person i lagets genomgång (skiss 9): kedjan, eget mål, läget och förklaringen med belägg. */
+export type NdTeamRad = { id: string; namn: string; fornamn: string; mal: number | null; order: number; status: Status | null; led: Led[]; orsak: Orsak | null; forklaring: string; kommentar: string | null };
+
 export type NdTeamGenomgang = {
   kort: NdTeam;
+  /** Skiss 9: en rad per person med kedjan, och lagets tal runt omkring. */
+  rader: NdTeamRad[];
+  /** Möten i månaden vars tid har passerat utan utfall. */
+  saknarUtfall: number;
+  /** Till målet, när ett mål finns. */
+  tillMalet: { kvar: number; dagar: number; perDag: number; hittills: number } | null;
   /** Uträkningen bakom takten, i klartext. */
   utrakning: string;
   /** En rad per person i bokstavsordning: antal, utan färg och utan dom. */
@@ -172,13 +182,24 @@ export async function teamGenomgang(user: CurrentUser, nu: Date = new Date()): P
 
   let personFraga = db.from("employee").select("id, first_name, last_name").neq("status", "offboarded");
   if (krets !== null) personFraga = personFraga.in("id", krets);
-  const [order, { data: pr }, mr, lagId, { data: fr }] = await Promise.all([
+  // Kedjan behöver tio rullande veckor bakåt: samtal ur växeln, möten och order.
+  const tioVeckor = new Date(Date.parse(`${idag}T12:00:00Z`) - 70 * 864e5).toISOString();
+  const malFraga = db.from("sales_target").select("employee_id, target_orders").eq("period_month", `${manad}-01`);
+  const [order, { data: pr }, mr, lagId, { data: fr }, samtalRader, { data: malRader }] = await Promise.all([
     lasOrder(db, krets, fran),
     personFraga.limit(1000),
-    lasStatMoten(db, manadStart),
+    lasStatMoten(db, tioVeckor < manadStart ? tioVeckor : manadStart),
     krets === null ? Promise.resolve(null) : lagetJagLeder(db, mig),
     // Lagets öppna rader läses med läsarens egen klient: RLS avgör vilka förslag hen får se.
     supabase.from("nav_forslag_lage").select(LAGE_KOL).eq("regel", REGEL_OBEKRAFTAT).eq("sort", "forslag").eq("prov", false).is("dom", null).gt("utgar", nu.toISOString()).limit(200),
+    // Vecka för vecka samtidigt: ungefär 12 000 samtal på tio veckor blir två varv i stället för tolv sidor i följd.
+    Promise.all(veckofonster(tioVeckor, nu.toISOString()).map(([fran, till]) => lasSidvis<{ employee_id: string | null; started_at: string }>((a, b) => {
+      let q = db.from("phone_call").select("employee_id, started_at").gte("started_at", fran).not("employee_id", "is", null);
+      if (till) q = q.lt("started_at", till);
+      if (krets !== null) q = q.in("employee_id", [...krets]);
+      return q.order("id").range(a, b) as unknown as PromiseLike<{ data: { employee_id: string | null; started_at: string }[] | null; error: { message: string } | null }>;
+    }))).then((v) => v.flat()),
+    krets === null ? malFraga.limit(1000) : malFraga.in("employee_id", [...krets]).limit(1000),
   ]);
   const sparade = await lasSparadTakt(db, taktKrets(krets, lagId), fran);
 
@@ -212,8 +233,25 @@ export async function teamGenomgang(user: CurrentUser, nu: Date = new Date()): P
     kort.takt.prognos === null
       ? `Ingen arbetsdag har gått i ${kort.manadsnamn} än, så det finns ingen takt att räkna på.`
       : `${kort.netto} order på ${kort.takt.gatt} ${kort.takt.gatt === 1 ? "arbetsdag" : "arbetsdagar"}, gånger månadens ${dagar.length} arbetsdagar, blir ungefär ${kort.takt.prognos}.`;
+  // Skiss 9: en rad per person med kedjan. Bara de som har ett mål eller något i månaden.
+  const malPer = new Map(((malRader ?? []) as { employee_id: string; target_orders: number | null }[]).map((m) => [m.employee_id, m.target_orders ?? null]));
+  const dag = (iso: string) => lokalDag(iso, tz);
+  const forsta = allaMoten.filter((m) => m.art === "ny");
+  const radIds = rader.filter((p) => p.bokade || p.hallna || p.uteblivna || p.order || malPer.get(p.id)).map((p) => p.id);
+  const lagRader: NdTeamRad[] = rader.filter((p) => radIds.includes(p.id)).map((p) => {
+    const v = personVeckor({
+      samtal: samtalRader.filter((c) => c.employee_id === p.id).map((c) => dag(c.started_at)),
+      bokade: forsta.filter((m) => m.bokatAv === p.id).map((m) => dag(m.bokatNar)),
+      hallna: forsta.filter((m) => m.hallsAv === p.id && m.utfall === "hallet").map((m) => dag(m.moteTid)),
+      uteblev: forsta.filter((m) => m.hallsAv === p.id && m.utfall === "uteblev").map((m) => dag(m.moteTid)),
+      order: order.filter((o) => o.salesperson_id === p.id && o.signed_on).map((o) => o.signed_on),
+    }, idag);
+    const k = kedja(v.veckor), mal = malPer.get(p.id) ?? null;
+    return { id: p.id, namn: p.namn, fornamn: p.namn.split(" ")[0], mal, order: p.order, status: statusMotMal(p.order, mal, kort.takt.gatt, kort.takt.totalt), led: k.led, orsak: k.orsak, forklaring: forklaring(k.led, k.orsak, v.s, v.f), kommentar: null };
+  });
+  const saknarUtfall = moten.filter((m) => m.art === "ny" && m.utfall === null && Date.parse(m.moteTid) < nu.getTime() && m.moteTid.slice(0, 7) === manad).length;
   const g: NdTeamGenomgang = {
-    kort, utrakning, personer, oppna, takten,
+    kort, rader: lagRader, saknarUtfall, tillMalet: tillMalet(kort.netto, kort.mal, kort.takt.gatt, kort.takt.totalt), utrakning, personer, oppna, takten,
     serInte: "Det här ser jag inte: order som inte är inlagda i Nav, och varför en order makulerades.",
     kalla: KALLRAD.regler,
   };

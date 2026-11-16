@@ -131,8 +131,9 @@ const USAGE = { input_tokens: 9000, output_tokens: 700, cache_read_input_tokens:
 const verktygstur = (namn, input, id = "tu_1") => ({ stop_reason: "tool_use", usage: USAGE, content: [{ type: "tool_use", id, name: namn, input }] });
 const textsvar = (text, o = {}) => ({ stop_reason: "end_turn", usage: USAGE, content: [{ type: "text", text }], ...o });
 
-// Förra veckans onsdag, så att "forra-veckan" alltid träffar.
-const idag = new Date();
+// Förra veckans onsdag, så att "forra-veckan" alltid träffar. Räknad på den svenska dagen, som rutten: strax efter
+// midnatt en måndag är det fortfarande söndag i UTC, och då träffade provet veckan före (2026-11-16 00.18).
+const idag = new Date(new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm" }).format(new Date()) + "T12:00:00Z");
 const mandag = new Date(Date.UTC(idag.getUTCFullYear(), idag.getUTCMonth(), idag.getUTCDate() - ((idag.getUTCDay() + 6) % 7)));
 const forraOnsdag = new Date(mandag.getTime() - 5 * 864e5).toISOString().slice(0, 10);
 const mote = (id, utfall, vem = S) => ({ id, kedja: "k" + id, bokatAv: vem, hallsAv: vem, bokatNar: `${forraOnsdag}T08:00:00Z`, moteTid: `${forraOnsdag}T10:00:00Z`, art: "ny", utfall, resultat: null, kalla: "nav", bekraftatNar: null });

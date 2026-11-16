@@ -69,15 +69,40 @@ export type ObekraftatText = {
  * Det Nav säger när ett möte står obekräftat sista dagen. Tre rader: läget, hur
  * det brukar gå, och vad Nav inte ser. Antal, aldrig en orsak.
  */
+const forsokText = (m: ObekraftatText): string =>
+  m.forsok <= 0
+    ? "Inget försök att nå kunden är noterat."
+    : m.jag
+      ? `Du har ringt ${gangerText(m.forsok)} utan svar.`
+      : m.bokare
+        ? `${m.bokare} har ringt ${gangerText(m.forsok)} utan svar.`
+        : `Kunden har ringts ${gangerText(m.forsok)} utan svar.`;
+
+/** Kortet Nav föreslår, för ett förslag: ett tal, vad talet räknar, en mening och förslagets egen knapp (skiss 9). */
+export type KortForslag = { tal: string; vad: string; text: string; knapp: string };
+export function textKortForslag(m: ObekraftatText): KortForslag {
+  return { tal: "1", vad: `möte ${m.dag} är obekräftat`, text: `${m.kund} ${m.kl}. ${forsokText(m)}`, knapp: "Välj vad som händer" };
+}
+
+const ORD_EN = ["inga", "en", "två", "tre", "fyra", "fem", "sex", "sju", "åtta", "nio", "tio"];
+const ordStor = (n: number) => { const o = ORD_EN[n] ?? String(n); return o[0].toUpperCase() + o.slice(1); };
+/** Inledningen till genomgången Det som ändrats (skiss 9). `fet` står i fetstil mellan `fore` och `efter`. */
+export function textAndratInledning(t: { foljs: number; bra: number; samre: number; tidiga: number }): { fore: string; fet: string; efter: string } {
+  if (!t.foljs) return { fore: "Jag följer inga ändringar än.", fet: "", efter: " Berätta om en ändring, så följer jag måttet och säger hur det gick." };
+  const fore = `Jag följer ${t.foljs === 1 ? "en ändring" : `${ORD_EN[t.foljs] ?? t.foljs} ändringar`}.`;
+  const ensam = t.foljs === 1;
+  const fet = t.bra ? (ensam ? "Den ser bra ut" : `${ordStor(t.bra)} ser bra ut`) : "";
+  const delar = [
+    t.bra ? " och går att ta vidare." : "",
+    t.samre ? (ensam ? " Den ser sämre ut." : ` ${ordStor(t.samre)} ser sämre ut.`) : "",
+    t.tidiga ? (ensam ? " Den är för tidig att döma." : ` ${ordStor(t.tidiga)} ${t.tidiga === 1 ? "är för tidig" : "är för tidiga"} att döma.`) : "",
+    " Ingen ändring får ”ser bra ut” om något annat blev sämre på köpet.",
+  ];
+  return { fore, fet, efter: delar.join("") };
+}
+
 export function textObekraftat(m: ObekraftatText, trodde: NAv | null, forFa: boolean, bekraftade?: NAv | null): string[] {
-  const forsok =
-    m.forsok <= 0
-      ? "Inget försök att nå kunden är noterat."
-      : m.jag
-        ? `Du har ringt ${gangerText(m.forsok)} utan svar.`
-        : m.bokare
-          ? `${m.bokare} har ringt ${gangerText(m.forsok)} utan svar.`
-          : `Kunden har ringts ${gangerText(m.forsok)} utan svar.`;
+  const forsok = forsokText(m);
   let hittills: string;
   if (!trodde || trodde.av === 0) hittills = "Jag har inga tidigare obekräftade möten att jämföra med.";
   else {

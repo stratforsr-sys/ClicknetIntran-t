@@ -7,7 +7,7 @@
  *
  *   TZ=UTC node --experimental-strip-types tests/chattforma.mjs
  */
-import { hanvisningsfel, sattInTal, utanMarken, kostnadKr, kostnadUsd, maxFragaUsd, farSlasPa, takBesked, lasUtrymme, lasChattInst, utanTal, KANDA_MODELLER, forsok, efterReserv } from "../src/lib/nav2/chatt/chattforma.ts";
+import { hanvisningsfel, sattInTal, utanMarken, kostnadKr, kostnadUsd, maxFragaUsd, farSlasPa, takBesked, lasUtrymme, lasChattInst, utanTal, KANDA_MODELLER, forsok, efterReserv, lasBilagor, bilageBlock, bilagaUsd, bilagaLogg, BILAGA } from "../src/lib/nav2/chatt/chattforma.ts";
 
 let fel = 0;
 const ok = (namn, villkor, extra = "") => {
@@ -209,6 +209,30 @@ rubrik("Inställningarna");
   ok("bara sant är på", lasChattInst([{ key: "chatt.pa", value: "true" }]).pa === false && lasChattInst([{ key: "chatt.pa", value: true }]).pa === true);
   ok("taken är inga inställningar", !("takKr" in lasChattInst([{ key: "chatt.tak-kr", value: 800 }])));
   ok("ett gammalt svar skickas utan sina tal", utanTal("Du höll ⟦t1:12⟧ av 19 möten, 63,2 %, kl. 14.00.") === "Du höll [tal] av [tal] möten, [tal] %, kl. [tal].");
+}
+
+console.log("\n\x1b[1mBifoga (skiss 9, punkt 26)\x1b[0m");
+{
+  const b64 = (n) => Buffer.alloc(n, 7).toString("base64");
+  const png = { sort: "image/png", namn: "bild.png", data: b64(1000) };
+  const pdf = { sort: "application/pdf", namn: "offert.pdf", data: b64(2000) };
+  const l = lasBilagor([png, pdf]);
+  ok("en bild och en PDF går att skicka", l.ok && l.bilagor.length === 2);
+  ok("utan bilagor går det också", lasBilagor(undefined).ok && lasBilagor(undefined).bilagor.length === 0);
+  const fyra = lasBilagor([png, png, png, png]);
+  ok("högst tre filer", !fyra.ok && fyra.fel === "Filen går inte att skicka: högst 3 filer per fråga.");
+  const fel = lasBilagor([{ sort: "application/zip", namn: "x.zip", data: b64(10) }]);
+  ok("fel sort ger ett besked", !fel.ok && fel.fel === "Filen går inte att skicka: x.zip är varken en bild (PNG, JPEG, WEBP) eller en PDF.");
+  const stor = lasBilagor([{ ...png, data: b64(BILAGA.maxBytes + 1) }]);
+  ok("för stor fil ger ett besked", !stor.ok && stor.fel === "Filen går inte att skicka: bild.png är större än 3 MB.");
+  const sammanlagt = lasBilagor([{ ...png, data: b64(2_000_000) }, { ...pdf, data: b64(2_000_000) }]);
+  ok("högst 3 MB sammanlagt", !sammanlagt.ok && sammanlagt.fel === "Filen går inte att skicka: filerna är större än 3 MB tillsammans.");
+  const trasig = lasBilagor([{ ...png, data: "inte base64!!" }]);
+  ok("trasig fil ger ett besked", !trasig.ok && /^Filen går inte att skicka: /.test(trasig.fel));
+  const block = bilageBlock(l.bilagor);
+  ok("bilden går som ett image-block, PDF:en som ett document-block", block[0].type === "image" && block[0].source.media_type === "image/png" && block[1].type === "document" && block[1].source.media_type === "application/pdf" && block[1].source.type === "base64");
+  ok("bilagorna kostar i reservationen", bilagaUsd("claude-sonnet-5-5", l.bilagor, 4) > 0 && bilagaUsd("claude-sonnet-5-5", [], 4) === 0);
+  ok("loggen får bara antal och sort", bilagaLogg(l.bilagor) === " [2 bifogade: PNG, PDF]" && !bilagaLogg(l.bilagor).includes("bild.png") && bilagaLogg([]) === "");
 }
 
 console.log(fel ? `\n\x1b[31m${fel} ✗\x1b[0m` : "\n\x1b[32mAllt stämmer\x1b[0m");

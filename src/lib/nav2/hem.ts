@@ -3,7 +3,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { hasRole, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { svensktDatum } from "@/lib/klocka";
+import { svenskVeckodag, svensktDatum } from "@/lib/klocka";
+import { dagensRam, type NdDag, type RastRad, type SchemaRad } from "./hemdag";
 import { harGodkants, nettoAntal, ordervarde, type Order } from "@/lib/order";
 import { SKRIVLAGE } from "./skrivlage";
 import { vapidPublik } from "./push";
@@ -106,7 +107,22 @@ export type NdHem = {
   chattLage: ChattLage | null;
   /** Hur stor del av månadens AI-utrymme personen har använt, i procent (0–100). Bara när skrivrutan frågar Claude. */
   chattAnvant: number | null;
+  /** Min dag: arbetsdagens start, slut och rasternas minuter i dag ur schemat. Null utan schema, och utan nya hemmet. */
+  dag: NdDag | null;
 };
+
+/** Dagens ram ur schemat och rasterna, med samma regel som Tid. Ett fel ger ingen ram, aldrig en gissad. */
+async function lasDag(supabase: SupabaseClient, user: CurrentUser, nu: Date = new Date()): Promise<NdDag | null> {
+  const e = user.employee;
+  if (!e) return null;
+  const vd = svenskVeckodag(nu);
+  const [{ data: sr, error: se }, { data: rr, error: re }] = await Promise.all([
+    supabase.from("work_schedule").select("scope, employee_id, team_id, weekday, start_time, end_time, valid_from").eq("weekday", vd),
+    supabase.from("scheduled_break").select("scope, employee_id, team_id, weekday, sort, duration_minutes, valid_from").eq("weekday", vd),
+  ]);
+  if (se || re) return null;
+  return dagensRam((sr ?? []) as SchemaRad[], (rr ?? []) as RastRad[], e.id, e.team_id ?? null, svensktDatum(nu), vd);
+}
 
 const KL = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
@@ -217,9 +233,10 @@ export async function byggHem(supabase: SupabaseClient, user: CurrentUser): Prom
   const nytt = !!inst && harNyttHem(inst.f, mig);
   let forslag: NdForslag | null = null;
   let team: NdTeam | null = null;
+  let dag: NdDag | null = null;
   if (nytt && inst) {
     const krets = await lasKrets(supabase, user);
-    [forslag, team] = await Promise.all([byggForslag(supabase, user, inst), byggTeam(user, krets)]);
+    [forslag, team, dag] = await Promise.all([byggForslag(supabase, user, inst), byggTeam(user, krets), lasDag(supabase, user).catch(() => null)]);
   }
   const niva = nivaFor(user.roles as string[]);
   // Chatten (0304): läses bara för den som har det nya hemmet, och för superadmin som ser läget i Inställningar.
@@ -249,5 +266,6 @@ export async function byggHem(supabase: SupabaseClient, user: CurrentUser): Prom
     chatt: chattPa,
     chattLage: niva === "superadmin" ? chatt : null,
     chattAnvant: chattPa && chatt?.utrymme ? Math.min(100, Math.round((chatt.utrymme.personUsd / chatt.utrymme.takPersonUsd) * 100)) : null,
+    dag,
   };
 }

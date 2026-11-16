@@ -9,7 +9,7 @@
  *   TZ=UTC node --experimental-strip-types tests/hemtext.mjs
  */
 import {
-  KALLRAD, textObekraftat, textKortObekraftade, textKvitto, textFacit, textFacitKort, textTakt, textTaktFacit, textTaktKort,
+  KALLRAD, textObekraftat, textKortObekraftade, textKortForslag, textAndratInledning, textKvitto, textFacit, textFacitKort, textTakt, textTaktFacit, textTaktKort,
   textAndringDom, textTrendSaknas, textTrodde, textAndel, textDom, narText, manadsnamn, gangerText,
 } from "../src/lib/nav2/hemtext.ts";
 
@@ -31,6 +31,12 @@ lika("förslaget", textObekraftat(M, { n: 1, av: 4 }, true), [
   "Det här ser jag inte: om kunden har hört av sig på annat sätt.",
 ]);
 lika("ett försök", textObekraftat({ ...M, forsok: 1 }, null, true)[0], "Mötet med Hagby Glas i morgon 09.00 är inte bekräftat. Mick har ringt en gång utan svar.");
+lika("kortet: ett tal, en mening och förslagets egen knapp", textKortForslag(M), { tal: "1", vad: "möte i morgon är obekräftat", text: "Hagby Glas 09.00. Mick har ringt två gånger utan svar.", knapp: "Välj vad som händer" });
+lika("kortet när ingen har ringt", textKortForslag({ ...M, forsok: 0 }).text, "Hagby Glas 09.00. Inget försök att nå kunden är noterat.");
+lika("kortet när det är ens eget möte", textKortForslag({ ...M, jag: true }).text, "Hagby Glas 09.00. Du har ringt två gånger utan svar.");
+lika("genomgången av det som ändrats", textAndratInledning({ foljs: 4, bra: 2, samre: 1, tidiga: 1 }), { fore: "Jag följer fyra ändringar.", fet: "Två ser bra ut", efter: " och går att ta vidare. En ser sämre ut. En är för tidig att döma. Ingen ändring får ”ser bra ut” om något annat blev sämre på köpet." });
+lika("en ändring, för tidig", textAndratInledning({ foljs: 1, bra: 0, samre: 0, tidiga: 1 }), { fore: "Jag följer en ändring.", fet: "", efter: " Den är för tidig att döma. Ingen ändring får ”ser bra ut” om något annat blev sämre på köpet." });
+lika("inga ändringar", textAndratInledning({ foljs: 0, bra: 0, samre: 0, tidiga: 0 }), { fore: "Jag följer inga ändringar än.", fet: "", efter: " Berätta om en ändring, så följer jag måttet och säger hur det gick." });
 lika("inget försök noterat: Nav säger vad den ser, inte vad någon gjort", textObekraftat({ ...M, forsok: 0 }, null, true)[0], "Mötet med Hagby Glas i morgon 09.00 är inte bekräftat. Inget försök att nå kunden är noterat.");
 lika("du bokade själv", textObekraftat({ ...M, jag: true }, null, true)[0], "Mötet med Hagby Glas i morgon 09.00 är inte bekräftat. Du har ringt två gånger utan svar.");
 lika("bokaren är okänd", textObekraftat({ ...M, bokare: null }, null, true)[0], "Mötet med Hagby Glas i morgon 09.00 är inte bekräftat. Kunden har ringts två gånger utan svar.");

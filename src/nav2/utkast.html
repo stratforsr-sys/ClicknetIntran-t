@@ -7511,7 +7511,7 @@ textarea.rtn-in{resize:vertical;line-height:1.45}
 }
 :root[data-theme="dark"]{ --rls-hov:color-mix(in srgb,var(--ink) 7%,transparent); --rls-tip:#1F2C28; --rls-tip-ink:#E8F0EB; --rls-tip-2:#9DAEA6; --rls-tip-acc:#3FC79A; --rls-tip-kant:#33443E; }
 
-#rail.rls{position:sticky;top:34px;height:calc(100vh - 34px);overflow:visible;padding:14px 10px 10px;display:flex;flex-direction:column;gap:10px;background:var(--rls-bg);border-right:1px solid var(--line);z-index:30;min-width:0}
+#rail.rls{position:sticky;top:34px;height:calc(100vh - 34px);overflow:visible;padding:14px 12px 10px;display:flex;flex-direction:column;gap:10px;background:var(--rls-bg);border-right:1px solid var(--line);z-index:30;min-width:0}
 #main:focus{outline:none}
 
 /* Hoppa till innehållet: syns bara med fokus (repots X1, WCAG 2.4.1). */
@@ -7523,17 +7523,17 @@ textarea.rtn-in{resize:vertical;line-height:1.45}
 #rail .rls-brand{display:flex;align-items:center;gap:10px;flex:1;min-width:0;padding:2px 4px 2px 0;border-radius:6px}
 #rail .rls-brand svg{flex:none;display:block}
 #rail .rls-wm{display:flex;flex-direction:column;gap:2px;min-width:0}
-#rail .rls-wm b{font:700 20px/1 var(--f-display);letter-spacing:-.03em;color:var(--ink)}
-#rail .rls-wm small{font-size:10.5px;line-height:1;color:var(--ink-3);letter-spacing:.03em}
+#rail .rls-wm b{font:600 20px/1 var(--f-display);letter-spacing:-.02em;color:var(--ink)}
+#rail .rls-wm small{font-size:11.5px;line-height:1;color:var(--ink-3)}
 #rail .rls-ib{position:relative;flex:none;width:32px;height:32px;display:grid;place-items:center;border-radius:6px;color:var(--ink-2);transition:background-color .12s,color .12s}
 #rail .rls-ib:hover,#rail .rls-ib[aria-expanded="true"]{background:var(--rls-hov);color:var(--ink)}
 #rail .rls-ib svg{width:18px;height:18px}
-#rail .rls-b{position:absolute;top:2px;right:0;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--brand);color:var(--on-brand);font:600 10px/16px var(--f-body);font-variant-numeric:tabular-nums;text-align:center;box-shadow:0 0 0 2px var(--rls-bg)}
-#rail .rls-sok{display:flex;align-items:center;gap:9px;height:32px;padding:0 6px 0 9px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink-3);font-size:13px;text-align:left;transition:border-color .12s,color .12s}
+#rail .rls-b{position:absolute;top:-4px;right:-5px;min-width:17px;height:17px;padding:0 4px;border-radius:9px;background:var(--brand);color:var(--on-brand);font:600 10.5px/17px var(--f-body);font-variant-numeric:tabular-nums;text-align:center;box-shadow:0 0 0 2px var(--rls-bg)}
+#rail .rls-sok{display:flex;align-items:center;gap:8px;height:30px;padding:0 8px 0 10px;border-radius:8px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink-3);font-size:13.5px;text-align:left;transition:border-color .12s,color .12s}
 #rail .rls-sok:hover{border-color:var(--line-2);color:var(--ink-2)}
 #rail .rls-sok svg{width:16px;height:16px;flex:none}
 #rail .rls-sok .rls-l{flex:1}
-#rail .rls-sok kbd{font:500 10.5px var(--f-body);padding:1px 5px;border-radius:4px;background:var(--rls-bg)}
+#rail .rls-sok kbd{font:11px var(--f-mono);color:var(--ink-3);border:1px solid var(--line);border-radius:5px;padding:1px 5px}
 
 /* Listan rullar själv; märket, sökningen och läget står kvar. Kanterna tonar bort när det finns mer. */
 #rail .rls-lista{--rls-mt:0px;--rls-mb:0px;position:relative;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;margin:0 -10px;padding:4px 10px 8px;display:flex;flex-direction:column;gap:14px;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 var(--rls-mt),#000 calc(100% - var(--rls-mb)),transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 var(--rls-mt),#000 calc(100% - var(--rls-mb)),transparent 100%)}
@@ -7542,14 +7542,14 @@ textarea.rtn-in{resize:vertical;line-height:1.45}
 #rail .rls-g{display:flex;flex-direction:column;gap:1px}
 
 /* Raden. Den gamla .ritem hade skugga och radie 9; här radie 6 och ingen skugga. */
-#rail .rls-i{display:flex;align-items:center;gap:10px;height:32px;padding:0 8px 0 9px;border-radius:6px;color:var(--ink-2);font-size:13.5px;font-weight:450;position:relative;width:100%;text-align:left;box-shadow:none;background:none;transition:background-color .12s,color .12s;outline-offset:-2px}
+#rail .rls-i{display:flex;align-items:center;gap:10px;height:33px;padding:0 10px;border-radius:8px;color:var(--ink-2);font-size:14px;font-weight:450;position:relative;width:100%;text-align:left;box-shadow:none;background:none;transition:background-color .12s,color .12s;outline-offset:-2px}
 #rail .rls-i svg{width:17px;height:17px;flex:none;color:var(--ink-3);transition:color .12s}
 #rail .rls-i:hover{background:var(--rls-hov);color:var(--ink)}
 #rail .rls-i:hover svg{color:var(--ink-2)}
 #rail .rls-i .rls-l{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #rail .rls-i.rls-akt{background:var(--brand-soft);color:var(--ink);font-weight:560;box-shadow:none}
 #rail .rls-i.rls-akt svg{color:var(--brand)}
-#rail .rls-n{margin-left:auto;min-width:16px;text-align:right;font:500 12px/1 var(--f-body);font-variant-numeric:tabular-nums;letter-spacing:0;color:var(--ink-3)}
+#rail .rls-n{margin-left:auto;min-width:16px;text-align:right;font:500 11px var(--f-mono);font-variant-numeric:tabular-nums;letter-spacing:0;color:var(--ink-3)}
 #rail .rls-akt .rls-n{color:var(--ink-2)}
 #rail .rls-p{margin:0 4px 0 auto;width:7px;height:7px;border-radius:50%;background:var(--brand);flex:none}
 #rail .rls-byt{animation:rlsbyt .3s var(--ease)}
@@ -7578,6 +7578,13 @@ textarea.rtn-in{resize:vertical;line-height:1.45}
 #rail.rls-gtr .rls-gi{transition:grid-template-rows .2s var(--ease)}
 #rail.rls-gtr .rls-g[data-rlsopen="false"] .rls-gi{transition:grid-template-rows .2s var(--ease),visibility 0s .2s}
 
+/* Profilen längst ned, som i skiss 9: bokstav, namn, roll och upp/ned. Står där vyn saknar ett sidhuvud (det nya hemmet). */
+#rail .rls-prof{display:flex;align-items:center;gap:9px;height:38px;padding:0 8px;border-radius:8px;font-weight:500;width:100%;text-align:left;color:var(--ink);white-space:nowrap;overflow:hidden}
+#rail .rls-prof:hover,#rail .rls-prof[aria-expanded="true"]{background:var(--rls-hov)}
+#rail .rls-prof i{flex:none;width:26px;height:26px;border-radius:7px;background:var(--brand-soft);color:var(--brand-ink);display:grid;place-items:center;font-style:normal;font-size:12px;font-weight:600}
+#rail .rls-prof span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+#rail .rls-prof small{display:block;font-size:11px;color:var(--ink-3);font-weight:400;line-height:1.1}
+#rail .rls-prof svg{margin-left:auto;color:var(--ink-3);width:14px;height:14px;flex:none}
 /* Läget längst ned: tre ikoner som en radiogrupp (repots Lagesvaljare). */
 #rail .rls-fot{display:flex;align-items:center;gap:8px;min-height:40px;padding:8px 0 0 9px;border-top:1px solid var(--line)}
 #rail .rls-ft{font-size:11.5px;font-weight:550;color:var(--ink-3)}
@@ -7601,6 +7608,8 @@ textarea.rtn-in{resize:vertical;line-height:1.45}
   :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-sok kbd{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
   :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-ib{width:44px;height:36px}
   :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-sok{width:44px;height:36px;padding:0;justify-content:center;border-color:transparent;background:none;color:var(--ink-2)}
+  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-prof{width:44px;padding:0 9px}
+  :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-prof :is(span,svg){display:none}
   :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-sok:hover{background:var(--rls-hov);color:var(--ink)}
   :is(body.prf-rail-hopfalld #rail,body.prf-rail-hovra #rail:not(.rls-ut)) .rls-sok svg{width:18px;height:18px}
   /* Smal: rullisten skulle ta 10 av 44 px och klippa antalen i ikonernas hörn. Toningarna i kanterna visar att listan fortsätter. */
@@ -8997,15 +9006,19 @@ td .ndprovsen{font-size:12.5px}
 @media (max-width:560px){.ndtjprad{grid-template-columns:minmax(0,1fr) 92px auto}.ndtjprad>output{grid-column:1/-1;text-align:left}}
 /* ===================== Nya hemmet (prefix hv) =====================
    Ett glasfönster kant i kant, som skiss 9. Fönstret har sina egna färger (--hv-…), så att menyraden och
-   resten av Nav aldrig ändras av det. Mörkt är förvalt, ljust väljs i överraden. */
+   resten av Nav aldrig ändras av det. Ljust eller mörkt följer Navs tema i Inställningar. */
 .main.hvmode{padding:0}
 .main.hvmode .wrap{max-width:none;gap:0}
 /* Rutan Nästa att göra står annars över skrivrutan. Den lyfts över rutan i stället. */
 body:has(.main.hvmode) .todopill:not(.min){bottom:calc(128px + env(safe-area-inset-bottom,0px))}
+/* Ihopfälld som i skissen: en ring på 46 px, 28 px från kanterna. */
+body:has(.main.hvmode) .todopill.min{right:28px;bottom:calc(28px + env(safe-area-inset-bottom,0px));padding:0;width:46px;height:46px;box-shadow:0 0 0 1px rgba(255,255,255,.14),0 8px 22px rgba(19,32,28,.22)}
+body:has(.main.hvmode) .todopill.min .pmin{width:46px;height:46px;font:600 11px var(--f-body)}
+body:has(.main.hvmode) .todopill.min .pmin svg{inset:4px;width:38px;height:38px}
 .hv{
   --hv-base:#0E1B17; --hv-field-a:rgba(14,122,95,.44); --hv-field-b:rgba(217,138,28,.10);
-  --hv-glass:rgba(255,255,255,.05); --hv-glass-2:rgba(255,255,255,.105); --hv-glass-3:rgba(255,255,255,.15); --hv-glass-line:rgba(255,255,255,.09); --hv-glass-hi:rgba(255,255,255,.09); --hv-pop:rgba(16,31,26,.92);
-  --hv-ink:#EDF3F0; --hv-ink-2:#A9B9B2; --hv-ink-3:#8A9B94; --hv-line:rgba(255,255,255,.075); --hv-line-2:rgba(255,255,255,.15);
+  --hv-glass:rgba(255,255,255,.05); --hv-glass-2:rgba(255,255,255,.105); --hv-glass-3:rgba(255,255,255,.15); --hv-glass-line:rgba(255,255,255,.09); --hv-glass-hi:rgba(255,255,255,.09); --hv-pop:rgba(16,31,26,.84);
+  --hv-ink:#EDF3F0; --hv-ink-2:#A9B9B2; --hv-ink-3:#7C8E86; --hv-line:rgba(255,255,255,.075); --hv-line-2:rgba(255,255,255,.15);
   --hv-brand:#5DC39F; --hv-on-brand:#06211A; --hv-brand-ink:#6FCDAB; --hv-brand-soft:rgba(93,195,159,.15);
   --hv-signal:#E8B15A; --hv-danger:#EE8B80;
   --hv-shadow:0 18px 44px rgba(0,0,0,.26); --hv-ring:rgba(93,195,159,.17); --hv-ring-2:rgba(93,195,159,.08); --hv-dialdot:rgba(217,138,28,.15);
@@ -9015,10 +9028,10 @@ body:has(.main.hvmode) .todopill:not(.min){bottom:calc(128px + env(safe-area-ins
 }
 .hv[data-hvtema="ljus"]{
   --hv-base:#E8EDE6; --hv-field-a:rgba(14,122,95,.22); --hv-field-b:rgba(217,138,28,.17);
-  --hv-glass:rgba(255,255,255,.50); --hv-glass-2:rgba(255,255,255,.74); --hv-glass-3:rgba(255,255,255,.95); --hv-glass-line:rgba(255,255,255,.85); --hv-glass-hi:#fff; --hv-pop:rgba(255,255,255,.94);
-  --hv-ink:#13201C; --hv-ink-2:#44524C; --hv-ink-3:#5F6D66; --hv-line:rgba(19,32,28,.09); --hv-line-2:rgba(19,32,28,.17);
+  --hv-glass:rgba(255,255,255,.50); --hv-glass-2:rgba(255,255,255,.74); --hv-glass-3:rgba(255,255,255,.95); --hv-glass-line:rgba(255,255,255,.85); --hv-glass-hi:#fff; --hv-pop:rgba(255,255,255,.88);
+  --hv-ink:#13201C; --hv-ink-2:#44524C; --hv-ink-3:#66746D; --hv-line:rgba(19,32,28,.09); --hv-line-2:rgba(19,32,28,.17);
   --hv-brand:#0E7A5F; --hv-on-brand:#FFFFFF; --hv-brand-ink:#0A5A46; --hv-brand-soft:#DDEFE6;
-  --hv-signal:#B36F0C; --hv-danger:#B63C31;
+  --hv-signal:#D98A1C; --hv-danger:#C4473C;
   --hv-shadow:0 14px 36px rgba(19,32,28,.09); --hv-ring:rgba(14,122,95,.19); --hv-ring-2:rgba(14,122,95,.08); --hv-dialdot:rgba(217,138,28,.20);
   --hv-p-inne:#0E7A5F; --hv-p-sjuk:#C4473C; --hv-p-ledig:#3A6EA5; --hv-p-ej:#B9C5B8;
 }
@@ -9028,17 +9041,25 @@ body:has(.main.hvmode) .todopill:not(.min){bottom:calc(128px + env(safe-area-ins
 .hv :is(button,textarea,input,select,[tabindex]):focus-visible{outline:2px solid var(--hv-brand);outline-offset:2px}
 .hv .num{font-family:var(--f-body);font-variant-numeric:tabular-nums;letter-spacing:0}
 .hv svg{flex:none}
-.hv-fonster{position:relative;isolation:isolate;overflow:hidden;min-height:100dvh;display:flex;flex-direction:column;background:var(--hv-base);padding:16px 36px 20px;transition:background .4s}
+.hv-fonster{position:relative;isolation:isolate;overflow:hidden;height:100dvh;display:flex;flex-direction:column;background:var(--hv-base);padding:16px 36px 20px;transition:background .4s}
 .hv-grund{position:absolute;inset:0;z-index:-1;pointer-events:none;overflow:hidden;background:radial-gradient(900px 620px at 16% -10%,var(--hv-field-a),transparent 62%),radial-gradient(560px 460px at 98% 106%,var(--hv-field-b),transparent 64%)}
-.hv-dial{position:absolute;right:-170px;top:-200px;width:820px;height:820px}
+.hv-dial{position:absolute;right:-170px;top:-200px;width:820px;height:820px;transition:transform 1s var(--hv-ease),opacity .6s}
+.hv:not([data-hvlage="hem"]) .hv-dial{transform:translate(-70px,110px) scale(.94);opacity:.6}
 .hv-dial g{transform-origin:200px 200px;animation:hvrot 240s linear infinite}
 @keyframes hvrot{to{transform:rotate(360deg)}}
 @keyframes hvupp{from{opacity:0;transform:translateY(10px)}}
-.hv-inre{flex:1;display:flex;flex-direction:column;width:100%;max-width:1300px;margin-inline:auto;min-height:0}
-.hv-lager{flex:1;display:flex;flex-direction:column;min-height:0;animation:hvupp .35s var(--hv-ease)}
+.hv-inre{flex:1;position:relative;display:flex;flex-direction:column;width:100%;max-width:1300px;margin-inline:auto;min-height:0}
+/* Under skrivrutan tonar tråden ut i fönstrets egen färg, så att ingen text sticker fram nedanför. */
+.hv-inre::after{content:"";position:absolute;left:-36px;right:-36px;bottom:-20px;height:62px;z-index:2;pointer-events:none;background:linear-gradient(transparent,var(--hv-base) 72%);opacity:0;transition:opacity .4s}
+.hv[data-hvlage="trad"] .hv-inre::after{opacity:1}
+.hv-scen{flex:1;position:relative;min-height:0;z-index:1}
+.hv-lager{position:absolute;inset:0;display:flex;flex-direction:column;min-height:0;animation:hvupp .35s var(--hv-ease);transition:opacity .4s var(--hv-ease),transform .45s var(--hv-ease)}
+.hv-skriver .hv-hemlager{opacity:.12;transform:translateY(-10px) scale(.99)}
 
 /* Överraden: ett tal och en stapel, datum och Stämpla in. Vilka som är var ligger bakom ett klick. */
 .hv-topp{position:relative;display:flex;align-items:center;gap:20px;min-height:36px;flex:none}
+.hv-meny{display:none;place-items:center;width:36px;height:36px;margin-left:-8px;border-radius:10px;color:var(--hv-ink)}
+.hv-meny svg{width:20px;height:20px}
 .hv-lg{display:inline-flex;align-items:center;gap:12px;height:36px;padding:0 10px;margin-left:-10px;border-radius:10px;white-space:nowrap;transition:background .15s}
 .hv-lg:hover,.hv-lg[aria-expanded="true"]{background:var(--hv-glass-2)}
 .hv-lg b{font:600 20px/1 var(--f-body);letter-spacing:-.02em}
@@ -9051,9 +9072,6 @@ body:has(.main.hvmode) .todopill:not(.min){bottom:calc(128px + env(safe-area-ins
 .hv-lgh{margin-left:auto;display:flex;align-items:center;gap:14px}
 .hv-datum{font-size:12.5px;color:var(--hv-ink-2);white-space:nowrap}
 .hv-datum small{font:500 11px var(--f-mono);color:var(--hv-ink-3);margin-left:8px}
-.hv-tonk{width:30px;height:30px;border-radius:9px;display:grid;place-items:center}
-.hv-tonk:hover{background:var(--hv-glass-2)}
-.hv-tonk i{width:14px;height:14px;border-radius:50%;border:1.5px solid var(--hv-ink-2);background:linear-gradient(90deg,var(--hv-ink-2) 50%,transparent 50%)}
 .hv-stamp{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 14px;border-radius:10px;background:var(--hv-brand);color:var(--hv-on-brand);font-size:13px;font-weight:600;white-space:nowrap}
 .hv-stamp.inne{background:transparent;color:var(--hv-ink-2);font-weight:500;padding:0 8px}
 .hv-stamp.inne:hover{background:var(--hv-glass-2)}
@@ -9069,9 +9087,9 @@ body:has(.main.hvmode) .todopill:not(.min){bottom:calc(128px + env(safe-area-ins
 /* Hälsningen: få saker, stora tal, luft. */
 .hv-hero{padding:30px 2px 0}
 .hv-hero h1{margin:0;font:600 38px/1.05 var(--f-display);letter-spacing:-.025em;color:var(--hv-ink)}
-.hv-hero p{margin:8px 0 0;font-size:15.5px;color:var(--hv-ink-2)}
+.hv-hero p{display:flex;align-items:center;gap:10px;margin:8px 0 0;font-size:15.5px;color:var(--hv-ink-2);white-space:nowrap;overflow:hidden}
+.hv-hero p>span{overflow:hidden;text-overflow:ellipsis}
 .hv-hero p b{color:var(--hv-ink);font-weight:550}
-.hv-hero p{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .hv-lyssna{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px 0 6px;border-radius:6px;font-size:12.5px;color:var(--hv-ink-3);flex:none}
 .hv-lyssna:hover{background:var(--hv-glass-2);color:var(--hv-ink)}
 .hv-lyssna svg{width:10px;height:10px;fill:currentColor}
@@ -9079,26 +9097,28 @@ body:has(.main.hvmode) .todopill:not(.min){bottom:calc(128px + env(safe-area-ins
 
 /* Korten är glas i samma fönster. */
 .hv-kort{display:grid;grid-template-columns:1.42fr 1fr 1fr 1fr;gap:16px;margin-top:26px}
-.hv-card{background:var(--hv-glass);border:1px solid var(--hv-glass-line);border-radius:18px;backdrop-filter:blur(24px) saturate(150%);-webkit-backdrop-filter:blur(24px) saturate(150%);box-shadow:inset 0 1px 0 var(--hv-glass-hi),var(--hv-shadow);padding:18px 22px 16px;display:flex;flex-direction:column;min-width:0;min-height:236px}
+.hv-card{background:var(--hv-glass);border:1px solid var(--hv-glass-line);border-radius:18px;backdrop-filter:blur(24px) saturate(150%);-webkit-backdrop-filter:blur(24px) saturate(150%);box-shadow:inset 0 1px 0 var(--hv-glass-hi),var(--hv-shadow);padding:18px 22px 16px;display:flex;flex-direction:column;min-width:0;min-height:0}
 .hv-card.hv-tal{cursor:pointer;transition:background .15s}
 .hv-card.hv-tal:hover{background:var(--hv-glass-2)}
-.hv-chead{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.hv-chead{display:flex;align-items:baseline;gap:8px;margin-bottom:10px}
+.hv-chead .hv-heat.nav{align-self:center}
 .hv-chead h2{margin:0;font:500 13.5px/1.3 var(--f-body);color:var(--hv-ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .hv-chead .hv-meta{white-space:nowrap}
 .hv-meta{font-size:12.5px;color:var(--hv-ink-3)}
 .hv-end{margin-left:auto}
-.hv-rad{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:12px;min-height:48px;border-top:1px solid var(--hv-line)}
+.hv-rad{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:12px;height:48px;border-top:1px solid var(--hv-line);overflow:hidden}
 .hv-rad>b{font-weight:500;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hv-heat{width:7px;height:7px;border-radius:50%;background:var(--hv-ink-3);justify-self:center}
 .hv-heat.hot{background:var(--hv-danger)}
+.hv-heat.nav{width:15px;height:15px;border-radius:0;background:none;display:inline-flex}
 .hv-btn{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 13px;border-radius:9px;font-size:13px;font-weight:550;background:var(--hv-glass-2);border:1px solid var(--hv-line-2);white-space:nowrap;transition:background .15s}
 .hv-btn:hover{background:var(--hv-glass-3)}
 .hv-btn svg{width:13px;height:13px;color:var(--hv-brand)}
 .hv-btn.hv-gor{min-height:34px;padding:0 16px;background:var(--hv-brand);color:var(--hv-on-brand);border-color:transparent;font-weight:600}
 .hv-btn.hv-gor:hover{filter:brightness(1.07)}
-.hv-kfot{margin-top:auto;padding-top:10px;font-size:12.5px;color:var(--hv-ink-2);align-self:flex-start;text-align:left}
+.hv-kfot{margin-top:auto;padding-top:10px;font-size:12.5px;color:var(--hv-ink-3);align-self:flex-start;text-align:left}
 button.hv-kfot:hover,.hv-tal:hover .hv-kfot{color:var(--hv-ink)}
-.hv-lugn{flex:1;display:flex;align-items:center;gap:10px;color:var(--hv-ink-2);border-top:1px solid var(--hv-line);min-height:60px}
+.hv-lugn{flex:1;display:flex;align-items:center;gap:10px;color:var(--hv-ink-2);border-top:1px solid var(--hv-line)}
 .hv-lugn svg{width:16px;height:16px;color:var(--hv-brand)}
 .hv-lugn2{flex-direction:column;align-items:flex-start;justify-content:center;gap:4px}
 .hv-lugn2 span{font-size:15.5px;color:var(--hv-ink)}
@@ -9106,12 +9126,13 @@ button.hv-kfot:hover,.hv-tal:hover .hv-kfot{color:var(--hv-ink)}
 .hv-stor{display:flex;flex-direction:column;gap:7px;margin-top:6px}
 .hv-stor b{font:600 60px/.92 var(--f-display);letter-spacing:-.04em;white-space:nowrap}
 .hv-stor span{color:var(--hv-ink-2);font-size:14px}
-.hv-ftxt{margin:12px 0 0;font-size:14px;line-height:1.5;color:var(--hv-ink-2)}
+.hv-ftxt{margin:12px 0 0;font-size:14.5px;line-height:1.5;color:var(--hv-ink-2);max-width:46ch}
 .hv-ftxt1{margin-top:6px;font-size:15px;color:var(--hv-ink)}
 .hv-dom{margin:8px 0 0;font-size:13px;font-weight:550;color:var(--hv-ink)}
 .hv-not{margin:8px 0 0;font-size:12.5px;line-height:1.45;color:var(--hv-ink-3)}
 .hv-frad{display:flex;align-items:center;gap:14px;margin-top:auto;padding-top:14px}
 .hv-frad .hv-kfot{margin:0;padding:0;align-self:center}
+.hv-tal .hv-frad .hv-kfot{color:var(--hv-ink-2)}
 .hv-frad .hv-btn+.hv-kfot,.hv-frad .hv-meta{margin-left:auto}
 .hv-matare{position:relative;height:6px;border-radius:3px;background:var(--hv-line-2);margin-top:14px}
 .hv-matare i{position:absolute;top:0;bottom:0;border-radius:3px}
@@ -9124,31 +9145,100 @@ button.hv-kfot:hover,.hv-tal:hover .hv-kfot{color:var(--hv-ink)}
 .hv-matare.hv-steg i.vant{background:color-mix(in srgb,var(--hv-brand) 38%,transparent)}
 
 /* Genvägarna och skrivrutan: samma glas. */
-.hv-botten{position:sticky;bottom:16px;z-index:3;flex:none;margin-top:auto;padding-top:14px}
-.hv-genv{display:flex;justify-content:center;gap:8px;margin-bottom:12px}
+.hv-genv{display:flex;justify-content:center;gap:8px;margin-top:auto;padding-top:14px}
 .hv-chip{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 15px;border-radius:12px;font-size:13px;font-weight:500;white-space:nowrap;background:var(--hv-glass-2);border:1px solid var(--hv-glass-line);backdrop-filter:blur(26px) saturate(160%);-webkit-backdrop-filter:blur(26px) saturate(160%);box-shadow:inset 0 1px 0 var(--hv-glass-hi),0 6px 18px rgba(0,0,0,.10)}
 .hv-chip:hover{background:var(--hv-glass-3)}
 .hv-chip.hv-fraga{padding-left:10px;border-color:color-mix(in srgb,var(--hv-brand) 40%,transparent)}
+.hv-chip.hv-fraga span:first-child{display:inline-flex}
+.hv-chip small{font-size:12px;color:var(--hv-ink-3)}
 .hv-merv{position:relative;display:inline-flex}
 .hv-mer{position:absolute;bottom:42px;right:0;min-width:170px;padding:6px;display:flex;flex-direction:column;border-radius:14px;background:var(--hv-pop);z-index:5}
 .hv-mer button{text-align:left;padding:8px 12px;border-radius:9px;font-size:13px}
 .hv-mer button:hover{background:var(--hv-glass-2)}
-.hv-skriv{position:relative;width:100%;max-width:780px;margin:0 auto;padding:13px 12px 10px 18px;border-radius:20px;background:var(--hv-glass-2);border:1px solid var(--hv-glass-line);backdrop-filter:blur(26px) saturate(160%);-webkit-backdrop-filter:blur(26px) saturate(160%);box-shadow:inset 0 1px 0 var(--hv-glass-hi),var(--hv-shadow)}
+.hv-skriv{position:relative;z-index:3;flex:none;width:100%;max-width:780px;margin:12px auto 0;padding:13px 12px 10px 18px;border-radius:20px;background:var(--hv-glass-2);border:1px solid var(--hv-glass-line);backdrop-filter:blur(26px) saturate(160%);-webkit-backdrop-filter:blur(26px) saturate(160%);box-shadow:inset 0 1px 0 var(--hv-glass-hi),var(--hv-shadow)}
 .hv-skriv textarea{display:block;width:100%;height:24px;resize:none;border:0;outline:0;background:none;color:var(--hv-ink);font:15px/1.55 var(--f-body);padding:0}
 .hv-skriv textarea::placeholder{color:var(--hv-ink-3)}
-.hv-srad{display:flex;align-items:center;gap:6px;margin-top:8px}
-.hv-tips{margin-right:auto;font-size:12.5px;color:var(--hv-ink-3)}
+.hv-srad{display:flex;align-items:center;gap:6px;margin-top:8px;margin-left:-8px}
+.hv-tips{margin-right:auto;height:28px;padding:0 8px;border-radius:8px;font-size:12.5px;color:var(--hv-ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .15s,background .15s}
+.hv-tips:hover{color:var(--hv-ink);background:var(--hv-glass)}
+.hv:not([data-hvlage="hem"]) .hv-tips{visibility:hidden}
+.hv-ikonk{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:var(--hv-ink-2)}
+.hv-ikonk:hover,.hv-ikonk.pa{background:var(--hv-glass);color:var(--hv-ink)}
+.hv-ikonk.pa{color:var(--hv-danger)}
+.hv-ikonk svg{width:16px;height:16px}
+.hv-bilagor{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
+.hv-bil{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 4px 0 10px;border-radius:8px;background:var(--hv-glass);border:1px solid var(--hv-glass-line);font-size:12.5px;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hv-bil button{width:20px;height:20px;border-radius:6px;color:var(--hv-ink-3)}
+.hv-bil button:hover{background:var(--hv-glass-2);color:var(--hv-ink)}
+.hv-qfil{display:block;margin-top:4px;font-size:12px;color:var(--hv-ink-3)}
 .hv-send{width:34px;height:34px;border-radius:50%;background:var(--hv-brand);color:var(--hv-on-brand);display:grid;place-items:center;transition:transform .15s var(--hv-ease)}
 .hv-send:hover{transform:scale(1.07)}
-.hv-send svg{width:16px;height:16px;stroke-width:2.2;transform:rotate(-90deg)}
+.hv-send svg{width:16px;height:16px;stroke-width:2.2}
 
 /* Arket: ett öppnat kort tar ytan. Nav talar först. */
-.hv-ark{padding-top:4px}
-.hv-arktopp{display:flex;gap:8px;margin-bottom:22px}
+.hv-ark{padding-top:8px}
+.hv-arkhuvud{display:grid;grid-template-columns:28px 1fr auto;gap:12px;align-items:center;margin-bottom:12px}
+.hv-arkhuvud p{margin:0;font-size:15px}
+.hv-arkhuvud p b{font-weight:600}
+.hv-arkhuvud kbd{font-family:var(--f-mono)}
+.hv-arkyta{flex:1;min-height:0;padding:18px 20px;display:flex;flex-direction:column;overflow:hidden}
+.hv-rull{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;margin:0 -12px;padding:0 12px;scrollbar-width:thin;scrollbar-color:var(--hv-line) transparent}
+/* Min dag: dagens form överst (möten fyllda, uppgifter i luckorna), sedan genomgången uppifrån och ned. */
+.hv-dag{flex:1;min-height:0;display:flex;flex-direction:column}
+.hv-dbar{position:relative;flex:none;height:10px;border-radius:5px;background:var(--hv-line)}
+.hv-dbar i{position:absolute;top:0;bottom:0;min-width:5px;border-radius:3px;background:var(--hv-brand);transition:background .3s,opacity .3s}
+.hv-dbar i.upg{background:color-mix(in srgb,var(--hv-brand) 40%,transparent)}
+.hv-dbar i.gjord{opacity:.3}
+.hv-dbar u{position:absolute;top:-5px;bottom:-5px;width:2px;margin-left:-1px;border-radius:1px;background:var(--hv-signal)}
+.hv-dskala{position:relative;flex:none;height:14px;margin:7px 0 14px;font:10.5px var(--f-mono);color:var(--hv-ink-3)}
+.hv-dskala span{position:absolute;transform:translateX(-50%)}
+.hv-dskala span:first-child{transform:none}
+.hv-dskala span:last-child{transform:translateX(-100%)}
+.hv-drad{position:relative;z-index:0;display:grid;grid-template-columns:58px 14px minmax(0,1fr) auto;align-items:center;gap:12px;min-height:42px;border-top:1px solid var(--hv-line);font-size:14px}
+.hv-drad:first-child{border-top:0}
+.hv-kl{font:12px/1.3 var(--f-mono);color:var(--hv-ink-3)}
+.hv-kl small{display:block;font-size:10.5px;color:var(--hv-signal)}
+.hv-pk{width:8px;height:8px;border-radius:50%;background:var(--hv-brand);justify-self:center;transition:background .3s,border-color .3s}
+.hv-drad.upg .hv-pk{background:none;border:1.5px solid var(--hv-ink-3)}
+.hv-drad.upg.het .hv-pk{border-color:var(--hv-danger)}
+.hv-dag.bokad .hv-drad.upg .hv-pk{background:var(--hv-brand);border-color:var(--hv-brand)}
+.hv-dag.bokad .hv-dbar i.upg{background:var(--hv-brand)}
+.hv-vad{display:flex;align-items:baseline;gap:10px;min-width:0;white-space:nowrap}
+.hv-vad b{font-weight:500;overflow:hidden;text-overflow:ellipsis}
+.hv-vad small{font-size:12.5px;color:var(--hv-ink-3);overflow:hidden;text-overflow:ellipsis}
+.hv-drad.forbi{color:var(--hv-ink-3)}
+.hv-drad.forbi .hv-vad b{font-weight:400}
+.hv-drad.forbi .hv-pk{opacity:.45}
+.hv-drad.nast{min-height:60px;margin:5px 0;border-top-color:transparent}
+.hv-drad.nast::before{content:"";position:absolute;inset:0 -12px;z-index:-1;border-radius:12px;background:var(--hv-glass-2);border:1px solid var(--hv-glass-line)}
+.hv-drad.nast+.hv-drad,.hv-dnu+.hv-drad{border-top-color:transparent}
+.hv-drad.nast .hv-vad{flex-direction:column;align-items:flex-start;gap:1px}
+.hv-drad.nast .hv-vad b{font-weight:600;font-size:15px}
+.hv-dnu{display:flex;align-items:center;gap:10px;height:24px;font:11px var(--f-mono);color:var(--hv-signal)}
+.hv-dnu::after{content:"";flex:1;height:1px;background:color-mix(in srgb,var(--hv-signal) 45%,transparent)}
+.hv-vecka{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;flex:1;min-height:0}
+.hv-vdag{border-radius:12px;background:var(--hv-glass);border:1px solid var(--hv-line);padding:12px 12px 10px;display:flex;flex-direction:column;min-height:0;text-align:left;transition:background .15s}
+.hv-vdag:hover{background:var(--hv-glass-2)}
+.hv-vdag.idagen{border-color:color-mix(in srgb,var(--hv-brand) 55%,transparent)}
+.hv-vdag header{display:flex;align-items:baseline;gap:6px}
+.hv-vdag header b{font-weight:600}
+.hv-vdag header small{color:var(--hv-brand);font-size:12px}
+.hv-vdag header span{margin-left:auto;font-size:11.5px;color:var(--hv-ink-3)}
+.hv-vdag>small{font-size:12px;color:var(--hv-ink-3);margin:2px 0 8px}
+.hv-tid{position:relative;flex:1;min-height:60px;border-left:1px solid var(--hv-line);margin-left:2px}
+.hv-tid i{position:absolute;left:6px;right:0;border-radius:5px;background:color-mix(in srgb,var(--hv-brand) 24%,transparent);border-left:2px solid var(--hv-brand);font:normal 11.5px/1.25 var(--f-body);color:var(--hv-ink);padding:2px 6px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.hv-arkfot b{color:var(--hv-ink);font-weight:500}
+.hv-arkfot .hv-lank{display:inline;margin:0;font-size:13px;color:var(--hv-ink-2)}
+.hv-rumtop{position:absolute;top:6px;left:2px;z-index:2;display:flex;gap:8px}
+.hv-rumtop .hv-kn{backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.hv-rumtop .hv-kn svg{width:16px;height:16px}
+.hv-kn i{width:6px;height:6px;border-radius:50%;background:var(--hv-danger)}
+.hv-trad{position:absolute;top:-16px;bottom:-123px;left:0;right:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--hv-line) transparent}
+.hv-tcol{width:100%;max-width:780px;margin:0 auto;padding:62px 0 140px;display:flex;flex-direction:column;gap:18px}
+.hv-inl{display:flex;flex-direction:column;gap:18px;scroll-margin-top:62px}
+.hv-kvitto{display:flex;align-items:center;gap:12px;padding:12px 0 2px 40px;font-size:13.5px}
 .hv-kn{display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:0 12px;border-radius:9px;font-size:12.5px;font-weight:500;background:var(--hv-glass-2);border:1px solid var(--hv-glass-line);white-space:nowrap;transition:background .15s}
 .hv-kn:hover{background:var(--hv-glass-3)}
-.hv-bak{display:inline-flex}
-.hv-bak svg{width:14px;height:14px;transform:rotate(90deg)}
 .hv-navs{display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px;width:100%;max-width:820px;margin:0 auto;animation:hvupp .45s var(--hv-ease)}
 :where(.hv-navs) p{margin:0;font-size:15px;line-height:1.55;max-width:680px}
 :where(.hv-navs) p+p{margin-top:14px}
@@ -9158,7 +9248,7 @@ button.hv-kfot:hover,.hv-tal:hover .hv-kfot{color:var(--hv-ink)}
 .hv-chatt{display:flex;flex-direction:column;gap:28px;width:100%;max-width:780px;margin:8px auto 0}
 .hv-tur{display:flex;flex-direction:column;gap:12px}
 .hv-tur>.hv-kalla{margin-left:42px}
-.hv-q{align-self:flex-end;max-width:80%;margin:0;padding:9px 14px;border-radius:14px 14px 4px 14px;background:var(--hv-glass-2);border:1px solid var(--hv-glass-line);font-size:15px;line-height:1.5;overflow-wrap:anywhere}
+.hv-q{align-self:flex-end;max-width:70%;margin:0;padding:10px 16px;border-radius:18px 18px 6px 18px;background:var(--hv-glass-2);border:1px solid var(--hv-glass-line);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:var(--hv-shadow);font-size:14.5px;line-height:1.5;overflow-wrap:anywhere;animation:hvupp .4s var(--hv-ease) backwards}
 .hv-siffra{font:inherit;font-weight:600;color:inherit;padding:0 2px;border-radius:4px;border-bottom:1px solid var(--hv-brand);cursor:pointer;transition:background .15s}
 .hv-siffra:hover,.hv-siffra[aria-expanded="true"]{background:var(--hv-brand-soft)}
 .hv-obel{background:none;color:inherit;border-bottom:2px dotted var(--hv-ink-3)}
@@ -9199,17 +9289,34 @@ button.hv-kfot:hover,.hv-tal:hover .hv-kfot{color:var(--hv-ink)}
 .hv-blind{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--hv-line)}
 .hv-blind+.hv-blind{border:0;padding-top:5px}
 .hv-grupp{display:flex;align-items:baseline;gap:8px;padding:18px 0 8px;font-size:12.5px;font-weight:500;color:var(--hv-ink-2)}
-.hv-grupp:first-child{padding-top:8px}
+.hv-grupp:first-child{padding-top:0}
 .hv-grupp small{font-weight:400;color:var(--hv-ink-3)}
-.hv-sak{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:12px;min-height:60px;border-top:1px solid var(--hv-line)}
+.hv-sak{display:grid;grid-template-columns:16px minmax(0,1fr) auto;align-items:center;gap:12px;height:60px;border-top:1px solid var(--hv-line);overflow:hidden}
+.hv-rull.hv-tom .hv-lugn{border-top:0;min-height:60px}
 .hv-sak b,.hv-sak small{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hv-sak b{font-weight:500;font-size:14.5px}
 .hv-sak small{font-size:12.5px;color:var(--hv-ink-3)}
-.hv-tr{display:grid;grid-template-columns:26px minmax(0,1fr) 64px 64px 72px 52px;column-gap:14px;align-items:center;padding:10px 0;border-top:1px solid var(--hv-line);font-size:13.5px}
-.hv-tr>b{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hv-tr>span.num{text-align:right;color:var(--hv-ink-2)}
-.hv-trh{border-top:0;padding:6px 0 4px;font-size:11.5px;color:var(--hv-ink-3)}
-.hv-trh>span{text-align:right}
+.hv-ur{display:grid;grid-template-columns:26px minmax(0,1fr) 64px 64px 72px 52px;column-gap:14px;align-items:center;padding:10px 0;border-top:1px solid var(--hv-line);font-size:13.5px}
+.hv-ur>b{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hv-ur>span.num{text-align:right;color:var(--hv-ink-2)}
+.hv-urh{border-top:0;padding:6px 0 4px;font-size:11.5px;color:var(--hv-ink-3)}
+.hv-urh>span{text-align:right}
+/* Skiss 9: en rad per person med kedjan. Raden fälls ut med förklaringen. */
+.hv-tr{display:grid;grid-template-columns:26px 84px 128px 70px minmax(0,1fr) 14px;column-gap:14px;align-items:center;padding:11px 0;border-top:1px solid var(--hv-line);cursor:pointer;animation:hvupp .45s var(--hv-ease) both}
+.hv-tr>b{font-weight:500;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hv-tr .o{font-size:12.5px;color:var(--hv-ink-2)}
+.hv-tr .l{font-size:12.5px;color:var(--hv-ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hv-tr .l b{font-weight:500;color:var(--hv-ink)}
+.hv-tr>svg{width:14px;height:14px;color:var(--hv-ink-3);transform:rotate(-90deg);transition:transform .2s var(--hv-ease)}
+.hv-tr.oppen>svg{transform:none}
+.hv-kedja{display:flex;gap:2px}
+.hv-kedja i{flex:1;height:6px;border-radius:3px;background:var(--hv-line-2)}
+.hv-kedja i.ned{background:var(--hv-signal)}
+.hv-kedja i.upp{background:var(--hv-brand)}
+.hv-tv{grid-column:2/-1;display:none;padding-top:7px;font-size:12.5px;line-height:1.5;color:var(--hv-ink-2);max-width:68ch}
+.hv-tv em{display:block;font-style:normal;color:var(--hv-ink-3);margin-top:3px}
+.hv-tr.oppen .hv-tv{display:block}
+.hv-blind button{font:11.5px var(--f-mono);color:var(--hv-ink-2);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--hv-line)}
 .hv-mskala{display:flex;justify-content:space-between;gap:12px;margin:8px 0 8px;font-size:12px;color:var(--hv-ink-3)}
 .hv-mskala b{color:var(--hv-ink);font-weight:550}
 .hv-or{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:14px;align-items:baseline;padding:11px 0;border-top:1px solid var(--hv-line);font-size:13.5px}
@@ -9222,16 +9329,17 @@ button.hv-kfot:hover,.hv-tal:hover .hv-kfot{color:var(--hv-ink)}
 .hv-or.hv-vantar{color:var(--hv-ink-2)}
 .hv-lank{display:block;margin-top:2px;font-size:12px;color:var(--hv-ink-3);text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--hv-line-2)}
 .hv-lank:hover{color:var(--hv-ink)}
-.hv-ar{display:grid;grid-template-columns:22px minmax(0,1.2fr) minmax(0,1fr);gap:14px;align-items:start;padding:12px 0;border-top:1px solid var(--hv-line)}
-.hv-tk{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12.5px;font-weight:600;line-height:1;margin-top:1px}
+.hv-ar{display:grid;grid-template-columns:22px minmax(0,1.1fr) minmax(0,1fr) 164px;gap:14px;align-items:center;padding:12px 0;border-top:1px solid var(--hv-line);animation:hvupp .45s var(--hv-ease) both}
+.hv-tk{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12.5px;font-weight:600;line-height:1}
 .hv-tk.upp{background:var(--hv-brand-soft);color:var(--hv-brand-ink)}
 .hv-tk.ned{background:color-mix(in srgb,var(--hv-signal) 22%,transparent);color:var(--hv-signal)}
 .hv-tk.vet{border:1.5px dashed var(--hv-ink-3)}
-.hv-ar b{display:block;font-weight:500;font-size:13.5px;line-height:1.45}
-.hv-ar small{display:block;font-size:12px;color:var(--hv-ink-3);margin-top:2px}
+.hv-ar b{display:block;font-weight:500;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hv-ar small{display:block;font-size:12px;color:var(--hv-ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hv-at{justify-self:end;font-size:12.5px;color:var(--hv-ink-3);text-align:right}
+.hv-at .hv-btn{min-height:30px;height:30px;font-size:12.5px;color:var(--hv-ink)}
 .hv-egenrad{color:var(--hv-ink-2);font-style:italic}
-.hv-fe{font-size:12.5px;line-height:1.45;color:var(--hv-ink-2)}
-.hv-fe small{color:var(--hv-ink);font-weight:550}
+.hv-fe{font-size:12.5px;line-height:1.4}
 .hv-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 14px;padding:14px 0 2px;border-top:1px solid var(--hv-line)}
 .hv-form h4{grid-column:1/-1;margin:0;font:600 14px var(--f-body)}
 .hv-form label{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--hv-ink-2)}
@@ -9240,21 +9348,18 @@ button.hv-kfot:hover,.hv-tal:hover .hv-kfot{color:var(--hv-ink)}
 .hv-form textarea{resize:vertical;min-height:54px;line-height:1.45}
 .hv-ferr{margin:0;font-size:12.5px;color:var(--hv-danger)}
 .hv-fk{display:flex;justify-content:flex-end;gap:8px}
-.hv-arkfot{display:flex;align-items:center;gap:12px;min-height:46px;width:100%;max-width:820px;margin:14px auto 0;padding-left:40px;font-size:13.5px;color:var(--hv-ink-2);flex-wrap:wrap}
+.hv-arkfot{display:flex;align-items:center;gap:12px;min-height:45px;flex:none;padding-top:14px;margin-top:14px;border-top:1px solid var(--hv-line);font-size:13px;color:var(--hv-ink-2)}
+.hv-arkfot .hv-end{margin-left:auto;display:flex;gap:8px}
+.hv-arkfot .hv-kn{color:var(--hv-ink)}
 .hv-kvi{display:inline-flex;align-items:center;gap:10px;color:var(--hv-ink);animation:hvupp .35s var(--hv-ease)}
 .hv-ok{width:20px;height:20px;border-radius:50%;background:var(--hv-brand);color:var(--hv-on-brand);display:grid;place-items:center;flex:none}
 .hv-ok svg{width:11px;height:11px;stroke-width:2.6}
 /* Hela listan: källan bakom raden, radens meny och tangentbordets markering. Veckan och Golvet. */
-.hv-arktopp .hv-end{margin-left:auto}
 .hv-kn>svg{width:13px;height:13px}
 .hv-kn[aria-pressed="true"]{background:var(--hv-brand-soft);color:var(--hv-brand-ink);border-color:transparent}
 .hv-sakt{display:block;max-width:100%;text-align:left}
 .hv-sakt:hover b{text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--hv-line-2)}
 .hv-sakk{display:inline-flex;align-items:center;gap:4px}
-.hv-mer{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;color:var(--hv-ink-3)}
-.hv-mer:hover,.hv-mer[aria-expanded="true"]{background:var(--hv-glass-2);color:var(--hv-ink)}
-.hv-mer svg{width:16px;height:16px}
-.hv-meny{display:flex;flex-wrap:wrap;gap:8px;padding:8px 0 6px}
 .hv-sak.hv-fel b{color:var(--hv-ink-2)}
 .hv .upg-nyprick{margin-right:7px;vertical-align:middle}
 .hv-sak.sel{background:var(--hv-glass-2);box-shadow:-12px 0 0 var(--hv-glass-2),12px 0 0 var(--hv-glass-2)}
@@ -9268,21 +9373,53 @@ button.hv-kfot:hover,.hv-tal:hover .hv-kfot{color:var(--hv-ink)}
 .hv-ifolk label{display:inline-flex;align-items:center;gap:6px;font-size:13.5px}
 .hv-ifolk p{flex-basis:100%;margin:2px 0 0;color:var(--ink-3)}
 .hv-iin{width:112px;flex:none;text-align:right}
-@media (max-height:700px){.hv-hero{padding-top:22px}.hv-hero h1{font-size:34px}.hv-card{min-height:210px}}
-@media (max-width:1180px){.hv-kort{grid-template-columns:repeat(2,minmax(0,1fr))}.hv-lgt{display:none}}
-@media (max-width:900px){.hv-val3{grid-template-columns:1fr}.hv-form{grid-template-columns:1fr}.hv-ar{grid-template-columns:22px minmax(0,1fr)}.hv-fe{grid-column:2}}
+@media (max-height:700px){.hv-rad{min-height:44px;height:44px}.hv-hero{padding-top:24px}.hv-hero h1{font-size:34px}.hv-ftxt{margin-top:8px}}
+@media (max-width:1100px){.hv-lgt,.hv-datum small{display:none}}
+@media (max-width:900px){.hv-val3{grid-template-columns:1fr}.hv-form{grid-template-columns:1fr}.hv-ar{grid-template-columns:22px minmax(0,1fr)}.hv-fe,.hv-at{grid-column:2;justify-self:start}}
+@media (max-width:900px){body:has(.main.hvmode) .bnav{display:none}.hv-meny{display:inline-grid}}
 @media (max-width:860px){
-  .hv-fonster{padding:14px 16px 96px}
-  .hv-kort{grid-template-columns:1fr;gap:12px;margin-top:20px}
-  .hv-card{min-height:0}
+  .hv-fonster{padding:10px 16px 0}
+  .hv-inre::after{left:-16px;right:-16px;bottom:0}
+  .hv-hemlager{overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none}
+  .hv-hemlager::-webkit-scrollbar{display:none}
   .hv-datum,.hv-lgbar{display:none}
-  .hv-hero h1{font-size:30px}
-  .hv-stor b{font-size:48px}
-  .hv-botten{bottom:76px}
-  .hv-skriv{max-width:none}
+  .hv-hero{padding:14px 2px 0}
+  .hv-hero h1{font-size:26px}
+  .hv-hero p{margin-top:6px;font-size:13.5px}
+  .hv-kort{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px}
+  .hv-card{padding:11px 12px 10px;border-radius:14px}
+  .hv-chead{margin-bottom:6px;gap:6px}
+  .hv-chead h2{font-size:12px}
+  .hv-rad{grid-template-columns:8px minmax(0,1fr);gap:8px;height:32px;min-height:32px}
+  .hv-rad>b{font-size:13px}
+  .hv-rad .hv-btn{display:none}
+  .hv-lugn{font-size:13px}
+  .hv-stor{gap:4px;margin-top:2px}
+  .hv-stor b{font-size:34px}
+  .hv-stor span{font-size:12.5px}
+  .hv-ftxt{margin-top:6px;font-size:12.5px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .hv-frad{gap:8px;padding-top:8px;flex-wrap:wrap}
+  .hv-frad .hv-btn{min-height:28px;padding:0 10px;font-size:12px}
+  .hv-kfot{padding-top:6px;font-size:11.5px}
+  .hv-matare{margin-top:8px}
+  .hv-genv{overflow-x:auto;flex-wrap:nowrap;justify-content:flex-start;scrollbar-width:none;margin:0 -16px;padding:12px 16px 2px}
+  .hv-genv::-webkit-scrollbar{display:none}
+  .hv-chip{flex:none;height:32px;padding:0 13px}
+  .hv-merv{display:contents}
+  .hv-genv .hv-mer{position:static;flex-direction:row;gap:8px;min-width:0;padding:0;background:none;border:0;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}
+  .hv-genv .hv-mer button{flex:none;height:32px;padding:0 13px;border-radius:12px;font-size:13px;white-space:nowrap;background:var(--hv-glass-2);border:1px solid var(--hv-glass-line)}
+  .hv-skriv{max-width:none;width:auto;margin:6px -16px 0;border-radius:20px 20px 0 0;border-bottom:0;padding:12px 12px calc(10px + env(safe-area-inset-bottom)) 16px}
+  .hv-skriv textarea{font-size:16px}
+  .hv-trad{top:-10px;bottom:-96px}
+  .hv-tcol{padding:52px 0 120px}
+  .hv-arkyta{padding:14px}
+  .hv-arkhuvud kbd{display:none}
+  .hv-vecka{grid-template-columns:1fr;gap:8px;overflow-y:auto;align-content:start}
+  .hv-tid{min-height:0;margin:4px 0 0;border-left:0;display:flex;flex-direction:column;gap:4px}
+  .hv-tid i{position:static;white-space:normal}
   .hv-dial{width:560px;height:560px;right:-200px;top:-160px}
-  .hv-tr{grid-template-columns:26px minmax(0,1fr) 44px 44px 52px 40px;column-gap:8px}
-  .hv-arkfot{padding-left:0}
+  .hv-ur{grid-template-columns:26px minmax(0,1fr) 44px 44px 52px 40px;column-gap:8px}
+  .hv-tr{grid-template-columns:26px minmax(0,1fr) auto 14px}.hv-tr .hv-kedja{grid-column:2/4;grid-row:2;margin-top:6px}.hv-tr .l{grid-column:2/-1}
   .hv-navs{grid-template-columns:minmax(0,1fr)}
   .hv-navs>svg{display:none}
 }
@@ -23281,8 +23418,9 @@ function prfTema(v){
   try { localStorage.setItem('nav2-theme', v); } catch(_){}
   return fore;
 }
-function prfTemaSynk(){ if (S.prfRuta || S.prfMeny) render(); }
+function prfTemaSynk(){ if (S.prfRuta || S.prfMeny || (S.view === 'hem' && hvPa())) render(); }
 const prfDatornMorkt = () => matchMedia('(prefers-color-scheme: dark)').matches;
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (S.theme === 'auto') prfTemaSynk(); }); } catch(_){}
 
 /* ---------- Klockan: bara de sorter man vill ha ---------- */
 // I live-läge filtrerar servern klockan själv (utskicken, 0255); localStorage-valen gäller bara demot.
@@ -23398,6 +23536,7 @@ function prfMenyPos(){
   const el = document.getElementById('prfMeny'), k = document.getElementById('prfKnapp'); if (!el || !k) return;
   const r = k.getBoundingClientRect(), w = Math.min(272, innerWidth - 16);
   el.style.width = w + 'px';
+  if (k.closest('#rail')){ el.style.top = (r.top + scrollY - el.offsetHeight - 6) + 'px'; el.style.left = r.left + 'px'; return; }
   el.style.top = (r.bottom + scrollY + 6) + 'px';
   el.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.right - w)) + 'px';
 }
@@ -25861,6 +26000,13 @@ function rlsPost(p, ark){
 
 /* ---------- Rälsen ---------- */
 let rlsNyckel = '', rlsForra = new Map(), rlsForraRoll = '';
+// Profilknappen i rälsen: samma knapp och meny som i vyernas sidhuvud (prfKnapp), där vyn inte har något sidhuvud.
+P.rlsupned = '<path d="m8 9 4-4 4 4M8 15l4 4 4-4"/>';
+function rlsProfil(){
+  prfSt();
+  const vis = prfVisNamn(), roll = ND && ND.jag ? NDNIVA[ND.jag.niva] || '' : '';
+  return `<button type="button" class="rls-prof" id="prfKnapp" aria-haspopup="menu" aria-expanded="${!!S.prfMeny}" ${S.prfMeny ? 'aria-controls="prfMenyLista"' : ''} data-prfmeny aria-label="${esc(vis)}, profil och inställningar"><i aria-hidden="true">${esc(String(vis)[0] || '')}</i><span>${esc(vis)}<small>${esc(roll)}</small></span>${I('rlsupned')}</button>`;
+}
 function renderRail(){
   const {snabb, grupper} = rlsPoster(), lage = rlsLage();
   const bell = bellOlasta(), bellOppen = !!(S.bellOpen && S.rlsBell === 'rail');
@@ -25884,6 +26030,7 @@ function renderRail(){
       <div class="rgroup rls-g rls-snabb">${snabb.map(p => rlsPost(p)).join('')}</div>
       ${grupper.map(grupp).join('')}
     </div>
+    ${S.view === 'hem' && typeof hvPa === 'function' && hvPa() ? rlsProfil() : ''}
     ${fot}
     <span class="sr" role="status">${esc(S.rlsSr || '')}</span>`;
   rlsEfter();
@@ -26131,7 +26278,7 @@ function rlsArkRita(){
     <div class="rls-arkg"><a class="rls-i" href="#" data-go="/installningar">${avatar(prfJag(), 24, S.role === 'chef' ? 2 : 0)}<span class="rls-l">Profil och inställningar</span></a></div>
   </div>`;
 }
-function rlsArkStang(){ S.rlsMer = false; rlsArkRita(); const m = document.querySelector('#bnav [data-rlsmer]'); if (m){ m.setAttribute('aria-expanded', 'false'); m.focus(); } }
+function rlsArkStang(){ S.rlsMer = false; rlsArkRita(); const m = [...document.querySelectorAll('[data-rlsmer]')].find(b => b.offsetParent); if (m){ m.setAttribute('aria-expanded', 'false'); m.focus(); } }
 function rlsArkTangent(e){
   const d = document.querySelector('#rlsArk .rls-arkd'); if (!d) return;
   if (e.key === 'Escape'){ e.preventDefault(); e.stopImmediatePropagation(); rlsArkStang(); return; }
@@ -27522,7 +27669,7 @@ function ndTidStart(){
   TID_SCHEMA.slut = s ? s.slut : '';
   TID_SCHEMA.nytt = ND.tid.kommande.length ? {fran:frKort(ND.tid.kommande[0].fran), text:`${NDDAG[ND.tid.kommande[0].veckodag]}ar ${ND.tid.kommande[0].start}–${ND.tid.kommande[0].slut}.`} : null;
   if (s){ SCHEMA.start = tmin(s.start); SCHEMA.slut = tmin(s.slut); S.tTol = s.tol; }
-  S.events = ND.tid.stamplar ? ndDagensEvents() : [];
+  S.events = ND.tid.modulPa ? ndDagensEvents() : [];
   S.tVecka = ndMandag(kIdag());
   S.ndPaminn = JSON.parse(JSON.stringify(ND.tid.paminn || {in:{pa:true, min:15}, ut:{pa:false, min:15}}));
   S.ndTiFragat = new Set(); S.ndUnderlag = {}; S.ndTiKlara = 0; S.ndTol = null; S.ndLonPer = null;
@@ -28022,6 +28169,8 @@ teamNow = function(){
   const c = ND.tid.chef, ut = [];
   c.paPlats.forEach(p => ut.push([p.namn, 'inne', `sedan ${p.sedan}`]));
   c.dagsbild.forEach(r => { if (r.lage === 'sjuk') ut.push([r.namn, 'sjuk', r.detalj]); else if (r.lage === 'ledig') ut.push([r.namn, 'ledig', r.detalj]); else if (r.lage === 'ej_instamplad') ut.push([r.namn, 'ej', r.detalj]); });
+  // Resten av laget: de som stämplar men varken är inne eller avviker (till exempel en dag utan schema). Hemmets "på plats" räknar alla.
+  (c.lag || []).forEach(p => { if (!ut.some(x => x[0] === p.namn)) ut.push([p.namn, 'ej', 'inte instämplad']); });
   return ut;
 };
 // Vyns handlare: veckobläddring med datum i stället för veckonummer, och dagar som öppnas.
@@ -34608,7 +34757,8 @@ renderGolvet = function(){ return _ndHemGolvMo() + (typeof ndMoHemKort === 'func
 const hvPa = () => !!(ND && ND.hem && ND.hem.nytt);
 S.hv = S.hv || {ark:null, id:null, fi:0, data:{}, laddar:{}, fel:'', kvitto:null, form:null, dra:false, sparar:false, inaktuell:false, q:'', kom:'', meny:null, chatt:[]};
 S.hv.chatt = S.hv.chatt || [];
-let hvTon = (() => { try { return localStorage.getItem('nav2-hvton') === 'ljus' ? 'ljus' : 'mork'; } catch(_){ return 'mork'; } })();
+// Ljust eller mörkt väljs i Inställningar och gäller hela Nav. Hemmet har ingen egen tonknapp.
+const hvTema = () => S.theme === 'light' ? 'ljus' : S.theme === 'dark' ? 'mork' : (prfDatornMorkt() ? 'mork' : 'ljus');
 const hvTal = n => Math.round(n).toLocaleString('sv-SE');
 const hvOrd = n => ['Noll', 'En', 'Två', 'Tre', 'Fyra', 'Fem', 'Sex', 'Sju', 'Åtta', 'Nio', 'Tio'][n] || String(n);
 const hvAndel = x => Math.max(0, Math.min(1, x));
@@ -34621,36 +34771,108 @@ const HVDIAL = (() => {
 })();
 
 /* ---------- Hemmet ---------- */
+// Tre lägen i samma fönster, som i skissen: hemmet, ett ark (Väntar på dig, Min dag, Veckan) och tråden.
+// S.hv.ark är det som är öppet. Ett ark tar ytan; allt annat (Teamet, Ändrat, förslagen, Mer och chatten) läggs i
+// tråden, inlägg efter inlägg (S.hv.trad), och tråden står kvar när man går hem. Den töms när sidan laddas om.
+const HVARK = ['vantar', 'dag', 'vecka'];
+const hvLage = () => !S.hv.ark ? 'hem' : HVARK.includes(S.hv.ark) ? 'ark' : 'trad';
+let hvNr = 0;
+const hvSamma = (t, sort, id) => t.sort === sort && (t.id || null) === (id || null);
 function hvHem(){
-  const H = S.hv;
+  const H = S.hv; H.trad = H.trad || [];
   // Ett förslag som lämnades för att flytta mötet i Möten: läs om när hemmet visas igen.
   if (H.inaktuell){ H.inaktuell = false; ndOmlas('hv'); }
-  return `<div class="hv" data-hvtema="${hvTon}" data-hvlage="${H.ark ? 'ark' : 'hem'}">
+  const lage = hvLage();
+  if (lage === 'trad' && !H.trad.some(t => hvSamma(t, H.ark, H.id))) H.trad.push({sort:H.ark, id:H.id || null, nr:++hvNr});
+  return `<div class="hv${lage === 'hem' && String(H.q || '').trim() ? ' hv-skriver' : ''}" data-hvtema="${hvTema()}" data-hvlage="${lage}">
     <div class="hv-fonster">
       <div class="hv-grund" aria-hidden="true"><svg class="hv-dial" viewBox="0 0 400 400" fill="none"><g>${HVDIAL}</g></svg></div>
       <div class="hv-inre">
-        ${H.ark ? hvArk() : hvHemlager()}
-        <div class="hv-botten">${H.ark ? '' : hvGenv()}${hvSkriv()}</div>
+        ${lage === 'trad' ? hvRumtop() : ''}
+        <div class="hv-scen">${lage === 'hem' ? hvHemlager() : lage === 'ark' ? hvArk() : hvTrad()}</div>
+        ${hvSkriv()}
       </div>
     </div>
   </div>`;
 }
 function hvHemlager(){
-  return `<div class="hv-lager">
+  return `<div class="hv-lager hv-hemlager">
     ${hvTopp()}
     ${hvHero()}
     <div class="hv-kort">${hvVantar()}${hvForeslar()}${ND.hem.team ? hvTeam() : hvDinManad()}${hvAndrat()}</div>
+    ${hvGenv()}
   </div>`;
 }
-// Genvägarna står i samma grupp som skrivrutan, så att rutan aldrig lägger sig över dem när sidan är högre än skärmen.
-// Förbered står först när chatten är på och ett möte återstår i dag (den frågar chatten). Min statistik leder till Mötens statistik
-// för den som ser den. Mer har det som inte får en egen genväg: Golvet, Coachning, Personalen och Nyheter.
+// Tråden: ← Hem och hur mycket som brinner står överst, som i skissen. Båda går hem.
+P.hvvanster = '<path d="M19 12H5.5M11 6l-6 6 6 6"/>';
+P.hvmik = '<rect x="9" y="3.5" width="6" height="10.5" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/>';
+P.hvupp = '<path d="M12 19V5.5M6 11l6-6 6 6"/>';
+P.hvmeny = '<path d="M4 8h16M4 16h16"/>';
+function hvRumtop(){
+  ndHemSynk();
+  const n = ndHemRad.filter(r => r.nar === 'nu' && !hvDold(r)).length;
+  return `<div class="hv-rumtop"><button class="hv-kn" data-hvstang>${I('hvvanster')}Hem</button><button class="hv-kn" data-hvstang><i${n ? '' : ' style="background:var(--hv-brand)"'}></i><span>${n ? `${n} brinner` : 'Inget brinner'}</span></button></div>`;
+}
+const HVINL = {team:() => hvArkTeam(), andrat:() => hvArkAndrat(), forslag:() => hvArkForslag(), manad:() => hvArkManad(), golvet:() => hvArkGolvet(), coachning:() => hvTradCoach(), chatt:t => hvArkChatt(t.id)};
+// Coachning i tråden: det gamla hemmets coachningskort i Navs röst, ur samma uträkningar (cnLaget, cnFlaggor, cnPuls).
+// Knapparna gör samma sak som där. Hela vyn med övningarna och 1:1-mötena ligger kvar i Coachning.
+function hvTradCoach(){
+  if (!ndKopplad('coachning') || typeof cnSt !== 'function') return hvNavSager('<p>Coachningen går inte att läsa just nu.</p>');
+  cnSt();
+  const fot = `<div class="hv-lf"><span class="hv-lbl">Övningarna, 1:1-mötena och överenskommelserna finns i Coachning.</span><button class="hv-kn hv-hoger" data-go="/coachning">Öppna Coachning</button></div>`;
+  if (S.role === 'chef'){
+    const prio = ['tappar', 'vantar', 'oant', 'larm', 'sen', 'fast', 'ingen'];
+    const rader = cnLaget().map(vem => ({vem, f:cnFlaggor(vem), m:cnMoten(vem)}));
+    const beh = rader.filter(r => r.f.some(x => x[0] !== 'avgor')).map(r => ({...r, h:prio.findIndex(p => r.f.some(x => x[0] === p))})).sort((a, b) => a.h - b.h);
+    const idag = rader.filter(r => r.m.nasta && r.m.nasta.d === cnT()), p = cnPuls();
+    const knapp = r => { const k = prio[r.h], v = esc(r.vem), u = encodeURIComponent(r.vem);
+      return k === 'tappar' || k === 'fast' ? `<button class="hv-btn" data-cnfraga="${v}">Fråga hur det går</button>` : k === 'vantar' ? `<button class="hv-btn" data-cnga="/coachning/person/${u}/vantar">Kvittera</button>` : k === 'oant' ? `<button class="hv-btn" data-cnga="/coachning/mote/${u}">Anteckna</button>` : `<button class="hv-btn" data-cnga="/coachning/person/${u}">Öppna</button>`; };
+    return hvNavSager(`<p>${p.alla ? `Laget har svarat på <b>${p.svar} av ${p.alla}</b> övningsdagar den här veckan. ` : ''}${beh.length ? `<b>${beh.length === 1 ? 'En person behöver' : `${hvOrd(beh.length)} behöver`} något av dig.</b>` : 'Alla svarar på sina övningar. Inget väntar på dig.'}</p>
+      ${hvKalla('Räknat av regler · ur övningarna, svaren och 1:1-mötena')}
+      <div class="hv-lista hv-glass"><div class="hv-lh"><h3>Coachning</h3><span class="hv-marke">Laget</span><span class="hv-end num">${beh.length} behöver något</span></div>
+        ${beh.map(r => `<div class="hv-sak"><span class="hv-av" aria-hidden="true">${esc(String(r.vem)[0] || '')}</span><div><b>${esc(r.vem)}</b><small>${r.f.find(x => x[0] === prio[r.h])[1]}</small></div>${knapp(r)}</div>`).join('')}
+        ${idag.map(r => `<div class="hv-sak"><i class="hv-heat" aria-hidden="true"></i><div><b>1:1 med ${esc(cnFor(r.vem))} ${cnNarText(r.m.nasta)}</b><small>${cnPunktText((S.cn.punkter[r.vem] || []).length, r.vem)}</small></div><button class="hv-btn" data-cnga="/coachning/${r.m.pagar ? 'mote' : 'person'}/${encodeURIComponent(r.vem)}">${r.m.pagar ? 'Starta' : 'Förbered'}</button></div>`).join('')}
+        ${fot}
+      </div>`);
+  }
+  const vem = cnMig(), ovs = cnAktiva(vem), ov = ovs[0], e = cnMoten(vem).nasta;
+  return hvNavSager(`<p>${ov ? `Din övning: <b>När ${esc(ov.nar)}, ${esc(ov.da)}.</b>` : 'Du har ingen övning just nu.'}${e ? ` Nästa 1:1 är ${cnNarText(e)}.` : ''}</p>
+    ${hvKalla('Räknat av regler · ur dina övningar och 1:1-möten')}
+    <div class="hv-lista hv-glass"><div class="hv-lh"><h3>Coachning</h3><span class="hv-marke">Din</span>${ovs.length ? `<span class="hv-end num">${ovs.length} ${ovs.length === 1 ? 'övning' : 'övningar'}</span>` : ''}</div>
+      ${ovs.map(o => `<div class="hv-sak"><i class="hv-heat" aria-hidden="true"></i><div><b>När ${esc(o.nar)}</b><small>→ ${esc(o.da)}</small></div><button class="hv-btn" data-cnga="/coachning">Öppna</button></div>`).join('')}
+      ${fot}
+    </div>`);
+}
+function hvTrad(){
+  const H = S.hv, fokus = H.trad.filter(t => hvSamma(t, H.ark, H.id)).pop();
+  return `<div class="hv-lager hv-trad" id="hvTrad"><div class="hv-tcol" aria-live="polite">${H.trad.map(t => {
+    // Bara det inlägg som är öppet visar ett fel, ett formulär och ett kvitto. De andra visar sin data.
+    const f = t === fokus, spar = {fel:H.fel, form:H.form, id:H.id};
+    if (!f) Object.assign(H, {fel:'', form:null});
+    H.id = t.id;
+    let inne; try { inne = (HVINL[t.sort] || (() => ''))(t); } finally { Object.assign(H, spar); }
+    return `<div class="hv-inl" data-hvnr="${t.nr}" data-hvinl="${esc(t.sort)}"${t.id ? ` data-hvinlid="${esc(t.id)}"` : ''}>${inne}${f && t.sort !== 'chatt' ? hvKvitto() : ''}</div>`;
+  }).join('')}</div></div>`;
+}
+// Ett nytt inlägg visas från början, som i skissen. Ett svar som strömmar in följs till slutet.
+function hvVisaNytt(){
+  const nr = S.hv.visaNr; if (!nr) return; S.hv.visaNr = null;
+  requestAnimationFrame(() => { const t = document.getElementById('hvTrad'), el = t && t.querySelector(`[data-hvnr="${nr}"]`); if (t && el) t.scrollTo({top:el.offsetTop - 62, behavior:'smooth'}); });
+}
+function hvRulla(){ requestAnimationFrame(() => { const t = document.getElementById('hvTrad'); if (t) t.scrollTo({top:t.scrollHeight, behavior:'smooth'}); }); }
+// Genvägarna står längst ned i hemmets lager, precis ovanför skrivrutan, som i skissen.
+// Frågan står först när chatten svarar: Förbered före ett möte i dag, annars Vem ska jag ringa nu? (skissens SNABB).
+// Möten bär samma tal som Möten har i menyn. Mer har Golvet, Teamet i november och Coachning, och allt öppnas i tråden.
+function hvMotenTal(){ return typeof moSyns === 'function' && moSyns() ? ndMo().kort.filter(k => moAtt(k) || moUtfall(k) || moFoljIdag(k)).length : 0; }
 function hvGenv(){
-  const H = S.hv, n = hvChattPa() ? ndHemKal(kIdag()).filter(e => e.s >= now())[0] : null;
-  const forbered = n ? `<button class="hv-chip hv-fraga" data-hvforbered="${esc(`Förbered mitt möte ${hm(n.s).replace(':', '.')} med ${n.t}`)}">${hubMark(15)}<span>Förbered ${hm(n.s).replace(':', '.')} med ${esc(String(n.t).split(' ')[0])}</span></button>` : '';
+  const H = S.hv, chatt = hvChattPa(), n = chatt ? ndHemKal(kIdag()).filter(e => e.s >= now())[0] : null;
+  const fraga = !chatt ? '' : n
+    ? `<button class="hv-chip hv-fraga" data-hvforbered="${esc(`Förbered mitt möte ${hm(n.s).replace(':', '.')} med ${n.t}`)}"><span>${hubMark(15)}</span><span>Förbered ${hm(n.s).replace(':', '.')} med ${esc(String(n.t).split(' ')[0])}</span></button>`
+    : `<button class="hv-chip hv-fraga" data-hvforbered="Vem ska jag ringa nu?"><span>${hubMark(15)}</span><span>Vem ska jag ringa nu?</span></button>`;
+  const mt = ndKopplad('moten') ? hvMotenTal() : 0;
   const stat = S.role === 'chef' && ndKopplad('moten') && typeof ndMsChef === 'function' ? '<button class="hv-chip" data-hvstat>Min statistik</button>' : '';
-  const mer = [ND.hem.golvet ? '<button data-hvark="golvet">Golvet</button>' : '', '<button data-go="/coachning">Coachning</button>', S.role === 'chef' ? '<button data-go="/personal">Personalen</button>' : '', '<button data-go="/nyheter">Nyheter</button>'].join('');
-  return `<div class="hv-genv">${forbered}<button class="hv-chip" data-todo>Min dag</button><button class="hv-chip" data-hvark="vecka">Veckan som kommer</button>${ndKopplad('moten') ? '<button class="hv-chip" data-go="/moten">Möten</button>' : ''}${stat}<span class="hv-merv"><button class="hv-chip" data-hvmer aria-expanded="${!!H.mer}">Mer</button>${H.mer ? `<div class="hv-mer hv-glass" role="menu">${mer}</div>` : ''}</span></div>`;
+  const mer = [ND.hem.golvet ? '<button data-hvark="golvet">Golvet</button>' : '', ND.hem.team ? `<button data-hvark="team">Teamet i ${esc(ND.hem.team.manadsnamn)}</button>` : '', ndKopplad('coachning') ? '<button data-hvark="coachning">Coachning</button>' : ''].join('');
+  return `<div class="hv-genv">${fraga}<button class="hv-chip" data-hvark="dag">Min dag</button><button class="hv-chip" data-hvark="vecka">Veckan som kommer</button>${ndKopplad('moten') ? `<button class="hv-chip" data-go="/moten">Möten${mt ? ` <small class="num">${mt}</small>` : ''}</button>` : ''}${stat}${mer ? `<span class="hv-merv"><button class="hv-chip" data-hvmer aria-expanded="${!!H.mer}">Mer</button>${H.mer ? `<div class="hv-mer hv-glass" role="menu">${mer}</div>` : ''}</span>` : ''}</div>`;
 }
 // Överraden: hur många som är på plats (klick visar laget), datum och Stämpla in. Ingen egen ruta.
 function hvTopp(){
@@ -34659,10 +34881,10 @@ function hvTopp(){
   const pa = antal.inne || 0;
   const lag = team.length ? `<button class="hv-lg" data-hvdra aria-expanded="${!!H.dra}" aria-label="Laget just nu: ${pa} av ${team.length} på plats. Visa vilka."><b class="num">${pa}<small>/${team.length}</small></b><span class="hv-lgt">på plats</span><span class="hv-lgbar" aria-hidden="true">${['inne', 'sjuk', 'ledig', 'ej'].filter(k => antal[k]).map(k => `<i style="flex:${antal[k]};background:var(--hv-p-${k})"></i>`).join('')}</span>${I('chev')}</button>` : '<span></span>';
   const dra = H.dra && team.length ? `<div class="hv-dra" role="region" aria-label="Laget just nu">${team.map(([n, l, d]) => `<div class="hv-prow"><span class="hv-av" aria-hidden="true">${esc(String(n)[0] || '')}</span><span>${esc(n)}</span><span class="hv-st"><i style="background:var(--hv-p-${l})"></i>${esc(LAGE[l].l)}</span><span class="hv-dt">${esc(d || '')}</span></div>`).join('')}</div>` : '';
-  const stamplar = ndKopplad('tid') && ND.tid && ND.tid.stamplar, inne = stampLage() === 'in', sist = S.events[S.events.length - 1];
+  // Stämpla in står för alla när stämplingen är på: också den vars roll inte måste stämpla får göra det.
+  const stamplar = ndKopplad('tid') && ND.tid && ND.tid.modulPa, inne = stampLage() === 'in', sist = S.events[S.events.length - 1];
   const stamp = !stamplar ? '' : inne ? `<button class="hv-stamp inne" data-act="ut" aria-label="Du är instämplad sedan ${sist ? hm(sist.t) : ''}. Stämpla ut.">${I('check')}Inne${sist ? ' sedan ' + hm(sist.t) : ''} · Stämpla ut</button>` : `<button class="hv-stamp" data-act="in">Stämpla in</button>`;
-  const ton = `<button class="hv-tonk" data-hvton="${hvTon === 'mork' ? 'ljus' : 'mork'}" aria-label="Byt till ${hvTon === 'mork' ? 'ljust' : 'mörkt'} fönster" title="${hvTon === 'mork' ? 'Ljust fönster' : 'Mörkt fönster'}"><i aria-hidden="true"></i></button>`;
-  return `<div class="hv-topp">${lag}<div class="hv-lgh"><span class="hv-datum">${esc(ndHemLangt(kIdag()))}<small>v.${ndVecka(kIdag())}</small></span>${ton}${stamp}</div>${dra}</div>`;
+  return `<div class="hv-topp"><button class="hv-meny" data-rlsmer aria-haspopup="dialog" aria-expanded="${!!S.rlsMer}" aria-label="Meny">${I('hvmeny')}</button>${lag}<div class="hv-lgh"><span class="hv-datum">${esc(ndHemLangt(kIdag()))}<small>v.${ndVecka(kIdag())}</small></span>${stamp}</div>${dra}</div>`;
 }
 // Hälsningen och en rad om läget: hur mycket som brinner, och nästa möte i dag.
 function hvHero(){
@@ -34670,7 +34892,7 @@ function hvHero(){
   const nu = ndHemRad.filter(r => r.nar === 'nu' && !hvDold(r)).length;
   const lage = nu === 0 ? 'Inget brinner.' : nu === 1 ? 'En sak brinner.' : `${hvOrd(nu)} saker brinner.`;
   const kal = ndHemKal(kIdag()).filter(e => e.s >= now()), n = kal[0];
-  const dag = n ? `${kal.length === 1 ? 'Ett möte' : `${hvOrd(kal.length)} möten`} kvar i dag, nästa ${hm(n.s).replace(':', '.')} ${esc(n.t)}.` : 'Inga fler möten i dag.';
+  const dag = n ? `${kal.length === 1 ? 'Ett möte' : `${hvOrd(kal.length)} möten`} kvar i dag, nästa ${hm(n.s).replace(':', '.')} med ${esc(n.t)}.` : 'Inga fler möten i dag.';
   return `<div class="hv-hero"><h1>${MODES[S.mode].halsning}, ${esc(ME[S.role].fornamn)}</h1><p><span><b>${lage}</b> ${dag}</span><button class="hv-lyssna" data-listen aria-label="${S.speaking ? 'Sluta läsa upp' : 'Lyssna på dagen i korthet'}">${S.speaking ? '<i class="hv-stopp"></i>Sluta' : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5l12 7-12 7z"/></svg>Lyssna'}</button></p></div>`;
 }
 
@@ -34693,28 +34915,25 @@ function hvVantar(){
   const vanta = alla.filter(r => r.nar === 'vanta').length, fot = !fler ? 'Hela listan' : fler === vanta ? `${vanta} till som kan vänta` : `${fler} till`;
   return `<section class="hv-card" aria-label="Väntar på dig">
     <div class="hv-chead"><h2>Väntar på dig</h2><span class="hv-meta num">${rader.length || ''}</span></div>
-    ${visa.length ? visa.map(r => `<div class="hv-rad"><i class="hv-heat ${r.nar === 'nu' ? 'hot' : ''}" aria-hidden="true"></i><b>${hvPrick(r)}${esc(r.t)}</b>${hvRadKnapp(r)}</div>`).join('') : `<div class="hv-lugn">${I('check')}<span>${rader.length ? 'Inget brinner, och inget mer i dag.' : alla.length ? 'Det som väntar har du valt bort från hemmet.' : 'Inget väntar på dig.'}</span></div>`}
+    ${visa.length ? visa.map(r => `<div class="hv-rad"><i class="hv-heat ${r.nar === 'nu' ? 'hot' : ''}" aria-hidden="true"></i><b>${hvPrick(r)}${esc(r.t)}</b>${hvRadKnapp(r)}</div>`).join('') : `<div class="hv-lugn">${I('check')}Inget väntar på dig just nu.</div>`}
     ${alla.length ? `<button class="hv-kfot" data-hvark="vantar">${fot}</button>` : ''}
   </section>`;
 }
 
-/* ---------- Nav föreslår: en sak i taget, det äldsta först ---------- */
+/* ---------- Nav föreslår: en sak i taget, det äldsta först. Ett tal, en mening, en knapp (skiss 9). ---------- */
+// Talet, meningen och knappen kommer färdiga från servern (f.kort, hemtext.ts). Utan förslag står bocken, som i skissen.
 function hvForeslar(){
-  const F = ND.hem.forslag || {}, o = F.oppna || [], H = S.hv;
-  if (!o.length){
-    // Den som får ändra inställningarna ser att förslagen är avstängda. Alla andra ser hur långt trendregeln har kvar.
-    const under = !F.pa && ND.hem.inst ? (ND.hem.inst.farBrytare ? 'Förslagen är avstängda. De slås på i Inställningar, under Nya hemmet.' : 'Förslagen är avstängda.') : (F.trendrad || '');
-    return `<section class="hv-card hv-forslag" aria-label="Nav föreslår">
-      <div class="hv-chead">${hubMark(15)}<h2>Nav föreslår</h2></div>
-      <div class="hv-lugn hv-lugn2"><span>Inget att föreslå just nu.</span>${under ? `<small>${esc(under)}</small>` : ''}</div>
+  const F = ND.hem.forslag || {}, o = F.oppna || [], H = S.hv, mark = `<i class="hv-heat nav">${hubMark(15)}</i>`;
+  if (!o.length) return `<section class="hv-card hv-forslag hv-tom" aria-label="Nav föreslår">
+      <div class="hv-chead">${mark}<h2>Nav föreslår</h2></div>
+      <div class="hv-lugn">${I('check')}Inga förslag just nu.</div>
     </section>`;
-  }
-  const i = Math.min(H.fi, o.length - 1), f = o[i];
+  const i = Math.min(H.fi, o.length - 1), f = o[i], k = f.kort || {tal:'1', vad:'', text:f.rubrik, knapp:'Visa'};
   return `<section class="hv-card hv-forslag" aria-label="Nav föreslår">
-    <div class="hv-chead">${hubMark(15)}<h2>Nav föreslår</h2><span class="hv-meta hv-end num">${o.length > 1 ? `${i + 1} av ${o.length}` : ''}</span></div>
-    <div class="hv-stor"><b class="num">${o.length}</b><span>${esc(String(F.kortrad || '').replace(/^\d+\s*/, ''))}</span></div>
-    <p class="hv-ftxt">${esc(f.rubrik)}</p>
-    <div class="hv-frad"><button class="hv-btn hv-gor" data-hvforslag="${esc(f.id)}">Visa</button>${o.length > 1 ? `<button class="hv-kfot" data-hvnasta>${o.length - 1} till</button>` : ''}</div>
+    <div class="hv-chead">${mark}<h2>Nav föreslår</h2><span class="hv-meta hv-end num">${o.length > 1 ? `${i + 1} av ${o.length}` : ''}</span></div>
+    <div class="hv-stor"><b class="num">${esc(k.tal)}</b><span>${esc(k.vad)}</span></div>
+    <p class="hv-ftxt">${esc(k.text)}</p>
+    <div class="hv-frad"><button class="hv-btn hv-gor" data-hvforslag="${esc(f.id)}">${esc(k.knapp)}</button>${o.length > 1 ? `<button class="hv-kfot" data-hvnasta>${o.length - 1} förslag till</button>` : ''}</div>
   </section>`;
 }
 
@@ -34732,7 +34951,6 @@ function hvTeam(){
     <div class="hv-stor"><b class="num">${m ? m[1] : T.netto}</b><span>${esc(m ? m[2] : 'order')}</span></div>
     ${hvMatare(T, false)}
     <p class="hv-ftxt">${esc(T.text.kort || T.text.rad)}</p>
-    ${T.text.malrad ? `<p class="hv-not">${esc(T.text.malrad)}</p>` : ''}
     <div class="hv-frad"><span class="hv-kfot">Visa uträkningen</span><span class="hv-meta">${esc(bi)}</span></div>
   </section>`;
 }
@@ -34771,32 +34989,63 @@ function hvDinManad(){
   </section>`;
 }
 
-/* ---------- Det som ändrats: det senaste som fått en dom ---------- */
-// Vem raden gäller, när den inte bär ett namn. Servern avgör (galler), kortet gissar aldrig.
-const HVGALLER = {dig:'hos dig', laget:'laget', alla:'hela företaget'};
+/* ---------- Det som ändrats: hur många som följs, det mätta talet och nästa dom (skiss 9) ---------- */
+// Talen och texten kommer färdiga från servern (andratKort, forslagforma.ts). Utan mätning står inget tal.
 function hvAndrat(){
-  const a = (ND.hem.forslag && ND.hem.forslag.andrat) || [];
-  if (!a.length) return `<section class="hv-card hv-tal" aria-label="Det som ändrats" data-hvark="andrat" role="button" tabindex="0">
+  const F = ND.hem.forslag || {}, a = F.andrat || [], K = F.andratKort || {foljs:0, nastaDom:null, stort:null, text:''};
+  if (!a.length && !K.foljs) return `<section class="hv-card hv-tal" aria-label="Det som ändrats" data-hvark="andrat" role="button" tabindex="0">
     <div class="hv-chead"><h2>Det som ändrats</h2></div>
-    <div class="hv-lugn hv-lugn2"><span>Inget har ändrats än.</span><small>Berätta om en ändring, så följer jag den och säger hur det gick.</small></div>
     <div class="hv-frad"><span class="hv-kfot">Berätta om en ändring</span></div>
   </section>`;
-  const x = a[0];
   return `<section class="hv-card hv-tal" aria-label="Det som ändrats" data-hvark="andrat" role="button" tabindex="0">
-    <div class="hv-chead"><h2>Det som ändrats</h2><span class="hv-meta hv-end">${x.vem ? esc(x.vem) : HVGALLER[x.galler] || ''}</span></div>
-    <p class="hv-ftxt hv-ftxt1">${esc(x.text)}</p>
-    ${x.dom ? `<p class="hv-dom">${esc(x.dom)}</p>` : ''}
-    <div class="hv-frad"><span class="hv-kfot">Visa översynen</span>${a.length > 1 ? `<span class="hv-meta">${a.length - 1} till</span>` : ''}</div>
+    <div class="hv-chead"><h2>Det som ändrats</h2>${K.foljs ? `<span class="hv-meta hv-end num">${K.foljs} följs</span>` : ''}</div>
+    ${K.stort ? `<div class="hv-stor"><b class="num">${esc(K.stort.tal)}</b><span>${esc(K.stort.vad)}</span></div>` : ''}
+    ${K.text ? `<p class="hv-ftxt">${esc(K.text)}</p>` : ''}
+    <div class="hv-frad"><span class="hv-kfot">Visa översynen</span>${K.nastaDom ? `<span class="hv-meta">nästa dom ${esc(frKort(K.nastaDom))}</span>` : ''}</div>
   </section>`;
 }
 
 /* ---------- Skrivrutan: svarar som paletten tills chatten är påslagen, och säger det ---------- */
 const hvChattPa = () => !!(ND && ND.hem && ND.hem.chatt);
+// Skissens skrivruta: Bifoga, tipset, Tala och Skicka. Vad svaren är (AI eller sökrutan) står i rutans titel,
+// och varje svar bär sin egen källrad. Tala finns bara där webbläsaren har taligenkänning.
+const HVTIPS = 'Vad måste jag göra för att sälja mer?';
+const hvKanTala = () => !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 function hvSkriv(){
-  return `<form class="hv-skriv" data-hvskriv>
-    <textarea id="hvQ" rows="1" placeholder="Sök, gör eller fråga Nav…" aria-label="Skriv till Nav" data-hvfalt="q">${esc(S.hv.q || '')}</textarea>
-    <div class="hv-srad"><span class="hv-tips">${hvChattPa() ? 'Svaren skrivs av AI ur Navs tal. Talen sätter Nav in.' + (typeof ND.hem.chattAnvant === 'number' ? ` ${ND.hem.chattAnvant} % av månadens AI-utrymme är använt.` : '') : 'Svaren kommer ur Navs sökruta, inte från AI.'}</span><button class="hv-send" aria-label="Skicka">${I('arrow')}</button></div>
+  const H = S.hv, bil = H.bilagor || [];
+  const om = hvChattPa() ? 'Svaren skrivs av AI ur Navs tal. Talen sätter Nav in.' + (typeof ND.hem.chattAnvant === 'number' ? ` ${ND.hem.chattAnvant} % av månadens AI-utrymme är använt.` : '') : 'Svaren kommer ur Navs sökruta, inte från AI.';
+  return `<form class="hv-skriv" data-hvskriv title="${esc(om)}">
+    ${bil.length ? `<div class="hv-bilagor">${bil.map((b, i) => `<span class="hv-bil">${esc(b.namn)}<button type="button" data-hvbilx="${i}" aria-label="Ta bort ${esc(b.namn)}">×</button></span>`).join('')}</div>` : ''}
+    <textarea id="hvQ" rows="1" placeholder="Fråga Nav eller be om något…" aria-label="Skriv till Nav" data-hvfalt="q">${esc(H.q || '')}</textarea>
+    <div class="hv-srad"><button type="button" class="hv-ikonk" data-hvbifoga aria-label="Bifoga">${I('plus')}</button><button type="button" class="hv-tips" data-hvtips>Prova: ${HVTIPS}</button>${hvKanTala() ? `<button type="button" class="hv-ikonk${H.talar ? ' pa' : ''}" data-hvtala aria-label="${H.talar ? 'Sluta lyssna' : 'Tala'}" aria-pressed="${!!H.talar}">${I('hvmik')}</button>` : ''}<button class="hv-send" aria-label="Skicka">${I('hvupp')}</button></div>
+    <input type="file" id="hvFil" hidden multiple accept="image/png,image/jpeg,image/webp,application/pdf" data-hvfil>
   </form>`;
+}
+// Bifoga: högst tre filer, bilder eller PDF, högst 3 MB tillsammans (samma gräns som rutten, lasBilagor).
+const HVBILSORT = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'], HVBILMAX = 3 * 1024 * 1024;
+function hvLaggFiler(filer){
+  const H = S.hv, nu = H.bilagor || [], nya = [...filer];
+  if (nu.length + nya.length > 3){ toast('Filen går inte att skicka: högst 3 filer per fråga.'); return; }
+  const fel = nya.find(f => !HVBILSORT.includes(f.type));
+  if (fel){ toast(`Filen går inte att skicka: ${fel.name} är varken en bild (PNG, JPEG, WEBP) eller en PDF.`); return; }
+  const summa = nu.reduce((a, b) => a + Math.floor(b.data.length * 3 / 4), 0) + nya.reduce((a, f) => a + f.size, 0);
+  if (summa > HVBILMAX){ toast('Filen går inte att skicka: filerna får vara högst 3 MB tillsammans.'); return; }
+  Promise.all(nya.map(f => new Promise((ja, nej) => { const l = new FileReader(); l.onload = () => ja({sort:f.type, namn:f.name, data:String(l.result).split(',')[1] || ''}); l.onerror = nej; l.readAsDataURL(f); })))
+    .then(b => { H.bilagor = [...(H.bilagor || []), ...b]; render(); })
+    .catch(() => toast('Filen gick inte att läsa.'));
+}
+// Tala: taligenkänning på svenska skriver in i rutan. Ett nytt tryck stoppar.
+let hvRek = null;
+function hvTala(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition; if (!SR) return;
+  if (hvRek){ hvRek.stop(); return; }
+  const r = new SR(), fore = String(S.hv.q || '').trim();
+  r.lang = 'sv-SE'; r.interimResults = true;
+  r.onresult = e => { let t = ''; for (const x of e.results) t += x[0].transcript; S.hv.q = (fore ? fore + ' ' : '') + t; const q = document.getElementById('hvQ'); if (q) q.value = S.hv.q; };
+  r.onerror = e => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') toast('Nav får inte använda mikrofonen. Tillåt den i webbläsaren.'); };
+  r.onend = () => { hvRek = null; S.hv.talar = false; if (S.view === 'hem') render(); };
+  hvRek = r; S.hv.talar = true; render();
+  try { r.start(); } catch(_){ hvRek = null; S.hv.talar = false; render(); }
 }
 function hvSok(q){
   openPal();
@@ -34806,6 +35055,7 @@ function hvSok(q){
 function hvFraga(){
   const q = String(S.hv.q || '').trim(); if (!q) return;
   if (hvChattPa()) return hvChattFraga(q);
+  if ((S.hv.bilagor || []).length){ toast('Filer går bara att skicka när chatten är påslagen.'); return; }
   S.hv.q = '';
   hvSok(q);
 }
@@ -34821,19 +35071,23 @@ async function hvChattFraga(q){
   if (T.some(t => t.laddar)){ toast('Vänta på svaret först.'); return; }
   H.q = '';
   const historia = T.filter(t => t.svar).slice(-3).map(t => ({fraga:t.fraga, svar:hvChattRen(t.svar.text)}));
-  const tur = {fraga:q, hamtar:[], svar:null, fel:'', laddar:true, visa:null, lagt:false, lagger:false, lagda:0};
+  const bilagor = H.bilagor || []; H.bilagor = [];
+  const tur = {fraga:q, filer:bilagor.map(b => b.namn), hamtar:[], svar:null, fel:'', laddar:true, visa:null, lagt:false, lagger:false, lagda:0};
   T.push(tur);
-  Object.assign(H, {ark:'chatt', id:null, kvitto:null, fel:'', form:null, meny:null});
-  const rita = () => { if (S.view === 'hem' && S.hv.ark === 'chatt'){ render(); const el = document.querySelector('.hv-chatt'); if (el && el.lastElementChild && el.lastElementChild.scrollIntoView) el.lastElementChild.scrollIntoView({block:'end'}); } };
+  // Frågan blir ett inlägg i tråden, efter det som redan ligger där.
+  const inl = {sort:'chatt', id:String(T.length - 1), nr:++hvNr};
+  (H.trad = H.trad || []).push(inl);
+  Object.assign(H, {ark:'chatt', id:inl.id, kvitto:null, fel:'', form:null, meny:null, mer:false});
+  const rita = () => { if (S.view === 'hem' && hvLage() === 'trad'){ render(); hvRulla(); } };
   rita();
   try {
-    const res = await fetch('/nav2/chatt', {method:'POST', credentials:'same-origin', headers:{'content-type':'application/json'}, body:JSON.stringify({fraga:q, historia})});
+    const res = await fetch('/nav2/chatt', {method:'POST', credentials:'same-origin', headers:{'content-type':'application/json'}, body:JSON.stringify({fraga:q, historia, ...(bilagor.length ? {bilagor} : {})})});
     if (!res.ok || !res.body || !String(res.headers.get('content-type') || '').includes('event-stream')){
       let d = null; try { d = await res.json(); } catch(_){}
       if (res.status === 409){
         // Avstängd sedan sidan lästes: rutan svarar som sökrutan, och säger varför.
-        ND.hem.chatt = false; T.pop();
-        if (!T.length && H.ark === 'chatt') H.ark = null;
+        ND.hem.chatt = false; T.pop(); H.trad = H.trad.filter(t => t !== inl);
+        if (H.ark === 'chatt' && H.id === inl.id) Object.assign(H, {ark:null, id:null});
         if (S.view === 'hem') render();
         toast((d && d.fel) || 'Chatten är inte påslagen.'); hvSok(q); return;
       }
@@ -34872,14 +35126,15 @@ function hvChattUtkast(t, i){
     ${t.lagt ? `<p class="hv-tank">Tillagt i dina uppgifter.</p>` : `<p class="hv-utkrad"><button class="hv-kn" data-hvchattlagg="${i}"${t.lagger ? ' disabled' : ''}>Lägg i min dag</button><span class="hv-tank">Inget är skapat än.</span></p>`}
   </div>`;
 }
-function hvArkChatt(){
-  return `<div class="hv-chatt" aria-live="polite">${(S.hv.chatt || []).map((t, i) => {
+function hvArkChatt(nr){
+  const alla = S.hv.chatt || [], visa = nr === null || nr === undefined ? alla.map((t, i) => i) : [+nr];
+  return `<div class="hv-chatt">${visa.filter(i => alla[i]).map(i => { const t = alla[i];
     const s = t.svar, k = s && t.visa ? (s.tal || []).find(x => x.id === t.visa) : null;
     const hamtar = t.hamtar.map(h => `<p class="hv-tank">${esc(h)}</p>`).join('') + (t.laddar && !t.hamtar.length ? '<p class="hv-tank">Frågar…</p>' : '');
     const obel = s && s.obelagda ? `<p class="hv-tank">${s.obelagda === 1 ? 'Det markerade talet kunde jag inte belägga.' : 'De markerade talen kunde jag inte belägga.'}</p>` : '';
     const kalla = k ? `<p class="hv-talk"><span class="hv-mono">${esc(k.om || 'Källan går inte att visa.')}</span></p>` : '';
     const fel = t.fel ? `<p>${esc(t.fel)}</p><p><button class="hv-kn" data-hvchattsok="${i}">Sök i stället</button></p>` : '';
-    return `<div class="hv-tur"><p class="hv-q">${esc(t.fraga)}</p>${hvNavSager(`${hamtar}${s ? hvChattText(t, i) + obel + kalla : ''}${fel}`)}${s && (s.utkast || []).length ? hvChattUtkast(t, i) : ''}${s ? hvKalla(s.kalla || 'Skrivet av AI ur Navs tal') : ''}</div>`;
+    return `<div class="hv-tur"><p class="hv-q">${esc(t.fraga)}${(t.filer || []).length ? `<small class="hv-qfil">${t.filer.map(esc).join(' · ')}</small>` : ''}</p>${hvNavSager(`${hamtar}${s ? hvChattText(t, i) + obel + kalla : ''}${fel}`)}${s && (s.utkast || []).length ? hvChattUtkast(t, i) : ''}${s ? hvKalla(s.kalla || 'Skrivet av AI ur Navs tal') : ''}</div>`;
   }).join('')}</div>`;
 }
 // Utkastet läggs in en uppgift i taget. Faller en står knappen kvar, och nästa tryck lägger bara in de som saknas.
@@ -34902,11 +35157,10 @@ async function hvChattLagg(i){
 
 /* ---------- Arket: ett öppnat kort tar ytan ---------- */
 function hvOppna(ark, id){
-  Object.assign(S.hv, {ark, id:id || null, kvitto:null, fel:'', form:null, dra:false, kom:'', meny:null});
+  Object.assign(S.hv, {ark, id:id || null, kvitto:null, fel:'', form:null, dra:false, kom:'', meny:null, mer:false});
+  if (!HVARK.includes(ark)){ const t = {sort:ark, id:id || null, nr:++hvNr}; (S.hv.trad = S.hv.trad || []).push(t); S.hv.visaNr = t.nr; }
   if (ark === 'forslag' || ark === 'team' || ark === 'andrat') hvHamta(ark, id);
-  // Kvällsnotisens text räknas på servern (samma som pushen). Den hämtas en gång, när den som leder öppnar Veckan.
-  if (ark === 'vecka' && ND.hem.push && ND.hem.push.ledare && S.ndKvall === undefined){ S.ndKvall = null; ndLas('/nav2/hem?kvall=1').then(x => { if (x && x.ok && x.data && x.data.kvall){ S.ndKvall = x.data.kvall; if (S.view === 'hem' && S.hv.ark === 'vecka') render(); } }).catch(() => {}); }
-  render(); window.scrollTo(0, 0);
+  render(); hvVisaNytt();
 }
 function hvStang(){ Object.assign(S.hv, {ark:null, id:null, kvitto:null, fel:'', form:null, meny:null}); render(); }
 // Genomgången hämtas när kortet öppnas. Varje ark har sin egen hämtning: en efterhämtning för ett ark får aldrig
@@ -34925,95 +35179,127 @@ async function hvHamta(ark, id){
   const fel = !s || !s.ok || !s.data || s.data.fel ? ((s && s.data && s.data.fel) || (s && s.fel) || 'Nav svarade inte.') : '';
   if (!fel) H.data[ark] = {...s.data, id:id || null};
   else if (hvOppet(ark, id)) H.fel = fel;
-  if (ark === 'team' && !fel) hvHamtaFacit();
   if (S.view === 'hem' && H.ark === ark) render();
-}
-async function hvHamtaFacit(){
-  let s;
-  try { s = await ndLas('/nav2/forslag?las=facit'); } catch(_){ s = {ok:false}; }
-  if (s && s.ok && s.data && !s.data.fel) S.hv.data.facit = s.data;
-  if (S.view === 'hem' && S.hv.ark === 'team') render();
 }
 const hvNavSager = inne => `<div class="hv-navs">${hubMark(28)}<div>${inne}</div></div>`;
 const hvLaddar = text => hvNavSager(`<p class="hv-tank">${esc(text)}…</p>`);
 const hvFel = () => hvNavSager(`<p>${esc(S.hv.fel)}</p><p><button class="hv-kn" data-hvigen>Försök igen</button></p>`);
 const hvKalla = text => `<div class="hv-kalla"><span class="hv-mono">${esc(text)}</span></div>`;
-// Kvittot står i ytans fot, så att det aldrig täcker något. Ångra står bredvid.
-function hvFot(){
-  const k = S.hv.kvitto;
-  return `<div class="hv-arkfot" aria-live="polite">${k ? `<span class="hv-kvi"><i class="hv-ok">${I('check')}</i><span>${esc(k.text)}</span></span>${k.angra ? `<button class="hv-kn" data-hvangra="${esc(k.angra)}">Ångra</button>` : ''}${k.visa ? `<button class="hv-kn" data-hvvisa="${esc(k.visa)}">Ångra</button>` : ''}` : ''}</div>`;
-}
+// Ett ark tar ytan: Navs märke, en mening om läget och Stäng, sedan ytan i glas med sin egen fot.
 function hvArk(){
-  const a = S.hv.ark;
-  const kropp = a === 'vantar' ? hvArkVantar() : a === 'forslag' ? hvArkForslag() : a === 'team' ? hvArkTeam() : a === 'manad' ? hvArkManad() : a === 'andrat' ? hvArkAndrat() : a === 'vecka' ? hvArkVecka() : a === 'golvet' ? hvArkGolvet() : a === 'chatt' ? hvArkChatt() : '';
-  // Lyssna läser upp det som brinner, som i det gamla hemmets sammanfattning (speakBrief).
-  const lyssna = a === 'vantar' ? `<button class="hv-kn hv-end" data-listen aria-pressed="${!!S.speaking}">${I(S.speaking ? 'x' : 'play')}${S.speaking ? 'Stoppa' : 'Lyssna'}</button>` : '';
+  const a = S.hv.ark, [text, yta, fot, end] = a === 'vecka' ? hvArkVecka() : a === 'dag' ? hvArkDag() : hvArkVantar();
   return `<div class="hv-lager hv-ark">
-    <div class="hv-arktopp"><button class="hv-kn" data-hvstang><span class="hv-bak" aria-hidden="true">${I('chev')}</span>Hem</button>${lyssna}</div>
-    ${kropp}
-    ${hvFot()}
+    <div class="hv-arkhuvud">${hubMark(28)}<p id="hvArktext">${text}</p><button class="hv-kn" data-hvstang>Stäng <kbd class="hv-mono">esc</kbd></button></div>
+    <div class="hv-arkyta hv-glass">${yta}<div class="hv-arkfot" aria-live="polite"><span id="hvFotv">${S.hv.kvitto ? hvKvi() : fot || ''}</span><span class="hv-end">${end || ''}</span></div></div>
   </div>`;
 }
-// Hela listan bakom Väntar på dig: samma saker, i dagens grupper, med en rad om varför under varje.
-// Här bor också det sammanfattningen hade: Sedan du tittade, källan bakom raden, Stämmer inte och Visa inte här.
+// Kvittot: i ett ark står det i arkets fot, i tråden under inlägget. Ångra står bredvid.
+function hvKvi(){
+  const k = S.hv.kvitto; if (!k) return '';
+  return `<span class="hv-kvi"><i class="hv-ok">${I('check')}</i><span>${esc(k.text)}</span>${k.angra ? `<button class="hv-kn" data-hvangra="${esc(k.angra)}">Ångra</button>` : ''}${k.visa ? `<button class="hv-kn" data-hvvisa="${esc(k.visa)}">Ångra</button>` : ''}${k.dag ? '<button class="hv-kn" data-hvangradag>Ångra</button>' : ''}</span>`;
+}
+const hvKvitto = () => S.hv.kvitto ? `<div class="hv-kvitto" aria-live="polite">${hvKvi()}</div>` : '';
+// Hela listan bakom Väntar på dig: samma saker, i dagens grupper, med en rad om varför under varje (skiss 9).
+// Foten säger hur lång tid det som brinner tar, men bara när varje sak som brinner har en uppskattning (uppgiftens est).
+const hvMin = r => { if (!String(r.id).startsWith('upg-')) return null; const t = TASKS.find(x => 'upg-' + x.id === r.id); return t && t.est ? +t.est : null; };
 function hvArkVantar(){
   ndHemSynk();
-  const H = S.hv, rader = hvSaker(), delta = (DELTA[S.role === 'chef' ? 'chef' : 'saljare'] || {})[S.mode] || '';
-  const meny = x => H.meny === x.id ? `<div class="hv-meny"><button class="hv-kn" data-hvflagga="${esc(x.id)}">Stämmer inte</button>${x.bkind ? `<button class="hv-kn" data-hvdolj="${esc(x.bkind)}">Visa inte ${esc(KIND_LABEL[x.bkind] || x.bkind)} på hemmet</button>` : ''}</div>` : '';
-  const sak = (x, k) => { const fel = S.flagged.has(x.id);
-    return `<div class="hv-sak${fel ? ' hv-fel' : ''}${S.selRad === x.id ? ' sel' : ''}" data-id="${esc(x.id)}"><i class="hv-heat ${k === 'nu' && !fel ? 'hot' : ''}" aria-hidden="true"></i>
-      <div>${x.ga ? `<button class="hv-sakt" data-hvga="${esc(x.id)}"><b>${hvPrick(x)}${esc(x.t)}</b></button>` : `<b>${hvPrick(x)}${esc(x.t)}</b>`}<small>${fel ? 'Markerad som fel · ' : ''}${esc(x.why || (x.d || []).join(' · '))}</small>${meny(x)}</div>
-      <span class="hv-sakk">${hvRadKnapp(x)}${fel ? '' : `<button class="hv-mer" data-hvmeny="${esc(x.id)}" aria-expanded="${H.meny === x.id}" aria-label="Mer om raden">${I('mer')}</button>`}</span></div>`; };
-  const lista = rader.length ? [['nu', 'Nu'], ['idag', 'Senare i dag'], ['vanta', 'Kan vänta']].map(([k, l]) => {
+  const rader = hvSaker(), brinn = rader.filter(x => x.nar === 'nu');
+  const sak = (x, k) => `<div class="hv-sak${S.selRad === x.id ? ' sel' : ''}" data-id="${esc(x.id)}"><i class="hv-heat${k === 'nu' ? ' hot' : ''}" aria-hidden="true"></i><div>${x.ga ? `<button class="hv-sakt" data-hvga="${esc(x.id)}"><b>${hvPrick(x)}${esc(x.t)}</b></button>` : `<b>${hvPrick(x)}${esc(x.t)}</b>`}<small>${esc(x.why || (x.d || []).join(' · '))}</small></div>${hvRadKnapp(x)}</div>`;
+  const lista = [['nu', 'Nu'], ['idag', 'Senare i dag'], ['vanta', 'Kan vänta']].map(([k, l]) => {
     const r = rader.filter(x => x.nar === k);
     return r.length ? `<div class="hv-grupp">${l}<small class="num">${r.length}</small></div>${r.map(x => sak(x, k)).join('')}` : '';
-  }).join('') : `<div class="hv-lugn">${I('check')}<span>Inget väntar på dig.</span></div>`;
-  const dolda = [...S.hiddenKinds];
-  return hvNavSager(`<p><b>${rader.length ? `${rader.length} ${rader.length === 1 ? 'sak väntar' : 'saker väntar'} på dig.` : 'Inget väntar på dig.'}</b>${rader.length ? ' Det som brinner står först.' : ''}</p>
-    ${delta ? `<p class="hv-not">${esc(delta)}</p>` : ''}
-    <div class="hv-lista hv-glass">${lista}
-      ${dolda.length ? `<div class="hv-lf"><span class="hv-lbl">Visas inte på hemmet: ${dolda.map(k => esc(KIND_LABEL[k] || k)).join(', ')}.</span><span class="hv-hoger">${dolda.map(k => `<button class="hv-kn" data-hvvisa="${esc(k)}">Visa ${esc(KIND_LABEL[k] || k)} igen</button>`).join('')}</span></div>` : ''}
-    </div>`);
+  }).join('');
+  const min = brinn.map(hvMin), tid = brinn.length && min.every(m => m) ? `Det som brinner tar ungefär ${min.reduce((a, m) => a + m, 0)} min.` : '';
+  const text = rader.length ? `${rader.length === 1 ? 'En sak' : `${hvOrd(rader.length)} saker`} väntar på dig. <b>${!brinn.length ? 'Inget brinner.' : brinn.length === 1 ? 'En sak brinner.' : `${hvOrd(brinn.length)} saker brinner.`}</b>` : 'Inget väntar på dig just nu.';
+  return [text, `<div class="hv-rull${rader.length ? '' : ' hv-tom'}">${lista}${rader.length ? '' : `<div class="hv-lugn">${I('check')}Inget väntar på dig just nu.</div>`}</div>`, tid, '<button class="hv-kn" data-view="uppgifter">Alla uppgifter</button>'];
 }
-// Veckan: det gamla hemmets Nästa arbetsdag och Veckan som kommer, ur samma uträkningar (ndHemTmrSynk, ndHemVecka).
-// Här står också dagens slut (vad som blev klart) och kvällsnotisen för den som leder.
+// Min dag (skiss 9): kalendern och det som väntar på samma linje. Mötena står på sina tider, och det som väntar
+// läggs i luckorna efter nu, det som brinner först, var och en med sin uppskattning. Reglerna räknar, inte AI.
+// Luften säger hur mycket som är över: arbetsdagens slut minus nu, rasterna, mötena och uppgifterna. Den räknas
+// bara när schemat finns och varje sak har en uppskattning.
+function hvPlaneraDag({moten, uppgifter, nu, start, slut, rast}){
+  const rader = moten.map(m => ({...m, typ:'mote'})), utanTid = [], fran = Math.max(nu, start || 0);
+  let t = fran, ryms = true;
+  for (const u of uppgifter){
+    if (!u.min){ utanTid.push(u); continue; }
+    let a = t;
+    for (;;){ const krock = rader.find(r => r.a < a + u.min && r.b > a); if (!krock) break; a = krock.b; }
+    if (slut && a + u.min > slut){ ryms = false; continue; }
+    rader.push({...u, a, b:a + u.min, typ:'upg'}); t = a + u.min;
+  }
+  rader.sort((x, y) => x.a - y.a);
+  const kvar = rader.filter(r => r.b > nu).reduce((s, r) => s + r.b - Math.max(r.a, nu), 0) + uppgifter.filter(u => u.min && !rader.some(r => r.id === u.id && r.typ === 'upg')).reduce((s, u) => s + u.min, 0);
+  const luft = start === null || start === undefined || !slut || utanTid.length ? null : slut - fran - (rast || 0) - kvar;
+  return {rader, utanTid, luft, ryms};
+}
+const hvLangd = x => [x >= 60 && `${Math.floor(x / 60)} h`, x % 60 && `${x % 60} min`].filter(Boolean).join(' ') || '0 min';
+function hvArkDag(){
+  ndHemSynk();
+  const D = ND.hem.dag || null, nu = now(), saker = hvSaker();
+  const moten = ndHemKal(kIdag()).map(e => ({a:e.s, b:e.e || e.s + 30, namn:e.t, id:e.id}));
+  const uppg = saker.filter(r => r.nar !== 'vanta').map(r => ({id:r.id, namn:r.t, min:hvMin(r), brinner:r.nar === 'nu', rad:r}));
+  const P = hvPlaneraDag({moten, uppgifter:uppg, nu, start:D ? D.start : null, slut:D ? D.slut : null, rast:D ? D.rast : 0});
+  const kvar = P.rader.filter(r => r.b > nu), nast = kvar[0], forsta = kvar.find(r => r.typ === 'mote');
+  const mot = kvar.filter(r => r.typ === 'mote').length, upg = uppg.length, vanta = saker.filter(r => r.nar === 'vanta').length;
+  const T0 = D ? Math.floor(D.start / 60) * 60 : 480, T1 = D ? Math.ceil(D.slut / 60) * 60 : 1020, pos = t => Math.max(0, Math.min(100, (t - T0) / (T1 - T0) * 100));
+  const luft = P.luft === null ? '' : P.luft >= 0 ? ` <b>Allt ryms, med ${hvLangd(P.luft)} över.</b>` : ` <b>Allt ryms inte: ${hvLangd(-P.luft)} för mycket.</b>`;
+  const text = `${mot === 0 ? 'Inga möten' : mot === 1 ? 'Ett möte' : `${hvOrd(mot)} möten`} kvar och ${!upg ? 'inget som väntar' : upg === 1 ? 'en sak som väntar' : `${hvOrd(upg).toLowerCase()} saker som väntar`}.${luft}`;
+  const rad = r => {
+    const forbi = r.b <= nu, ar = r === nast;
+    const not = r.typ === 'upg' && ar ? (r.rad.why || '') : '';
+    const kn = forbi ? '' : r.typ === 'upg' ? hvRadKnapp(r.rad) : r === forsta && hvChattPa() ? `<button class="hv-btn" data-hvforbered="${esc(`Förbered mitt möte ${hm(r.a).replace(':', '.')} med ${r.namn}`)}">Förbered</button>` : '';
+    return `<div class="hv-drad ${r.typ}${forbi ? ' forbi' : ''}${ar ? ' nast' : ''}${r.brinner ? ' het' : ''}"><span class="hv-kl">${hm(r.a)}${ar && r.a > nu ? `<small>om ${hvLangd(r.a - nu)}</small>` : ''}</span><i class="hv-pk"></i><span class="hv-vad"><b>${esc(r.namn)}</b>${not ? `<small>${esc(not)}</small>` : ''}</span>${kn}</div>`;
+  };
+  const lista = P.rader.map(rad), i0 = P.rader.findIndex(r => r.b > nu);
+  lista.splice(i0 < 0 ? lista.length : i0, 0, `<div class="hv-dnu">${hm(nu)} nu</div>`);
+  const utan = P.utanTid.map(u => `<div class="hv-drad upg${u.brinner ? ' het' : ''}"><span class="hv-kl">utan tid</span><i class="hv-pk"></i><span class="hv-vad"><b>${esc(u.namn)}</b></span>${hvRadKnapp(u.rad)}</div>`).join('');
+  const timmar = Array.from({length:(T1 - T0) / 60 + 1}, (_x, i) => T0 / 60 + i);
+  const bokad = !!S.hv.dagBokad, harUpg = P.rader.some(r => r.typ === 'upg' && String(r.id).startsWith('upg-'));
+  const yta = `<div class="hv-dag${bokad ? ' bokad' : ''}"><div class="hv-dbar">${P.rader.map(r => `<i class="${r.typ}${r.b <= nu ? ' gjord' : ''}" style="left:${pos(r.a).toFixed(1)}%;width:${(pos(r.b) - pos(r.a)).toFixed(1)}%" title="${hm(r.a)} ${esc(r.namn)}"></i>`).join('')}<u style="left:${pos(nu).toFixed(1)}%"></u></div>
+    <div class="hv-dskala">${timmar.map(h => `<span style="left:${pos(h * 60).toFixed(1)}%">${String(h).padStart(2, '0')}</span>`).join('')}</div>
+    <div class="hv-rull">${lista.join('')}${utan}</div></div>`;
+  const fot = vanta ? `<button class="hv-lank" data-hvark="vantar">${vanta === 1 ? 'En sak' : `${hvOrd(vanta)} saker`} kan vänta och ligger inte i dag</button>` : '';
+  const end = bokad ? `<button class="hv-kn" data-view="kalender">${I('check')}Bokat i kalendern</button>` : harUpg ? '<button class="hv-kn" data-hvboka>Boka tiden i kalendern</button>' : '';
+  S.hv.dagPlan = P.rader.filter(r => r.typ === 'upg' && r.b > nu && String(r.id).startsWith('upg-')).map(r => ({id:String(r.id).slice(4), tid:hm(r.a)}));
+  return [text, yta, fot, end];
+}
+// Boka tiden i kalendern: varje uppgift får sin tid i dag, som när den dras i kalendern. Ångra lägger tillbaka den gamla.
+async function hvBokaDag(){
+  const plan = S.hv.dagPlan || []; if (!plan.length || S.hv.sparar) return;
+  S.hv.sparar = true;
+  const fore = [];
+  for (const p of plan){
+    const t = TASKS.find(x => String(x.id) === p.id); if (!t) continue;
+    const s = await ndUpgPost('planera', {id:p.id, dag:kIdag(), tid:p.tid}, {ladda:false, tyst:true});
+    if (!s || !s.ok) break;
+    fore.push({id:p.id, dag:t.due || null, tid:t.tid || null});
+  }
+  S.hv.sparar = false;
+  if (fore.length){ S.hv.dagBokad = fore; S.hv.kvitto = {text:'Tiden för uppgifterna är bokad i din kalender.', dag:true}; ndOmlas('upg'); }
+  else toast('Tiden gick inte att boka. Försök igen.');
+  render();
+}
+async function hvAngraDag(){
+  const fore = S.hv.dagBokad || []; S.hv.dagBokad = null; S.hv.kvitto = null;
+  for (const f of fore) await ndUpgPost('planera', {id:f.id, dag:f.dag, tid:f.tid}, {ladda:false, tyst:true});
+  ndOmlas('upg'); toast('Ångrat. Uppgifterna har sina gamla tider.'); render();
+}
+// Veckan som kommer (skiss 9): fem dagar, kalenderns poster på sin tid, och det som ska bli klart i veckan.
+// Samma uträkningar som det gamla hemmets vecka (ndHemVecka, ndHemKal, ndHemBorta). I dag öppnar Min dag.
+const hvKlartVy = t => /^Bokför/.test(t) ? ['provision', 'Provision'] : /^Besluta/.test(t) ? ['franvaro', 'Frånvaro'] : /^Kvittera rutinen/.test(t) ? ['rutiner', 'Rutiner'] : /kvar till .*målet$/.test(t) ? ['provision', 'Provision'] : ['uppgifter', 'Uppgifter'];
 function hvArkVecka(){
   ndHemSynk();
-  const chef = S.role === 'chef', roll = chef ? 'chef' : 'saljare';
-  const d = ndHemTmrSynk(), x = TMR[roll] || {kal:[], uppg:[]};
-  const {man, fre} = ndHemVecka(), w = WEEK[roll] || {dagar:[], klart:[]};
-  const rad = (k, t, h) => `<div class="hv-or"><span class="num">${esc(k)}</span><div>${t}</div><span class="hv-flagga">${h ? esc(h) : ''}</span></div>`;
-  const grupp = (rubrik, rader) => rader && rader.length ? `<div class="hv-grupp">${rubrik}<small class="num">${rader.length}</small></div>${rader.join('')}` : '';
-  const kal = x.kal || [], uppg = x.uppg || [], borta = x.borta || [], beslut = x.beslut || [];
-  const nasta = grupp('Kalendern', kal.map(([t, n]) => rad(t, esc(n)))) + grupp('Borta', borta.map(([n, t]) => rad('', `<b>${esc(n)}</b> · ${esc(t)}`)))
-    + grupp('Beslut med frist', beslut.map(([n, t]) => rad('', `<b>${esc(n)}</b> · ${esc(t)}`))) + grupp('Uppgifter', uppg.map(u => rad('', esc(u))));
-  const tal = [`${kal.length} i kalendern`, `${uppg.length} ${uppg.length === 1 ? 'uppgift' : 'uppgifter'} med frist`, ...(chef ? [`${borta.length} borta`, `${beslut.length} beslut med frist`] : [])].join(', ');
-  // Dagens slut, som stämpelkortet sa det: klara uppgifter i dag, och det som är kvar före Kan vänta.
-  const klara = ndKopplad('uppgifter') && ND.uppgifter ? (ND.uppgifter.klara || []).filter(k => String(k.at).slice(0, 10) === kIdag()).length : 0;
-  const kvar = INBOX.filter(i => !S.done.has(i.id) && i.nar !== 'vanta').length;
-  const slut = S.mode === 'slut' ? ` I dag blev ${klara} ${klara === 1 ? 'uppgift klar' : 'uppgifter klara'}. ${kvar} ${kvar === 1 ? 'sak' : 'saker'} är kvar.` : '';
-  const dagar = (w.dagar || []).filter(g => !g[4] || g[4] >= kIdag()).map(g => rad(`${g[0]} ${g[1]}`, (g[2] || []).map(esc).join(' · '), g[3] ? g[3][0] : '')).join('');
-  const klart = (w.klart || []).map(t => rad('', esc(String(t).replace('{PV}', `${hemPvPoster().n} order`)))).join('');
-  const P = ND.hem.push, kvall = P && P.ledare ? `<div class="hv-lista hv-glass">
-      <div class="hv-lh"><h3>Kvällsnotisen</h3><span class="hv-marke">I mobilen</span></div>
-      <p class="hv-lagerad">Nästa arbetsdag på vardagar kl. 17 och veckan som kommer på söndagar kl. 18. En notis per kväll, aldrig något om hälsa.</p>
-      ${S.ndKvall ? `<p class="hv-lagerad">Så här lyder den i kväll: <b>${esc(S.ndKvall.titel)}</b> ${esc(S.ndKvall.text)}</p>` : ''}
-      <p class="hv-lagerad hv-push">${ndHemPushRad()}</p>
-    </div>` : '';
-  return hvNavSager(`<p><b>${esc(ndHemLangt(d))}</b> är nästa arbetsdag: ${tal}.${slut}</p>
-    ${hvKalla('Räknat av regler · ur kalendern, uppgifterna och frånvaron')}
-    <div class="hv-lista hv-glass">
-      <div class="hv-lh"><h3>${esc(ndHemLangt(d))}</h3><span class="hv-marke">Nästa arbetsdag</span></div>
-      ${nasta || '<p class="hv-not">Inget i kalendern, ingen borta och inga uppgifter med frist den dagen.</p>'}
-    </div>
-    <div class="hv-lista hv-glass">
-      <div class="hv-lh"><h3>Veckan</h3><span class="hv-marke">v.${ndVecka(man)}</span><span class="hv-end num">${esc(frPeriod(man, fre))}</span></div>
-      ${dagar}
-      <div class="hv-grupp">Att få klart i veckan</div>
-      ${klart || '<p class="hv-not">Inget med frist i veckan.</p>'}
-      <div class="hv-lf"><span class="hv-lbl">Hela veckan står i kalendern.</span><span class="hv-hoger"><button class="hv-kn" data-view="kalender">Öppna kalendern</button><button class="hv-kn" data-view="uppgifter">Alla uppgifter</button></span></div>
-    </div>
-    ${kvall}`);
+  const chef = S.role === 'chef', {man} = ndHemVecka(), w = WEEK[chef ? 'chef' : 'saljare'] || {klart:[]};
+  const dagar = [0, 1, 2, 3, 4].map(i => { const d = ndPlusDag(man, i); return {d, kal:ndHemKal(d)}; });
+  const antal = dagar.reduce((a, x) => a + x.kal.length, 0);
+  const borta = chef ? new Set(dagar.flatMap(x => ndHemBorta(x.d).map(b => b[0]))).size : null;
+  const klart = (w.klart || []).map(t => String(t).replace('{PV}', `${hemPvPoster().n} order`));
+  const text = `Veckan som kommer, <b>v.${ndVecka(man)}</b>. ${antal} i kalendern${borta === null ? '' : !borta ? ', ingen borta' : `, ${borta === 1 ? 'en' : hvOrd(borta).toLowerCase()} borta`}, ${!klart.length ? 'inget att få klart' : klart.length === 1 ? 'en sak att få klart' : `${hvOrd(klart.length).toLowerCase()} saker att få klart`}.`;
+  const kol = dagar.map(({d, kal}) => { const idag = d === kIdag();
+    return `<button class="hv-vdag${idag ? ' idagen' : ''}" ${idag ? 'data-hvark="dag"' : 'data-view="kalender"'}><header><b>${esc(String(ndHemDagNamn(d)).slice(0, 3))}</b>${idag ? '<small>i dag</small>' : ''}<span>${esc(frKort(d))}</span></header><small>${kal.length} i kalendern</small><div class="hv-tid">${kal.map(e => `<i style="top:${Math.max(0, (e.s / 60 - 8.5) / 8.5 * 100).toFixed(1)}%">${hm(e.s)} ${esc(e.t)}</i>`).join('')}</div></button>`; }).join('');
+  const vy = klart.length ? hvKlartVy(klart[0]) : null;
+  return [text, `<div class="hv-vecka">${kol}</div>`, klart.length ? `Att få klart i veckan: <b>${esc(klart[0])}</b>${klart.length > 1 ? ` och ${klart.length - 1} till` : ''}` : '', vy ? `<button class="hv-kn" data-view="${vy[0]}">Öppna ${vy[1]}</button>` : ''];
 }
 // Golvet: dagens signerade order och Grattis, ett klick bort. Det gamla hemmets Golvet just nu, läst ur samma data
 // (ND.hem.golvet) och omläst varje minut (ndHemLive). Tavlan på kontoret visar samma order, men där går det inte att gratulera.
@@ -35064,38 +35350,40 @@ function hvArkForslag(){
       <div class="hv-lf"><span class="hv-lbl">Nav ringer eller skriver aldrig till kunden.</span></div>
     </div>`);
 }
-// Teamets genomgång: lagets öppna rader överst, sedan en rad per person, taktens facit och Navs facit per val.
+// Teamets genomgång (skiss 9): mätaren, en rad per person med kedjan och läget mot eget mål, det Nav inte ser,
+// taktens facit och vad som behövs till målet. Allt räknas av regler på servern (hem-team.ts, kedja.ts).
+const HVLED = ['Samtal', 'Svar', 'Bokade möten', 'Hållna möten', 'Order'];
+const hvKedja = led => `<span class="hv-kedja">${led.map((c, i) => `<i class="${c === 'u' ? 'upp' : c === 'd' ? 'ned' : ''}" title="${HVLED[i]}: ${c === 'u' ? 'över sitt eget spann' : c === 'd' ? 'under sitt eget spann' : c === 'n' ? 'som vanligt' : 'ser jag inte'}"></i>`).join('')}</span>`;
+const hvDec = x => String(x).replace('.', ',');
 function hvArkTeam(){
   const H = S.hv, t = H.data.team && H.data.team.team;
   if (H.fel) return hvFel();
-  if (!t) return hvLaddar('Hämtar lagets tal');
-  const K = t.kort, fc = H.data.facit && H.data.facit.facit;
-  const personer = t.personer.map(p => `<div class="hv-tr"><span class="hv-av" aria-hidden="true">${esc(String(p.namn)[0] || '')}</span><b>${esc(p.namn)}</b><span class="num">${p.bokade}</span><span class="num">${p.hallna}</span><span class="num">${p.uteblivna}</span><span class="num">${p.order}</span></div>`).join('');
-  const tal = v => v === null || v === undefined ? '–' : v;
-  const takten = t.takten.map(m => `<div class="hv-or"><span class="num">${esc(pvManNamn(m.manad).slice(0, 3))}</span><div>Efter 5 dagar sa takten ${tal(m.efter5)}, efter 10 ${tal(m.efter10)}, efter 15 ${tal(m.efter15)}${m.efterhand ? '<small>Räknat i efterhand ur orderna</small>' : ''}</div><span class="hv-kr num">blev ${m.blev}</span></div>`).join('');
-  return hvNavSager(`<p>Laget har <b>${esc(K.text.stort)}</b> efter ${K.takt.gatt} av ${K.takt.totalt} arbetsdagar${K.makulerade ? `, och ${K.makulerade} ${K.makulerade === 1 ? 'är makulerad' : 'är makulerade'}` : ''}. ${esc(K.text.rad)}</p>
-    ${hvKalla(`${t.kalla} · ${t.utrakning}`)}
+  if (!t) return hvLaddar('Läser order, möten och samtal för ' + ((ND.hem.team && ND.hem.team.manadsnamn) || 'månaden'));
+  const K = t.kort, rader = t.rader || [], oppna = H.trOppen || new Set(rader.filter(p => p.orsak).map(p => p.id));
+  H.trOppen = oppna;
+  const efter = rader.filter(p => p.status === 'Efter sitt mål'), olika = new Set(efter.map(p => p.orsak || '')).size > 1;
+  const efterText = !efter.length ? '' : efter.length === 1 ? ' En ligger efter sitt mål.' : ` ${hvOrd(efter.length)} ligger efter sitt mål${olika ? ', av olika skäl' : ''}.`;
+  const person = p => `<div class="hv-tr${oppna.has(p.id) ? ' oppen' : ''}" role="button" tabindex="0" aria-expanded="${oppna.has(p.id)}" data-hvtr="${esc(p.id)}"><span class="hv-av" aria-hidden="true">${esc(String(p.fornamn)[0] || '')}</span><b>${esc(p.fornamn)}</b>${hvKedja(p.led)}<span class="o num">${p.mal ? `${p.order} av ${p.mal}` : p.order}</span><span class="l">${p.status ? `<b>${esc(p.status)}</b>` : ''}${p.orsak ? `${p.status ? ' · ' : ''}${esc(p.orsak)}` : ''}</span>${I('chev')}<div class="hv-tv">${esc(p.forklaring)}${p.kommentar ? `<em>${esc(p.kommentar)}</em>` : ''}</div></div>`;
+  const facit = (K.facit || []).filter(f => f.sa !== null).map(f => { const d = f.blev - f.sa; return `<div class="hv-or"><span class="num">${esc(pvManNamn(f.manad).slice(0, 3))}</span><div>Takten sa ${f.sa}<small>Det blev ${f.blev}${f.efterhand ? ' · räknat i efterhand' : ''}</small></div><span class="hv-kr num">${d > 0 ? `${d} fler` : d < 0 ? `${-d} färre` : 'träffade'}</span></div>`; }).join('');
+  const underlag = H.underlag ? `<div class="hv-ur hv-urh"><span></span><b></b><span>Bokade</span><span>Hållna</span><span>Uteblivna</span><span>Order</span></div>${(t.personer || []).map(p => `<div class="hv-ur"><span class="hv-av" aria-hidden="true">${esc(String(p.namn)[0] || '')}</span><b>${esc(p.namn)}</b><span class="num">${p.bokade}</span><span class="num">${p.hallna}</span><span class="num">${p.uteblivna}</span><span class="num">${p.order}</span></div>`).join('')}<div class="hv-blind"><span class="hv-mono">Bokade är första möten personen bokade i månaden. Hållna och uteblivna är möten personen höll. ${esc(t.serInte)}</span></div>` : '';
+  const T2 = t.tillMalet;
+  return hvNavSager(`<p>Laget har <b>${esc(K.text.stort)}</b> efter ${K.takt.gatt} av ${K.takt.totalt} arbetsdagar${K.makulerade ? `, och ${K.makulerade} ${K.makulerade === 1 ? 'är makulerad' : 'är makulerade'}` : ''}. ${esc(K.text.rad)}${efterText}</p>
+    <div class="hv-kalla"><span class="hv-mono">${esc(`${t.kalla} · ${t.utrakning}`)}</span><button class="hv-kn" data-hvunderlag aria-expanded="${!!H.underlag}">${H.underlag ? 'Dölj underlaget' : 'Visa underlaget'}</button></div>
+    ${underlag ? `<div class="hv-lista hv-glass">${underlag}</div>` : ''}
     ${t.oppna ? `<div class="hv-lista hv-glass"><div class="hv-lh"><h3>${esc(t.oppna)}</h3><span class="hv-marke">Öppna rader</span></div></div>` : ''}
     <div class="hv-lista hv-glass">
       <div class="hv-lh"><h3>Teamet i ${esc(K.manadsnamn)}</h3><span class="hv-marke">Läget i dag</span><span class="hv-end num">${K.takt.gatt} av ${K.takt.totalt} arbetsdagar</span></div>
       ${K.mal ? `${hvMatare(K, true)}<div class="hv-mskala num"><span><b>${K.netto}</b> order</span><span>${K.takt.prognos !== null ? `<b>≈${K.takt.prognos}</b> i samma takt · ` : ''}<b>${K.mal}</b> mål</span></div>` : ''}
-      ${K.text.malrad ? `<p class="hv-not">${esc(K.text.malrad)}</p>` : ''}
-      <div class="hv-tr hv-trh"><span></span><b></b><span>Bokade</span><span>Hållna</span><span>Uteblivna</span><span>Order</span></div>
-      ${personer || '<p class="hv-not">Ingen har något att visa i månaden än.</p>'}
-      <div class="hv-blind"><span class="hv-mono">Bokade är första möten personen bokade i månaden. Hållna och uteblivna är möten personen höll. Antal, ingen dom.</span></div>
-      <div class="hv-blind"><span class="hv-mono">${esc(t.serInte)}</span></div>
+      ${rader.map(person).join('') || '<p class="hv-not">Ingen har något att visa i månaden än.</p>'}
+      <div class="hv-blind"><span class="hv-mono">Kedjan: samtal · svar · bokade · hållna · order. Färg = utanför eget spann två veckor i rad.</span></div>
+      <div class="hv-blind"><span class="hv-mono">Det här ser jag inte: vad som sägs i samtalen, och om ett samtal blev besvarat.${t.saknarUtfall ? ` ${t.saknarUtfall} ${t.saknarUtfall === 1 ? 'möte saknar' : 'möten saknar'} utfall.` : ''}</span>${t.saknarUtfall ? '<button data-go="/moten">Visa dem</button>' : ''}</div>
     </div>
     <div class="hv-lista hv-glass">
-      <div class="hv-lh"><h3>Så har takten träffat</h3><span class="hv-marke">Facit</span></div>
-      ${takten || '<p class="hv-not">Takten har inget facit än. Det kommer när en månad är avslutad.</p>'}
+      <div class="hv-lh"><h3>Så har takten träffat</h3><span class="hv-marke">Facit</span><span class="hv-end num">efter ${K.takt.gatt} arbetsdagar</span></div>
+      ${facit || '<p class="hv-not">Takten har inget facit än. Det kommer när en månad är avslutad.</p>'}
       <div class="hv-blind"><span class="hv-mono">Ett spann med en chans i procent visas först när det har träffat så ofta som det lovar, i ungefär åtta avslutade månader.</span></div>
     </div>
-    <div class="hv-lista hv-glass">
-      <div class="hv-lh"><h3>Navs facit per val</h3><span class="hv-marke">Obekräftade möten</span></div>
-      <p class="hv-facit">${fc ? esc(fc.text) : 'Hämtar facit…'}</p>
-      ${fc && fc.trodde ? `<p class="hv-facit">${esc(fc.trodde)}</p>` : ''}
-      <div class="hv-blind"><span class="hv-mono">${esc((fc && fc.kalla) || 'Räknat av regler')} · räknas för hela laget, aldrig per person</span></div>
-    </div>`);
+    ${T2 ? `<p><b>Till målet.</b> ${T2.kvar} order på ${T2.dagar} arbetsdagar, ungefär ${hvDec(T2.perDag)} om dagen. Hittills har det varit ${hvDec(T2.hittills)} om dagen.</p>` : ''}`);
 }
 // Uträkningen bakom Din månad: order för order, samma tal som lönen bygger på. Väntande order står för sig, märkta.
 function hvArkManad(){
@@ -35126,15 +35414,17 @@ const HVKALLA = {regel:'Nav såg det', person:'Någon berättade', installning:'
 function hvArkAndrat(){
   const H = S.hv, d = H.data.andrat;
   if (H.fel) return hvFel();
-  if (!d) return hvLaddar('Hämtar det som ändrats');
-  const rader = (d.andrat || []).map(a => `<div class="hv-ar"><span class="hv-tk ${a.ton === 'upp' ? 'upp' : a.ton === 'ned' ? 'ned' : 'vet'}" aria-hidden="true">${a.ton === 'upp' ? '↑' : a.ton === 'ned' ? '↓' : ''}</span><div><b>${esc(a.text)}</b><small>${esc(HVKALLA[a.fran] || '')}${a.vem ? ' · ' + esc(a.vem) : ''} · ${esc(frKort(String(a.nar).slice(0, 10)))}</small>${a.kommentar ? `<small class="hv-egenrad">”${esc(a.kommentar)}”</small>` : ''}</div><div class="hv-fe">${a.tal ? esc(a.tal) : ''}<small>${esc(a.dom || (a.sort === 'andring' ? 'Följs. Ingen dom än.' : ''))}</small></div></div>`).join('');
-  const antal = (d.andrat || []).length;
-  return hvNavSager(`<p>${antal ? `<b>${antal === 1 ? 'En rad' : `${antal} rader`} i loggen.</b> En ändring får aldrig ”ser bra ut” om motvikten blev sämre på köpet, och ett enskilt möte får ingen dom.` : '<b>Inget har ändrats än.</b> Berätta om en ändring, så följer jag måttet och säger hur det gick.'}</p>
-    ${hvKalla(`${d.kalla || 'Räknat av regler'} · jämfört med de 40 avgjorda mötena före · dom först när slumpen är osannolik`)}
+  if (!d) return hvLaddar('Läser ändringarna och veckorna före');
+  const I0 = d.inledning || {fore:'', fet:'', efter:''};
+  // Pröva med laget står på raden som ser bra ut och gäller en person, för den som leder ett lag.
+  const cell = a => a.sort === 'andring' && a.ton === 'upp' && d.farLaget && a.galler !== 'laget' && a.galler !== 'alla' ? '<button class="hv-btn" data-hvform="prova">Pröva med laget</button>' : '';
+  const rader = (d.andrat || []).map(a => `<div class="hv-ar"><span class="hv-tk ${a.ton === 'upp' ? 'upp' : a.ton === 'ned' ? 'ned' : 'vet'}" aria-hidden="true">${a.ton === 'upp' ? '↑' : a.ton === 'ned' ? '↓' : ''}</span><div><b>${esc(a.text)}</b><small>${esc(HVKALLA[a.fran] || '')}${a.vem ? ' · ' + esc(a.vem) : ''} · ${esc(frKort(String(a.nar).slice(0, 10)))}</small>${a.kommentar ? `<small class="hv-egenrad">”${esc(a.kommentar)}”</small>` : ''}</div><div class="hv-fe num">${a.tal ? esc(a.tal) : ''}<small>${esc(a.dom || (a.sort === 'andring' ? 'För tidigt att säga' : ''))}</small></div><span class="hv-at">${cell(a)}</span></div>`).join('');
+  return hvNavSager(`<p>${esc(I0.fore)}${I0.fet ? ` <b>${esc(I0.fet)}</b>` : ''}${esc(I0.efter)}</p>
+    ${hvKalla(`${d.kalla || 'Räknat av regler'} · jämfört med samma personers 40 avgjorda möten före · dom först när slumpen är osannolik`)}
     <div class="hv-lista hv-glass">
-      <div class="hv-lh"><h3>Det som ändrats</h3>${antal ? `<span class="hv-marke">${antal} ${antal === 1 ? 'rad' : 'rader'}</span>` : ''}</div>
+      <div class="hv-lh"><h3>Det som ändrats</h3>${d.foljs ? `<span class="hv-marke">${d.foljs} följs</span>` : ''}${d.nastaDom ? `<span class="hv-end num">nästa dom ${esc(frKort(d.nastaDom))}</span>` : ''}</div>
       ${rader}
-      ${H.form ? hvAndringForm(d) : `<div class="hv-lf"><span class="hv-lbl">Har ni ändrat något som inte syns i Nav?</span><span class="hv-hoger"><button class="hv-kn" data-hvform="beratta">Berätta om en ändring</button>${d.farLaget ? `<button class="hv-kn" data-hvform="prova">Pröva med laget</button>` : ''}</span></div>`}
+      ${H.form ? hvAndringForm(d) : `<div class="hv-lf"><span class="hv-lbl">Har ni ändrat något som inte syns i Nav?</span><button class="hv-kn hv-hoger" data-hvform="beratta">Berätta om en ändring</button></div>`}
     </div>`);
 }
 // Fyra fält: vad som ändrades, vem det gäller, från vilken dag och vilket mått som ska följas.
@@ -35258,13 +35548,24 @@ ndOmlasAnmal('hv', {delar:['hem', 'uppgifter', 'moten', 'kalender']});
 
 function hvKlick(e){
   if (!hvPa() || S.view !== 'hem') return;
-  const t = e.target.closest && e.target.closest('[data-hvstang], [data-hvtal], [data-hvchattsok], [data-hvchattlagg], [data-hvgor], [data-hvforslag], [data-hvnasta], [data-hvval], [data-hvangra], [data-hvdra], [data-hvmer], [data-hvstat], [data-hvforbered], [data-hvton], [data-hvigen], [data-hvfraga], [data-hvform], [data-hvformx], [data-hvmeny], [data-hvflagga], [data-hvdolj], [data-hvvisa], [data-hvga], [data-hvgratt], [data-hvark]');
+  const t = e.target.closest && e.target.closest('[data-hvtr], [data-hvunderlag], [data-hvboka], [data-hvangradag], [data-hvbifoga], [data-hvtips], [data-hvtala], [data-hvbilx], [data-hvstang], [data-hvtal], [data-hvchattsok], [data-hvchattlagg], [data-hvgor], [data-hvforslag], [data-hvnasta], [data-hvval], [data-hvangra], [data-hvdra], [data-hvmer], [data-hvstat], [data-hvforbered], [data-hvigen], [data-hvfraga], [data-hvform], [data-hvformx], [data-hvmeny], [data-hvflagga], [data-hvdolj], [data-hvvisa], [data-hvga], [data-hvgratt], [data-hvark]');
   // En väg ut ur hemmet (kalendern, uppgifterna, en inställning) stänger arket, så att Hem är hemmet nästa gång. Klicket går vidare som vanligt.
   if (!t){ if (S.hv.ark && e.target.closest && e.target.closest('.hv [data-view], .hv [data-go]')) Object.assign(S.hv, {ark:null, id:null, kvitto:null, form:null, meny:null}); return; }
   // Kort som är en enda knapp (data-hvark) får inte svälja knapparna inuti sig.
   const d = t.dataset;
   e.preventDefault(); e.stopPropagation();
+  // Ett klick i ett äldre inlägg i tråden gör det inlägget till det öppna, så att valen och Ångra gäller rätt sak.
+  const inl = t.closest && t.closest('[data-hvinl]');
+  if (inl && hvLage() === 'trad' && !hvSamma({sort:inl.dataset.hvinl, id:inl.dataset.hvinlid}, S.hv.ark, S.hv.id)) Object.assign(S.hv, {ark:inl.dataset.hvinl, id:inl.dataset.hvinlid || null, kvitto:null, fel:'', form:null, meny:null});
   if (d.hvstang !== undefined){ hvStang(); return; }
+  if (d.hvboka !== undefined){ hvBokaDag(); return; }
+  if (d.hvtr){ const o = S.hv.trOppen || new Set(); o.has(d.hvtr) ? o.delete(d.hvtr) : o.add(d.hvtr); S.hv.trOppen = o; render(); return; }
+  if (d.hvunderlag !== undefined){ S.hv.underlag = !S.hv.underlag; render(); return; }
+  if (d.hvangradag !== undefined){ hvAngraDag(); return; }
+  if (d.hvbifoga !== undefined){ if (!hvChattPa()){ toast('Filer går bara att skicka när chatten är påslagen.'); return; } const f = document.getElementById('hvFil'); if (f) f.click(); return; }
+  if (d.hvtips !== undefined){ if (hvChattPa()) hvChattFraga(HVTIPS); else hvSok(HVTIPS); return; }
+  if (d.hvtala !== undefined){ hvTala(); return; }
+  if (d.hvbilx !== undefined){ S.hv.bilagor = (S.hv.bilagor || []).filter((_b, i) => i !== +d.hvbilx); render(); return; }
   if (d.hvtal){ const [ti, id] = d.hvtal.split(':'), tur = S.hv.chatt[+ti]; if (tur){ tur.visa = tur.visa === id ? null : id; render(); } return; }
   if (d.hvchattsok !== undefined){ const tur = S.hv.chatt[+d.hvchattsok]; if (tur) hvSok(tur.fraga); return; }
   if (d.hvchattlagg !== undefined){ hvChattLagg(+d.hvchattlagg); return; }
@@ -35274,10 +35575,9 @@ function hvKlick(e){
   if (d.hvval){ hvValj(d.hvval); return; }
   if (d.hvangra){ hvAngra(d.hvangra); return; }
   if (d.hvdra !== undefined){ S.hv.dra = !S.hv.dra; render(); return; }
-  if (d.hvmer !== undefined){ S.hv.mer = !S.hv.mer; render(); return; }
+  if (d.hvmer !== undefined){ S.hv.mer = !S.hv.mer; render(); if (S.hv.mer) requestAnimationFrame(() => { const r = document.querySelector('.hv-genv'); if (r && r.scrollWidth > r.clientWidth) r.scrollLeft = r.scrollWidth; }); return; }
   if (d.hvstat !== undefined){ S.moStat = true; S.moTillbaka = null; ndGa('/moten'); return; }
   if (d.hvforbered){ hvChattFraga(d.hvforbered); return; }
-  if (d.hvton){ hvTon = d.hvton === 'ljus' ? 'ljus' : 'mork'; try { localStorage.setItem('nav2-hvton', hvTon); } catch(_){} render(); return; }
   if (d.hvigen !== undefined){ hvHamta(S.hv.ark, S.hv.id); render(); return; }
   if (d.hvfraga !== undefined){ hvFragaOmRad(+d.hvfraga); return; }
   if (d.hvform){ hvFormOppna(d.hvform); return; }
@@ -35303,9 +35603,11 @@ document.addEventListener('submit', e => {
 document.addEventListener('input', e => {
   const n = e.target && e.target.dataset && e.target.dataset.hvfalt; if (!n || !hvPa()) return;
   if (n === 'q' || n === 'kom') S.hv[n] = e.target.value;
+  if (n === 'q'){ const v = document.querySelector('.hv'); if (v) v.classList.toggle('hv-skriver', hvLage() === 'hem' && !!e.target.value.trim()); }
   else if (S.hv.form){ S.hv.form[n] = e.target.value; S.hv.form.fel = ''; if (n === 'matt') render(); }
 });
 document.addEventListener('change', e => {
+  if (e.target && e.target.dataset && e.target.dataset.hvfil !== undefined && hvPa()){ hvLaggFiler(e.target.files || []); e.target.value = ''; return; }
   const n = e.target && e.target.dataset && e.target.dataset.hvfalt; if (!n || !hvPa() || !S.hv.form) return;
   S.hv.form[n] = e.target.value;
   if (n === 'matt') render();
@@ -35318,7 +35620,8 @@ function hvTangent(e){
   if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.target && e.target.id === 'hvQ'){ e.preventDefault(); hvFraga(); return; }
   // Ett kort som är en knapp öppnas med Enter och mellanslag.
   if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.matches && e.target.matches('.hv-card[data-hvark]')){ e.preventDefault(); hvOppna(e.target.dataset.hvark); return; }
-  if (e.key === 'Escape' && S.hv.ark && !hvOvanpa()){ if (S.hv.form){ S.hv.form = null; render(); } else hvStang(); }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.matches && e.target.matches('.hv-tr[data-hvtr]')){ e.preventDefault(); const o = S.hv.trOppen || new Set(), id = e.target.dataset.hvtr; o.has(id) ? o.delete(id) : o.add(id); S.hv.trOppen = o; render(); return; }
+  if (e.key === 'Escape' && S.hv.ark && !hvOvanpa() && !String(S.hv.q || '').trim()){ if (S.hv.form){ S.hv.form = null; render(); } else hvStang(); }
 }
 // Lyssnaren hör tangenten före Navs vanliga (capture). Annars har den vanliga redan stängt paletten eller panelen
 // när den här frågar vad som är öppet, och ett enda Escape stänger både det översta och arket under.

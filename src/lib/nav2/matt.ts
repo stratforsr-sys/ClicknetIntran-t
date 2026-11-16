@@ -49,6 +49,8 @@ export type Matt = {
   serInte: string;
   /** Frasen för att måttet blivit sämre, i domen "Bättre, men …". Utan punkt. */
   samre: string;
+  /** Vad talet "n av av" räknar, efter talet i ett kort: "möten uteblev". */
+  kort: string;
 };
 
 const UNDERLAG = "Räknar första möten med utfall, på mötets dag.";
@@ -59,30 +61,35 @@ export const MATT: Record<MattNyckel, Matt> = {
     text: `Uteblivna möten av hållna och uteblivna. ${UNDERLAG}`,
     serInte: "Ser inte möten som saknar utfall, och inte varför kunden uteblev.",
     samre: "fler möten uteblir",
+    kort: "möten uteblev",
   },
   "moten.hallna-av-alla": {
     nyckel: "moten.hallna-av-alla", version: 1, sort: "andel", battre: "upp", motvikt: "moten.uteblivna",
     text: `Hållna möten av hållna, uteblivna och avbokade. ${UNDERLAG}`,
     serInte: "Ser inte möten som saknar utfall, och inte om mötet ledde till något.",
     samre: "färre möten hålls",
+    kort: "möten hölls",
   },
   "moten.bekraftade": {
     nyckel: "moten.bekraftade", version: 1, sort: "andel", battre: "upp", motvikt: "moten.hallna-av-alla",
     text: `Möten som bekräftades före mötestiden, av hållna, uteblivna och avbokade. ${UNDERLAG}`,
     serInte: "Ser inte om kunden hörde av sig på annat sätt än genom Nav.",
     samre: "färre möten bekräftas",
+    kort: "möten bekräftades",
   },
   "order.netto": {
     nyckel: "order.netto", version: 1, sort: "antal", battre: "upp", motvikt: "order.makulerade",
     text: "Order som signerats i månaden minus de som makulerats i månaden. Samma tal som provisionens trappa räknar på.",
     serInte: "Ser inte order som ligger som utkast, och inte om en order makuleras senare.",
     samre: "färre order kommer in",
+    kort: "order",
   },
   "order.makulerade": {
     nyckel: "order.makulerade", version: 1, sort: "antal", battre: "ned", motvikt: "order.netto",
     text: "Order som makulerats i månaden, oavsett när de signerades.",
     serInte: "Ser inte varför ordern makulerades.",
     samre: "fler order makuleras",
+    kort: "order makulerades",
   },
 };
 

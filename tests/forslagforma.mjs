@@ -15,7 +15,7 @@
  */
 import {
   obekraftadeAttForesla, forslagNyckel, nyckelDelar, inaktuellt, oppetLage, utfallFor, facitPerVal, facitDags,
-  domAndring, kollpunkt, trendLaget, troddeAvstamning, forFaAttSaga, facitVid,
+  domAndring, kollpunkt, trendLaget, troddeAvstamning, forFaAttSaga, facitVid, kortAndrat,
 } from "../src/lib/nav2/forslagforma.ts";
 
 let fel = 0;
@@ -259,6 +259,28 @@ console.log("\n\x1b[1mInställningarna\x1b[0m");
   lika("en teamledare slår inte på förslagen", farAndraForslagInst(["team_lead"], "forslag.pa"), false);
   lika("en säljchef väljer inte vilka som har nya hemmet", farAndraForslagInst(["sales_manager"], "hem.nytt"), false);
   lika("en admin slår på förslagen", [farAndraForslagInst(["admin"], "forslag.pa"), farAndraForslagInst(["ceo"], "hem.nytt")], [true, true]);
+}
+
+console.log("\n\x1b[1mKortet Det som ändrats (skiss 9)\x1b[0m");
+{
+  const A = (x) => ({ sort: "andring", text: "En ändring", ton: "vet", stangd: false, domsDag: null, dommen: false, efter: null, mattKort: null, ...x });
+  const rader = [
+    A({ text: "Carl ringer före 10.", ton: "upp", efter: { n: 2, av: 52 }, mattKort: "möten uteblev" }),
+    A({ text: "Möten bokas längre fram", ton: "ned" }),
+    A({ text: "Nya leads rings inom en timme" }),
+    A({ text: "Gammal", stangd: true, ton: "upp" }),
+    { sort: "forslag", text: "Hagby Glas: du valde att låta mötet stå.", ton: "vet", stangd: false, domsDag: "2026-11-27", dommen: false, efter: null, mattKort: null },
+    { sort: "forslag", text: "Förbi", ton: "vet", stangd: false, domsDag: "2026-11-10", dommen: false, efter: null, mattKort: null },
+  ];
+  const k = kortAndrat(rader, "2026-11-16");
+  lika("följs räknar ändringarna som inte har sin slutdom", k.foljs, 3);
+  lika("nästa dom är den närmaste dagen som inte har varit", k.nastaDom, "2026-11-27");
+  lika("det stora talet är den bästa ändringens mätta tal", k.stort, { tal: "2 av 52", vad: "möten uteblev" });
+  lika("texten: den bästa, och att en annan ser sämre ut", k.text, "Carl ringer före 10. En annan ändring ser sämre ut.");
+  lika("utan mätt tal: inget stort tal", kortAndrat([A({ text: "X", ton: "upp" })], "2026-11-16").stort, null);
+  lika("bara en som ser sämre ut", kortAndrat([A({ text: "Möten bokas längre fram", ton: "ned" })], "2026-11-16").text, "Möten bokas längre fram. Den ser sämre ut.");
+  lika("bara en som följs", kortAndrat([A({ text: "Nya leads rings inom en timme" })], "2026-11-16").text, "Nya leads rings inom en timme. För tidigt att säga.");
+  lika("inget alls", kortAndrat([], "2026-11-16"), { foljs: 0, nastaDom: null, stort: null, text: "" });
 }
 
 console.log(fel ? `\n\x1b[31m${fel} fel\x1b[0m\n` : "\n\x1b[32mAllt stämmer\x1b[0m\n");

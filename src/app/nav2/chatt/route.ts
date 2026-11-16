@@ -3,7 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { svenskKlocka, svensktDatum } from "@/lib/klocka";
 import { sammaUrsprung } from "@/lib/nav2/skrivlage";
-import { CHATT_NYCKLAR, farSlasPa, lasChattInst, maxFragaUsd, provNyckel, takBesked, utanTal } from "@/lib/nav2/chatt/chattforma";
+import { CHATT_NYCKLAR, bilagaLogg, bilagaUsd, bilageBlock, farSlasPa, lasBilagor, lasChattInst, maxFragaUsd, provNyckel, takBesked, utanTal } from "@/lib/nav2/chatt/chattforma";
 import { skapaKallor } from "@/lib/nav2/chatt/kallor";
 import { chattMiljo } from "@/lib/nav2/chatt/logg";
 import { MAX_UT, MAX_VARV, fragetur, harReserv, korSamtal, loggKostnadUsd, type Handelse, type Klient, type Tur } from "@/lib/nav2/chatt/samtal";
@@ -16,7 +16,7 @@ export const maxDuration = 120;
 /**
  * Nav 2.0: chatten med Claude (designdokumentet, Steg 3).
  *
- *   POST {fraga, historia?: [{fraga, svar}]}   svaret strömmas som händelser (text/event-stream):
+ *   POST {fraga, historia?: [{fraga, svar}], bilagor?: [{sort, namn, data}]}   svaret strömmas som händelser (text/event-stream):
  *     {h: "hamtar", text}                        vad som hämtas medan ett verktyg kör
  *     {h: "svar", text, tal, obelagda, kalla, utkast}
  *     {h: "avbojt", text} | {h: "fel", text}     skrivrutan svarar då som sökrutan
@@ -61,6 +61,10 @@ export async function POST(request: Request) {
   // Styrtecken tas bort: Postgres tar inte emot dem i en text, och en fråga som inte går att logga får inte ställas.
   const fraga = String(b.fraga ?? "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim().slice(0, 1000);
   if (fraga.length < 3) return json({ fel: "Frågan är för kort." }, 400);
+  // Bilder och PDF går till Claude i frågans tur. De sparas aldrig, och loggen får bara antal och sort.
+  const bil = lasBilagor(b.bilagor);
+  if (!bil.ok) return json({ fel: bil.fel }, 400);
+  const bilagor = bil.bilagor;
 
   const db = supabaseAdmin();
   const { data: instRader } = await db.from("nav_setting").select("key, value").in("key", [...Object.values(CHATT_NYCKLAR), FORSLAG_NYCKLAR.hemNytt]).limit(50);
@@ -82,8 +86,8 @@ export async function POST(request: Request) {
   const miljo = chattMiljo();
   const modell = inst.modell;
   // Kan reservmodellen ta över räknas det mesta frågan kan kosta till den dyraste modellens pris.
-  const hogst = maxFragaUsd(harReserv(modell) ? "okand" : modell, MAX_UT, MAX_VARV);
-  const { data: resSvar, error: resFel } = await db.rpc("nav_chatt_reservera", { p_miljo: miljo, p_employee: mig.id, p_modell: modell, p_max_usd: hogst, p_fraga: fraga });
+  const hogst = maxFragaUsd(harReserv(modell) ? "okand" : modell, MAX_UT, MAX_VARV) + bilagaUsd(harReserv(modell) ? "okand" : modell, bilagor, MAX_VARV);
+  const { data: resSvar, error: resFel } = await db.rpc("nav_chatt_reservera", { p_miljo: miljo, p_employee: mig.id, p_modell: modell, p_max_usd: hogst, p_fraga: fraga + bilagaLogg(bilagor) });
   const res = resSvar as { ok?: unknown; id?: unknown; skal?: unknown } | null;
   if (resFel || !res || typeof res.ok !== "boolean") return json({ fel: "Chattens utrymme gick inte att läsa, så jag svarar som sökrutan." }, 503);
   if (!res.ok) return json({ fel: takBesked(res.skal), tak: true }, 429);
@@ -99,7 +103,8 @@ export async function POST(request: Request) {
     { role: "user", content: String(h.fraga).slice(0, 1000) },
     { role: "assistant", content: utanTal(String(h.svar)).slice(0, 2000) },
   ]);
-  turer.push({ role: "user", content: fragetur({ idag, klocka: svenskKlocka(nu), fornamn: mig.first_name, roller: user.roles, fraga }) });
+  const fragan = fragetur({ idag, klocka: svenskKlocka(nu), fornamn: mig.first_name, roller: user.roles, fraga });
+  turer.push({ role: "user", content: bilagor.length ? [...bilageBlock(bilagor), { type: "text", text: fragan }] : fragan });
 
   const klient = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,

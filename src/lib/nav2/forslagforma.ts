@@ -503,3 +503,47 @@ export function farAndraForslagInst(roller: readonly string[], nyckel: string): 
 
 /** Har personen det nya hemmet? */
 export const harNyttHem = (f: Pick<ForslagInst, "hemNytt">, anstalld: string): boolean => f.hemNytt === "alla" || f.hemNytt.includes(anstalld);
+
+/* ------------------------------------------------------------------------ */
+/* Kortet Det som ändrats (skiss 9)                                          */
+/* ------------------------------------------------------------------------ */
+
+/** En rad i loggen, som kortet behöver den. `efter` är den senaste mätningens tal, `mattKort` vad talet räknar. */
+export type AndratIn = {
+  sort: "forslag" | "andring";
+  text: string;
+  ton: "upp" | "ned" | "vet";
+  stangd: boolean;
+  domsDag: string | null;
+  dommen: boolean;
+  efter: NAv | null;
+  mattKort: string | null;
+};
+export type AndratKort = { foljs: number; nastaDom: string | null; stort: { tal: string; vad: string } | null; text: string };
+
+const utanPunkt = (t: string) => t.trim().replace(/[.!?]+$/, "");
+
+/**
+ * Kortets tal och text. Raderna kommer nyast först. Följs = ändringar som inte har fått sin slutdom.
+ * Nästa dom = närmaste dag då ett valt förslag döms. Det stora talet är den bästa ändringens mätta tal,
+ * och finns bara när en mätning finns. Texten har högst två meningar: den bästa, och att en annan ser sämre ut.
+ */
+export function kortAndrat(rader: readonly AndratIn[], idag: string): AndratKort {
+  const andringar = rader.filter((r) => r.sort === "andring" && !r.stangd);
+  const dagar = rader.filter((r) => !r.dommen && r.domsDag && r.domsDag >= idag).map((r) => r.domsDag!).sort();
+  const bast = andringar.find((r) => r.ton === "upp"), samre = andringar.find((r) => r.ton === "ned");
+  const stor = bast ?? andringar.find((r) => r.efter && r.mattKort);
+  const text = bast
+    ? `${utanPunkt(bast.text)}.${samre ? " En annan ändring ser sämre ut." : ""}`
+    : samre
+      ? `${utanPunkt(samre.text)}. Den ser sämre ut.`
+      : andringar[0]
+        ? `${utanPunkt(andringar[0].text)}. För tidigt att säga.`
+        : "";
+  return {
+    foljs: andringar.length,
+    nastaDom: dagar[0] ?? null,
+    stort: stor?.efter && stor.mattKort ? { tal: `${stor.efter.n} av ${stor.efter.av}`, vad: stor.mattKort } : null,
+    text,
+  };
+}

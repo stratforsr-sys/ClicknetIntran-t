@@ -15,26 +15,32 @@ import type { Navnyhet } from "./typer.ts";
 export const POSTER: Navnyhet[] = [
   {
     slug: "nya-hemmet-fyra-kort",
-    rubrik: "Nya hemmet: fyra kort och Nav föreslår",
+    rubrik: "Nya hemmet: fyra kort, Nav föreslår och en chatt",
     ingress: "Ett nytt hem är byggt. Det är avstängt för alla och slås på per person i Inställningar, så att ni kan prova det själva först.",
     text: `**Slå på det** i **Inställningar**, under **Administration**, i rutan **Nya hemmet**. Välj vilka som ska ha det,
 eller alla. Ingen annan märker något, och det gamla hemmet finns kvar tills ni säger till.
 
 Det nya hemmet har fyra kort:
 
-- **Väntar på dig.** Samma lista som förut, det som brinner först.
-- **Nav föreslår.** Ett första möte som är obekräftat sin sista dag blir ett förslag till den som håller mötet, med
-  tre val: Jag ringer själv, Flytta mötet eller Låt stå. Dagen efter mötet säger Nav hur det gick.
-- **Teamet i månaden** för den som leder ett lag, och **Din månad** för säljaren. Det stora talet är det som är
-  klart. Takten står som en uträkning, med sitt eget facit bredvid.
+- **Väntar på dig.** Det som brinner först. Klicka för hela listan, med ungefär hur lång tid det tar när uppgifterna
+  har en tid.
+- **Nav föreslår.** Ett första möte som är obekräftat sin sista dag blir ett förslag till den som håller mötet.
+  Dagen efter mötet säger Nav hur det gick.
+- **Teamet i månaden** för den som leder ett lag, och **Din månad** för säljaren. Klicka för varje person mot sitt
+  eget mål, kedjan från samtal till order och orsaken när den går att visa. Det Nav inte ser står utskrivet.
 - **Det som ändrats.** Berätta om en ändring, så följer Nav måttet och säger om det blev bättre, sämre eller om det
   är för tidigt att säga.
 
-**Nav föreslår är avstängt** tills ni slår på det i samma ruta. Fram till dess räknar jobben bara och skriver ingenting.
-Nav ringer eller skriver aldrig till en kund, och gör inget utan att någon har valt det.
+Under korten finns **Min dag** (dagen som en tidslinje, som går att boka i kalendern), **Veckan som kommer**,
+**Möten** och **Mer** (Golvet, Teamet och Coachning). Allt öppnas i samma fönster, och **← Hem** tar dig tillbaka.
 
-Allt som stod på det gamla hemmet har en plats i det nya. Genvägarna **Veckan** och **Golvet** längst ned leder till
-nästa arbetsdag och till dagens order med Grattis. Skrivrutan svarar som sökrutan gör i dag, inte med AI.`,
+**Skrivrutan är en chatt med AI** (Claude) när den är påslagen. Den läser bara det du själv får se i Nav, visar var
+varje tal kommer ifrån och gör ingenting utan att du väljer det. Du kan bifoga en bild eller en PDF och prata in
+frågan. Talen i korten är Navs egna uträkningar, inte AI.
+
+I telefonen ligger skrivrutan längst ned, genvägarna går att svepa och menyn finns uppe till vänster.
+
+Nav ringer eller skriver aldrig till en kund, och gör inget utan att någon har valt det.`,
     datum: "2026-11-15",
     roller: ["ceo", "admin"],
     href: "/nav2",

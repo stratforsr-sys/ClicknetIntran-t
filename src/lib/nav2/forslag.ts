@@ -5,11 +5,11 @@ import type { CurrentUser } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { lasSidvis } from "@/lib/sidvis";
 import {
-  FORSLAG_NYCKLAR, TREND_BEHOVER, facitPerVal, harNyttHem, lasForslagInst, nyckelDelar, oppetLage, troddeAvstamning,
-  type Beslut, type FacitRad, type ForslagInst, type ForslagMote, type MotesUtfall, type Val,
+  FORSLAG_NYCKLAR, TREND_BEHOVER, facitPerVal, harNyttHem, kortAndrat, lasForslagInst, nyckelDelar, oppetLage, troddeAvstamning,
+  type AndratIn, type AndratKort, type Beslut, type FacitRad, type ForslagInst, type ForslagMote, type MotesUtfall, type Val,
 } from "./forslagforma";
 import {
-  KALLRAD, dagText, narText, textAndringDom, textDom, textFacit, textKortObekraftade, textObekraftat, textTrendSaknas, textTrodde,
+  KALLRAD, dagText, narText, textAndratInledning, textAndringDom, textDom, textFacit, textKortForslag, textKortObekraftade, textObekraftat, textTrendSaknas, textTrodde, type KortForslag,
 } from "./hemtext";
 import { MATT, type MattNyckel } from "./matt";
 import { lasInstallningar, lokalDag, type MotenInst } from "./motesflode";
@@ -86,6 +86,8 @@ export type NdForslagRad = {
   utgar: string | null;
   /** Hur texten kom till. */
   kalla: string;
+  /** Kortet Nav föreslår: talet, vad det räknar, en mening och knappen (skiss 9). */
+  kort: KortForslag;
 };
 
 export type NdAndring = {
@@ -121,13 +123,23 @@ export type NdForslag = {
   /** Kortets rad: "2 möten i morgon är obekräftade". null när inget är öppet. */
   kortrad: string | null;
   andrat: NdAndring[];
+  /** Kortet Det som ändrats: hur många som följs, nästa dom, det mätta talet och texten (skiss 9). */
+  andratKort: AndratKort;
   /** Hur långt trendregeln har kvar: avgjorda möten mot de 60 den behöver. */
   trend: { har: number; behover: number };
   /** Samma sak i ord, medan regeln är tyst. null när den har det den behöver. */
   trendrad: string | null;
 };
 
-export const TOMT_FORSLAG: NdForslag = { pa: false, oppna: [], kortrad: null, andrat: [], trend: { har: 0, behover: TREND_BEHOVER }, trendrad: null };
+export const TOMT_ANDRATKORT: AndratKort = { foljs: 0, nastaDom: null, stort: null, text: "" };
+export const TOMT_FORSLAG: NdForslag = { pa: false, oppna: [], kortrad: null, andrat: [], andratKort: TOMT_ANDRATKORT, trend: { har: 0, behover: TREND_BEHOVER }, trendrad: null };
+
+/** Kortets underlag ur en loggrad: texten och tonen som raden visas med, och den senaste mätningens tal. */
+function somAndratIn(rad: LageRad, x: NdAndring): AndratIn {
+  const m = (rad.dom ?? rad.matning) as { efter?: unknown } | null;
+  const matt = MATT[(rad.foljer?.matt ?? rad.regel) as MattNyckel];
+  return { sort: rad.sort, text: x.text, ton: x.ton, stangd: x.stangd, domsDag: rad.doms_dag, dommen: !!rad.dom, efter: somNAv(m?.efter), mattKort: matt?.kort ?? null };
+}
 
 /* ------------------------------------------------------------------------ */
 /* Inställningarna och kretsen                                               */
@@ -219,18 +231,19 @@ const somNAv = (x: unknown): NAv | null => {
 /** Ett öppet förslag: rubriken och Navs tre rader. Antal, aldrig en orsak. */
 export function somForslagRad(rad: LageRad, info: MotesInfo | undefined, namn: Map<string, string>, mig: string, nu: Date, tz: string): NdForslagRad {
   const val = ((rad.val ?? []) as string[]).filter((v): v is Val => v === "ringer-sjalv" || v === "flytta" || v === "lat-sta");
-  if (!info) return { id: rad.id, mote: moteFor(rad), rubrik: "Ett möte", rader: ["Mötet finns inte längre."], val: [], utgar: rad.utgar, kalla: KALLRAD.regler };
+  if (!info) return { id: rad.id, mote: moteFor(rad), rubrik: "Ett möte", rader: ["Mötet finns inte längre."], val: [], utgar: rad.utgar, kalla: KALLRAD.regler, kort: { tal: "1", vad: "möte finns inte längre", text: "Mötet finns inte längre.", knapp: "Visa" } };
   const nar = narText(info.m.moteTid, nu, tz);
   const belagg = rad.belagg ?? {};
   // Det Nav trodde skrevs på raden när den skapades och ändras inte i efterhand. Saknas uppgiften om
   // underlaget räcker säger texten att det är för få: hellre det än en jämförelse utan grund.
+  const m = { kund: info.kund, dag: nar.dag, kl: nar.kl, bokare: namn.get(info.m.bokatAv) || null, forsok: info.forsok, jag: info.m.bokatAv === mig };
   const rader = textObekraftat(
-    { kund: info.kund, dag: nar.dag, kl: nar.kl, bokare: namn.get(info.m.bokatAv) || null, forsok: info.forsok, jag: info.m.bokatAv === mig },
+    m,
     rad.trodde,
     belagg.forFa !== false,
     somNAv(belagg.bekraftade),
   );
-  return { id: rad.id, mote: info.m.id, rubrik: `${info.kund} ${nar.dag} ${nar.kl}`, rader, val, utgar: rad.utgar, kalla: KALLRAD.regler };
+  return { id: rad.id, mote: info.m.id, rubrik: `${info.kund} ${nar.dag} ${nar.kl}`, rader, val, utgar: rad.utgar, kalla: KALLRAD.regler, kort: textKortForslag(m) };
 }
 
 const arUtfall = (x: unknown): x is MotesUtfall => x === "hallet" || x === "uteblev" || x === "avbokat" || x === "flyttat" || x === "okant";
@@ -285,17 +298,17 @@ export async function byggForslag(supabase: Db, user: CurrentUser, inst?: { f: F
       admin.from("mote").select("id", { count: "exact", head: true }).in("utfall", ["hallet", "uteblev"]).neq("art", "uppfoljning").gte("mote_tid", i.m.gallerFran ?? "1970-01-01T00:00:00Z"),
     ]);
     const o = (oppna.data ?? []) as unknown as LageRad[];
-    const a = ((andrade.data ?? []) as unknown as LageRad[])
-      .sort(nyastForst)
-      .slice(0, 3);
+    const allaA = ((andrade.data ?? []) as unknown as LageRad[]).sort(nyastForst);
+    const a = allaA.slice(0, 3);
     const trend = { har: avgjorda.count ?? 0, behover: TREND_BEHOVER };
     const trendrad = trend.har < trend.behover ? textTrendSaknas(trend.har, trend.behover) : null;
-    if (!o.length && !a.length) return { pa: i.f.pa, oppna: [], kortrad: null, andrat: [], trend, trendrad };
+    if (!o.length && !a.length) return { pa: i.f.pa, oppna: [], kortrad: null, andrat: [], andratKort: TOMT_ANDRATKORT, trend, trendrad };
 
     const [info, namn] = await Promise.all([
-      motesInfo(admin, [...o, ...a].map(moteFor).filter((x): x is string => !!x)),
-      fornamn(admin, [...a.map((r) => r.om)]),
+      motesInfo(admin, [...o, ...allaA].map(moteFor).filter((x): x is string => !!x)),
+      fornamn(admin, [...allaA.map((r) => r.om)]),
     ]);
+    const idag = lokalDag(nu.toISOString(), tz);
     const bokare = await fornamn(admin, o.map((r) => info.get(moteFor(r) ?? "")?.m.bokatAv));
     // Bara det som fortfarande går att välja i står i kortet. Resten stänger nattjobbet.
     const kvar = o.filter((r) => oppetLage(r.nyckel, r.utgar ?? "", info.get(moteFor(r) ?? "")?.m ?? null, nu, tz) === "oppet");
@@ -305,6 +318,7 @@ export async function byggForslag(supabase: Db, user: CurrentUser, inst?: { f: F
       oppna: kvar.map((r) => somForslagRad(r, info.get(moteFor(r) ?? ""), bokare, mig, nu, tz)),
       kortrad: kvar.length ? textKortObekraftade(kvar.length, dagar.length === 1 ? dagText(dagar[0], lokalDag(nu, tz)) : null) : null,
       andrat: a.map((r) => somAndring(r, info.get(moteFor(r) ?? ""), namn, mig)),
+      andratKort: kortAndrat(allaA.map((r) => somAndratIn(r, somAndring(r, info.get(moteFor(r) ?? ""), namn, mig))), idag),
       trend,
       trendrad,
     };
@@ -375,10 +389,16 @@ export async function lasGenomgang(user: CurrentUser, vad: string, id?: string |
       fornamn(admin, rader.map((r) => r.om)),
       lasKrets(supabase, user),
     ]);
+    const nd = rader.map((r) => ({ rad: r, x: somAndring(r, info.get(moteFor(r) ?? ""), namn, mig) }));
+    const kort = kortAndrat(nd.map(({ rad, x }) => somAndratIn(rad, x)), lokalDag(nu.toISOString(), tz));
+    const foljda = nd.filter(({ x }) => x.sort === "andring" && !x.stangd).map(({ x }) => x);
     return {
       status: 200,
       data: {
-        andrat: rader.map((r) => ({ ...somAndring(r, info.get(moteFor(r) ?? ""), namn, mig), mitt: r.om === mig })),
+        andrat: nd.map(({ rad, x }) => ({ ...x, mitt: rad.om === mig })),
+        foljs: kort.foljs,
+        nastaDom: kort.nastaDom,
+        inledning: textAndratInledning({ foljs: foljda.length, bra: foljda.filter((x) => x.ton === "upp").length, samre: foljda.filter((x) => x.ton === "ned").length, tidiga: foljda.filter((x) => x.ton === "vet").length }),
         // Vad läsaren får berätta om: sig själv alltid, kretsen och laget när hen har en. `krets` är listan som
         // formuläret får erbjuda (null = alla), så att ingen väljs som servern sedan nekar.
         farLaget: arChefFor(krets, mig),

@@ -65,6 +65,7 @@ const kr = (n) => `${Math.round(n).toLocaleString("sv-SE")} kr`;
 const FORSLAG = (antal) => Array.from({ length: antal }, (_x, i) => ({
   id: `f${i}`, mote: `m${i}`, rubrik: `Hagby Glas ${i} i morgon 09.00`, val: ["ringer-sjalv", "flytta", "lat-sta"], utgar: "2026-11-17T08:00:00Z", kalla: "Räknat av regler",
   rader: [`Mötet med Hagby Glas ${i} i morgon 09.00 är inte bekräftat. Mick har ringt två gånger utan svar.`, "Hittills har 1 av 4 obekräftade möten hållits. Det är för få för att säga något.", "Det här ser jag inte: om kunden har hört av sig på annat sätt."],
+  kort: { tal: "1", vad: "möte i morgon är obekräftat", text: `Hagby Glas ${i} 09.00. Mick har ringt två gånger utan svar.`, knapp: "Välj vad som händer" },
 }));
 const TEAM = {
   manad: "2026-11", manadsnamn: "november", netto: 19, vantar: 1, makulerade: 1, mal: 46, utanMal: 0, takt: { gatt: 10, totalt: 21, prognos: 40 },
@@ -81,7 +82,8 @@ const GOLVET = {
     { id: "o2", vem: "Edvin Prov", kund: "Åkes Bygg", vad: "Mellan, 36 månader", belopp: null, kl: "11:40", du: true, jag: false, grattis: 2 },
   ],
 };
-function hem({ chef, forslag = 1, andrat = ANDRAT, rader = null, team = TEAM, underlag = "med", vantar = 1, pa = true, inst = null, golvet = GOLVET, mode = "morgon", hvton = null } = {}) {
+const AKORT = { foljs: 4, nastaDom: "2026-11-27", stort: { tal: "2 av 52", vad: "möten uteblev" }, text: "Carl ringer före 10. En annan ändring ser sämre ut." };
+function hem({ chef, forslag = 1, andrat = ANDRAT, andratKort = AKORT, rader = null, team = TEAM, underlag = "med", vantar = 1, pa = true, inst = null, golvet = GOLVET, mode = "morgon", hvton = null } = {}) {
   const anrop = [];
   const U = {
     rader: [{ slag: "order", text: "#11 Hagmans Rör", sub: "Stor, 36 månader", dag: "2026-11-03", belopp: 6500 }, { slag: "order", text: "#12 Åkes Bygg", sub: "Mellan, 36 månader", dag: "2026-11-05", belopp: 8000 }],
@@ -93,14 +95,14 @@ function hem({ chef, forslag = 1, andrat = ANDRAT, rader = null, team = TEAM, un
       jag: { id: "jag" },
       hem: {
         nytt: true, inst,
-        forslag: { pa, oppna: FORSLAG(forslag), kortrad: forslag ? `${forslag} ${forslag === 1 ? "möte i morgon är obekräftat" : "möten i morgon är obekräftade"}` : null, andrat, trend: { har: 11, behover: 60 }, trendrad: "För att jämföra laget med sig självt behöver jag 60 avgjorda möten. Jag har 11." },
+        forslag: { pa, oppna: FORSLAG(forslag), kortrad: forslag ? `${forslag} ${forslag === 1 ? "möte i morgon är obekräftat" : "möten i morgon är obekräftade"}` : null, andrat, andratKort, trend: { har: 11, behover: 60 }, trendrad: "För att jämföra laget med sig självt behöver jag 60 avgjorda möten. Jag har 11." },
         team: chef ? team : null,
         golvet, push: { nyckel: "n", enheter: 1, ledare: !!chef },
       },
       uppgifter: { klara: [{ at: "2026-11-16T09:00:00Z" }, { at: "2026-11-16T13:00:00Z" }, { at: "2026-11-13T13:00:00Z" }] },
       provision: { jagId: "jag", underlag: { "2026-11": underlag === "med" ? { jag: {} } : {} }, moten: null },
       moten: { kort: [], saljare: [{ id: "p1", namn: "Edvin Prov" }], offertPaket: [] },
-      tid: { stamplar: true },
+      tid: { stamplar: true, modulPa: true },
     },
     S: { view: "hem", role: chef ? "chef" : "saljare", mode, events: [], hv: undefined, flagged: new Set(), hiddenKinds: new Set(), done: new Set(), speaking: false },
     MODES: { morgon: { halsning: "God morgon", dag: "Måndag 16 november" }, slut: { halsning: "Bra jobbat i dag", dag: "Måndag 16 november" } },
@@ -134,7 +136,7 @@ function hem({ chef, forslag = 1, andrat = ANDRAT, rader = null, team = TEAM, un
     localStorage: { getItem: (k) => (k === "nav2-hvton" ? hvton : null), setItem: () => {} },
     openPal: () => { anrop.push(["pal"]); }, TextDecoder,
   };
-  kor(block, g, ["hvHem", "hvVantar", "hvForeslar", "hvTeam", "hvDinManad", "hvAndrat", "hvArk", "hvSkriv", "hvInstRuta", "hvPa", "hvFlagga", "hvDolj", "hvVisa", "hvGrattis", "hvHamta", "hvOppna", "hvValj", "hvTangent", "hvFraga", "hvChattLagg", "hvKlick"]);
+  kor(block, g, ["hvHem", "hvVantar", "hvForeslar", "hvTeam", "hvDinManad", "hvAndrat", "hvArk", "hvSkriv", "hvInstRuta", "hvPa", "hvFlagga", "hvDolj", "hvVisa", "hvGrattis", "hvHamta", "hvOppna", "hvValj", "hvTangent", "hvFraga", "hvChattLagg", "hvKlick", "hvStang", "hvPlaneraDag"]);
   g.anrop = anrop;
   return g;
 }
@@ -151,10 +153,10 @@ rubrik("Chefens hem: fyra kort");
   ok("Nav föreslår", !!kort(h, "Nav föreslår"));
   ok("Teamet i november, inte Din månad", !!kort(h, "Teamet i november") && !h.includes("Din november"));
   ok("Det som ändrats", !!kort(h, "Det som ändrats"));
-  ok("hälsningen och en rad om läget", h.includes("<h1>God morgon, Zen</h1>") && h.includes("Två saker brinner.") && h.includes("nästa 11.00 PEGU Byggservice"), h.match(/<div class="hv-hero">[\s\S]*?<\/div>/)?.[0]);
+  ok("hälsningen och en rad om läget", h.includes("<h1>God morgon, Zen</h1>") && h.includes("Två saker brinner.") && h.includes("nästa 11.00 med PEGU Byggservice"), h.match(/<div class="hv-hero">[\s\S]*?<\/div>/)?.[0]);
   ok("överraden: på plats, datum och Stämpla in", h.includes("1<small>/3</small>") && h.includes("Måndag 16 november") && /data-act="in"[^>]*>[^<]*Stämpla in/.test(h), h.match(/<div class="hv-topp">[\s\S]*?<\/div>/)?.[0]);
-  ok("skrivrutan finns, och säger att svaren inte kommer från AI", h.includes("data-hvskriv") && /Svaren kommer ur Navs sökruta, inte från AI/.test(h));
-  ok("genvägarna Min dag och Veckan som kommer", /data-todo[^>]*>Min dag/.test(h) && /data-hvark="vecka"[^>]*>Veckan som kommer/.test(h));
+  ok("skrivrutan finns, och säger (i rutans titel) att svaren inte kommer från AI", h.includes("data-hvskriv") && /title="Svaren kommer ur Navs sökruta, inte från AI\./.test(h));
+  ok("genvägarna Min dag och Veckan som kommer", /data-hvark="dag"[^>]*>Min dag/.test(h) && /data-hvark="vecka"[^>]*>Veckan som kommer/.test(h));
   ok("utan Golvets data finns ingen genväg dit", !hem({ chef: true, golvet: null }).hvHem().includes('data-hvark="golvet"'));
 }
 
@@ -168,23 +170,20 @@ rubrik("Väntar på dig: samma lista som i dag, det som brinner först");
   ok("ett klick löser saken: knappen bär radens id", k.includes('data-hvgor="r1"') && k.includes(">Bekräfta</button>"));
   ok("resten ligger ett klick bort", /data-hvark="vantar"[^>]*>2 till som kan vänta</.test(k), k.match(/<button class="hv-kfot[\s\S]*?<\/button>/)?.[0]);
   const tom = kort(hem({ chef: true, rader: [] }).hvHem(), "Väntar på dig");
-  ok("tomt läge: Inget väntar på dig.", tom.includes("Inget väntar på dig.") && !tom.includes("data-hvgor"), tom);
+  ok("tomt läge: Inget väntar på dig just nu.", tom.includes("Inget väntar på dig just nu.") && !tom.includes("data-hvgor"), tom);
 }
 
-rubrik("Nav föreslår");
+rubrik("Nav föreslår (skiss 9, punkt 14 och 15)");
 {
   const ett = kort(hem({ chef: false }).hvHem(), "Nav föreslår");
-  ok("ett förslag: talet och saken", /<b class="num">1<\/b><span>möte i morgon är obekräftat<\/span>/.test(stor(ett)), stor(ett));
-  ok("vilket möte det gäller, och en knapp som öppnar det", ett.includes("Hagby Glas 0 i morgon 09.00") && ett.includes('data-hvforslag="f0"'), ett);
-  ok("ingen bläddring när det bara finns ett", !ett.includes("data-hvnasta"));
-  const tre = kort(hem({ chef: false, forslag: 3 }).hvHem(), "Nav föreslår");
-  ok("tre förslag: 1 av 3, och 2 till", tre.includes("1 av 3") && /data-hvnasta[^>]*>2 till</.test(tre) && /<b class="num">3<\/b><span>möten i morgon är obekräftade<\/span>/.test(stor(tre)), tre);
-  const tom = kort(hem({ chef: false, forslag: 0 }).hvHem(), "Nav föreslår");
-  ok("tomt läge: Inget att föreslå just nu, och hur långt trendregeln har kvar", tom.includes("Inget att föreslå just nu.") && tom.includes("behöver jag 60 avgjorda möten. Jag har 11."), tom);
-  const av = kort(hem({ chef: true, forslag: 0, pa: false, inst: { pa: false, farBrytare: true } }).hvHem(), "Nav föreslår");
-  ok("den som får ändra inställningarna ser att förslagen är avstängda", av.includes("Förslagen är avstängda"), av);
-  const avSalj = kort(hem({ chef: false, forslag: 0, pa: false }).hvHem(), "Nav föreslår");
-  ok("säljaren får ingen hänvisning till en inställning hen inte når", !avSalj.includes("avstängda"), avSalj);
+  ok("ett förslag: förslagets tal och vad det räknar", /<div class="hv-stor"><b class="num">1<\/b><span>möte i morgon är obekräftat<\/span><\/div>/.test(ett), ett);
+  ok("en mening och förslagets egen knapp", ett.includes('<p class="hv-ftxt">Hagby Glas 0 09.00. Mick har ringt två gånger utan svar.</p>') && /data-hvforslag="f0">Välj vad som händer<\/button>/.test(ett), ett);
+  ok("Navs märke i huvudet", ett.includes('<i class="hv-heat nav"><svg data-nav="15"></svg></i><h2>Nav föreslår</h2>'));
+  ok("ingen bläddring när det bara finns ett", !ett.includes("data-hvnasta") && !ett.includes("1 av 1"));
+  const tva = kort(hem({ chef: false, forslag: 2 }).hvHem(), "Nav föreslår");
+  ok("två förslag: 1 av 2 och 1 förslag till", tva.includes(">1 av 2<") && /data-hvnasta>1 förslag till</.test(tva), tva);
+  const tom = kort(hem({ chef: true, forslag: 0, pa: false, inst: { pa: false, farBrytare: true } }).hvHem(), "Nav föreslår");
+  ok("tomt: bock och Inga förslag just nu., inget om avstängt", /<div class="hv-lugn"><svg data-i="check"><\/svg>Inga förslag just nu\.<\/div>/.test(tom) && !/avstängda|trendregeln|avgjorda möten/.test(tom), tom);
 }
 
 rubrik("Teamet i månaden");
@@ -196,7 +195,7 @@ rubrik("Teamet i månaden");
   ok("mätaren har takten som ett streck", /class="nu" style="width:41\.3%"/.test(k) && /class="takt" style="left:87\.0%"/.test(k), k.match(/<div class="hv-matare[\s\S]*?<\/div>/)?.[0]);
   ok("kortet öppnar genomgången", k.includes('data-hvark="team"') && k.includes("Visa uträkningen"));
   const utan = kort(hem({ chef: true, team: { ...TEAM, mal: null, text: { ...TEAM.text, stort: "19 order", malrad: "Inget mål satt för november." } } }).hvHem(), "Teamet i november");
-  ok("inget mål satt: kortet säger det och visar takten utan avstånd", utan.includes("Inget mål satt för november.") && /<b class="num">19<\/b><span>order<\/span>/.test(stor(utan)) && !utan.includes("hv-matare"), utan);
+  ok("inget mål satt: kortet visar takten utan avstånd, och ingen rad om målet", !utan.includes("Inget mål satt för november.") && /<b class="num">19<\/b><span>order<\/span>/.test(stor(utan)) && !utan.includes("hv-matare"), utan);
   const tidigt = kort(hem({ chef: true, team: { ...TEAM, takt: { gatt: 0, totalt: 21, prognos: null }, text: { ...TEAM.text, rad: "För tidigt för en takt. Den kommer när månadens första arbetsdag har gått.", facit: "", kort: "För tidigt för en takt. Den kommer när månadens första arbetsdag har gått." } } }).hvHem(), "Teamet i november");
   ok("första arbetsdagen: ingen prognos, inget streck", tidigt.includes("För tidigt för en takt.") && !tidigt.includes('class="takt"'), tidigt);
 }
@@ -217,19 +216,16 @@ rubrik("Din månad: bara det provisionsmotorn har räknat");
   ok("utan provisionsregel visas inga kronor", !!utan && !/\bkr\b/.test(utan) && /<b class="num">2<\/b><span>order i november<\/span>/.test(stor(utan)), utan);
 }
 
-rubrik("Det som ändrats");
+rubrik("Det som ändrats (skiss 9, punkt 18 och 19)");
 {
-  const k = kort(hem({ chef: false }).hvHem(), "Det som ändrats");
-  ok("det senaste som fått en dom", k.includes("Hagby Glas: du valde att låta mötet stå. Mötet hölls.") && k.includes('data-hvark="andrat"'), k);
-  ok("en rad om läsaren själv står som hos dig", k.includes(">hos dig<"), k);
-  const inst = kort(hem({ chef: false, andrat: [{ ...ANDRAT[0], sort: "andring", text: "Bekräftelsen öppnar 1 arbetsdag före mötet i stället för 2.", fran: "installning", galler: "alla", dom: "Inget före att jämföra med." }] }).hvHem(), "Det som ändrats");
-  ok("en inställning som gäller alla står aldrig som hos dig", inst.includes(">hela företaget<") && !inst.includes("hos dig") && inst.includes("Inget före att jämföra med."), inst);
-  const lag = kort(hem({ chef: true, andrat: [{ ...ANDRAT[0], sort: "andring", text: "Vi ringer kunden dagen före.", fran: "person", galler: "laget" }] }).hvHem(), "Det som ändrats");
-  ok("en ändring för laget står som laget", lag.includes(">laget<") && !lag.includes("hos dig"), lag);
-  const annan = kort(hem({ chef: true, andrat: [{ ...ANDRAT[0], vem: "Hanna", galler: "person" }] }).hvHem(), "Det som ändrats");
-  ok("en rad om någon annan bär personens förnamn", annan.includes(">Hanna<") && !annan.includes("hos dig"), annan);
-  const tom = kort(hem({ chef: false, andrat: [] }).hvHem(), "Det som ändrats");
-  ok("tomt läge: Inget har ändrats än. Berätta om en ändring.", tom.includes("Inget har ändrats än.") && tom.includes("Berätta om en ändring"), tom);
+  const k = kort(hem({ chef: true }).hvHem(), "Det som ändrats");
+  ok("hur många som följs står i huvudet", /<h2>Det som ändrats<\/h2><span class="hv-meta hv-end num">4 följs<\/span>/.test(k), k);
+  ok("det mätta talet, stort", /<div class="hv-stor"><b class="num">2 av 52<\/b><span>möten uteblev<\/span><\/div>/.test(k), k);
+  ok("texten och foten med nästa dom", k.includes('<p class="hv-ftxt">Carl ringer före 10. En annan ändring ser sämre ut.</p>') && /<span class="hv-kfot">Visa översynen<\/span><span class="hv-meta">nästa dom 27 nov<\/span>/.test(k), k);
+  const utan = kort(hem({ chef: true, andratKort: { ...AKORT, stort: null, nastaDom: null } }).hvHem(), "Det som ändrats");
+  ok("utan mätt tal: inget tal och ingen tom ruta", !utan.includes("hv-stor") && !utan.includes("nästa dom"), utan);
+  const tom = kort(hem({ chef: true, andrat: [], andratKort: { foljs: 0, nastaDom: null, stort: null, text: "" } }).hvHem(), "Det som ändrats");
+  ok("inget ändrat: bara rubriken och Berätta om en ändring", /<div class="hv-chead"><h2>Det som ändrats<\/h2><\/div>\s*<div class="hv-frad"><span class="hv-kfot">Berätta om en ändring<\/span><\/div>/.test(tom) && !tom.includes("hv-ftxt") && !tom.includes("hv-lugn"), tom);
 }
 
 rubrik("Ett öppnat kort tar ytan");
@@ -252,7 +248,7 @@ rubrik("Ett öppnat kort tar ytan");
   g.S.hv.kvitto = { text: "Klart. Mötet står kvar som det är. På onsdag säger jag hur det gick.", angra: "f0" };
   g.S.hv.data.forslag.forslag.lage = "valt"; g.S.hv.data.forslag.forslag.valt = "lat-sta";
   const kv = g.hvHem();
-  ok("kvittot och Ångra står i ytans fot", /class="hv-arkfot"[\s\S]*Klart\. Mötet står kvar som det är\.[\s\S]*data-hvangra="f0"/.test(kv), kv.match(/<div class="hv-arkfot"[\s\S]*?<\/div>/)?.[0]);
+  ok("kvittot och Ångra står under inlägget i tråden", /class="hv-kvitto"[\s\S]*Klart\. Mötet står kvar som det är\.[\s\S]*data-hvangra="f0"/.test(kv), kv.match(/<div class="hv-kvitto"[\s\S]*?<\/div>/)?.[0]);
   ok("efter valet finns inga val kvar att trycka på", !kv.includes("data-hvval"));
   g.S.hv.data.forslag.forslag = { ...g.S.hv.data.forslag.forslag, mitt: false, lage: "oppet", valt: null };
   g.S.hv.kvitto = null;
@@ -277,16 +273,11 @@ rubrik("Ett öppnat kort tar ytan");
     },
   });
   const t = g.hvHem();
-  ok("teamets genomgång: lagets öppna rader överst", t.indexOf("Obekräftade möten i morgon: 3, varav 1 utan val.") > 0 && t.indexOf("Obekräftade möten i morgon: 3") < t.indexOf("Carl Prov"), t);
-  ok("en rad per person: antal, utan dom", t.includes("Carl Prov") && t.includes("Edvin Prov") && />8<\/span><span class="num">5<\/span><span class="num">1<\/span><span class="num">6</.test(t), t.match(/<div class="hv-tr">[\s\S]*?<\/div>/)?.[0]);
-  ok("uträkningen bakom takten", t.includes("19 order på 10 arbetsdagar, gånger månadens 21 arbetsdagar, blir ungefär 40."));
-  ok("taktens facit: varje avslutad månad, också den som räknats i efterhand", t.includes("blev 44") && t.includes("blev 24") && t.includes("Räknat i efterhand ur orderna"), t);
-  ok("lagets facit per val", t.includes("När någon har ringt själv har 5 av 7 möten hållits."));
-  ok("det Nav inte ser, och källraden", t.includes("Det här ser jag inte: order som inte är inlagda i Nav") && t.includes("Räknat av regler"));
+  ok("lagets öppna rader står kvar i genomgången", t.includes("Obekräftade möten i morgon: 3, varav 1 utan val."));
 
   Object.assign(g.S.hv, {
     ark: "andrat",
-    data: { andrat: { farLaget: true, kalla: "Räknat av regler", matt: [{ nyckel: "moten.uteblivna", text: "Uteblivna möten av hållna och uteblivna.", serInte: "Ser inte varför." }],
+    data: { andrat: { farLaget: true, foljs: 1, nastaDom: "2026-11-27", inledning: { fore: "Jag följer en ändring.", fet: "Den ser bra ut", efter: " och går att ta vidare. Ingen ändring får ”ser bra ut” om något annat blev sämre på köpet." }, kalla: "Räknat av regler", matt: [{ nyckel: "moten.uteblivna", text: "Uteblivna möten av hållna och uteblivna.", serInte: "Ser inte varför." }],
       andrat: [
         { id: "a1", sort: "andring", text: "Vi ringer kunden dagen före.", dom: "Ser bra ut. Hela laget ändrade sig samtidigt, så jag har inget att jämföra med.", tal: "0 av 20 uteblev. Bokade per vecka: 6 före, 7 efter.", ton: "upp", nar: "2026-11-13T07:00:00Z", vem: null, kommentar: null, fran: "person", mitt: false, kalla: "Räknat av regler" },
         { id: "a2", sort: "forslag", text: "Hagby Glas: Edvin valde att låta mötet stå. Kunden uteblev. Mötet blev aldrig bekräftat.", dom: null, tal: null, ton: "vet", nar: "2026-11-12T07:00:00Z", vem: "Edvin", kommentar: "Kunden bad om ny tid.", fran: "regel", mitt: false, kalla: "Räknat av regler" },
@@ -295,56 +286,26 @@ rubrik("Ett öppnat kort tar ytan");
   const a = g.hvHem();
   ok("det som ändrats: varje rad med källa, tal och dom", a.includes("Vi ringer kunden dagen före.") && a.includes("0 av 20 uteblev. Bokade per vecka: 6 före, 7 efter.") && a.includes("Ser bra ut.") && a.includes("Någon berättade") && a.includes("Nav såg det"), a);
   ok("personens egen rad står bredvid, som personens ord", a.includes("”Kunden bad om ny tid.”"));
-  ok("Berätta om en ändring och Pröva med laget", a.includes("data-hvform=\"beratta\"") && a.includes("data-hvform=\"prova\"") && a.includes("Berätta om en ändring") && a.includes("Pröva med laget"));
+  ok("Berätta om en ändring i foten, Pröva med laget på raden som ser bra ut", /<div class="hv-lf"><span class="hv-lbl">Har ni ändrat något som inte syns i Nav\?<\/span><button class="hv-kn hv-hoger" data-hvform="beratta">Berätta om en ändring<\/button><\/div>/.test(a) && /Vi ringer kunden dagen före\.[\s\S]*?<span class="hv-at"><button class="hv-btn" data-hvform="prova">Pröva med laget<\/button><\/span>/.test(a), a.match(/<div class="hv-lf">[\s\S]*?<\/div>/)?.[0]);
+  ok("inledningen som i skissen, och huvudet med N följs och nästa dom", a.includes("<p>Jag följer en ändring. <b>Den ser bra ut</b> och går att ta vidare.") && /<h3>Det som ändrats<\/h3><span class="hv-marke">1 följs<\/span><span class="hv-end num">nästa dom 27 nov<\/span>/.test(a), a.slice(a.indexOf("hv-inl"), a.indexOf("hv-inl") + 700));
   ok("källraden", a.includes("Räknat av regler"));
   g.S.hv.form = { typ: "beratta", text: "", om: "jag", fran: "2026-11-16", matt: "moten.uteblivna", fel: "" };
   const fo = g.hvHem();
   ok("formuläret har fyra fält: vad, vem, från vilken dag och vilket mått", fo.includes('data-hvfalt="text"') && fo.includes('data-hvfalt="om"') && fo.includes('data-hvfalt="fran"') && fo.includes('data-hvfalt="matt"') && fo.includes("data-hvandring"), fo.match(/<form class="hv-form"[\s\S]*?<\/form>/)?.[0]);
   ok("chefen kan välja laget eller en person, säljaren bara sig själv", fo.includes('value="laget"') && fo.includes('value="p1"'));
   const s = hem({ chef: false });
-  Object.assign(s.S.hv, { ark: "andrat", data: { andrat: { farLaget: false, kalla: "Räknat av regler", matt: [{ nyckel: "moten.uteblivna", text: "x", serInte: "y" }], andrat: [] } }, form: { typ: "beratta", text: "", om: "jag", fran: "2026-11-16", matt: "moten.uteblivna", fel: "" } });
+  Object.assign(s.S.hv, { ark: "andrat", data: { andrat: { farLaget: false, foljs: 0, nastaDom: null, inledning: { fore: "Jag följer inga ändringar än.", fet: "", efter: " Berätta om en ändring, så följer jag måttet och säger hur det gick." }, kalla: "Räknat av regler", matt: [{ nyckel: "moten.uteblivna", text: "x", serInte: "y" }], andrat: [] } }, form: { typ: "beratta", text: "", om: "jag", fran: "2026-11-16", matt: "moten.uteblivna", fel: "" } });
   const sf = s.hvHem();
-  ok("säljaren berättar bara om sig själv, och prövar inte med laget", !sf.includes('value="laget"') && !sf.includes('data-hvform="prova"') && sf.includes("Inget har ändrats än."), sf.match(/<form class="hv-form"[\s\S]*?<\/form>/)?.[0]);
+  ok("säljaren berättar bara om sig själv, och prövar inte med laget", !sf.includes('value="laget"') && !sf.includes('data-hvform="prova"') && sf.includes("Jag följer inga ändringar än."), sf.match(/<form class="hv-form"[\s\S]*?<\/form>/)?.[0]);
 }
 
-rubrik("Det gamla hemmets saker har en plats: Väntar på dig");
+rubrik("Hela listan: det som finns kvar från det gamla hemmet (F2)");
 {
   const g = hem({ chef: true });
   g.S.hv.ark = "vantar";
   const v = g.hvHem();
-  ok("Sedan du tittade står överst i listan", v.includes("I natt och i morse: 2 nya poster i klockan, senast Order #31 är godkänd."), v.slice(0, 900));
-  ok("listan går att få uppläst", /data-listen[^>]*aria-pressed="false"[^>]*>[\s\S]{0,60}Lyssna/.test(v));
   ok("en rad med en källa går att öppna, också när knappen gör något annat", v.includes('data-hvga="r2"') && v.includes('data-hvga="r3"') && !v.includes('data-hvga="r1"'), v.match(/data-hvga="[^"]*"/g)?.join(" "));
-  ok("varje rad har en meny", ["r1", "r2", "r3", "r4", "r5"].every((id) => v.includes(`data-hvmeny="${id}"`)) && !v.includes("data-hvflagga"));
-  g.S.hv.meny = "r3";
-  const m = g.hvHem();
-  ok("menyn: Stämmer inte, och Visa inte rutiner på hemmet", m.includes('data-hvflagga="r3"') && m.includes(">Stämmer inte<") && m.includes('data-hvdolj="rutin"') && m.includes("Visa inte rutiner på hemmet") && (m.match(/data-hvflagga=/g) || []).length === 1, m.match(/<div class="hv-meny">[\s\S]*?<\/div>/)?.[0]);
-  ok("raderna går att nå med tangentbordet (J, K, E, Enter)", (m.match(/class="hv-sak[^"]*" data-id="/g) || []).length === 5 && html.includes("document.querySelectorAll('.irow, .hv-sak[data-id]')") && html.includes("querySelector('[data-row], [data-hvgor]')"));
-
-  await g.hvFlagga("r1");
-  ok("Stämmer inte går till kön för fel med raden i klartext", JSON.stringify(g.anrop[0]) === JSON.stringify(["flagga", { rad: "r1", text: "Carl är sjukanmäld." }]) && g.S.flagged.has("r1"), JSON.stringify(g.anrop));
-  ok("kvittot står i ytans fot", /class="hv-arkfot"[\s\S]*Markerad som fel\./.test(g.hvHem()));
-  const f = g.hvHem();
-  ok("den flaggade raden står kvar i listan, märkt, utan knappen Stämmer inte", f.includes("Carl är sjukanmäld") && f.includes("Markerad som fel") && !f.includes('data-hvmeny="r1"'), f.match(/data-id="r1"[\s\S]*?<\/div>\s*<\/div>/)?.[0]);
-  g.S.hv.ark = null;
-  const h = g.hvHem();
-  ok("på hemmet räknas den inte längre: kortet och hälsningen hoppar över den", !kort(h, "Väntar på dig").includes("Carl är sjukanmäld") && h.includes("En sak brinner."), kort(h, "Väntar på dig"));
-
-  await g.hvDolj("rutin");
-  ok("Visa inte här sparas som förut", JSON.stringify(g.anrop.at(-1)) === JSON.stringify(["dolj", { sort: "rutin" }]) && g.S.hiddenKinds.has("rutin"), JSON.stringify(g.anrop));
-  ok("kvittot har Ångra", g.S.hv.kvitto?.visa === "rutin" && /data-hvvisa="rutin"/.test((g.S.hv.ark = "vantar", g.hvHem())));
-  const d = g.hvHem();
-  ok("sorten står kvar i hela listan, och går att ta tillbaka", d.includes("Rutinen Säljsamtal ska granskas") && d.includes("Visas inte på hemmet: rutiner") && d.includes('data-hvvisa="rutin"'), d.match(/<div class="hv-lf">[\s\S]*?<\/div>/)?.[0]);
-  g.S.hv.ark = null;
-  const k = kort(g.hvHem(), "Väntar på dig");
-  ok("kortet visar inte sorten, men säger hur många som finns i listan", !k.includes("Rutinen Säljsamtal") && k.includes("Sätt utfall på 2 möten") && />3 till</.test(k), k);
-  await g.hvVisa("rutin");
-  ok("Visa igen tar tillbaka sorten", JSON.stringify(g.anrop.at(-1)) === JSON.stringify(["visa", { sort: "rutin" }]) && !g.S.hiddenKinds.has("rutin"));
-
-  const allt = hem({ chef: false });
-  allt.S.hiddenKinds = new Set(["frånvaro", "uppgift", "rutin", "möten", "utbildning"]);
-  const tomt = kort(allt.hvHem(), "Väntar på dig");
-  ok("allt bortvalt: kortet säger det, och listan går fortfarande att öppna", tomt.includes("Det som väntar har du valt bort från hemmet.") && tomt.includes('data-hvark="vantar"') && !tomt.includes("Inget väntar på dig."), tomt);
+  ok("raderna går att nå med tangentbordet (J, K, E, Enter)", (v.match(/class="hv-sak[^"]*" data-id="/g) || []).length === 5 && html.includes("document.querySelectorAll('.irow, .hv-sak[data-id]')"));
 }
 
 rubrik("Det gamla hemmets saker har en plats: nytt sedan sist");
@@ -361,26 +322,25 @@ rubrik("Det gamla hemmets saker har en plats: nytt sedan sist");
   ok("och i hela listan", (v.match(/upg-nyprick/g) || []).length === 1 && v.indexOf("upg-nyprick") < v.indexOf("Ring Solbacken") && v.indexOf("upg-nyprick") > v.indexOf('data-id="upg-7"'), v.match(/data-id="upg-7"[\s\S]{0,300}/)?.[0]);
 }
 
-rubrik("Det gamla hemmets saker har en plats: Veckan");
+rubrik("Skiss 9 exakt: Veckan (punkt 24)");
 {
   const g = hem({ chef: true });
-  g.S.hv.ark = "vecka";
+  const DAG = ["Måndag", "Tisdag", "Onsdag", "Torsdag", "Fredag"];
+  Object.assign(g, {
+    ndPlusDag: (d, n) => `2026-11-${String(+d.slice(8) + n).padStart(2, "0")}`,
+    ndHemDagNamn: (d) => DAG[+d.slice(8) - 16],
+    ndHemKal: (d) => (d === "2026-11-16" ? [{ s: 540, e: 570, t: "Nordic Grön & Mark" }, { s: 660, e: 705, t: "PEGU Byggservice" }] : d === "2026-11-17" ? [{ s: 600, e: 630, t: "Maya Städ" }] : []),
+    ndHemBorta: (d) => (d === "2026-11-18" ? [["Mick Prov", "semester"]] : []),
+  });
+  g.hvOppna("vecka");
   const v = g.hvHem();
-  ok("nästa arbetsdag: kalendern, borta, beslut med frist och uppgifter", v.includes("Tisdag 17 november") && v.includes("Morgonmöte Team Nord") && v.includes("09:00") && v.includes("Mick Prov") && v.includes("semester") && v.includes("Carls ledighet") && v.includes("Ring Solbacken"), v);
-  ok("veckan dag för dag, från i dag", v.includes("v.47") && v.includes("16–20 nov") && v.includes("2 i kalendern") && v.includes("Besluta Carls ledighet"), v);
-  ok("att få klart i veckan, med provisionen att bokföra", v.includes("Att få klart i veckan") && v.includes("Bokför novemberprovisionen, 4 order") && !v.includes("{PV}"));
-  ok("kalendern är ett klick bort", /data-view="kalender"[^>]*>Öppna kalendern/.test(v));
-  ok("kvällsnotisen har sin plats hos den som leder: när den skickas, och på eller av för enheten", v.includes("Kvällsnotisen") && v.includes("vardagar kl. 17") && v.includes("söndagar kl. 18") && v.includes("På för den här enheten."), v.match(/Kvällsnotisen[\s\S]{0,400}/)?.[0]);
-  ok("källraden", v.includes("Räknat av regler"));
-
-  const s = hem({ chef: false, mode: "slut" });
-  s.S.hv.ark = "vecka";
-  const sv = s.hvHem();
-  ok("säljaren ser sin egen dag, utan vilka som är borta", sv.includes("PEGU Byggservice") && sv.includes("Skicka offert till Solbacken") && !sv.includes("Mick Prov") && !sv.includes("Kvällsnotisen"), sv);
-  ok("dagens slut: vad som blev klart i dag och vad som är kvar", sv.includes("I dag blev 2 uppgifter klara.") && sv.includes("2 saker är kvar."), sv.match(/I dag blev[^<]*/)?.[0]);
-  const morgon = hem({ chef: false });
-  morgon.S.hv.ark = "vecka";
-  ok("på morgonen står inget om dagens slut", !morgon.hvHem().includes("I dag blev"));
+  ok("rubriken som skissen: veckonummer, i kalendern, borta och att få klart", v.includes('<p id="hvArktext">Veckan som kommer, <b>v.47</b>. 3 i kalendern, en borta, två saker att få klart.</p>'), v.match(/<p id="hvArktext">[\s\S]*?<\/p>/)?.[0]);
+  ok("fem kolumner", (v.match(/class="hv-vdag/g) || []).length === 5);
+  ok("i dag är märkt och öppnar Min dag", /<button class="hv-vdag idagen" data-hvark="dag"><header><b>Mån<\/b><small>i dag<\/small><span>16 nov<\/span><\/header><small>2 i kalendern<\/small>/.test(v), v.match(/<button class="hv-vdag idagen"[\s\S]*?<\/header>/)?.[0]);
+  ok("posterna står på sin tid", /<i style="top:5\.9%">09:00 Nordic Grön &amp; Mark<\/i>/.test(v), v.match(/<div class="hv-tid">[\s\S]*?<\/div>/)?.[0]);
+  ok("foten: Att få klart i veckan, med en knapp dit", v.includes('<span id="hvFotv">Att få klart i veckan: <b>Ring Solbacken</b> och 1 till</span>') && /<button class="hv-kn" data-view="uppgifter">Öppna Uppgifter<\/button>/.test(v), v.match(/<div class="hv-arkfot"[\s\S]*?<\/div>/)?.[0]);
+  ok("inget annat: ingen nästa arbetsdag, ingen kvällsnotis", !v.includes("Nästa arbetsdag") && !v.includes("Kvällsnotisen") && !v.includes("I dag blev"));
+  ok("kvällsnotisen hämtas inte längre när Veckan öppnas", !/function hvOppna\([^)]*\)\{[\s\S]{0,700}kvall=1/.test(html));
 }
 
 rubrik("Det gamla hemmets saker har en plats: Golvet och Grattis");
@@ -406,8 +366,8 @@ rubrik("Rådgivarens fynd: klicken, hämtningarna, Escape och exempeldata");
 {
   // 1. Fönstrets rot får aldrig bära ett attribut som klicklyssnaren lyssnar efter: då sväljs varje klick som inte
   //    har en egen väljare (Min dag, Stämpla in, Lyssna, Skicka, Öppna kalendern).
-  const lyssnar = html.match(/e\.target\.closest\('(\[data-hvstang\][^']*)'\)/)?.[1].match(/data-[a-z]+/g) ?? [];
-  ok("klicklyssnarens väljare går att läsa ur koden", lyssnar.length > 15 && lyssnar.includes("data-hvton") && lyssnar.includes("data-hvark"), lyssnar.join(" "));
+  const lyssnar = html.match(/e\.target\.closest\('(\[data-hvtr\][^']*)'\)/)?.[1].match(/data-[a-z]+/g) ?? [];
+  ok("klicklyssnarens väljare går att läsa ur koden", lyssnar.length > 15 && lyssnar.includes("data-hvark"), lyssnar.join(" "));
   const g = hem({ chef: true });
   const sidor = [g.hvHem()];
   for (const ark of ["vantar", "vecka", "golvet", "manad"]) { g.S.hv.ark = ark; sidor.push(g.hvHem()); }
@@ -475,9 +435,9 @@ rubrik("Rådgivarens fynd: klicken, hämtningarna, Escape och exempeldata");
   // 4. Texten om var förslagen slås på visas bara för den som har brytaren.
   const INST = { pa: false, obekraftatTid: "14:00", gransFacit: 0.01, gransDom: 0.05, gransPerson: 0.01, gransMotvikt: 0.2, foljda: [], hemNytt: [] };
   const utan = kort(hem({ chef: true, forslag: 0, pa: false, inst: { ...INST, farBrytare: false } }).hvHem(), "Nav föreslår");
-  ok("den som saknar brytaren får inte höra att hen kan slå på förslagen", utan.includes("Förslagen är avstängda.") && !utan.includes("slås på i Inställningar"), utan);
+  ok("ingen rad om avstängda förslag, för någon (beställaren: som skissen)", !utan.includes("avstängda"));
   const med = kort(hem({ chef: true, forslag: 0, pa: false, inst: { ...INST, farBrytare: true } }).hvHem(), "Nav föreslår");
-  ok("den som har brytaren får veta var den finns", med.includes("De slås på i Inställningar, under Nya hemmet."), med);
+  ok("inte heller för den som har brytaren", !med.includes("avstängda") && med.includes("Inga förslag just nu."));
 
   // 6. Utan provisionens data visas inga tal alls: utkastets exempelmotor får aldrig stå som riktig.
   const ex = hem({ chef: false });
@@ -639,23 +599,296 @@ rubrik("Chatten i skrivrutan");
 rubrik("Rättelser efter klickprovet 2026-11-15");
 {
   const h = hem({ chef: true }).hvHem();
-  const botten = h.match(/<div class="hv-botten">[\s\S]*<\/form>\s*<\/div>/)?.[0] ?? "";
-  ok("genvägarna och skrivrutan sitter ihop längst ner, så att rutan aldrig lägger sig över genvägarna", botten.includes('class="hv-genv"') && botten.indexOf('class="hv-genv"') < botten.indexOf("data-hvskriv"), botten.slice(0, 200));
-  ok("en rad genvägar, och den är borta när ett kort är öppet", (h.match(/class="hv-genv"/g) || []).length === 1);
-  ok("det är gruppen som står kvar nertill, inte rutan ensam", /\.hv-botten\{position:sticky;/.test(html) && !/\.hv-skriv\{position:sticky/.test(html));
   ok("Nästa att göra är ihopfälld i det nya hemmet, som i skissen", /const min = pillHv\(\) \? !S\.hvPillUt : S\.pillMin;/.test(html) && /if \(d\.pillmin !== undefined && pillHv\(\)\)\{ S\.hvPillUt = !S\.hvPillUt;/.test(html));
   ok("utfälld lyfts den över skrivrutan", /body:has\(\.main\.hvmode\) \.todopill:not\(\.min\)\{bottom:/.test(html));
   const tk = kort(h, "Teamet i november");
   ok("Teamets rubrik får plats på en rad: dagarna står kort", /<span class="hv-meta hv-end num"[^>]*>dag 10 av 21<\/span>/.test(tk) && tk.includes('title="10 av 21 arbetsdagar"'), tk.match(/<div class="hv-chead">[\s\S]*?<\/div>/)?.[0]);
-  ok("mörkt fönster är förvalt, som i skissen", h.includes('data-hvtema="mork"') && hem({ chef: true, hvton: "ljus" }).hvHem().includes('data-hvtema="ljus"'));
   ok("veckonumret efter datumet", h.includes("Måndag 16 november<small>v.47</small>"));
   ok("Lyssna efter läget, med det gamla hemmets uppläsning", /<button class="hv-lyssna" data-listen[^>]*>[\s\S]*?Lyssna<\/button>/.test(h));
   ok("Teamets rad är skissens: takten och facit i en mening", tk.includes("I samma takt blir det ungefär 40. I oktober sa takten 38, det blev 44.") && !tk.includes("inget löfte"), tk);
   const genv = h.match(/<div class="hv-genv">[\s\S]*?<\/span><\/div>/)?.[0] ?? "";
-  ok("genvägarna som i skissen: Min dag, Veckan som kommer, Möten, Min statistik, Mer", /data-todo[^>]*>Min dag/.test(genv) && />Veckan som kommer</.test(genv) && /data-go="\/moten"[^>]*>Möten</.test(genv) && /data-hvmer[^>]*>Mer</.test(genv), genv);
+  ok("genvägarna som i skissen: Min dag, Veckan som kommer, Möten, Min statistik, Mer", /data-hvark="dag"[^>]*>Min dag/.test(genv) && />Veckan som kommer</.test(genv) && /data-go="\/moten"[^>]*>Möten[ <]/.test(genv) && /data-hvmer[^>]*>Mer</.test(genv), genv);
   ok("Förbered står bara när chatten svarar", !genv.includes("data-hvforbered"));
-  const g2 = hem({ chef: true }); g2.S.hv.mer = true; const mer = g2.hvHem().match(/<div class="hv-mer[\s\S]*?<\/div>/)?.[0] ?? "";
-  ok("Mer har Golvet, Coachning, Personalen och Nyheter", /data-hvark="golvet"/.test(mer) && /\/coachning/.test(mer) && /\/personal"/.test(mer) && /\/nyheter/.test(mer), mer);
+}
+
+rubrik("Skiss 9 exakt: tonen följer Nav (punkt 3)");
+{
+  ok("ingen egen tonknapp i hemvyn", !/nav2-hvton|hv-tonk|data-hvton|hvTon\b/.test(html));
+  const tema = (theme, mork) => { const g = hem({ chef: true }); g.S.theme = theme; g.prfDatornMorkt = () => mork; return g.hvHem().match(/data-hvtema="([^"]*)"/)?.[1]; };
+  ok("ljust i Inställningar ger ljust fönster", tema("light", true) === "ljus");
+  ok("mörkt i Inställningar ger mörkt fönster", tema("dark", false) === "mork");
+  ok("Automatiskt följer datorn", tema("auto", true) === "mork" && tema("auto", false) === "ljus");
+  ok("hemmet ritas om när temat byts", /function prfTemaSynk\(\)\{ if \(S\.prfRuta \|\| S\.prfMeny \|\| \(S\.view === 'hem' && hvPa\(\)\)\) render\(\); \}/.test(html));
+  ok("och när datorn byter, i läget Automatiskt", /matchMedia\('\(prefers-color-scheme: dark\)'\)\.addEventListener\('change', \(\) => \{ if \(S\.theme === 'auto'\) prfTemaSynk\(\); \}\)/.test(html));
+}
+
+rubrik("Skiss 9 exakt: överraden (punkt 1, 2 och 4)");
+{
+  // teamNow i riktigt läge: de som är inne, avvikelserna, och resten av laget som inte är instämplade.
+  const kod = html.match(/teamNow = function\(\)\{[\s\S]*?\n\};/)?.[0] ?? "";
+  const lag = (paPlats, dagsbild, alla) => { const g = { ND: { tid: { chef: { paPlats, dagsbild, lag: alla } } }, _ndTeamNow: () => [], teamNow: null }; new Function("g", `with (g) { ${kod} }`)(g); return g.teamNow(); };
+  const sju = Array.from({ length: 7 }, (_x, i) => ({ id: `p${i}`, namn: `Person ${i}` }));
+  const t = lag([], [], sju);
+  ok("en söndag utan scheman: alla sju står med, ingen inne", t.length === 7 && t.every((x) => x[1] === "ej"), JSON.stringify(t));
+  const t2 = lag([{ namn: "Person 0", sedan: "07:58" }], [{ namn: "Person 1", lage: "sjuk", detalj: "sjuk sedan i dag" }], sju);
+  ok("den som är inne och den som är sjuk räknas en gång", t2.length === 7 && t2.filter((x) => x[1] === "inne").length === 1 && t2.filter((x) => x[1] === "sjuk").length === 1, JSON.stringify(t2));
+  const g = hem({ chef: true });
+  g.teamNow = () => sju.map((p) => [p.namn, "ej", "inte instämplad"]);
+  const h = g.hvHem();
+  ok("0/7 på plats med stapeln", h.includes("<b class=\"num\">0<small>/7</small></b>") && h.includes("hv-lgbar"), h.match(/<div class="hv-topp">[\s\S]*?<\/div>/)?.[0]);
+  const s = hem({ chef: true });
+  s.ND.tid = { stamplar: false, modulPa: true };
+  ok("Stämpla in finns också för den som inte måste stämpla", /data-act="in"[^>]*>Stämpla in/.test(s.hvHem()));
+  s.ND.tid = { stamplar: false, modulPa: false };
+  ok("men inte när stämplingen är avstängd", !/data-act="in"/.test(s.hvHem()));
+  ok("dagens stämplingar läses för alla när stämplingen är på", html.includes("S.events = ND.tid.modulPa ? ndDagensEvents() : [];"));
+}
+
+// Regeln för en väljare i hemmets CSS, exakt som den står (första träffen utanför @media när inget annat sägs).
+const regel = (sel, i = html) => { const m = i.match(new RegExp(`(?:^|\\n|\\})${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\{([^}]*)\\}`)); return m ? m[1] : null; };
+const media = (villkor) => { const start = html.indexOf(`@media ${villkor}{`); if (start < 0) return ""; let d = 0, j = start; for (; j < html.length; j++) { if (html[j] === "{") d++; else if (html[j] === "}") { d--; if (d === 0) break; } } return html.slice(start, j + 1); };
+rubrik("Skiss 9 exakt: hälsningen (punkt 6 och 7)");
+{
+  ok(".hv-hero p på en rad med gap 10", regel(".hv-hero p") === "display:flex;align-items:center;gap:10px;margin:8px 0 0;font-size:15.5px;color:var(--hv-ink-2);white-space:nowrap;overflow:hidden", regel(".hv-hero p"));
+  ok(".hv-hero p>span klipps med …", regel(".hv-hero p>span") === "overflow:hidden;text-overflow:ellipsis", regel(".hv-hero p>span"));
+  ok("låg skärm: padding-top 24", /\.hv-hero\{padding-top:24px\}/.test(media("(max-height:700px)")), media("(max-height:700px)"));
+}
+
+rubrik("Skiss 9 exakt: korten (punkt 8–12, 20, 39 och 40)");
+{
+  ok("korten följer innehållet", /min-height:0\}?$/.test(regel(".hv-card")) && !/\.hv-card\{min-height/.test(media("(max-height:700px)")), regel(".hv-card"));
+  ok("kortets huvud på baslinjen", regel(".hv-chead") === "display:flex;align-items:baseline;gap:8px;margin-bottom:10px", regel(".hv-chead"));
+  ok("Navs märke i huvudet centrerat", regel(".hv-chead .hv-heat.nav") === "align-self:center", regel(".hv-chead .hv-heat.nav"));
+  ok("texten 14,5 px, högst 46 tecken bred", regel(".hv-ftxt") === "margin:12px 0 0;font-size:14.5px;line-height:1.5;color:var(--hv-ink-2);max-width:46ch", regel(".hv-ftxt"));
+  ok("kortfoten är ink-3, i talkorten ink-2", /color:var\(--hv-ink-3\)/.test(regel(".hv-kfot")) && /color:var\(--hv-ink-2\)/.test(regel(".hv-tal .hv-frad .hv-kfot") || ""), regel(".hv-kfot"));
+  ok("raderna 48 px, 44 på låg skärm", /height:48px/.test(regel(".hv-rad")) && /\.hv-rad\{min-height:44px;height:44px\}/.test(media("(max-height:700px)")));
+  ok("låg skärm: texten närmare talet", /\.hv-ftxt\{margin-top:8px\}/.test(media("(max-height:700px)")));
+  ok("två kolumner först under 860", !media("(max-width:1180px)").includes(".hv-kort") && (html.match(/\.hv-kort\{grid-template-columns:repeat\(2/g) || []).length === 1 && /\.hv-kort\{grid-template-columns:repeat\(2/.test(media("(max-width:860px)")));
+  ok("det lugna läget: bock, linje överst, ingen egen höjd", regel(".hv-lugn") === "flex:1;display:flex;align-items:center;gap:10px;color:var(--hv-ink-2);border-top:1px solid var(--hv-line)", regel(".hv-lugn"));
+  ok("mörka färger som skissen", /--hv-ink-3:#7C8E86;/.test(regel(".hv")) && /--hv-pop:rgba\(16,31,26,\.84\);/.test(regel(".hv")));
+  const lj = regel('.hv[data-hvtema="ljus"]');
+  ok("ljusa färger som skissen", /--hv-ink-3:#66746D;/.test(lj) && /--hv-pop:rgba\(255,255,255,\.88\);/.test(lj) && /--hv-signal:#D98A1C;/.test(lj) && /--hv-danger:#C4473C;/.test(lj), lj);
+  const tom = kort(hem({ chef: true, rader: [] }).hvHem(), "Väntar på dig");
+  ok("Väntar tomt: bock och skissens text", /<div class="hv-lugn"><svg data-i="check"><\/svg>Inget väntar på dig just nu\.<\/div>/.test(tom), tom);
+}
+
+rubrik("Skiss 9 exakt: Nästa att göra (punkt 28)");
+{
+  ok("ihopfälld är den 46 px och står 28 px från kanterna", regel("body:has(.main.hvmode) .todopill.min") === "right:28px;bottom:calc(28px + env(safe-area-inset-bottom,0px));padding:0;width:46px;height:46px;box-shadow:0 0 0 1px rgba(255,255,255,.14),0 8px 22px rgba(19,32,28,.22)", regel("body:has(.main.hvmode) .todopill.min"));
+  ok("talet 600 11px", regel("body:has(.main.hvmode) .todopill.min .pmin") === "width:46px;height:46px;font:600 11px var(--f-body)");
+  ok("ringen 38 px, 4 px in", regel("body:has(.main.hvmode) .todopill.min .pmin svg") === "inset:4px;width:38px;height:38px");
+}
+
+rubrik("Skiss 9 exakt: fönstret, arken och tråden (punkt 29, 30 och 37)");
+{
+  ok("fönstret är en skärm hög och rullar aldrig själv", /height:100dvh/.test(regel(".hv-fonster")) && /overflow:hidden/.test(regel(".hv-fonster")) && !/min-height:100dvh/.test(regel(".hv-fonster")), regel(".hv-fonster"));
+  ok("scenen tar ytan mellan överraden och skrivrutan", regel(".hv-scen") === "flex:1;position:relative;min-height:0;z-index:1", regel(".hv-scen"));
+  ok("tråden rullar i sig själv, ända ut till fönstrets kant", /position:absolute;top:-16px;bottom:-123px;left:0;right:0;overflow-y:auto/.test(regel(".hv-trad") || ""), regel(".hv-trad"));
+  ok("arkets lista rullar inuti ytan", /overflow-y:auto/.test(regel(".hv-rull") || "") && /overflow:hidden/.test(regel(".hv-arkyta") || ""), regel(".hv-arkyta"));
+  ok("ingen klistrad botten längre", !/\.hv-botten\{/.test(html));
+  const g = hem({ chef: true });
+  const h = g.hvHem();
+  const scen = h.slice(h.indexOf('class="hv-scen"'), h.indexOf("data-hvskriv"));
+  ok("på hemmet ligger genvägarna i scenen och skrivrutan efter den", scen.includes('class="hv-genv"') && h.indexOf('class="hv-scen"') < h.indexOf("data-hvskriv"));
+  g.hvOppna("vantar");
+  const a = g.hvHem();
+  ok("ett ark har Navs märke, texten och Stäng esc", /<div class="hv-arkhuvud"><svg data-nav="28"><\/svg><p id="hvArktext">[\s\S]*?<\/p><button class="hv-kn" data-hvstang>Stäng <kbd class="hv-mono">esc<\/kbd><\/button><\/div>/.test(a), a.match(/<div class="hv-arkhuvud">[\s\S]*?<\/div>/)?.[0]);
+  ok("arkets yta är glas i full bredd", a.includes('<div class="hv-arkyta hv-glass">'));
+  ok("i ett ark syns inga genvägar, men skrivrutan", !a.includes('class="hv-genv"') && a.includes("data-hvskriv"));
+  ok("det gamla ‹ Hem finns inte", !/hv-arktopp|hv-bak/.test(html));
+  const t = hem({ chef: true });
+  t.hvOppna("team"); t.hvOppna("andrat");
+  const th = t.hvHem();
+  ok("Teamet och sedan Ändrat ligger båda i tråden, i den ordningen", t.S.hv.trad.map((x) => x.sort).join() === "team,andrat" && th.indexOf('data-hvinl="team"') < th.indexOf('data-hvinl="andrat"'), t.S.hv.trad.map((x) => x.sort).join());
+  ok("överst i tråden: ← Hem och hur mycket som brinner", /<div class="hv-rumtop"><button class="hv-kn" data-hvstang><svg[^>]*>[\s\S]*?<\/svg>Hem<\/button><button class="hv-kn" data-hvstang><i><\/i><span>2 brinner<\/span><\/button><\/div>/.test(th), th.match(/<div class="hv-rumtop">[\s\S]*?<\/div>/)?.[0]);
+  t.hvStang();
+  ok("Hem tömmer inte tråden", t.S.hv.ark === null && t.S.hv.trad.length === 2 && !t.hvHem().includes("hv-rumtop"));
+  const lugn = hem({ chef: true, rader: [] }); lugn.hvOppna("team");
+  ok("inget som brinner: grön prick och Inget brinner", /<i style="background:var\(--hv-brand\)"><\/i><span>Inget brinner<\/span>/.test(lugn.hvHem()));
+  ok("Escape går hem från tråden när rutan är tom", /if \(e\.key === 'Escape' && S\.hv\.ark && !hvOvanpa\(\) && !String\(S\.hv\.q \|\| ''\)\.trim\(\)\)/.test(html));
+}
+
+rubrik("Skiss 9 exakt: genvägarna och Mer (punkt 21, 22 och F2)");
+{
+  const pa = hem({ chef: true }); pa.ND.hem.chatt = true;
+  const gv = pa.hvHem().match(/<div class="hv-genv">[\s\S]*?<\/span><\/div>/)?.[0] ?? "";
+  ok("chatten på och ett möte kvar i dag: Förbered först, med märket", /^<div class="hv-genv"><button class="hv-chip hv-fraga" data-hvforbered="Förbered mitt möte 11\.00 med PEGU Byggservice"><span><svg data-nav="15"><\/svg><\/span><span>Förbered 11\.00 med PEGU<\/span><\/button>/.test(gv), gv.slice(0, 300));
+  const inget = hem({ chef: true }); inget.ND.hem.chatt = true; inget.ndHemKal = () => [];
+  ok("inget möte kvar: Vem ska jag ringa nu?", /data-hvforbered="Vem ska jag ringa nu\?"><span><svg data-nav="15"><\/svg><\/span><span>Vem ska jag ringa nu\?<\/span>/.test(inget.hvHem()));
+  ok("chatten av: ingen av dem", !hem({ chef: true }).hvHem().includes("data-hvforbered"));
+  const moten = (g, n) => Object.assign(g, { moSyns: () => true, ndMo: () => ({ kort: Array.from({ length: n + 2 }, (_x, i) => ({ v: i < n })) }), moAtt: (k) => k.v, moUtfall: () => false, moFoljIdag: () => false });
+  const m = moten(hem({ chef: true }), 7);
+  ok("Möten bär talet som Möten har i menyn", /data-go="\/moten">Möten <small class="num">7<\/small><\/button>/.test(m.hvHem()), m.hvHem().match(/data-go="\/moten">[^<]*(<small[^<]*<\/small>)?/)?.[0]);
+  const m0 = moten(hem({ chef: true }), 0);
+  ok("inget tal när inget väntar", /data-go="\/moten">Möten<\/button>/.test(m0.hvHem()));
+  ok("talet är menyns tal", /function hvMotenTal\(\)\{ return typeof moSyns === 'function' && moSyns\(\) \? ndMo\(\)\.kort\.filter\(k => moAtt\(k\) \|\| moUtfall\(k\) \|\| moFoljIdag\(k\)\)\.length : 0; \}/.test(html));
+  const g = hem({ chef: true }); g.S.hv.mer = true;
+  const mer = g.hvHem().match(/<div class="hv-mer[\s\S]*?<\/div>/)?.[0] ?? "";
+  ok("Mer har Golvet, Teamet i november och Coachning", /data-hvark="golvet">Golvet</.test(mer) && /data-hvark="team">Teamet i november</.test(mer) && /data-hvark="coachning">Coachning</.test(mer) && !/data-go=/.test(mer), mer);
+  g.hvOppna("coachning");
+  ok("Coachning öppnas i tråden", g.S.hv.trad.some((x) => x.sort === "coachning") && g.hvHem().includes('data-hvinl="coachning"'));
+  const s = hem({ chef: false }); s.S.hv.mer = true;
+  const smer = s.hvHem().match(/<div class="hv-mer[\s\S]*?<\/div>/)?.[0] ?? "";
+  ok("säljaren har inget Teamet i Mer när laget inte går att läsa", !/data-hvark="team"/.test(smer) && /data-hvark="coachning"/.test(smer), smer);
+}
+
+rubrik("Skiss 9 exakt: skrivrutan, Bifoga, Tala och tipset (punkt 25–27)");
+await (async () => {
+  const g = hem({ chef: true }); g.ND.hem.chatt = true;
+  const sk = g.hvSkriv();
+  ok("platshållaren är skissens", sk.includes('placeholder="Fråga Nav eller be om något…"'));
+  ok("raden: Bifoga, tipset, Skicka", /<div class="hv-srad"><button type="button" class="hv-ikonk" data-hvbifoga aria-label="Bifoga"><svg[^>]*>[\s\S]*?<\/svg><\/button><button type="button" class="hv-tips" data-hvtips>Prova: Vad måste jag göra för att sälja mer\?<\/button><button class="hv-send" aria-label="Skicka">/.test(sk), sk);
+  ok("filväljaren tar bilder och PDF", /<input type="file" id="hvFil" hidden multiple accept="image\/png,image\/jpeg,image\/webp,application\/pdf" data-hvfil>/.test(sk));
+  ok("utan taligenkänning ingen Tala", !sk.includes("data-hvtala"));
+  g.window.webkitSpeechRecognition = function () {};
+  ok("med taligenkänning finns Tala", /<button type="button" class="hv-ikonk" data-hvtala aria-label="Tala" aria-pressed="false">/.test(g.hvSkriv()));
+  ok("raden börjar 8 px ut, som i skissen", regel(".hv-srad") === "display:flex;align-items:center;gap:6px;margin-top:8px;margin-left:-8px");
+  ok("tipset syns bara på hemmet", /\.hv:not\(\[data-hvlage="hem"\]\) \.hv-tips\{visibility:hidden\}/.test(html));
+  g.S.hv.bilagor = [{ sort: "image/png", namn: "bild <1>.png", data: "AAAA" }];
+  ok("en bilaga står som ett chip med ×", /<div class="hv-bilagor"><span class="hv-bil">bild &lt;1&gt;\.png<button type="button" data-hvbilx="0" aria-label="Ta bort bild &lt;1&gt;\.png">×<\/button><\/span><\/div>/.test(g.hvSkriv()), g.hvSkriv());
+  // Tipset frågar chatten.
+  const hamtat = [];
+  g.fetch = async (url, o) => { hamtat.push(JSON.parse(o.body)); return { ok: false, status: 500, headers: { get: () => "application/json" }, json: async () => ({}) }; };
+  g.hvKlick({ target: { closest: () => ({ dataset: { hvtips: "" } }) }, preventDefault() {}, stopPropagation() {} });
+  await new Promise((r) => setTimeout(r, 0));
+  ok("tipset ställer frågan, med bilagan", hamtat[0]?.fraga === "Vad måste jag göra för att sälja mer?" && hamtat[0]?.bilagor?.length === 1, JSON.stringify(hamtat[0] ?? {}).slice(0, 200));
+  ok("bilagan är skickad och borta ur rutan", (g.S.hv.bilagor || []).length === 0);
+  ok("för stor fil: ett besked och inget läggs till", /function hvLaggFiler\(filer\)/.test(html) && /högst 3 MB/.test(html));
+})();
+
+rubrik("Skiss 9 exakt: hela listan bakom Väntar på dig (punkt 31–33)");
+{
+  const g = hem({ chef: true }); g.hvOppna("vantar");
+  const a = g.hvHem();
+  ok("rubriken som skissen: Fem saker väntar på dig. Två saker brinner.", a.includes('<p id="hvArktext">Fem saker väntar på dig. <b>Två saker brinner.</b></p>'), a.match(/<p id="hvArktext">[\s\S]*?<\/p>/)?.[0]);
+  ok("grupperna Nu, Senare i dag och Kan vänta, med antal", /<div class="hv-grupp">Nu<small class="num">2<\/small><\/div>/.test(a) && /<div class="hv-grupp">Senare i dag<small class="num">1<\/small><\/div>/.test(a) && /<div class="hv-grupp">Kan vänta<small class="num">2<\/small><\/div>/.test(a));
+  ok("en rad per sak: punkt, text, varför och knapp", /<div class="hv-sak" data-id="r1"><i class="hv-heat hot" aria-hidden="true"><\/i><div><b>Carl är sjukanmäld<\/b><small>Sjuk sedan i dag. Ingen har bekräftat<\/small><\/div><button class="hv-btn" data-hvgor="r1">Bekräfta<\/button><\/div>/.test(a), a.match(/<div class="hv-sak"[\s\S]*?<\/div><button[\s\S]*?<\/button><\/div>/)?.[0]);
+  ok("foten: Alla uppgifter, till Uppgifter", /<span class="hv-end"><button class="hv-kn" data-view="uppgifter">Alla uppgifter<\/button><\/span>/.test(a));
+  ok("ingen tid när något som brinner saknar uppskattning", !a.includes("tar ungefär"));
+  ok("inget Lyssna, ingen Sedan du tittade, ingen radmeny", !a.includes("data-listen") && !a.includes("I natt och i morse") && !a.includes("data-hvmeny") && !a.includes("Stämmer inte"));
+  const m = hem({ chef: true, rader: [
+    { id: "upg-7", nar: "nu", heat: 5, bkind: "uppgift", t: "Ring Mälarö", why: "Frist i dag", act: { l: "Klar", check: true } },
+    { id: "upg-8", nar: "nu", heat: 4, bkind: "uppgift", t: "Skicka offert", why: "Frist i dag", act: { l: "Klar", check: true } },
+  ] });
+  m.TASKS = [{ id: "7", est: 10, ndNytt: [] }, { id: "8", est: 15, ndNytt: [] }];
+  m.hvOppna("vantar");
+  ok("när allt som brinner har en uppskattning: tiden står i foten", m.hvHem().includes('<span id="hvFotv">Det som brinner tar ungefär 25 min.</span>'), m.hvHem().match(/<span id="hvFotv">[\s\S]*?<\/span>/)?.[0]);
+  const tom = hem({ chef: true, rader: [] }); tom.hvOppna("vantar");
+  ok("tom lista: Inget väntar på dig just nu.", tom.hvHem().includes('<p id="hvArktext">Inget väntar på dig just nu.</p>') && /hv-rull hv-tom[\s\S]*Inget väntar på dig just nu\./.test(tom.hvHem()));
+  ok("radmenyns CSS krockar inte med Mer", !/\.hv-mer\{width:30px/.test(html));
+}
+
+rubrik("Skiss 9 exakt: Min dag (punkt 23)");
+{
+  const P = (x) => ({ moten: [], uppgifter: [], nu: 581, start: 480, slut: 1020, rast: 60, ...x });
+  const g0 = hem({ chef: true });
+  const p1 = g0.hvPlaneraDag(P({ moten: [{ a: 540, b: 570, namn: "Nordic" }, { a: 590, b: 620, namn: "Möte" }], uppgifter: [{ id: "u1", namn: "A", min: 5, brinner: true }, { id: "u2", namn: "B", min: 20 }] }));
+  ok("mötena står på sina tider, uppgifterna läggs i luckorna efter nu", JSON.stringify(p1.rader.map((r) => [r.a, r.b, r.typ])) === JSON.stringify([[540, 570, "mote"], [581, 586, "upg"], [590, 620, "mote"], [620, 640, "upg"]]), JSON.stringify(p1.rader.map((r) => [r.a, r.b, r.typ])));
+  ok("luften: slut − nu − rast − det som är kvar", p1.luft === 1020 - 581 - 60 - 30 - 25, p1.luft);
+  const p2 = g0.hvPlaneraDag(P({ uppgifter: [{ id: "u1", namn: "A", min: 600 }] }));
+  ok("en uppgift som inte ryms före slut ligger inte i dagen", p2.rader.length === 0 && p2.ryms === false && p2.luft < 0);
+  const p3 = g0.hvPlaneraDag(P({ uppgifter: [{ id: "u1", namn: "A", min: null }] }));
+  ok("en uppgift utan tid: ingen luft", p3.utanTid.length === 1 && p3.luft === null);
+  ok("utan schema: ingen luft", g0.hvPlaneraDag(P({ start: null, slut: null })).luft === null);
+
+  const g = hem({ chef: true, rader: [
+    { id: "upg-7", nar: "nu", heat: 5, bkind: "uppgift", t: "Ring Mälarö", why: "Frist i dag", act: { l: "Klar", check: true } },
+    { id: "upg-8", nar: "idag", heat: 2, bkind: "uppgift", t: "Skicka offert", why: "Frist i dag", act: { l: "Klar", check: true } },
+    { id: "r5", nar: "vanta", heat: 1, bkind: "utbildning", t: "Kursen", why: "Del 2", act: { l: "Öppna" } },
+  ] });
+  g.TASKS = [{ id: "7", est: 5, ndNytt: [] }, { id: "8", est: 20, ndNytt: [] }];
+  g.now = () => 581;
+  g.ndHemKal = () => [{ s: 540, e: 570, t: "Nordic Grön & Mark" }, { s: 660, e: 705, t: "PEGU Byggservice" }, { s: 810, e: 855, t: "Veckomöte" }];
+  g.ND.hem.dag = { start: 480, slut: 1020, rast: 60 };
+  g.ND.hem.chatt = true;
+  ok("Min dag öppnar arket", /<button class="hv-chip" data-hvark="dag">Min dag<\/button>/.test(g.hvHem()));
+  g.hvOppna("dag");
+  const a = g.hvHem();
+  ok("rubriken: möten kvar, saker som väntar och luften", a.includes('<p id="hvArktext">Två möten kvar och två saker som väntar. <b>Allt ryms, med 4 h 24 min över.</b></p>'), a.match(/<p id="hvArktext">[\s\S]*?<\/p>/)?.[0]);
+  ok("stapeln och skalan 08–17", a.includes('<div class="hv-dbar">') && /<div class="hv-dskala">(<span[^>]*>\d\d<\/span>){10}<\/div>/.test(a));
+  ok("strecket nu", /<u style="left:18\.7%"><\/u>/.test(a), a.match(/<u style="[^"]*"><\/u>/)?.[0]);
+  ok("en rad per sak, nästa markerad, nu-linjen", /<div class="hv-dnu">09:41 nu<\/div>/.test(a) && /class="hv-drad upg nast het"/.test(a) && /class="hv-drad mote forbi"/.test(a));
+  ok("nästa möte kan förberedas", /data-hvforbered="Förbered mitt möte 11\.00 med PEGU Byggservice">Förbered<\/button>/.test(a));
+  ok("foten: det som kan vänta, och Boka tiden i kalendern", a.includes('<button class="hv-lank" data-hvark="vantar">En sak kan vänta och ligger inte i dag</button>') && a.includes('<button class="hv-kn" data-hvboka>Boka tiden i kalendern</button>'));
+}
+
+rubrik("Skiss 9 exakt: Teamet i månaden (punkt 16 och 34–36)");
+{
+  const RAD = (x) => ({ id: "p", namn: "X Prov", fornamn: "X", mal: 12, order: 7, status: "Före sitt mål", led: ["n", null, "u", "n", "u"], orsak: null, forklaring: "Bokade möten: över sitt eget spann två veckor i rad.", kommentar: null, ...x });
+  const g = hem({ chef: true });
+  g.S.hv.data.team = { team: { kort: TEAM, utrakning: "19 order på 10 arbetsdagar, gånger månadens 21 arbetsdagar, blir ungefär 40.", personer: [{ id: "p1", namn: "Carl Prov", bokade: 8, hallna: 5, uteblivna: 1, order: 6 }], oppna: null, takten: [], serInte: "Det här ser jag inte: order som inte är inlagda i Nav.", kalla: "Räknat av regler",
+    rader: [RAD({ id: "p1", namn: "Carl Prov", fornamn: "Carl" }), RAD({ id: "p2", namn: "Edvin Prov", fornamn: "Edvin", mal: 11, order: 4, status: "Efter sitt mål", led: ["n", null, "n", "d", "n"], orsak: "Möten uteblir", forklaring: "Ringer och bokar som vanligt. 9 av 20 möten uteblev, mot 5 av 40 före. Varför vet jag inte." }), RAD({ id: "p3", namn: "Mick Prov", fornamn: "Mick", mal: null, order: 2, status: null, led: [null, null, null, null, null], forklaring: "Inget sticker ut." })],
+    saknarUtfall: 3, tillMalet: { kvar: 27, dagar: 11, perDag: 2.5, hittills: 1.9 } } };
+  g.hvOppna("team");
+  const t = g.hvHem();
+  ok("inledningen: läget, takten och hur många som ligger efter", t.includes("<p>Laget har <b>19 av 46 order</b> efter 10 av 21 arbetsdagar, och 1 är makulerad. I samma takt blir det ungefär 40. Det är en uträkning på takten, inget löfte. En ligger efter sitt mål.</p>"), t.match(/<p>Laget har[\s\S]*?<\/p>/)?.[0]);
+  ok("mätaren och skalan med takten och målet", t.includes("hv-matare hv-bred") && /<b>19<\/b> order<\/span><span[^>]*><b>≈40<\/b> i samma takt · <b>46<\/b> mål/.test(t));
+  ok("en rad per person med kedjan i fem led", (t.match(/class="hv-tr[ "]/g) || []).length === 3 && /<span class="hv-kedja"><i class="" title="Samtal: som vanligt"><\/i><i class="" title="Svar: ser jag inte"><\/i><i class="upp" title="Bokade möten: över sitt eget spann"><\/i>/.test(t), t.match(/<span class="hv-kedja">[\s\S]*?<\/span>/)?.[0]);
+  ok("eget mål: 7 av 12 och läget", /<span class="o num">7 av 12<\/span><span class="l"><b>Före sitt mål<\/b><\/span>/.test(t));
+  ok("orsaken står efter läget, och raden är utfälld med förklaringen", /class="hv-tr oppen"[^>]*>[\s\S]*?<b>Efter sitt mål<\/b> · Möten uteblir[\s\S]*?9 av 20 möten uteblev, mot 5 av 40 före\. Varför vet jag inte\./.test(t));
+  ok("utan eget mål: bara antalet, inget läge", /<span class="o num">2<\/span><span class="l"><\/span>/.test(t));
+  ok("kedjans förklaring", t.includes("Kedjan: samtal · svar · bokade · hållna · order. Färg = utanför eget spann två veckor i rad."));
+  ok("det Nav inte ser, och mötena utan utfall", /Det här ser jag inte: vad som sägs i samtalen, och om ett samtal blev besvarat\. 3 möten saknar utfall\.<\/span><button data-go="\/moten">Visa dem<\/button>/.test(t));
+  ok("facit: takten sa och det blev, efter lika många dagar", /<h3>Så har takten träffat<\/h3><span class="hv-marke">Facit<\/span><span class="hv-end num">efter 10 arbetsdagar<\/span>/.test(t) && /<div>Takten sa 38<small>Det blev 44<\/small><\/div><span class="hv-kr num">6 fler<\/span>/.test(t));
+  ok("Till målet, med decimalkomma", t.includes("<b>Till målet.</b> 27 order på 11 arbetsdagar, ungefär 2,5 om dagen. Hittills har det varit 1,9 om dagen."));
+  ok("Visa underlaget fäller ut antalen per person", t.includes("data-hvunderlag") && !t.includes("Uteblivna</span>"));
+  g.S.hv.underlag = true;
+  ok("underlaget: bokade, hållna, uteblivna och order per person", /Uteblivna<\/span>/.test(g.hvHem()) && g.hvHem().includes("Carl Prov"));
+  ok("inget facit per val längre", !t.includes("Navs facit per val") && !/hvHamtaFacit\(\)/.test(html));
+  const k = kort(hem({ chef: true, team: { ...TEAM, mal: null, text: { ...TEAM.text, stort: "19 order", malrad: "Inget mål satt för november." } } }).hvHem(), "Teamet i november");
+  ok("kortet utan mål: bara antalet, ingen rad om målet", /<b class="num">19<\/b><span>order<\/span>/.test(k) && !k.includes("Inget mål satt") && !k.includes("hv-matare"), k);
+}
+
+rubrik("Skiss 9 exakt: mobil som Claude (punkt 41, F6)");
+{
+  const M = media("(max-width:860px)");
+  const mob = (sel) => M.match(new RegExp(`[\\s}]${sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\{([^}]*)\\}`))?.[1] ?? "";
+  ok("fönstret: 100dvh kvar, kant 16 och ingen luft under skrivrutan", mob(".hv-fonster") === "padding:10px 16px 0", mob(".hv-fonster"));
+  ok("skrivrutan längst ned i full bredd, bara övre hörnen rundade, säker kant", mob(".hv-skriv") === "max-width:none;width:auto;margin:6px -16px 0;border-radius:20px 20px 0 0;border-bottom:0;padding:12px 12px calc(10px + env(safe-area-inset-bottom)) 16px", mob(".hv-skriv"));
+  ok("skrivfältet 16 px, så att telefonen inte zoomar", mob(".hv-skriv textarea") === "font-size:16px", mob(".hv-skriv textarea"));
+  ok("genvägarna i en rad som går att svepa", /^overflow-x:auto;flex-wrap:nowrap;justify-content:flex-start;scrollbar-width:none;/.test(mob(".hv-genv")), mob(".hv-genv"));
+  ok("genvägarnas rad går ut till kanten", /margin:0 -16px;padding:12px 16px 2px/.test(mob(".hv-genv")), mob(".hv-genv"));
+  ok("ingen rullist under genvägarna", mob(".hv-genv::-webkit-scrollbar") === "display:none");
+  ok("chippen krymper inte", /flex:none/.test(mob(".hv-chip")), mob(".hv-chip"));
+  ok("Mer fälls ut i samma rad, inte som en ruta som klipps", mob(".hv-merv") === "display:contents" && mob(".hv-genv .hv-mer") === "position:static;flex-direction:row;gap:8px;min-width:0;padding:0;background:none;border:0;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none", mob(".hv-genv .hv-mer"));
+  ok("Mers val ser ut som chippen", /^flex:none;height:32px;padding:0 13px;border-radius:12px;/.test(mob(".hv-genv .hv-mer button")), mob(".hv-genv .hv-mer button"));
+  ok("korten två och två, som på datorn fast mindre", mob(".hv-kort") === "grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:14px", mob(".hv-kort"));
+  ok("korten: mindre kant och radie", mob(".hv-card") === "padding:11px 12px 10px;border-radius:14px", mob(".hv-card"));
+  ok("rubriken 12 px", mob(".hv-chead h2") === "font-size:12px" && mob(".hv-chead") === "margin-bottom:6px;gap:6px");
+  ok("det stora talet 34 px", mob(".hv-stor b") === "font-size:34px" && mob(".hv-stor span") === "font-size:12.5px" && mob(".hv-stor") === "gap:4px;margin-top:2px");
+  ok("Väntar: rader 32 px, utan knappar", mob(".hv-rad") === "grid-template-columns:8px minmax(0,1fr);gap:8px;height:32px;min-height:32px" && mob(".hv-rad>b") === "font-size:13px" && mob(".hv-rad .hv-btn") === "display:none");
+  ok("texten högst tre rader", mob(".hv-ftxt") === "margin-top:6px;font-size:12.5px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden", mob(".hv-ftxt"));
+  ok("foten och knappen mindre", mob(".hv-frad") === "gap:8px;padding-top:8px;flex-wrap:wrap" && mob(".hv-frad .hv-btn") === "min-height:28px;padding:0 10px;font-size:12px" && mob(".hv-kfot") === "padding-top:6px;font-size:11.5px");
+  ok("hälsningen mindre, fortfarande en rad", mob(".hv-hero") === "padding:14px 2px 0" && mob(".hv-hero h1") === "font-size:26px" && mob(".hv-hero p") === "margin-top:6px;font-size:13.5px");
+  ok("hemmet rullar om det inte ryms", mob(".hv-hemlager") === "overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none");
+  ok("Veckan blir en lista per dag", mob(".hv-vecka") === "grid-template-columns:1fr;gap:8px;overflow-y:auto;align-content:start" && mob(".hv-tid") === "min-height:0;margin:4px 0 0;border-left:0;display:flex;flex-direction:column;gap:4px" && mob(".hv-tid i") === "position:static;white-space:normal");
+  ok("arket: mindre kant, inget esc", mob(".hv-arkyta") === "padding:14px" && mob(".hv-arkhuvud kbd") === "display:none");
+  ok("tråden under skrivrutan", mob(".hv-trad") === "top:-10px;bottom:-96px" && mob(".hv-tcol") === "padding:52px 0 120px");
+  ok("gamla mobilreglerna borta: en kolumn och 96 px luft", !M.includes("grid-template-columns:1fr;gap:12px;margin-top:20px") && !M.includes("padding:14px 16px 96px"));
+  // Som i Claude: ingen flikrad nere, en menyknapp uppe till vänster som öppnar Navs meny.
+  ok("Navs flikrad döljs på hemmet i telefonen, menyknappen syns", /@media \(max-width:900px\)\{body:has\(\.main\.hvmode\) \.bnav\{display:none\}\.hv-meny\{display:inline-grid\}\}/.test(html));
+  ok("menyknappen är dold på datorn", regel(".hv-meny") === "display:none;place-items:center;width:36px;height:36px;margin-left:-8px;border-radius:10px;color:var(--hv-ink)", regel(".hv-meny"));
+  const g = hem({ chef: true });
+  const h = g.hvHem();
+  ok("menyknappen först i överraden", /<div class="hv-topp"><button class="hv-meny" data-rlsmer aria-haspopup="dialog" aria-expanded="false" aria-label="Meny"><svg/.test(h), h.slice(h.indexOf("hv-topp") - 12, h.indexOf("hv-topp") + 200));
+  g.S.rlsMer = true;
+  ok("menyknappen säger när menyn är öppen", g.hvHem().includes('class="hv-meny" data-rlsmer aria-haspopup="dialog" aria-expanded="true"'));
+  ok("ikonen: två streck", /P\.hvmeny = '<path d="M4 8h16M4 16h16"\/>';/.test(html));
+  ok("menyn stängs med fokus på den knapp som syns", /function rlsArkStang\(\)\{ S\.rlsMer = false; rlsArkRita\(\); const m = \[\.\.\.document\.querySelectorAll\('\[data-rlsmer\]'\)\]\.find\(b => b\.offsetParent\);/.test(html));
+  ok("Mer rullar fram de nya valen i raden", /if \(d\.hvmer !== undefined\)\{ S\.hv\.mer = !S\.hv\.mer; render\(\); if \(S\.hv\.mer\) requestAnimationFrame\(\(\) => \{ const r = document\.querySelector\('\.hv-genv'\); if \(r && r\.scrollWidth > r\.clientWidth\) r\.scrollLeft = r\.scrollWidth; \}\); return; \}/.test(html));
+}
+
+rubrik("Skiss 9 exakt: menyraden (punkt 42)");
+{
+  const R = (sel) => html.match(new RegExp(`\\n${sel.replace(/[.*+?^${}()|[\]\\#]/g, "\\$&")}\\{([^}]*)\\}`))?.[1] ?? "";
+  ok("rälsen: 14 12 10 i kant", /padding:14px 12px 10px/.test(R("#rail.rls")), R("#rail.rls"));
+  ok("raden: 33 px, 14 px text, radie 8", /height:33px;padding:0 10px;border-radius:8px;color:var\(--ink-2\);font-size:14px/.test(R("#rail .rls-i")), R("#rail .rls-i"));
+  ok("antalen i mono 11 px", /font:500 11px var\(--f-mono\)/.test(R("#rail .rls-n")), R("#rail .rls-n"));
+  ok("sökrutan: 30 px, ram line-2, radie 8", /height:30px;padding:0 8px 0 10px;border-radius:8px;border:1px solid var\(--line-2\)/.test(R("#rail .rls-sok")) && /font:11px var\(--f-mono\);color:var\(--ink-3\);border:1px solid var\(--line\);border-radius:5px;padding:1px 5px/.test(R("#rail .rls-sok kbd")), R("#rail .rls-sok"));
+  ok("märket: nav i 600 20px", /font:600 20px\/1 var\(--f-display\);letter-spacing:-\.02em/.test(R("#rail .rls-wm b")) && /font-size:11\.5px/.test(R("#rail .rls-wm small")));
+  ok("klockans tal som skissen", /top:-4px;right:-5px;min-width:17px;height:17px;padding:0 4px;border-radius:9px/.test(R("#rail .rls-b")), R("#rail .rls-b"));
+  ok("profilen längst ned i rälsen på det nya hemmet: bokstav, namn, roll och upp/ned", /S\.view === 'hem' && typeof hvPa === 'function' && hvPa\(\) \? rlsProfil\(\) : ''/.test(html) && /class="rls-prof" id="prfKnapp"[^>]*data-prfmeny/.test(html) && /<i aria-hidden="true">\$\{esc\(String\(vis\)\[0\] \|\| ''\)\}<\/i><span>\$\{esc\(vis\)\}<small>/.test(html));
+  ok("profilmenyn öppnas uppåt från rälsen", /if \(k\.closest\('#rail'\)\)\{ el\.style\.top = \(r\.top \+ scrollY - el\.offsetHeight - 6\) \+ 'px'; el\.style\.left = r\.left \+ 'px'; return; \}/.test(html));
 }
 
 console.log(fel ? `\n\x1b[31m${fel} prov föll.\x1b[0m` : "\n\x1b[32mAlla prov gick igenom.\x1b[0m");
