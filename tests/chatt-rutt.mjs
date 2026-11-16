@@ -407,6 +407,11 @@ rubrik("Kunskapsbasen: svaret kommer ur företagets dokument");
     && kallaFor([{ _verktyg: "sok_kunskap", ...m }]) === "Skrivet av AI, inte ur Navs tal eller kunskapsbasen"
     && kallaFor([{ _verktyg: "las_matt", fel: "Det får du inte se." }]) === "Skrivet av AI, inte ur Navs tal eller kunskapsbasen"
     && kallaFor([]) === "Skrivet av AI, inte ur Navs tal eller kunskapsbasen", kallaFor([{ _verktyg: "sok_kunskap", ...t }]));
+  // Kunskapsbasen (Inställningar) och rutinerna (Rutiner) är två källor, och källraden säger vilken.
+  const blandat = (await korVerktyg("sok_kunskap", { sokord: "möte transport" }, { ...ctx, kallor: { ...ctx.kallor, kunskap: async () => ({ allaOrden: true, dokument: [{ rubrik: "Sökord: transport", omrade: "Sälj", text: "a", andrad: "2026-11-01T00:00:00Z", kalla: "kunskapsbasen" }, { rubrik: "Så bokar du ett möte", omrade: "Sälj", text: "b", andrad: "2026-11-02T00:00:00Z", kalla: "rutiner" }] }) } }, 1)).svar;
+  ok("varje dokument säger om det ligger i kunskapsbasen eller i Rutiner", blandat.dokument[0].kalla === "Kunskapsbasen" && blandat.dokument[1].kalla === "Rutiner", JSON.stringify(blandat.dokument.map((d) => d.kalla)));
+  ok("källraden skiljer kunskapsbasen från rutinerna", kallaFor([blandat]) === "Skrivet av AI ur företagets kunskapsbas (Sökord: transport) och företagets rutiner (Så bokar du ett möte)"
+    && kallaFor([{ _verktyg: "las_matt", antal: 2 }, blandat]) === "Skrivet av AI ur Navs tal, företagets kunskapsbas (Sökord: transport) och företagets rutiner (Så bokar du ett möte)", kallaFor([blandat]));
 }
 
 rubrik("Korten: exakt vad som görs, och bara det personen själv får göra");

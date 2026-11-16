@@ -60,6 +60,9 @@ export const SKRIVLAGE = {
   moten: true,
   // Introfilmen (beställaren 2026-10-31, 0270): "sedd" måste sparas från första dagen, annars ser alla filmen varje gång.
   introfilm: true,
+  // Kunskapsbasen i Inställningar (0312). Beställaren 2026-11-16: "vi behöver lägga till Kunskapsbas i inställningar,
+  // där ska vi ladda upp massa dokument", och ja till förslaget samma dag. Bara admin och uppåt når rutten.
+  kunskap: true,
 } as const;
 
 export type Skrivvy = keyof typeof SKRIVLAGE;

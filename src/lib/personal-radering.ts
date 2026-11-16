@@ -157,6 +157,7 @@ const TABELL: Record<string, string> = {
   module_rating: "Betyg på utbildningsmoduler",
   nav_chatt_logg: "Frågor till chatten",
   nav_chatt_prov: "Godkända prov av chattens modell",
+  kunskap_dokument: "Dokument i kunskapsbasen som personen senast ändrade",
   nav_forslag: "Navs förslag och ändringar",
   nav_forslag_handelse: "Val och domar i Navs förslag",
   nav_preference: "Egna inställningar i Nav",

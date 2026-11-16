@@ -8085,6 +8085,28 @@ body.nd-riktig :is(.pv-lagrad,.arow[data-agenda],.pv-tab tbody tr[data-pvupers],
 .ut-p:first-child{border-top:0}
 .ut-p:hover{background:var(--surface-2)}
 .ut-p[aria-pressed="true"]{background:var(--surface-2);box-shadow:inset 2px 0 0 var(--brand)}
+/* Kunskapsbasen i Inställningar (prefix kun) */
+.kun-lista{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.kun-rad{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-top:1px solid var(--line)}
+.kun-lista>.kun-rad:first-child,.kun-omr+.kun-rad{border-top:0}
+.kun-omr{margin-top:14px;padding-bottom:2px;font-size:12px;font-weight:600;color:var(--prf-ink-3);border-bottom:1px solid var(--line)}
+.kun-lista>.kun-omr:first-child{margin-top:0}
+.kun-t{display:flex;flex-direction:column;gap:2px;min-width:0}
+.kun-t b{font-size:14px;font-weight:550;color:var(--ink);overflow-wrap:anywhere}
+.kun-t small{font-size:12.5px;line-height:1.45;color:var(--prf-ink-3);overflow-wrap:anywhere}
+.kun-rad .prf-knappar{flex:none;flex-wrap:nowrap}
+.kun-upp{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.kun-upp li{display:flex;flex-direction:column;gap:1px;padding-left:10px;border-left:2px solid var(--line-2);font-size:13px;line-height:1.45;color:var(--ink-2)}
+.kun-upp b{font-weight:550;color:var(--ink);overflow-wrap:anywhere}
+.kun-upp .kun-u-klar{border-left-color:var(--brand)}
+.kun-upp .kun-u-fel{border-left-color:var(--danger)}
+.kun-upp .kun-u-fel span{color:var(--danger-ink)}
+.kun-form .prf-f{max-width:none}
+.kun-form .prf-f:not(.kun-text){max-width:420px}
+.kun-form textarea{min-height:220px;line-height:1.5}
+@media (max-width:760px){
+  .kun-rad{flex-direction:column;align-items:flex-start;gap:10px}
+}
 .ut-p:focus-visible{outline:2px solid var(--brand);outline-offset:-2px}
 .ut-p b{display:block;font-size:13.5px;font-weight:550;color:var(--ink)}
 .ut-p small{font-size:12.5px;color:var(--prf-ink-3)}
@@ -44882,6 +44904,188 @@ if (ND){
   // En push som redan är sedd eller rensad (på en annan enhet) stängs när Nav öppnas här.
   setTimeout(() => klTraySynk(performance.timeOrigin || Date.now()), 1500);
 }
+
+/* ===================== KUNSKAPSBASEN (prefix kun) =====================
+   Inställningar → Kunskapsbas (0312, PRD:n 2026-11-16). Beställaren: "vi behöver lägga till Kunskapsbas i
+   inställningar, där ska vi ladda upp massa dokument". Chatten svarar ur dokumenten (sok_kunskap), och listan
+   Det chatten inte hittade säger vad som saknas. Bara den som sköter företagets inställningar (admin och uppåt)
+   ser fliken: rutten /nav2/kunskap prövar samma sak. Datan hämtas först när fliken öppnas.
+   Av en fil sparas bara texten. Ta bort, ändra och stryk går att ångra. */
+const KUNKORT = 'kunskap', KUNFILMAX = 3 * 1024 * 1024, KUNFILSORT = /\.(pdf|txt|md)$/i;
+P.kunbok = '<path d="M5 5.5A1.5 1.5 0 0 1 6.5 4H19v13H7a2 2 0 0 0-2 2z"/><path d="M5 19a2 2 0 0 0 2 2h12v-4"/><path d="M9 8.5h6M9 12h4"/>';
+const kunFar = () => !!ND && !!ND.jag && (ND.jag.niva === 'admin' || ND.jag.niva === 'superadmin');
+function kunSt(){ return S.kun || (S.kun = {vy:null, laddar:false, fel:'', form:null, upp:[], laddarUpp:false}); }
+const kunDag = iso => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('sv-SE', {day:'numeric', month:'short', year:'numeric'}); };
+function kunLadda(om){
+  const s = kunSt(); if (s.laddar || (s.vy && !om)) return;
+  s.laddar = true; s.fel = '';
+  ndLas('/nav2/kunskap').then(r => {
+    s.laddar = false;
+    const d = r.ok ? r.data : null;
+    if (d && Array.isArray(d.dokument) && !d.fel) s.vy = d;
+    else if (!s.vy) s.fel = (d && d.fel) || r.fel || 'Kunskapsbasen gick inte att läsa.';
+    render();
+  });
+}
+// Ett nej visas som ett kvitto, utom när raden själv säger det (uppladdningen, formuläret).
+async function kunPost(data, {tid, tyst} = {}){
+  try {
+    const s = ndSvar(await ndSkriv('/nav2/kunskap', data, tid ? {tid} : undefined));
+    if (s.fel && !tyst) ndSkrivFel(s);
+    return s;
+  } catch(_){ if (!tyst) toast('Nav svarade inte.'); return {fel:'Nav svarade inte.'}; }
+}
+const kunLasFil = f => new Promise((ja, nej) => { const l = new FileReader(); l.onload = () => ja(String(l.result).split(',')[1] || ''); l.onerror = nej; l.readAsDataURL(f); });
+// Filerna går en i taget, så att varje rad säger hur det gick för just den filen.
+async function kunLaddaUpp(filer){
+  const s = kunSt(); if (s.laddarUpp) return;
+  s.laddarUpp = true; s.upp = filer.map(f => ({namn:f.name, lage:'vantar', text:'Väntar'}));
+  render();
+  let nya = 0;
+  for (let i = 0; i < filer.length; i++){
+    const f = filer[i], rad = s.upp[i];
+    if (!KUNFILSORT.test(f.name)){ rad.lage = 'fel'; rad.text = 'Läses inte. Kunskapsbasen tar PDF, text (.txt) och Markdown (.md).'; render(); continue; }
+    if (!f.size || f.size > KUNFILMAX){ rad.lage = 'fel'; rad.text = f.size ? 'För stor. Högst 3 MB per fil.' : 'Filen är tom.'; render(); continue; }
+    rad.lage = 'laser'; rad.text = 'Läser texten …'; render();
+    let data = '';
+    try { data = await kunLasFil(f); } catch(_){ data = ''; }
+    const svar = data ? await kunPost({handling:'fil', namn:f.name, data}, {tid:90000, tyst:true}) : {fel:'Filen gick inte att läsa.'};
+    if (svar.fel){ rad.lage = 'fel'; rad.text = svar.fel; }
+    else { nya++; rad.lage = 'klar'; rad.text = `Inlagd som "${svar.titel}", ${svar.stycken} ${svar.stycken === 1 ? 'stycke' : 'stycken'}.`; }
+    render();
+  }
+  s.laddarUpp = false;
+  if (nya) kunLadda(true); else render();
+}
+async function kunOppna(id){
+  const s = kunSt(), r = await ndLas('/nav2/kunskap?id=' + encodeURIComponent(id)), d = r.ok && r.data && r.data.dokument;
+  if (!d){ toast((r.data && r.data.fel) || r.fel || 'Dokumentet gick inte att öppna.'); if (r.status === 404) kunLadda(true); return; }
+  s.form = {id:d.id, titel:d.titel, omrade:d.omrade || '', text:d.text, fel:'', fore:{titel:d.titel, omrade:d.omrade || '', text:d.text}};
+  S.prfFokus = '#kunTitel'; render();
+}
+const kunFormAndrad = f => f.id ? ['titel', 'omrade', 'text'].some(k => f[k] !== f.fore[k]) : !!(f.titel.trim() || f.omrade.trim() || f.text.trim());
+function kunAvbryt(){
+  const s = kunSt(), f = s.form; if (!f) return;
+  s.form = null; S.prfFokus = f.id ? `[data-kunandra="${f.id}"]` : '[data-kunny]'; render();
+  // Det som skrivits kastas inte tyst: Ångra öppnar formuläret igen som det var.
+  if (kunFormAndrad(f)) toast(f.id ? 'Ändringarna sparades inte.' : 'Utkastet sparades inte.', () => { kunSt().form = f; S.prfFokus = '#kunText'; render(); }, 'Fortsätt skriva');
+}
+async function kunSpara(){
+  const s = kunSt(), f = s.form; if (!f || f.sparar) return;
+  if (!f.titel.trim()){ f.fel = 'Skriv en titel.'; S.prfFokus = '#kunTitel'; render(); return; }
+  if (!f.text.trim()){ f.fel = 'Dokumentet har ingen text.'; S.prfFokus = '#kunText'; render(); return; }
+  if (f.id && !kunFormAndrad(f)){ s.form = null; render(); return; }
+  f.sparar = true; f.fel = ''; render();
+  const svar = await kunPost(f.id ? {handling:'andra', id:f.id, titel:f.titel, omrade:f.omrade, text:f.text} : {handling:'lagg', titel:f.titel, omrade:f.omrade, text:f.text}, {tyst:true});
+  f.sparar = false;
+  if (svar.fel){ f.fel = svar.fel; render(); return; }
+  s.form = null; kunLadda(true); render();
+  const fore = f.fore, id = svar.id;
+  toast(f.id ? 'Sparat. Chatten svarar ur den nya texten.' : 'Dokumentet ligger i kunskapsbasen.', async () => {
+    const a = await kunPost(f.id ? {handling:'andra', id, ...fore} : {handling:'ta_bort', id});
+    if (!a.fel){ kunLadda(true); toast(f.id ? 'Den förra texten är tillbaka.' : 'Dokumentet är borttaget igen.'); }
+  });
+}
+async function kunTaBort(id){
+  const svar = await kunPost({handling:'ta_bort', id});
+  if (svar.fel){ if (svar.fel.includes('finns inte')) kunLadda(true); return; }
+  kunLadda(true);
+  const b = svar.borttaget;
+  toast('Dokumentet är borttaget. Chatten svarar inte längre ur det.', async () => {
+    const a = await kunPost({handling:'lagg', titel:b.titel, omrade:b.omrade, text:b.text, filnamn:b.filnamn});
+    if (!a.fel){ kunLadda(true); toast('Dokumentet är tillbaka.'); }
+  });
+}
+async function kunStryk(sokord){
+  const svar = await kunPost({handling:'miss_stryk', sokord});
+  if (svar.fel){ kunLadda(true); return; }
+  kunLadda(true);
+  toast('Struken ur listan.', async () => { const a = await kunPost({handling:'miss_tillbaka', rader:svar.strukna}); if (!a.fel) kunLadda(true); });
+}
+function kunFormHtml(f){
+  return prfKort('kun-form', f.id ? 'Ändra dokumentet' : 'Nytt dokument', 'En rad som börjar med # är en rubrik. Rubriker delar ett långt dokument i avsnitt, så att chatten hittar rätt del.', `<div class="prf-kb kun-form">
+    <div class="prf-f"><label for="kunTitel">Titel</label><input class="prf-in" id="kunTitel" data-kunf="titel" maxlength="160" autocomplete="off" value="${esc(f.titel)}"></div>
+    <div class="prf-f"><label for="kunOmrade">Område</label><input class="prf-in" id="kunOmrade" data-kunf="omrade" maxlength="80" autocomplete="off" value="${esc(f.omrade)}" aria-describedby="kunOmradeH"><p class="prf-hj" id="kunOmradeH">Valfritt, till exempel Tjänster eller Branscher. Dokument med samma område står ihop i listan.</p></div>
+    <div class="prf-f kun-text"><label for="kunText">Text</label><textarea class="uin" id="kunText" data-kunf="text" rows="16" spellcheck="true">${esc(f.text)}</textarea></div>
+    ${f.fel ? `<p class="prf-fel" role="alert">${I('prfvarn')}<span>${esc(f.fel)}</span></p>` : ''}
+    <div class="prf-knappar"><button type="button" class="btn btn-p btn-sm" data-kunspara ${f.sparar ? 'disabled' : ''}>${f.sparar ? 'Sparar …' : 'Spara'}</button><button type="button" class="btn btn-s btn-sm" data-kunavbryt ${f.sparar ? 'disabled' : ''}>Avbryt</button></div>
+  </div>`);
+}
+function kunLista(d){
+  if (!d.length) return `<p class="prf-hj">Kunskapsbasen är tom. Chatten säger då att den inte har företagets eget svar. Börja med det som oftast frågas.</p>`;
+  const medOmr = d.some(x => x.omrade); let omr = null;
+  return `<ul class="kun-lista">${d.map(x => {
+    const huvud = medOmr && x.omrade !== omr ? `<li class="kun-omr">${esc(x.omrade || 'Utan område')}</li>` : ''; omr = x.omrade;
+    return `${huvud}<li class="kun-rad"><span class="kun-t"><b>${esc(x.titel)}</b><small>${[x.filnamn ? esc(x.filnamn) : 'Skriven här', `ändrad ${kunDag(x.andrad)}`, `<span class="num">${x.stycken}</span> ${x.stycken === 1 ? 'stycke' : 'stycken'}`].join(' · ')}</small></span><span class="prf-knappar"><button type="button" class="btn btn-s btn-sm" data-kunandra="${esc(x.id)}" aria-label="Ändra ${esc(x.titel)}">Ändra</button><button type="button" class="btn btn-s btn-sm" data-kunbort="${esc(x.id)}" aria-label="Ta bort ${esc(x.titel)}">Ta bort</button></span></li>`; }).join('')}</ul>`;
+}
+function kunSaknasKort(m){
+  const visa = m.slice(0, 50);
+  return prfKort('kun-saknas', 'Det chatten inte hittade', 'Sökningar i kunskapsbasen utan svar. Listan har inga namn: den säger vad som saknas, inte vem som frågade.', `<div class="prf-kb">${m.length
+    ? `<ul class="kun-lista">${visa.map(x => `<li class="kun-rad"><span class="kun-t"><b>${esc(x.sokord)}</b><small>${x.antal === 1 ? 'Sökt en gång' : `Sökt <span class="num">${x.antal}</span> gånger`} · senast ${kunDag(x.senast)}</small></span><button type="button" class="btn btn-s btn-sm" data-kunstryk="${esc(x.sokord)}" aria-label="Stryk ${esc(x.sokord)} ur listan">Stryk</button></li>`).join('')}</ul>${m.length > visa.length ? `<p class="prf-hj">Visar de <span class="num">${visa.length}</span> mest sökta av <span class="num">${m.length}</span>.</p>` : ''}`
+    : `<p class="prf-hj">Inga sökningar utan svar än.</p>`}</div>`);
+}
+function kunSek(){
+  const s = kunSt(), vy = s.vy;
+  if (!vy){
+    if (!s.laddar && !s.fel) kunLadda();
+    return prfKort('kun-dok', 'Dokument', '', `<div class="prf-kb">${s.fel ? `<div class="prf-rad"><p class="prf-hj">${esc(s.fel)}</p><button type="button" class="btn btn-s btn-sm" data-kunladda>Försök igen</button></div>` : `<p class="prf-hj" role="status">Läser kunskapsbasen …</p>`}</div>`);
+  }
+  if (s.form) return kunFormHtml(s.form);
+  const upp = s.upp.length ? `<ul class="kun-upp" aria-live="polite">${s.upp.map(u => `<li class="kun-u-${u.lage}"><b>${esc(u.namn)}</b><span>${esc(u.text)}</span></li>`).join('')}</ul>` : '';
+  const n = vy.dokument.length;
+  return prfKort('kun-lagg', 'Lägg till', 'Chatten svarar ur det som står här och säger vilket dokument svaret kommer ur. En ändring gäller direkt.', `<div class="prf-kb">
+      <div class="prf-knappar"><button type="button" class="btn btn-p btn-sm" data-kunvalj ${s.laddarUpp ? 'disabled' : ''}>${s.laddarUpp ? 'Laddar upp …' : 'Ladda upp filer'}</button><button type="button" class="btn btn-s btn-sm" data-kunny>Skriv eller klistra in</button><input type="file" id="kunFil" data-kunfil multiple accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown" hidden></div>
+      <p class="prf-hj">PDF, text (.txt) och Markdown (.md), högst 3 MB per fil. Bara texten sparas, inte filen. En PDF som är inskannad som bild har ingen text att läsa.</p>${upp}</div>`)
+    + prfKort('kun-dok', 'Dokument', n ? `<span class="num">${n}</span> dokument i kunskapsbasen.` : '', `<div class="prf-kb">${kunLista(vy.dokument)}</div>`)
+    + kunSaknasKort(vy.saknas || []);
+}
+/* ---------- Kopplingen till inställningsrutan ---------- */
+PRFSEK.push([KUNKORT, 'Kunskapsbas', 'kunbok', 'Det företaget vet: tjänster, branscher, arbetssätt. Chatten svarar ur det.']);
+PRFSOK.push(
+  ['kun-lagg', KUNKORT, 'Kunskapsbas: ladda upp eller skriv ett dokument', ['kunskapsbas', 'kunskap', 'dokument', 'ladda upp', 'pdf', 'chatten', 'ai']],
+  ['kun-dok', KUNKORT, 'Kunskapsbas: dokumenten', ['kunskapsbas', 'kunskap', 'dokument', 'ändra', 'ta bort']],
+  ['kun-saknas', KUNKORT, 'Kunskapsbas: det chatten inte hittade', ['kunskapsbas', 'saknas', 'sökningar', 'utan svar', 'chatten']]
+);
+const _kunPrfSok = prfSok;
+prfSok = function(q, palett){ return _kunPrfSok(q, palett).filter(([, sek]) => sek !== KUNKORT || kunFar()); };
+const _kunPrfGa = prfGa;
+prfGa = function(sek, rad){ if (sek === KUNKORT && !kunFar()) sek = null; return _kunPrfGa(sek, rad); };
+const _kunPrfAdminSek = prfAdminSek;
+prfAdminSek = function(){ return S.prfRuta && S.prfRuta.sek === KUNKORT ? kunSek() : _kunPrfAdminSek(); };
+const _kunRutaHtml = prfRutaHtml;
+prfRutaHtml = function(){
+  const R = S.prfRuta; if (R && R.sek === KUNKORT && !kunFar()) R.sek = 'konto';
+  let h = _kunRutaHtml();
+  // Fliken hamnar sist bland företagets inställningar, och bara för den som sköter dem.
+  h = h.replace(/<button type="button" role="tab" id="prfTab-kunskap"[\s\S]*?<\/button>/, '');
+  if (kunFar()){
+    const flik = `<button type="button" role="tab" id="prfTab-${KUNKORT}" aria-selected="${R.sek === KUNKORT}" aria-controls="prfPanel" tabindex="${R.sek === KUNKORT ? 0 : -1}" data-prfsek="${KUNKORT}">${I('kunbok')}<span>Kunskapsbas</span>${I('prfpil', 'prf-mpil')}</button>`;
+    const efter = ['utskick', 'salesboard', 'satser', 'admin', 'notiser'].map(k => new RegExp(`(<button type="button" role="tab" id="prfTab-${k}"[\\s\\S]*?</button>)`)).find(r => r.test(h));
+    if (efter) h = h.replace(efter, m => m + flik);
+  }
+  return h;
+};
+/* ---------- Händelserna ---------- */
+document.addEventListener('click', e => {
+  const t = e.target.closest && e.target.closest('button'); if (!t || !t.closest('#prfRuta') || !kunFar()) return;
+  const d = t.dataset, s = kunSt(), klart = () => { e.preventDefault(); e.stopImmediatePropagation(); };
+  if (d.kunladda !== undefined){ klart(); s.fel = ''; kunLadda(true); render(); return; }
+  if (d.kunvalj !== undefined){ klart(); document.getElementById('kunFil')?.click(); return; }
+  if (d.kunny !== undefined){ klart(); s.form = {id:null, titel:'', omrade:'', text:'', fel:''}; S.prfFokus = '#kunTitel'; render(); return; }
+  if (d.kunavbryt !== undefined){ klart(); kunAvbryt(); return; }
+  if (d.kunspara !== undefined){ klart(); kunSpara(); return; }
+  if (d.kunandra){ klart(); kunOppna(d.kunandra); return; }
+  if (d.kunbort){ klart(); kunTaBort(d.kunbort); return; }
+  if (d.kunstryk){ klart(); kunStryk(d.kunstryk); return; }
+}, true);
+// Det som skrivs sparas i läget vid varje tecken, så att en omritning aldrig tar bort något.
+document.addEventListener('input', e => { const f = e.target && e.target.dataset && e.target.dataset.kunf, s = S.kun; if (f && s && s.form) s.form[f] = e.target.value; });
+document.addEventListener('change', e => {
+  if (!e.target || !e.target.dataset || e.target.dataset.kunfil === undefined || !kunFar()) return;
+  const filer = [...(e.target.files || [])]; e.target.value = '';
+  if (filer.length) kunLaddaUpp(filer);
+});
+/* ---------- Kunskapsbasen slut ---------- */
 
 /* Start */
 try { const th = localStorage.getItem('nav2-theme'); if (th && th !== 'auto'){ document.documentElement.setAttribute('data-theme', th); S.theme = th; document.querySelectorAll('#themeSeg button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themeSet === th))); } } catch(_){}

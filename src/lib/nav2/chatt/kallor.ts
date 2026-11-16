@@ -78,25 +78,35 @@ export function skapaKallor(user: CurrentUser): Kallor {
         if (m.fel) throw new Error("mötena gick inte att läsa");
         return m.kort.map((k) => affarUr(k, m.inst.kolumnnamn));
       }),
-    // Kunskapsbasen är Rutiners dokument, lästa som den inloggade: RLS avgör målgruppen. Först alla sökorden,
-    // sedan något av dem, så att "sökord transport" hittar dokumentet om transport fast ordet sökord inte står där.
+    // Kunskapsbasen (0312, Inställningar → Kunskapsbas) först, publicerade rutiner därefter. Båda läses som den
+    // inloggade, så RLS avgör. Först alla sökorden, sedan något av dem, så att "sökord transport" hittar dokumentet
+    // om transport fast ordet sökord inte står där.
     kunskap: (sokord) =>
       en(`kunskap:${sokord}`, async () => {
         const db = await supabaseServer();
-        const sok = async (q: string): Promise<Dokument[]> => {
+        const stycken = async (q: string): Promise<Dokument[]> => {
+          const { data, error } = await db.rpc("kunskap_sok", { p_sokord: q, p_max: DOKUMENT_MAX });
+          if (error) throw new Error(error.message);
+          return ((data ?? []) as { titel: string; omrade: string; rubrik: string; text: string; andrad: string }[]).map((d) => ({ rubrik: d.rubrik && d.rubrik !== d.titel ? `${d.titel}: ${d.rubrik}` : d.titel, omrade: d.omrade, text: d.text, andrad: d.andrad, kalla: "kunskapsbasen" }));
+        };
+        const rutiner = async (q: string): Promise<Dokument[]> => {
           const { data, error } = await db.from("document").select("title, category_path, body_md, updated_at").eq("status", "published").textSearch("search", q, { type: "websearch", config: "swedish" }).order("updated_at", { ascending: false }).limit(DOKUMENT_MAX);
           if (error) throw new Error(error.message);
-          return ((data ?? []) as { title: string; category_path: string | null; body_md: string | null; updated_at: string }[]).map((d) => ({ rubrik: d.title, omrade: d.category_path ?? "", text: d.body_md ?? "", andrad: d.updated_at }));
+          return ((data ?? []) as { title: string; category_path: string | null; body_md: string | null; updated_at: string }[]).map((d) => ({ rubrik: d.title, omrade: d.category_path ?? "", text: d.body_md ?? "", andrad: d.updated_at, kalla: "rutiner" }));
+        };
+        const sok = async (q: string): Promise<Dokument[]> => {
+          const k = await stycken(q);
+          return k.length >= DOKUMENT_MAX ? k : [...k, ...(await rutiner(q))].slice(0, DOKUMENT_MAX);
         };
         const alla = await sok(sokord);
         if (alla.length) return { dokument: alla, allaOrden: true };
         const ord = sokord.split(/\s+/).filter((o) => o.length > 2 && o.toLowerCase() !== "or");
         return { dokument: ord.length > 1 ? await sok(ord.join(" or ")) : [], allaOrden: false };
       }),
-    // Samma lista som Rutiners egen sökning skriver till (`document_search_miss`), med samma tak. Raden har ingen person.
+    // Listan över det kunskapsbasen saknar (`kunskap_miss`, visas i Inställningar → Kunskapsbas). Raden har ingen person.
     kunskapMiss: async (sokord) => {
       const db = supabaseAdmin();
-      if (await underTak(db, { tabell: "document_search_miss", kolumn: "searched_at", fran: senasteMinuten() }, SOKMISSAR_PER_MINUT)) await db.from("document_search_miss").insert({ query: sokord.slice(0, 200) });
+      if (await underTak(db, { tabell: "kunskap_miss", kolumn: "nar", fran: senasteMinuten() }, SOKMISSAR_PER_MINUT)) await db.from("kunskap_miss").insert({ sokord: sokord.slice(0, 200) });
     },
   };
 }

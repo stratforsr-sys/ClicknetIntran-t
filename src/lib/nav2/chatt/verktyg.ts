@@ -38,7 +38,7 @@ export type Kallor = {
   provision(manad: string): Promise<{ summa: number; bokfort: number; signerade: number; makulerade: number; netto: number; rader: { text: string; belopp: number }[] } | null>;
   /** De öppna affärerna personen får se i Möten. Kretsen prövas av verktyget, som för talen. */
   affarer(): Promise<Affar[]>;
-  /** Företagets publicerade dokument som personen får läsa och som matchar sökorden. `allaOrden`: träffarna har alla sökorden, inte bara något av dem. */
+  /** Det i kunskapsbasen och i de publicerade rutinerna som personen får läsa och som matchar sökorden. Kunskapsbasen först. `allaOrden`: träffarna har alla sökorden, inte bara något av dem. */
   kunskap(sokord: string): Promise<{ dokument: Dokument[]; allaOrden: boolean }>;
   /** En sökning utan träff, till listan över det kunskapsbasen saknar. Utan person. */
   kunskapMiss(sokord: string): Promise<void>;
@@ -59,7 +59,8 @@ export type Affar = {
   mote: { tid: string; flyttningar: number } | null;
   uppfoljning: { datum: string; text: string | null; ingetSvar: number; andrad: string | null } | null;
 };
-export type Dokument = { rubrik: string; omrade: string; text: string; andrad: string };
+/** `kalla`: var texten ligger. Kunskapsbasen sköts i Inställningar, rutinerna i Rutiner. */
+export type Dokument = { rubrik: string; omrade: string; text: string; andrad: string; kalla: "kunskapsbasen" | "rutiner" };
 
 export type Ctx = { mig: string; idag: string; kallor: Kallor };
 /** Ett steg är ett anrop till en av Navs vanliga rutter. `angra` tar tillbaka det; "$fält" byts mot fältet i ruttens svar. */
@@ -408,7 +409,7 @@ async function lasAffarer(input: Record<string, unknown>, c: Ctx): Promise<Recor
 async function sokKunskap(input: Record<string, unknown>, c: Ctx): Promise<Record<string, unknown>> {
   const sokord = kort(input.sokord, 120);
   if (sokord.length < 2) return { fel: "Skriv vad som ska sökas." };
-  const serInte = "Söker bara i företagets publicerade dokument som personen får läsa. Texten är skriven av företaget och kan vara gammal: dagen den ändrades står på varje dokument.";
+  const serInte = "Söker bara i företagets kunskapsbas och i de publicerade rutiner som personen får läsa. Texten är skriven av företaget och kan vara gammal: dagen den ändrades står på varje dokument.";
   const { dokument: d, allaOrden } = await c.kallor.kunskap(sokord);
   // Listan över det som saknas är till för den som sköter kunskapsbasen. Dit går också en sökning där inget dokument
   // hade alla orden: hellre en rad för mycket än en lucka ingen ser. Går listan inte att skriva ska svaret komma ändå.
@@ -417,7 +418,7 @@ async function sokKunskap(input: Record<string, unknown>, c: Ctx): Promise<Recor
   return {
     sokord, traffar: Math.min(d.length, DOKUMENT_MAX), dataPer: c.idag,
     ...(allaOrden ? {} : { obs: "Inget dokument har alla sökorden. De här har något av dem och kan handla om något annat. Använd dem bara om de svarar på frågan. Sökningen är sparad i listan över det som saknas." }),
-    dokument: d.slice(0, DOKUMENT_MAX).map((x) => ({ rubrik: kort(x.rubrik, 160), omrade: kort(x.omrade, 80), andrad: x.andrad.slice(0, 10), text: x.text.slice(0, DOKUMENT_TECKEN), avkortad: x.text.length > DOKUMENT_TECKEN })),
+    dokument: d.slice(0, DOKUMENT_MAX).map((x) => ({ rubrik: kort(x.rubrik, 160), omrade: kort(x.omrade, 80), kalla: x.kalla === "rutiner" ? "Rutiner" : "Kunskapsbasen", andrad: x.andrad.slice(0, 10), text: x.text.slice(0, DOKUMENT_TECKEN), avkortad: x.text.length > DOKUMENT_TECKEN })),
     serInte,
   };
 }
@@ -566,9 +567,11 @@ const FALTNAMN: Record<string, string> = {
  */
 export function kallaFor(svar: readonly Record<string, unknown>[]): string {
   const last = svar.filter((s) => s && typeof s.fel !== "string" && s._egnaOrd !== true);
-  const dok = last.filter((s) => s._verktyg === "sok_kunskap").flatMap((s) => (Array.isArray(s.dokument) ? (s.dokument as { rubrik?: unknown }[]) : [])).map((d) => kort(d?.rubrik, 60)).filter(Boolean);
-  const delar = [last.some((s) => s._verktyg !== "sok_kunskap") ? "Navs tal" : "", dok.length ? `företagets kunskapsbas (${[...new Set(dok)].slice(0, DOKUMENT_MAX).join(", ")})` : ""].filter(Boolean);
-  return delar.length ? `Skrivet av AI ur ${delar.join(" och ")}` : "Skrivet av AI, inte ur Navs tal eller kunskapsbasen";
+  const dok = last.filter((s) => s._verktyg === "sok_kunskap").flatMap((s) => (Array.isArray(s.dokument) ? (s.dokument as { rubrik?: unknown; kalla?: unknown }[]) : []));
+  const namn = (rutin: boolean) => [...new Set(dok.filter((d) => (d?.kalla === "Rutiner") === rutin).map((d) => kort(d?.rubrik, 60)).filter(Boolean))].slice(0, DOKUMENT_MAX).join(", ");
+  const kb = namn(false), ru = namn(true);
+  const delar = [last.some((s) => s._verktyg !== "sok_kunskap") ? "Navs tal" : "", kb ? `företagets kunskapsbas (${kb})` : "", ru ? `företagets rutiner (${ru})` : ""].filter(Boolean);
+  return delar.length ? `Skrivet av AI ur ${delar.length > 2 ? `${delar.slice(0, -1).join(", ")} och ${delar[delar.length - 1]}` : delar.join(" och ")}` : "Skrivet av AI, inte ur Navs tal eller kunskapsbasen";
 }
 
 /**

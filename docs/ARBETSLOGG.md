@@ -5,6 +5,47 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-16 · AI-assistenten, fas 2, del 1: kunskapsbasen i Inställningar (0312 KÖRD)
+
+Beställaren efter fas 1: "jag godkänner. Nu gå vidare med fas 2". Jag läste det som ja till de två saker som
+väntade: provraden och förslaget om kunskapsbasen (PRD:n, "Kunskapsbasen i Inställningar").
+
+- **Provraden är godkänd.** Sonnet-raden i `nav_chatt_prov` med avtryck `485de06db391` (50 av 50) står som godkänd
+  av beställaren, på samma sätt som den förra raden. `chatt.pa` stod redan på sant, så chatten svarar nu i previewn
+  med fas 1. `hem.nytt` är fortfarande bara beställaren.
+- **0312 (körd):** `kunskap_dokument` (titel, område, filens namn, hela texten), `kunskap_stycke` (dokumentet delat
+  i stycken med svenskt sökindex; titeln och rubrikerna väger tyngst) och `kunskap_miss` (sökningar utan svar, utan
+  person). Alla inloggade läser dokument och stycken. Ingen skrivpolicy finns: bara servern skriver.
+  `kunskap_spara` skriver dokumentet och styckena i en transaktion, `kunskap_sok` söker som den som frågar och ger
+  bäst träff först. Additiv: main läser inget av det.
+- **Delningen** (`kunskapforma.ts`): vid rubriker (`#`), högst 2 500 tecken per stycke (under de 3 000 chatten
+  läser ur ett dokument). Små avsnitt intill varandra hålls ihop, så ett kort dokument blir ett stycke. En mening
+  delas aldrig om den ryms: chatten får bara säga ett tal ur ett dokument som ett ordagrant citat av en hel mening.
+- **Rutten `/nav2/kunskap`:** lägg till (skriven text eller fil), ändra, ta bort, stryk en sökning ur listan. Bara
+  admin och uppåt (`farSkotaKunskap`). Av en fil sparas bara texten: PDF läses med `pdfText`, .txt och .md som de
+  är, högst 3 MB. Word läses inte (kräver ett nytt paket). Varje skrivning bokförs i `audit_log`
+  (`kunskap.added`, `kunskap.changed`, `kunskap.removed`).
+- **Inställningar → Kunskapsbas** (blocket `KUNSKAPSBASEN (prefix kun)` i `utkast.html`): en egen flik för den som
+  sköter företagets inställningar. Ladda upp flera filer (en rad per fil säger hur det gick), skriv eller klistra
+  in, ändra, ta bort, och listan "Det chatten inte hittade". Allt går att ångra: Ångra efter Ta bort lägger
+  tillbaka dokumentet, efter Spara sätter den tillbaka den förra texten. Datan hämtas först när fliken öppnas.
+- **Chatten** (`kallor.ts`): `sok_kunskap` söker i kunskapsbasen först och fyller på med publicerade rutiner.
+  Varje dokument i svaret säger var det ligger, och källraden skiljer "företagets kunskapsbas" från "företagets
+  rutiner". Sökningar utan svar går till `kunskap_miss` i stället för Rutiners lista. Verktygslistan och
+  systemtexten är orörda, så avtrycket är kvar (`485de06db391`) och det godkända provet gäller.
+- **Mina val:** en egen flik i stället för en ruta i Administration (listan behöver platsen); admin och uppåt sköter
+  den; filen sparas inte; ingen utkast-status (det som läggs in gäller direkt, som beställaren bad om).
+- **Inte gjort:** utkastet "Sökord: transport" är inte inlagt. Det är min text och inte avstämd mot sökdata, så
+  beställaren laddar upp den själv (`~/nav-produkt/kunskapsbas/sokord-transport.md`). Gamla rader i `kunskap_miss`
+  gallras inte än (raderna har ingen person; taket är 60 per minut).
+- **Prov:** `tests/kunskap.mjs` (delningen, prövningen, rutten), `tests/kunskap-db.mjs` (0312 i en transaktion som
+  rullas tillbaka: sparning, sökning med svensk stamning, behörighet), två nya kontroller i `chatt-rutt.mjs`.
+- **Avbrottet samma kväll:** strax efter att 0312 kördes (16.52) och flera databasprov gick i rad, samtidigt som
+  Mötens session körde sina, svarade REST-lagret 503 `PGRST002` i ungefär en timme. Schemaläsningen fastnade på
+  `pg_timezone_names` (150 s mot rollens gräns på 8 s): Nano har inte minne nog att hålla katalogen varm. Ingen
+  inställning ändrades av oss; REST kom tillbaka och sviten kördes först därefter. Lärdom: mät att `select 1` och
+  REST är snabba före migration och prov, och kör inte två sessioners prov samtidigt.
+
 ## 2026-11-16 · AI-assistenten, fas 1: affärerna, kunskapsbasen och Godkänn-kortet (INTE pushat, provet INTE kört)
 
 Beställaren gav uppdraget "gör Navs AI-assistent allomfattande och säljbar" och bad om en PRD med faser.

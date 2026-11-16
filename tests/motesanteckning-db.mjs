@@ -148,7 +148,9 @@ try {
   await ok(`varje deltagare har en sett-rad för sitt kort (${settSaknas.n} saknas)`, settSaknas.n === 0);
   const nyttVidStart = await en(`
     select count(*)::int n from mote_anteckning a join mote_anteckning_sett s on s.kedja_id = a.kedja_id
-     where a.av <> s.employee_id and a.skapad > s.sett_till`);
+     where a.av <> s.employee_id and a.skapad > s.sett_till
+       -- Bara det som fanns när 0310 kördes: ett inlägg skrivet efteråt är riktig användning och får vara nytt.
+       and a.skapad <= coalesce((select max(applied_at) from schema_migrations where name like '0310%'), now())`);
   await ok(`ingenting står som nytt för någon vid start (${nyttVidStart.n})`, nyttVidStart.n === 0);
 
   // ---------------------------------------------------------------------------

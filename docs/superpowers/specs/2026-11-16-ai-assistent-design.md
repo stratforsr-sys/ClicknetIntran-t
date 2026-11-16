@@ -37,7 +37,7 @@ kunskap och förmågan att göra något.
   (sökord, tjänster, branscher) läggs som dokument i ett eget område. Ändringar gäller direkt.
   **Ändrat av beställaren 2026-11-16:** kunskapen ska inte ligga i Rutiner. Den får en egen plats,
   Inställningar → Kunskapsbas, där dokument laddas upp. Se "Kunskapsbasen i Inställningar" nedan.
-  Fas 1 läser Rutiner tills den är byggd.
+  Byggd 2026-11-16 (0312): chatten söker i kunskapsbasen först och i publicerade rutiner därefter.
 - **Pipelinen läses ur Möten.** Samma kort som tavlan i Möten visar, med samma behörighet. Inget nytt
   mått räknas på ett annat sätt än Nav redan gör.
 - **En handling körs av webbläsaren, som den inloggade.** Chatten förbereder ett kort. Godkänn skickar
@@ -98,7 +98,7 @@ rekryteringsbyrå) sätts upp med bara data.
 Sviten med minst 40 frågor för Clicknet, minst 15 lurförsök, en svit per påhittad kund, före och efter
 på de tre frågorna, 400 px, GDPR-genomgång och en ärlig lista över det som brister.
 
-## Kunskapsbasen i Inställningar (beställaren 2026-11-16, förslaget väntar på ja)
+## Kunskapsbasen i Inställningar (beställaren 2026-11-16, byggd samma dag efter beställarens ja)
 
 Beställaren: "Det ska inte finnas i rutiner, vi behöver lägga till Kunskapsbas i inställningar, där ska
 vi ladda upp massa dokument för kunskapsbasen."
@@ -116,6 +116,10 @@ Förslaget:
 - Alla anställda får svar ur den genom chatten. Den som får ändra företagets inställningar sköter den.
 - Chatten söker i kunskapsbasen först och i publicerade rutiner därefter. Källraden säger vilket.
 - Verktygets och systemtextens ord ändras inte, så provet gäller fortfarande.
+
+Byggt 2026-11-16 (0312, `/nav2/kunskap`, fliken Kunskapsbas i Inställningar). Avvikelser från förslaget: tre
+tabeller i stället för två (listan över sökningar utan svar fick en egen, så att Rutiners lista inte fylls med
+chattens sökningar), och en egen flik i stället för en ruta i Administration. Av en fil sparas bara texten.
 
 Öppet: Word-filer kräver ett nytt paket. Tal i ett dokument (sökvolymer, priser) kan chatten i dag bara
 säga som ett ordagrant citat av en hel mening.
