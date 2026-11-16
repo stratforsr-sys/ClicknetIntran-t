@@ -174,7 +174,7 @@ export async function POST(request: Request) {
         // Snabbraden tolkas av repots tolkaSnabbrad; en deluppgift har parent_id.
         // En rad utan dag får ingen deadline och läggs inte i dag (beställaren 2026-11-11,
         // som ersätter 2026-11-02); bara ett klockslag utan dag blir i dag. Se tolkaSnabbrad.
-        const s = await skapaUppgift({}, form(b.rad ? { rad: b.rad, utan_dag: "idag" } : { title: b.titel, parent_id: b.foralder ?? null, priority: b.prio ?? 3, due_date: b.dag ?? null }));
+        const s = await skapaUppgift({}, form(b.rad ? { rad: b.rad, utan_dag: "idag" } : { title: b.titel, parent_id: b.foralder ?? null, priority: b.prio ?? 3, due_date: b.dag ?? null, assignee_id: typeof b.till === "string" && b.till ? b.till : null }));
         // Gul 17 (produktionsprovet 2026-10-30): uppgiften lämnade ingen rad i händelseloggen.
         if (!s.fel) await db.from("audit_log").insert({ actor_id: mig, action: "task.created", object_type: "task", object_id: s.id ?? null });
         // Kvittot säger var raden hamnade, ur det som sparades: snabbraden i webbläsaren känner inte

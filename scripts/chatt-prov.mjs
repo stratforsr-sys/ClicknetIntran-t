@@ -7,12 +7,14 @@
  *     --modell claude-sonnet-5-5   bara en modell (annars alla tre)
  *     --varv 3                     hur många gånger varje fråga körs (förvalt 3)
  *     --spara fil.jsonl            var varje svar sparas (förvalt en fil i systemets tmp-katalog)
+ *     --bara s31,far-inte-se       bara de frågorna (id eller fall). Ett delprov: billigt att felsöka med,
+ *                                  och sparas aldrig i nav_chatt_prov
  *   node --experimental-strip-types scripts/chatt-prov.mjs --omratta fil.jsonl
  *                                  rättar om sparade svar. Gratis: varken Anthropic eller databasen anropas.
  *
  * KÖRS BARA EFTER BESTÄLLARENS JA. Utan --kor anropas ingenting, varken Anthropic eller databasen.
  *
- * Provet kör de trettio frågorna i tests/chatt-fragor.json mot fixturen i samma fil, aldrig mot
+ * Provet kör frågorna i tests/chatt-fragor.json mot fixturen i samma fil, aldrig mot
  * produktionens data, med samma slinga som rutten (src/lib/nav2/chatt/samtal.ts). En fråga är rätt bara
  * när varje körning av den är rätt. Resultatet skrivs ut, och med DATABASE_URL satt sparas en rad per
  * modell i nav_chatt_prov med avtrycket av systemtexten och verktygslistan.
@@ -41,6 +43,12 @@ const P = JSON.parse(readFileSync(join(rot, "tests", "chatt-fragor.json"), "utf8
 const k = kontrolleraFragor(P);
 if (k.fel.length) {
   console.error(`Frågefilen är inte hel:\n  ${k.fel.join("\n  ")}`);
+  process.exit(1);
+}
+const BARA = flagga("--bara")?.split(",").map((x) => x.trim()).filter(Boolean) ?? null;
+const fragor = BARA ? P.fragor.filter((q) => BARA.includes(q.id) || BARA.includes(q.fall)) : P.fragor;
+if (!fragor.length) {
+  console.error(`--bara ${BARA.join(",")} matchar ingen fråga.`);
   process.exit(1);
 }
 const OMRATTA = flagga("--omratta");
@@ -86,10 +94,10 @@ if (okanda.length) {
   process.exit(1);
 }
 
-const korningar = P.fragor.length * varv;
+const korningar = fragor.length * varv;
 console.log(`Provet av chattens modell`);
 console.log(`  Avtryck (systemtext och verktyg): ${avtryck()}`);
-console.log(`  Frågor: ${P.fragor.length} (${Object.entries(k.fall).map(([f, n]) => `${f} ${n}`).join(", ")})`);
+console.log(`  Frågor: ${P.fragor.length} (${Object.entries(k.fall).map(([f, n]) => `${f} ${n}`).join(", ")})${BARA ? `. DELPROV: bara ${fragor.length} av dem körs, och inget sparas i nav_chatt_prov` : ""}`);
 console.log(`  Varje fråga körs ${varv} ${varv === 1 ? "gång" : "gånger"} per modell: ${korningar} körningar per modell.`);
 console.log(`  Modeller: ${modeller.join(", ")}`);
 console.log(`  Kostnad, ett överslag och inget mätt tal (20 000 intoken och 2 500 uttoken per körning, ${KR_PER_DOLLAR} kr per dollar, utan cache):`);
@@ -126,7 +134,7 @@ for (const modell of modeller) {
   console.log(`\n${modell}`);
   let ratt = 0, obelagda = 0, kostnad = 0, cacheLas = 0, intoken = 0, reserv = 0, omskrivna = 0;
   const fall = [];
-  for (const q of P.fragor) {
+  for (const q of fragor) {
     const roll = P.fixtur.roller[q.som];
     const skal = [];
     for (let v = 0; v < varv; v++) {
@@ -150,11 +158,13 @@ for (const modell of modeller) {
     console.log(`  ${skal.length ? "✗" : "✓"} ${q.id} (${q.fall})${skal.length ? `\n      ${skal.join("\n      ")}` : ""}`);
   }
   const perFraga = kostnad / korningar;
-  console.log(`  ${ratt} av ${P.fragor.length} frågor rätt i alla ${varv} varv. Obelagda tal: ${obelagda}. Omskrivna svar: ${omskrivna} av ${korningar}. Reservmodellen tog över: ${reserv} ${reserv === 1 ? "gång" : "gånger"}. Kostnad: ${kostnad.toFixed(2)} kr, ${perFraga.toFixed(3)} kr per körning. Cachade intoken: ${intoken ? Math.round((cacheLas / intoken) * 100) : 0} %.`);
+  console.log(`  ${ratt} av ${fragor.length} frågor rätt i alla ${varv} varv. Obelagda tal: ${obelagda}. Omskrivna svar: ${omskrivna} av ${korningar}. Reservmodellen tog över: ${reserv} ${reserv === 1 ? "gång" : "gånger"}. Kostnad: ${kostnad.toFixed(2)} kr, ${perFraga.toFixed(3)} kr per körning. Cachade intoken: ${intoken ? Math.round((cacheLas / intoken) * 100) : 0} %.`);
   resultat.push({ modell, ratt, obelagda, reserv, omskrivna, perFraga, fall });
 }
 
-if (process.env.DATABASE_URL) {
+if (BARA) {
+  console.log(`\nDelprov: inget sparades i nav_chatt_prov.`);
+} else if (process.env.DATABASE_URL) {
   const { default: pg } = await import("pg");
   const db = new pg.Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   await db.connect();
@@ -173,4 +183,4 @@ if (process.env.DATABASE_URL) {
 } else {
   console.log(`\nDATABASE_URL saknas, så inget sparades i nav_chatt_prov.`);
 }
-console.log(`Kravet (beslutat 2026-11-15): inga allvarliga fel, alltså inget fel tal, inget tal om någon personen inte får se, inget "det är gjort" som inte är gjort och inget fel utkast. Läs skälen ovan: det räknas inte åt dig. Tal utan källa visas märkta och mäts för sig. En människa godkänner raden.`);
+console.log(`Kravet (beslutat 2026-11-15): inga allvarliga fel, alltså inget fel tal, inget tal om någon personen inte får se, inget "det är gjort" som inte är gjort och inget fel kort att godkänna. Läs skälen ovan: det räknas inte åt dig. Tal utan källa visas märkta och mäts för sig. En människa godkänner raden.`);

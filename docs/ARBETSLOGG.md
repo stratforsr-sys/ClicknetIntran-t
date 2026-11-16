@@ -5,6 +5,84 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-16 · AI-assistenten, fas 1: affärerna, kunskapsbasen och Godkänn-kortet (INTE pushat, provet INTE kört)
+
+Beställaren gav uppdraget "gör Navs AI-assistent allomfattande och säljbar" och bad om en PRD med faser.
+PRD:n ligger i `docs/superpowers/specs/2026-11-16-ai-assistent-design.md`. Tre riktiga frågor visade felet:
+sökord för transport, "hur får jag in 100 000 kr i veckan" och samma fråga om en anställd. Chatten saknade
+data, kunskap och förmågan att göra något.
+
+**Besluten (beställaren):** kravet "svar inom 3 sekunder" är struket. Chatten utför handlingar, men bara efter
+Godkänn, en sak per tryck. En affär är ett bolag på väg mot en order, ordnad efter steg, sedan nästa stegs dag,
+sedan belopp. Ingen procent per steg förrän den går att räkna. En summa står aldrig ensam.
+
+**Det som byggdes, och varför så litet:**
+- `las_affarer` läser samma kort som tavlan i Möten (`byggMoten`, som den inloggade, RLS). Ingen ny fråga mot
+  databasen och inget nytt sätt att räkna. Verktyget ordnar, summerar och räknar hur långt beloppen räcker mot
+  ett belopp personen nämner (`mal_kr`), eftersom Claude aldrig räknar. Kretsen prövas som för måtten.
+- `sok_kunskap` söker i Rutiners dokument (`document`, publicerade, RLS avgör målgruppen). Kunskapsbasen är
+  alltså Rutiner: redigerare, versioner och sökning fanns redan. En sökning utan fullträff skrivs i
+  `document_search_miss`, listan redaktören redan ser i Rutiner. Ingen migration.
+- Godkänn-kortet (`Handlingskort`): `forbered_uppgifter` (åt sig själv eller sitt lag) och
+  `forbered_uppfoljning` (ny dag för när kunden ska kontaktas). Verktyget bygger ett kort med stegen.
+  Webbläsaren skickar stegen till Navs vanliga rutter (`/nav2/uppgifter`, `/nav2/moten`) som den inloggade,
+  först vid Godkänn. Chattens rutt skriver fortfarande bara sin egen logg. Ångra byggs av ruttens svar
+  (`$id`, `$uppfoljning_andrad`). Går det inte att ångra säger kortet det före Godkänn.
+- Systemtexten: första meningen svarar, kort svar, nästa steg sist, aldrig bara "det kan jag inte" (utom för
+  behörighet), fråga i stället för att gissa. Ordet säljbolag är borta. Källraden räknas av servern
+  (`kallaFor`): Navs tal, kunskapsbasen med dokumentens rubriker, eller ingetdera.
+- Uppgiftsrutten tar `till` (mottagaren) vid `skapa`. Samma sak gick redan med `@namn` i snabbraden.
+
+**Provat:** `tests/chatt-rutt.mjs` (affärerna, kunskapsbasen, korten, behörigheten), `tests/nav2-hemvy.mjs`
+(kortet i gränssnittet: Godkänn, Avbryt, Ångra, ett steg som faller), `tests/chattforma.mjs`, `npx tsc --noEmit`.
+Sökfrågan är provad mot produktionen (bara antal): den går, och tål konstiga tecken.
+
+**Provet av modellen är kört 2026-11-16, efter beställarens ja ("kör det men försök att cacha, bryt ner det").**
+Sonnet 5.5, avtryck `485de06db391`, 50 frågor (20 nya, 15 om behörighet och lurförsök), tre varv var:
+50 av 50 rätt i alla varv, 0 tal utan källa, 19 av 150 svar omskrivna en gång, 12,38 kr (0,083 kr per körning,
+92 % av intoken ur cachen). Raden ligger i `nav_chatt_prov`, EJ godkänd: en människa godkänner den. Till dess
+svarar chatten i previewn "inte påslagen".
+
+Så hölls kostnaden nere (allt tillsammans ungefär 21 kr, mot överslaget 107 kr som räknar utan cache):
+- Cachen var redan på (systemtexten och verktygen, `cache_control` i `samtal.ts`).
+- Nytt: `--bara s31,far-inte-se` i `scripts/chatt-prov.mjs` kör ett delprov (id eller fall). Ett delprov sparas
+  aldrig i `nav_chatt_prov`. De 20 nya frågorna kördes först, ett varv var (2 kr): 18 rätt.
+- Felen rättades och provades om på bara de berörda frågorna innan hela provet kördes en gång.
+
+Det delprovet fällde, och vad som gjordes:
+- t35 (teamledaren frågar om Omars affärer): fixturen gav teamledaren bara sina egna affärer. Fel i fixturen,
+  inte i chatten: RLS i Möten visar lagets. `fixturKallor` följer nu kretsen, med ett eget prov i `chatt-rutt.mjs`
+  (teamledaren ser lagets affärer och inte en säljares utanför laget).
+- k32 ("100 000 kr den här veckan"): beloppet ur frågan skrevs med siffror i första meningen. En mening i
+  systemtexten: beloppet står i `mal.belopp`, hänvisa dit.
+- k32 igen: svaret gav veckans summa (`iVeckan.summa`) och provet krävde hela summan (`summa`). Frågan gäller
+  veckan, så båda är rätt svar. Kravet tar nu ett av flera fält (`falt` får vara en lista). ÄNDRAT KRAV, sagt
+  till beställaren: talet ska fortfarande vara insatt ur rätt anrop med rätt värde.
+- Affärssvaren skrevs om nästan varje gång, för "de två offerterna", "båda" och numrerade listor. Två meningar i
+  systemtexten (skriv antalet som hänvisning eller inte alls, numrera inte listor). Numreringen försvann.
+  "Båda" och "två" kommer fortfarande ibland, och fångas av omskrivningen: 19 av 150 i hela provet. En
+  omskrivning kostar ungefär 0,12 kr och några sekunder.
+
+**Det som brister, sagt rakt:**
+- Produktionen har noll publicerade dokument. Frågan om sökord får svaret "kunskapsbasen har inget" tills
+  någon lägger in ett dokument i Rutiner.
+- Återkomster och samtalsutfall ligger i dialern, som Nav inte kan läsa. Svaret säger det. Fas 2.
+- Orderbelopp, en kollegas kalender och uppgifter, och inställningar är inte med. Fas 2 och 3.
+- `las_affarer` kostar lika mycket som att öppna Möten, en gång per fråga om affärer.
+- Att en handling kom via chatten syns i chattens logg (verktygsanropet), inte i `audit_log`, som bara säger
+  vem som gjorde vad och när.
+
+**Tillägg samma dag, efter beställarens svar.** "Boka en återkomst" och "ändra en inställning" stod i listan
+beställaren godkände och kom inte med. Beställaren: en återkomst går att lägga som en uppgift, och inställningarna
+"ville jag ju ha med", sedan "sätt dem i nästa fas". Gjort: en mening i systemtexten (höra av sig till någon en
+viss dag, eller en påminnelse, förbereds som en uppgift med den dagen) och fråga s50 i provet, som nu har 50
+frågor. Avtrycket blev då `27fbd6f9e46b` (efter provets rättningar `485de06db391`). Inställningarna och återkomsten i dialern står i PRD:ns fas 2.
+Inställningarna föll bort av mitt fel: jag hade inte kartlagt vilka som finns, vem som får ändra dem och hur
+Ångra ska få tillbaka det gamla värdet. Webbsökning: beställaren frågade om AI:n inte kan läsa på webben. Den
+kan (Claudes sökverktyg, 10 dollar per 1 000 sökningar plus inläst text). Förslaget står i PRD:n under beslut
+som väntar. Ett utkast till dokumentet "Sökord: transport" ligger i `~/nav-produkt/kunskapsbas/`, utanför
+repot, för beställaren att läsa och publicera i Rutiner.
+
 ## 2026-11-16 · Klickprovet, del 1: menyraden går ihop med fönstrets topp och är byggd som skiss 9
 
 Beställaren såg previewn (126b121): "den går inte ihop med toppen av fönstret". Orsaken var att provremsans höjd satt
@@ -33,6 +111,16 @@ en hel fri ruta"). Rutans egen `outline:0` (tyngd 0,1,1) förlorade mot hemvyns 
 Previewen var seg (beställaren: "det är bara vitt"). Servern skickar sidans skal på 0,4 s och datan (`ndData`) efter
 12–25 s, mot cirka 5 s i produktionen. Orsaken: `NAV2_PG_URL` finns bara i Production och Preview (nav2-utkast), så
 grenens preview kör alla frågor via PostgREST, på en Nano som swappar (408 MB, 673 MB swap använd).
+
+**Lägg inte `NAV2_PG_URL` på en preview.** Den lades in för Preview (hemvy-chatt) med beställarens ja och togs bort
+efter åtta minuter. Varje serverinstans öppnar upp till 10 anslutningar (`NAV2_PG_ANSLUTNINGAR`) i poolerns sessionsläge.
+Poolens tak på Nano ligger kring 15 (16 `nav2_pg` sågs, alla overksamma). Previewens vilande instanser höll platserna,
+och produktionen fick köa: sidan tog 31–34 s klockan 11.08–11.14 i stället för 4,5 s. Previewens egen laddning tog
+91 s (1 495 s sammanlagd väntan på en plats, 124 frågor till REST, 5 fel). Previewen byggdes om utan nyckeln
+klockan 11.12, och produktionen var tillbaka på 4,5 s klockan 11.15 (448 frågor i pg, 0 till REST).
+
+Två fynd är kvar. Grenens data räknar 2,4–6,0 s CPU mot 0,8 s på main, och det måste ner före main. Produktionens
+pg-väg tål bara ungefär en instans i taget: två samtidiga instanser köar. Det kan vara vad som gav 504 klockan 08.05.
 
 I `tests/nav2-hemvy.mjs` finns fem nya avsnitt, och vart och ett föll först. Stilen lades in i previewen för hand och
 mättes mot skissen pixel för pixel före pushen. Kvar av klickprovet: Veckan (veckodagen står två gånger, och möten

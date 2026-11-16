@@ -1,5 +1,5 @@
 /**
- * Chatten: de sex verktygen (designdokumentet, Steg 3).
+ * Chatten: verktygen (designdokumentet 2026-11-15, Steg 3, och PRD:n 2026-11-16, fas 1).
  *
  * Claude räknar aldrig själv. Den frågar efter ett färdigt mått, och svaret bär
  * antal, "data per", vad måttet inte ser och om underlaget räcker.
@@ -9,8 +9,14 @@
  * personen själv får se i Nav. Verktygslistan är densamma för alla roller, så
  * att alla delar samma cache.
  *
- * Det enda verktyget som inte läser är `forbered_uppgifter`, och det skapar
- * ingenting: utkastet visas för personen, som trycker själv.
+ * Verktygen som börjar med `forbered_` läser inte, och de ändrar ingenting: de
+ * bygger ett kort (`Handlingskort`) som säger exakt vad som ska göras. Trycker
+ * personen på Godkänn skickar webbläsaren kortets steg till Navs vanliga
+ * rutter, som den inloggade. Då gäller samma behörighet, samma logg och samma
+ * regler som när personen gör det för hand.
+ *
+ * ETT NYTT VERKTYG läggs till här och bara här: en rad i `VERKTYG`, en gren i
+ * `korVerktyg`, och en källa i `Kallor` om det läser något nytt.
  *
  * Källorna (`Kallor`) skickas in, så att filen är ren och provet går med
  * `node --experimental-strip-types`. De riktiga står i `kallor.ts`.
@@ -30,11 +36,37 @@ export type Kallor = {
   vantar(): Promise<{ sammanfattning: string; rader: string[] }>;
   dag(dag: string): Promise<{ poster: { rubrik: string; tid: string | null }[]; uppgifter: { titel: string; klar: boolean }[] }>;
   provision(manad: string): Promise<{ summa: number; bokfort: number; signerade: number; makulerade: number; netto: number; rader: { text: string; belopp: number }[] } | null>;
+  /** De öppna affärerna personen får se i Möten. Kretsen prövas av verktyget, som för talen. */
+  affarer(): Promise<Affar[]>;
+  /** Företagets publicerade dokument som personen får läsa och som matchar sökorden. `allaOrden`: träffarna har alla sökorden, inte bara något av dem. */
+  kunskap(sokord: string): Promise<{ dokument: Dokument[]; allaOrden: boolean }>;
+  /** En sökning utan träff, till listan över det kunskapsbasen saknar. Utan person. */
+  kunskapMiss(sokord: string): Promise<void>;
 };
 
+/** En öppen affär: ett bolag på väg mot en order. Ett kort på tavlan i Möten. */
+export type Affar = {
+  kedja: string;
+  bolag: string;
+  deltagare: string[];
+  /** Den som håller mötet, eller höll det senaste. Null när ingen har hållit ett. */
+  ansvarig: string | null;
+  /** Stegets namn (kolumnens namn ur företagets inställning) och hur nära avslut det är: högre är närmare. */
+  steg: string;
+  rang: number;
+  belopp: number | null;
+  /** Det öppna mötet, svensk lokal tid "ÅÅÅÅ-MM-DD HH:MM". */
+  mote: { tid: string; flyttningar: number } | null;
+  uppfoljning: { datum: string; text: string | null; ingetSvar: number; andrad: string | null } | null;
+};
+export type Dokument = { rubrik: string; omrade: string; text: string; andrad: string };
+
 export type Ctx = { mig: string; idag: string; kallor: Kallor };
-export type Utkast = { titel: string; dag: string | null };
-export type Verktygssvar = { svar: Record<string, unknown>; utkast?: Utkast[] };
+/** Ett steg är ett anrop till en av Navs vanliga rutter. `angra` tar tillbaka det; "$fält" byts mot fältet i ruttens svar. */
+export type Steg = { vag: string; body: Record<string, unknown>; angra: Record<string, unknown> | null };
+/** Kortet personen godkänner: vad som ska göras, rad för rad, och stegen som gör det. `varning` står före Godkänn, `klart` är kvittot efteråt. */
+export type Handlingskort = { rubrik: string; rader: { text: string; dag: string | null; not: string }[]; steg: Steg[]; varning: string | null; klart: string };
+export type Verktygssvar = { svar: Record<string, unknown>; kort?: Handlingskort };
 
 const PERIODER = ["denna-vecka", "forra-veckan", "denna-manad", "forra-manaden"] as const;
 type PeriodNyckel = (typeof PERIODER)[number];
@@ -43,6 +75,11 @@ const DATUM = /^\d{4}-\d{2}-\d{2}$/;
 /** Under så här många rader säger verktyget att underlaget är för litet för en jämförelse. */
 export const JAMFOR_MINST = 10;
 export const UTKAST_MAX = 5;
+/** Så många affärer räknas upp i ett svar. Summorna gäller alla. */
+export const AFFARER_MAX = 10;
+/** Så många dokument, och så många tecken ur vart och ett, går till Claude. */
+export const DOKUMENT_MAX = 3;
+export const DOKUMENT_TECKEN = 3000;
 
 const obj = (properties: Record<string, unknown>) => ({ type: "object" as const, properties, required: Object.keys(properties), additionalProperties: false as const });
 
@@ -84,14 +121,44 @@ export const VERKTYG = [
     input_schema: obj({ manad: { type: "string", enum: ["denna-manad", "forra-manaden"] } }),
   },
   {
+    name: "las_affarer",
+    description:
+      "Läser de öppna affärerna för en person eller ett lag: bolag på väg mot en order, med steg, belopp när det finns, nästa steg med dag och vad som står still. Närmast avslut står först. Svaret bär summan av beloppen med antalet affärer och hur många som har ett belopp, vad som har nästa steg senast söndag, och hur långt det räcker mot ett belopp personen nämner.",
+    strict: true,
+    input_schema: obj({
+      vem: { type: "string", description: "\"jag\" för personen som frågar, \"laget\" för alla vars affärer personen får se, eller en kollegas namn." },
+      mal_kr: { type: "integer", description: "Beloppet i kronor som personen vill nå, som ett heltal. Noll om frågan inte nämner ett belopp." },
+    }),
+  },
+  {
+    name: "sok_kunskap",
+    description:
+      "Söker i företagets kunskapsbas: hur företaget arbetar, vad det säljer, branscher, begrepp, rutiner och hur Nav fungerar. Svaret bär de dokument som matchar, med text och dagen de ändrades. En sökning utan träff sparas i listan över det kunskapsbasen saknar.",
+    strict: true,
+    input_schema: obj({ sokord: { type: "string", description: "Ett till fyra ord som beskriver det som söks, till exempel ämnet och branschen." } }),
+  },
+  {
     name: "forbered_uppgifter",
-    description: "Förbereder ett utkast till en eller flera uppgifter. Ingenting skapas: personen ser utkastet och trycker själv på Lägg i min dag.",
+    description: "Förbereder en eller flera uppgifter, åt personen själv eller åt någon i personens lag. Ingenting skapas: personen ser ett kort med exakt vad som läggs upp och trycker själv på Godkänn.",
     strict: true,
     input_schema: obj({
       uppgifter: {
         type: "array",
-        items: obj({ titel: { type: "string", description: "Vad som ska göras, kort." }, dag: { type: "string", description: "Dagen som ÅÅÅÅ-MM-DD, eller en tom sträng för ingen dag." } }),
+        items: obj({
+          titel: { type: "string", description: "Vad som ska göras, kort." },
+          dag: { type: "string", description: "Dagen som ÅÅÅÅ-MM-DD, eller en tom sträng för ingen dag." },
+          till: { type: "string", description: "\"jag\" för personen som frågar, eller namnet på kollegan som ska göra uppgiften." },
+        }),
       },
+    }),
+  },
+  {
+    name: "forbered_uppfoljning",
+    description: "Förbereder en ny dag för när kunden i en öppen affär ska kontaktas igen. Ingenting ändras: personen ser ett kort med bolaget och dagen och trycker själv på Godkänn. Gäller affärer utan bokat möte.",
+    strict: true,
+    input_schema: obj({
+      bolag: { type: "string", description: "Bolagets namn, som det står i affären." },
+      dag: { type: "string", description: "Den nya dagen som ÅÅÅÅ-MM-DD." },
     }),
   },
 ] as const;
@@ -137,7 +204,13 @@ export function hamtarText(namn: string, input: Record<string, unknown>): string
     case "las_vantar": return "Hämtar det som väntar på dig.";
     case "las_dag": return `Hämtar kalendern och uppgifterna för ${DATUM.test(String(input.dag)) ? String(input.dag) : "dagen"}.`;
     case "las_provision": return "Hämtar din provision.";
-    case "forbered_uppgifter": return "Förbereder ett utkast till uppgifter.";
+    case "las_affarer": {
+      const vem = kort(input.vem, 40).toLowerCase();
+      return `Hämtar de öppna affärerna för ${arJag(vem) || !vem ? "dig" : arLaget(vem) ? "laget" : kort(input.vem, 40)}.`;
+    }
+    case "sok_kunskap": return "Söker i kunskapsbasen.";
+    case "forbered_uppgifter": return "Förbereder uppgifter att godkänna.";
+    case "forbered_uppfoljning": return "Förbereder en ny dag för uppföljningen.";
     default: return "Hämtar.";
   }
 }
@@ -252,18 +325,169 @@ async function lasProvision(input: Record<string, unknown>, c: Ctx): Promise<Rec
   };
 }
 
-function forbered(input: Record<string, unknown>): Verktygssvar {
+/** Kolumnerna på tavlan i Möten, efter hur nära avslut de är. En affär utan öppet möte är i uppföljning eller har en offert. */
+const RANG: Record<string, number> = { bokat: 1, att_bekrafta: 1, bekraftat: 2, hos_saljaren: 3 };
+export const STEG_UPPFOLJNING = "Uppföljning";
+export const STEG_OFFERT = "Offert skickad";
+
+/**
+ * En affär ur ett kort på tavlan i Möten. Ren, så att provet håller den. Stegets namn är kolumnens namn ur
+ * företagets inställning. En skickad offert är närmast avslut, också när ett nytt möte är bokat.
+ */
+export function affarUr(
+  k: {
+    kedja: string; namn: string; fas: string; deltagare: readonly string[];
+    mote: { tid: string; flyttningar: number; hallsAv: string } | null;
+    uppfoljning: { datum: string; text: string | null; offert: boolean; offertBelopp: number | null; ingetSvar: number; andrad: string | null } | null;
+    senast: { hallsAv: string } | null;
+  },
+  kolumnnamn: Readonly<Record<string, string>>,
+): Affar {
+  const offert = k.uppfoljning?.offert === true;
+  return {
+    kedja: k.kedja, bolag: k.namn, deltagare: [...k.deltagare],
+    ansvarig: k.mote?.hallsAv || k.senast?.hallsAv || null,
+    steg: offert ? STEG_OFFERT : k.mote ? kolumnnamn[k.fas] ?? k.fas : STEG_UPPFOLJNING,
+    rang: offert ? 4 : k.mote ? RANG[k.fas] ?? 1 : 3,
+    belopp: offert ? k.uppfoljning?.offertBelopp ?? null : null,
+    mote: k.mote ? { tid: k.mote.tid, flyttningar: k.mote.flyttningar } : null,
+    uppfoljning: k.uppfoljning ? { datum: k.uppfoljning.datum, text: k.uppfoljning.text, ingetSvar: k.uppfoljning.ingetSvar, andrad: k.uppfoljning.andrad } : null,
+  };
+}
+
+const dagarMellan = (fran: string, till: string) => Math.round((utc(till).getTime() - utc(fran).getTime()) / 86_400_000);
+
+async function lasAffarer(input: Record<string, unknown>, c: Ctx): Promise<Record<string, unknown>> {
+  if (!DATUM.test(c.idag)) return { fel: "Dagen gick inte att läsa." };
+  const vem = await vemKrets(input.vem, c);
+  if ("fel" in vem) return { fel: vem.fel };
+  const mal = Number.isInteger(input.mal_kr) && (input.mal_kr as number) > 0 && (input.mal_kr as number) <= 1_000_000_000 ? (input.mal_kr as number) : 0;
+  const sondag = plus(c.idag, 6 - ((utc(c.idag).getUTCDay() + 6) % 7));
+  const flera = vem.krets === null || vem.krets.length > 1;
+  const namn = flera ? new Map((await c.kallor.personer()).map((p) => [p.id, p.namn])) : null;
+  const rader = (await c.kallor.affarer())
+    .filter((a) => vem.krets === null || a.deltagare.some((id) => vem.krets!.includes(id)) || (a.ansvarig !== null && vem.krets.includes(a.ansvarig)))
+    .map((a) => {
+      const dag = a.mote ? a.mote.tid.slice(0, 10) : a.uppfoljning?.datum ?? null;
+      return {
+        rang: a.rang,
+        rad: {
+          bolag: kort(a.bolag, 120),
+          ...(namn ? { ansvarig: (a.ansvarig && namn.get(a.ansvarig)) || null } : {}),
+          steg: kort(a.steg, 40),
+          belopp: a.belopp,
+          nastaSteg: a.mote ? "Möte" : dag ? "Kontakta kunden" : null,
+          nastaDag: dag,
+          nastaTid: a.mote ? a.mote.tid.slice(11, 16).replace(":", ".") || null : null,
+          iVeckan: dag !== null && dag <= sondag,
+          // Dagen kunden skulle ha kontaktats har passerat. Ett möte som väntar på utfall räknas inte hit.
+          forsenadDagar: !a.mote && dag !== null && dag < c.idag ? dagarMellan(dag, c.idag) : null,
+          motetFlyttat: a.mote?.flyttningar || null,
+          ingetSvarIRad: (!a.mote && a.uppfoljning?.ingetSvar) || null,
+          anteckning: !a.mote && a.uppfoljning?.text ? kort(a.uppfoljning.text, 160) : null,
+        },
+      };
+    })
+    .sort((x, y) => y.rang - x.rang || (x.rad.nastaDag ?? "9999").localeCompare(y.rad.nastaDag ?? "9999") || (y.rad.belopp ?? -1) - (x.rad.belopp ?? -1) || x.rad.bolag.localeCompare(y.rad.bolag, "sv"))
+    .map((x) => x.rad);
+  const sum = (r: typeof rader) => ({ antal: r.length, medBelopp: r.filter((x) => x.belopp !== null).length, summa: r.reduce((s, x) => s + (x.belopp ?? 0), 0) });
+  const alla = sum(rader), vecka = sum(rader.filter((x) => x.iVeckan));
+  return {
+    vad: "Öppna affärer", vem: vem.namn, dataPer: c.idag,
+    oppna: alla.antal, medBelopp: alla.medBelopp, summa: alla.summa,
+    iVeckan: { ...vecka, senast: sondag },
+    utanNastaSteg: rader.filter((x) => x.nastaDag === null).length,
+    forsenade: rader.filter((x) => x.forsenadDagar !== null).length,
+    mal: mal ? { belopp: mal, saknas: Math.max(0, mal - alla.summa), saknasIVeckan: Math.max(0, mal - vecka.summa) } : null,
+    visar: Math.min(rader.length, AFFARER_MAX), affarer: rader.slice(0, AFFARER_MAX),
+    chans: "För tidigt att säga. Hur ofta ett steg leder till order går inte att räkna förrän företaget har fler avslutade affärer.",
+    serInte: "Ser bara affärer som finns i Möten: ett bolag med bokat möte, uppföljning eller skickad offert. Ser inte återkomster och samtal som ligger i andra system än Nav, och inte order som redan är signerade. Ett belopp finns bara på en offert där någon skrev in det. Summan är det som står på offerterna, inte vad som kommer in.",
+  };
+}
+
+async function sokKunskap(input: Record<string, unknown>, c: Ctx): Promise<Record<string, unknown>> {
+  const sokord = kort(input.sokord, 120);
+  if (sokord.length < 2) return { fel: "Skriv vad som ska sökas." };
+  const serInte = "Söker bara i företagets publicerade dokument som personen får läsa. Texten är skriven av företaget och kan vara gammal: dagen den ändrades står på varje dokument.";
+  const { dokument: d, allaOrden } = await c.kallor.kunskap(sokord);
+  // Listan över det som saknas är till för den som sköter kunskapsbasen. Dit går också en sökning där inget dokument
+  // hade alla orden: hellre en rad för mycket än en lucka ingen ser. Går listan inte att skriva ska svaret komma ändå.
+  if (!d.length || !allaOrden) await c.kallor.kunskapMiss(sokord).catch(() => undefined);
+  if (!d.length) return { sokord, traffar: 0, besked: "Kunskapsbasen har inget om det här. Sökningen är sparad i listan över det som saknas, så att den som sköter kunskapsbasen ser den.", serInte };
+  return {
+    sokord, traffar: Math.min(d.length, DOKUMENT_MAX), dataPer: c.idag,
+    ...(allaOrden ? {} : { obs: "Inget dokument har alla sökorden. De här har något av dem och kan handla om något annat. Använd dem bara om de svarar på frågan. Sökningen är sparad i listan över det som saknas." }),
+    dokument: d.slice(0, DOKUMENT_MAX).map((x) => ({ rubrik: kort(x.rubrik, 160), omrade: kort(x.omrade, 80), andrad: x.andrad.slice(0, 10), text: x.text.slice(0, DOKUMENT_TECKEN), avkortad: x.text.length > DOKUMENT_TECKEN })),
+    serInte,
+  };
+}
+
+const giltigDag = (dag: string) => DATUM.test(dag) && !Number.isNaN(utc(dag).getTime());
+/** Skälet som står på en uppgift som ströks med Ångra. Rutten kräver ett skäl, och de som hade uppgiften ser det. */
+const ANGRAD = "Ångrad direkt efter att den lades upp i chatten.";
+const BESKED_KORT = "Kortet visas för personen med knapparna Godkänn och Avbryt. Ingenting är gjort förrän personen trycker på Godkänn.";
+
+async function forberedUppgifter(input: Record<string, unknown>, c: Ctx): Promise<Verktygssvar> {
   const lista = Array.isArray(input.uppgifter) ? (input.uppgifter as Record<string, unknown>[]) : [];
-  if (!lista.length || lista.length > UTKAST_MAX) return { svar: { fel: `Ett utkast har mellan en och ${UTKAST_MAX} uppgifter.` } };
-  const utkast: Utkast[] = [];
+  if (!lista.length || lista.length > UTKAST_MAX) return { svar: { fel: `Ett kort har mellan en och ${UTKAST_MAX} uppgifter.` } };
+  const utkast: { titel: string; dag: string | null; till: string | null }[] = [];
+  const steg: Steg[] = [];
   for (const u of lista) {
     const titel = kort(u?.titel, 120);
     const dag = String(u?.dag ?? "").trim();
+    const till = kort(u?.till, 80);
     if (!titel) return { svar: { fel: "Varje uppgift behöver en titel." } };
-    if (dag && (!DATUM.test(dag) || Number.isNaN(utc(dag).getTime()))) return { svar: { fel: "Dagen ska skrivas som ÅÅÅÅ-MM-DD, eller lämnas tom." } };
-    utkast.push({ titel, dag: dag || null });
+    if (dag && !giltigDag(dag)) return { svar: { fel: "Dagen ska skrivas som ÅÅÅÅ-MM-DD, eller lämnas tom." } };
+    // Åt någon annan: bara den vars tal personen får se, alltså det egna laget. Snävare än Nav, som låter alla ge alla en uppgift.
+    let person: { id: string; namn: string } | null = null;
+    if (till && !arJag(till.toLowerCase())) {
+      if (arLaget(till.toLowerCase())) return { svar: { fel: "En uppgift läggs åt en person i taget. Fråga vem som ska göra den." } };
+      const v = await vemKrets(till, c);
+      if ("fel" in v) return { svar: { fel: v.fel === NEJ ? "Här går det bara att lägga uppgifter åt sig själv och åt sitt eget lag." : v.fel } };
+      if (v.krets?.length === 1 && v.krets[0] !== c.mig) person = { id: v.krets[0], namn: v.namn };
+    }
+    utkast.push({ titel, dag: dag || null, till: person?.namn ?? null });
+    steg.push({ vag: "/nav2/uppgifter", body: { handling: "skapa", titel, dag: dag || null, ...(person ? { till: person.id } : {}) }, angra: { handling: "avbryt", id: "$id", note: ANGRAD } });
   }
-  return { svar: { _egnaOrd: true, _belagda: ["uppgifter"], utkast, uppgifter: utkast.length, besked: "Utkastet visas för personen. Ingenting är skapat förrän personen trycker på Lägg i min dag." }, utkast };
+  return {
+    svar: { _egnaOrd: true, _belagda: ["uppgifter"], utkast, uppgifter: utkast.length, besked: BESKED_KORT },
+    kort: {
+      rubrik: utkast.length === 1 ? "Lägg upp en uppgift" : `Lägg upp ${utkast.length} uppgifter`,
+      rader: utkast.map((u) => ({ text: u.titel, dag: u.dag, not: [u.dag ? "" : "utan dag", u.till ? `åt ${u.till}` : ""].filter(Boolean).join(" · ") })),
+      steg, varning: null, klart: utkast.length === 1 ? "Uppgiften är upplagd." : "Uppgifterna är upplagda.",
+    },
+  };
+}
+
+async function forberedUppfoljning(input: Record<string, unknown>, c: Ctx): Promise<Verktygssvar> {
+  const dag = String(input.dag ?? "").trim();
+  if (!giltigDag(dag)) return { svar: { fel: "Dagen ska skrivas som ÅÅÅÅ-MM-DD." } };
+  if (dag < c.idag) return { svar: { fel: "Välj i dag eller en senare dag." } };
+  const sok = kort(input.bolag, 120).toLowerCase();
+  if (!sok) return { svar: { fel: "Fråga vilket bolag det gäller." } };
+  // Bara affärer personen själv ser i Möten. Rutten prövar sedan om personen får ändra just den.
+  const alla = await c.kallor.affarer();
+  const hela = alla.filter((a) => a.bolag.toLowerCase() === sok);
+  const traffar = hela.length ? hela : alla.filter((a) => a.bolag.toLowerCase().includes(sok));
+  if (!traffar.length) return { svar: { fel: "Jag hittar ingen öppen affär med det bolaget." } };
+  if (traffar.length > 1) return { svar: { fel: "Flera öppna affärer matchar namnet. Fråga vilket bolag som menas." } };
+  const a = traffar[0];
+  if (a.mote) return { svar: { fel: "Affären har ett bokat möte. Dagen ändras genom att flytta mötet i Möten." } };
+  const fore = a.uppfoljning?.datum ?? null;
+  if (fore === dag) return { svar: { fel: "Uppföljningen står redan på den dagen." } };
+  // Den förra dagen går bara att sätta tillbaka om den inte har passerat: Möten tar inte emot en dag bakåt i tiden.
+  const garAngra = fore !== null && fore >= c.idag;
+  const body = { handling: "uppfoljning_andra", kedja: a.kedja, fore: a.uppfoljning?.andrad ?? null, datum: dag, text: a.uppfoljning?.text ?? null };
+  return {
+    svar: { _egnaOrd: true, bolag: kort(a.bolag, 120), dag, forraDagen: fore, besked: BESKED_KORT },
+    kort: {
+      rubrik: "Ändra dagen för uppföljningen",
+      rader: [{ text: kort(a.bolag, 120), dag, not: fore ? `förut ${fore}` : "ingen dag förut" }],
+      steg: [{ vag: "/nav2/moten", body, angra: garAngra ? { ...body, fore: "$uppfoljning_andrad", datum: fore } : null }],
+      varning: garAngra ? null : "Går inte att ångra här efteråt: den förra dagen har passerat eller saknas. Dagen går att ändra igen i Möten.",
+      klart: "Uppföljningen är ändrad.",
+    },
+  };
 }
 
 /**
@@ -288,9 +512,12 @@ export async function korVerktyg(namn: string, input: unknown, c: Ctx, anrop: nu
       }
       case "las_dag": return { svar: { ...marke, ...(await lasDag(i, c)) } };
       case "las_provision": return { svar: { ...marke, ...(await lasProvision(i, c)) } };
-      case "forbered_uppgifter": {
-        const f = forbered(i);
-        return { svar: { ...marke, ...f.svar }, utkast: f.utkast };
+      case "las_affarer": return { svar: { ...marke, ...(await lasAffarer(i, c)) } };
+      case "sok_kunskap": return { svar: { ...marke, ...(await sokKunskap(i, c)) } };
+      case "forbered_uppgifter":
+      case "forbered_uppfoljning": {
+        const f = await (namn === "forbered_uppgifter" ? forberedUppgifter(i, c) : forberedUppfoljning(i, c));
+        return { svar: { ...marke, ...f.svar }, kort: f.kort };
       }
       default: return { svar: { ...marke, fel: "Okänt verktyg." } };
     }
@@ -312,8 +539,37 @@ const FALTNAMN: Record<string, string> = {
   "las_provision.antalRader": "Rader i underlaget",
   "las_provision.rader.belopp": "Belopp på en rad i underlaget",
   "las_forslag.oppna": "Öppna förslag",
-  "forbered_uppgifter.uppgifter": "Uppgifter i utkastet",
+  "forbered_uppgifter.uppgifter": "Uppgifter på kortet",
+  "las_affarer.oppna": "Öppna affärer",
+  "las_affarer.medBelopp": "Öppna affärer med belopp",
+  "las_affarer.summa": "Summan av beloppen på de öppna affärerna",
+  "las_affarer.iVeckan.antal": "Öppna affärer med nästa steg senast söndag",
+  "las_affarer.iVeckan.medBelopp": "Affärer med nästa steg senast söndag och med belopp",
+  "las_affarer.iVeckan.summa": "Summan av beloppen på affärer med nästa steg senast söndag",
+  "las_affarer.utanNastaSteg": "Öppna affärer utan nästa steg",
+  "las_affarer.forsenade": "Affärer där dagen för uppföljning har passerat",
+  "las_affarer.mal.belopp": "Beloppet frågan gällde",
+  "las_affarer.mal.saknas": "Kvar till beloppet om alla öppna affärer med belopp blir order",
+  "las_affarer.mal.saknasIVeckan": "Kvar till beloppet om affärerna med nästa steg senast söndag blir order",
+  "las_affarer.visar": "Affärer som räknas upp",
+  "las_affarer.affarer.belopp": "Offertens belopp",
+  "las_affarer.affarer.forsenadDagar": "Dagar sedan kunden skulle ha kontaktats",
+  "las_affarer.affarer.motetFlyttat": "Gånger mötet har flyttats",
+  "las_affarer.affarer.ingetSvarIRad": "Försök i rad utan svar",
+  "sok_kunskap.traffar": "Dokument i kunskapsbasen som matchade",
 };
+
+/**
+ * Raden under svaret som säger var det kommer ifrån: Navs tal, företagets kunskapsbas eller ingetdera.
+ * Ur verktygssvaren, aldrig ur Claudes text. Ett verktyg som svarade med fel, och ett kort Claude själv
+ * har förberett, är ingen källa.
+ */
+export function kallaFor(svar: readonly Record<string, unknown>[]): string {
+  const last = svar.filter((s) => s && typeof s.fel !== "string" && s._egnaOrd !== true);
+  const dok = last.filter((s) => s._verktyg === "sok_kunskap").flatMap((s) => (Array.isArray(s.dokument) ? (s.dokument as { rubrik?: unknown }[]) : [])).map((d) => kort(d?.rubrik, 60)).filter(Boolean);
+  const delar = [last.some((s) => s._verktyg !== "sok_kunskap") ? "Navs tal" : "", dok.length ? `företagets kunskapsbas (${[...new Set(dok)].slice(0, DOKUMENT_MAX).join(", ")})` : ""].filter(Boolean);
+  return delar.length ? `Skrivet av AI ur ${delar.join(" och ")}` : "Skrivet av AI, inte ur Navs tal eller kunskapsbasen";
+}
 
 /**
  * Raden som visas när någon klickar på ett tal: vad det är, vem det gäller, perioden och "data per". Ur
@@ -332,6 +588,6 @@ export function kallrad(svar: Record<string, unknown> | undefined, falt = ""): s
     : "";
   const faltnamn = FALTNAMN[`${String(svar._verktyg ?? "")}.${falt.replace(/\.\d+\./g, ".")}`] ?? "";
   const period = s("period") ? (s("fran") && s("till") ? `${s("period")} (${s("fran")} till ${s("till")})` : s("period")) : s("dag");
-  const vad = egen || faltnamn || s("vad") || ({ las_forslag: "Navs förslag", las_vantar: "Väntar på dig", las_dag: "Kalender och uppgifter", las_provision: "Din provision", forbered_uppgifter: "Utkast till uppgifter" } as Record<string, string>)[s("_verktyg")] || "";
+  const vad = egen || faltnamn || s("vad") || ({ las_forslag: "Navs förslag", las_vantar: "Väntar på dig", las_dag: "Kalender och uppgifter", las_provision: "Din provision", sok_kunskap: "Företagets kunskapsbas", forbered_uppgifter: "Uppgifter att godkänna", forbered_uppfoljning: "Uppföljning att godkänna" } as Record<string, string>)[s("_verktyg")] || "";
   return [vad, s("vem"), period, s("dataPer") ? `data per ${s("dataPer")}` : ""].filter(Boolean).join(" · ");
 }

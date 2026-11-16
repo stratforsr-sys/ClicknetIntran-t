@@ -18,7 +18,7 @@ export const maxDuration = 120;
  *
  *   POST {fraga, historia?: [{fraga, svar}], bilagor?: [{sort, namn, data}]}   svaret strömmas som händelser (text/event-stream):
  *     {h: "hamtar", text}                        vad som hämtas medan ett verktyg kör
- *     {h: "svar", text, tal, obelagda, kalla, utkast}
+ *     {h: "svar", text, tal, obelagda, kalla, kort}
  *     {h: "avbojt", text} | {h: "fel", text}     skrivrutan svarar då som sökrutan
  *
  * AVSTÄNGD tills någon slår på den: utan `chatt.pa` svarar rutten 409 innan något annat händer, och
@@ -34,8 +34,9 @@ export const maxDuration = 120;
  * CLAUDE SKRIVER ALDRIG ETT TAL. Den hänvisar till ett fält i ett verktygssvar, och `sattInTal` sätter in
  * värdet med källa. En siffra utan hänvisning märks ut och räknas i loggen.
  *
- * CLAUDE GÖR INGENTING. Fem verktyg läser, med den inloggades behörighet (`verktyg.ts`). Det sjätte
- * förbereder ett utkast till uppgifter som personen själv lägger in.
+ * CLAUDE GÖR INGENTING. Sju verktyg läser, med den inloggades behörighet (`verktyg.ts`). Två förbereder
+ * ett kort som säger exakt vad som ska göras. Trycker personen på Godkänn skickar webbläsaren kortets steg
+ * till Navs vanliga rutter, som den inloggade. Den här rutten skriver aldrig något annat än sin egen logg.
  *
  * VARJE FRÅGA LOGGAS, också en som avböjdes eller föll: kostnaden ska räknas mot gränsen ändå.
  * Loggraden skrivs av reservationen, före anropet, och rättas till den verkliga kostnaden när svaret är

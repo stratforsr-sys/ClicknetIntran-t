@@ -7,10 +7,12 @@ import { lasSidvis } from "@/lib/sidvis";
 import { byggForslag, lasKrets } from "../forslag";
 import { lasOrder, lasStatMoten } from "../hem-team";
 import { hamtaKalposter } from "../kalender";
+import { byggMoten } from "../moten";
 import { svaraPaletten } from "../palettsvar";
 import { byggProvision } from "../provision";
+import { SOKMISSAR_PER_MINUT, senasteMinuten, underTak } from "../tak";
 import { byggUppgifter } from "../uppgifter";
-import { dagUr, type Kallor } from "./verktyg";
+import { DOKUMENT_MAX, affarUr, dagUr, type Dokument, type Kallor } from "./verktyg";
 
 /**
  * Chatten: de riktiga källorna bakom verktygen.
@@ -69,5 +71,32 @@ export function skapaKallor(user: CurrentUser): Kallor {
         if (!u) return null;
         return { summa: u.summa, bokfort: u.bokfort, signerade: u.antal.signerade, makulerade: u.antal.makulerade, netto: u.antal.netto, rader: u.rader.map((r) => ({ text: r.text, belopp: r.belopp })) };
       }),
+    // Samma kort som tavlan i Möten, lästa som den inloggade: RLS avgör vilka affärer personen ser.
+    affarer: () =>
+      en("affarer", async () => {
+        const m = await byggMoten(await supabaseServer(), user);
+        if (m.fel) throw new Error("mötena gick inte att läsa");
+        return m.kort.map((k) => affarUr(k, m.inst.kolumnnamn));
+      }),
+    // Kunskapsbasen är Rutiners dokument, lästa som den inloggade: RLS avgör målgruppen. Först alla sökorden,
+    // sedan något av dem, så att "sökord transport" hittar dokumentet om transport fast ordet sökord inte står där.
+    kunskap: (sokord) =>
+      en(`kunskap:${sokord}`, async () => {
+        const db = await supabaseServer();
+        const sok = async (q: string): Promise<Dokument[]> => {
+          const { data, error } = await db.from("document").select("title, category_path, body_md, updated_at").eq("status", "published").textSearch("search", q, { type: "websearch", config: "swedish" }).order("updated_at", { ascending: false }).limit(DOKUMENT_MAX);
+          if (error) throw new Error(error.message);
+          return ((data ?? []) as { title: string; category_path: string | null; body_md: string | null; updated_at: string }[]).map((d) => ({ rubrik: d.title, omrade: d.category_path ?? "", text: d.body_md ?? "", andrad: d.updated_at }));
+        };
+        const alla = await sok(sokord);
+        if (alla.length) return { dokument: alla, allaOrden: true };
+        const ord = sokord.split(/\s+/).filter((o) => o.length > 2 && o.toLowerCase() !== "or");
+        return { dokument: ord.length > 1 ? await sok(ord.join(" or ")) : [], allaOrden: false };
+      }),
+    // Samma lista som Rutiners egen sökning skriver till (`document_search_miss`), med samma tak. Raden har ingen person.
+    kunskapMiss: async (sokord) => {
+      const db = supabaseAdmin();
+      if (await underTak(db, { tabell: "document_search_miss", kolumn: "searched_at", fran: senasteMinuten() }, SOKMISSAR_PER_MINUT)) await db.from("document_search_miss").insert({ query: sokord.slice(0, 200) });
+    },
   };
 }

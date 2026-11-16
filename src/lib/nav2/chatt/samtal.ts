@@ -14,15 +14,16 @@
  */
 import { efterReserv, forsok, hanvisningsfel, kostnadUsd, sattInTal, talfalt, utanMarken, type InsattTal, type Usage } from "./chattforma.ts";
 import { EFFORT, OMSKRIV, SYSTEMTEXT } from "./systemtext.ts";
-import { VERKTYG, hamtarText, kallrad, korVerktyg, type Ctx, type Utkast } from "./verktyg.ts";
+import { VERKTYG, hamtarText, kallaFor, kallrad, korVerktyg, type Ctx, type Handlingskort } from "./verktyg.ts";
 
 /** Högst så här många anrop till Claude per fråga. */
 export const MAX_VARV = 6;
 export const MAX_UT = 2000;
+/** Högst så här många kort att godkänna i ett svar. */
+export const KORT_MAX = 3;
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 /** Haiku 5.5 har ingen reservmodell på servern. */
 export const harReserv = (modell: string) => !modell.startsWith("claude-haiku");
-export const KALLRAD_AI = "Skrivet av AI ur Navs tal";
 
 export type Tur = { role: "user" | "assistant"; content: unknown };
 type Block = { type: string; text?: string; id?: string; name?: string; input?: unknown };
@@ -56,7 +57,7 @@ const obelagdaI = (text: string): string[] => [...new Set([...text.matchAll(/⟦
 
 export type Handelse =
   | { h: "hamtar"; text: string }
-  | { h: "svar"; text: string; tal: (InsattTal & { om: string })[]; obelagda: number; kalla: string; utkast: Utkast[] }
+  | { h: "svar"; text: string; tal: (InsattTal & { om: string })[]; obelagda: number; kalla: string; kort: Handlingskort[] }
   | { h: "avbojt"; text: string }
   | { h: "fel"; text: string };
 
@@ -82,7 +83,8 @@ export type Samtalssvar = {
   ren: string | null;
   tal: InsattTal[];
   obelagda: number;
-  utkast: Utkast[];
+  /** Korten Claude har förberett, i den ordning de kom. Inget av dem är utfört: personen godkänner vart och ett. */
+  kort: Handlingskort[];
 };
 
 export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[]; ctx: Ctx; sand: (h: Handelse) => void; fristMs?: number; klocka?: () => number }): Promise<Samtalssvar> {
@@ -91,7 +93,7 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
   const slut = klocka() + (i.fristMs ?? FRIST_MS);
   const kvar = () => slut - klocka();
   const turer = [...i.turer];
-  const ut: Samtalssvar = { stopp: "fel", usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, kostnadUsd: 0, reserv: 0, omskrivet: false, ofullstandig: false, anrop: [], svar: [], ra: null, text: null, ren: null, tal: [], obelagda: 0, utkast: [] };
+  const ut: Samtalssvar = { stopp: "fel", usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, kostnadUsd: 0, reserv: 0, omskrivet: false, ofullstandig: false, anrop: [], svar: [], ra: null, text: null, ren: null, tal: [], obelagda: 0, kort: [] };
   try {
     for (let varv = 0; ; varv++) {
       if (kvar() <= 0) throw new Tidsslut();
@@ -156,9 +158,16 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
           ut.anrop.push({ namn, input });
           sand({ h: "hamtar", text: hamtarText(namn, input) });
           const r = await medFrist(korVerktyg(namn, input, ctx, ut.anrop.length), kvar());
-          ut.svar.push(r.svar);
-          if (r.utkast) ut.utkast = r.utkast;
-          resultat.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(r.svar) });
+          let svar = r.svar;
+          // Samma kort en gång till visas inte två gånger. Ryms kortet inte får Claude veta det: den får aldrig säga att
+          // något väntar på Godkänn som personen inte ser.
+          const steg = r.kort ? JSON.stringify(r.kort.steg) : "";
+          if (r.kort && !ut.kort.some((k) => JSON.stringify(k.steg) === steg)) {
+            if (ut.kort.length < KORT_MAX) ut.kort.push(r.kort);
+            else svar = { _verktyg: namn, _anrop: ut.anrop.length, fel: "Svaret har redan så många kort som ryms, så det här kortet visas inte. Be personen godkänna de som visas och fråga sedan igen." };
+          }
+          ut.svar.push(svar);
+          resultat.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(svar) });
         }
         turer.push({ role: "user", content: resultat });
         continue;
@@ -186,7 +195,7 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
       ut.ren = utanMarken(insatt.text);
       ut.tal = insatt.tal;
       ut.obelagda = insatt.obelagda;
-      sand({ h: "svar", text: insatt.text, tal: insatt.tal.map((t) => ({ ...t, om: kallrad(ut.svar[t.kalla.anrop - 1], t.kalla.falt) })), obelagda: insatt.obelagda, kalla: KALLRAD_AI, utkast: ut.utkast });
+      sand({ h: "svar", text: insatt.text, tal: insatt.tal.map((t) => ({ ...t, om: kallrad(ut.svar[t.kalla.anrop - 1], t.kalla.falt) })), obelagda: insatt.obelagda, kalla: kallaFor(ut.svar), kort: ut.kort });
       return ut;
     }
   } catch (e) {

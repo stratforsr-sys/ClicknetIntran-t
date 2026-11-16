@@ -136,7 +136,7 @@ function hem({ chef, forslag = 1, andrat = ANDRAT, andratKort = AKORT, rader = n
     localStorage: { getItem: (k) => (k === "nav2-hvton" ? hvton : null), setItem: () => {} },
     openPal: () => { anrop.push(["pal"]); }, TextDecoder,
   };
-  kor(block, g, ["hvHem", "hvVantar", "hvForeslar", "hvTeam", "hvDinManad", "hvAndrat", "hvArk", "hvSkriv", "hvInstRuta", "hvPa", "hvFlagga", "hvDolj", "hvVisa", "hvGrattis", "hvHamta", "hvOppna", "hvValj", "hvTangent", "hvFraga", "hvChattLagg", "hvKlick", "hvStang", "hvPlaneraDag"]);
+  kor(block, g, ["hvHem", "hvVantar", "hvForeslar", "hvTeam", "hvDinManad", "hvAndrat", "hvArk", "hvSkriv", "hvInstRuta", "hvPa", "hvFlagga", "hvDolj", "hvVisa", "hvGrattis", "hvHamta", "hvOppna", "hvValj", "hvTangent", "hvFraga", "hvChattGodkann", "hvChattAngra", "hvKlick", "hvStang", "hvPlaneraDag"]);
   g.anrop = anrop;
   return g;
 }
@@ -525,29 +525,68 @@ rubrik("Chatten i skrivrutan");
   ok("nästa fråga bär det förra utbytet, utan märken", h2.length === 1 && h2[0].fraga === "Hur gick lagets möten förra veckan?" && h2[0].svar.startsWith("Laget höll 12 av 19 möten.") && !h2[0].svar.includes("⟦"), JSON.stringify(h2));
   ok("båda turerna står i samtalet", (pa.hvHem().match(/class="hv-tur"/g) || []).length === 2);
 
-  // Ett utkast: Claude förbereder, personen lägger in.
+  // Ett kort: Claude förbereder, personen godkänner. Varje steg går till Navs vanliga rutt.
   const u = hem({ chef: false });
   u.ND.hem.chatt = true;
-  u.fetch = async () => strom([{ h: "hamtar", text: "Förbereder ett utkast till uppgifter." }, { h: "svar", text: "Jag har förberett två uppgifter.", tal: [], obelagda: 0, kalla: "Skrivet av AI ur Navs tal", utkast: [{ titel: "Ring <b>Hagby</b> Glas", dag: "2026-11-17" }, { titel: "Skicka offerten", dag: null }] }]);
+  const KORT = { rubrik: "Lägg upp 2 uppgifter", klart: "Uppgifterna är upplagda.", varning: null,
+    rader: [{ text: "Ring <b>Hagby</b> Glas", dag: "2026-11-17", not: "åt Sara <i>Lind</i>" }, { text: "Skicka offerten", dag: null, not: "utan dag" }],
+    steg: [{ vag: "/nav2/uppgifter", body: { handling: "skapa", titel: "Ring <b>Hagby</b> Glas", dag: "2026-11-17", till: "p-sara" }, angra: { handling: "avbryt", id: "$id" } }, { vag: "/nav2/uppgifter", body: { handling: "skapa", titel: "Skicka offerten", dag: null }, angra: { handling: "avbryt", id: "$id" } }] };
+  const FLYTT = { rubrik: "Ändra dagen för uppföljningen", klart: "Uppföljningen är ändrad.", varning: "Går inte att ångra här efteråt.", rader: [{ text: "Solbacken", dag: "2026-11-20", not: "förut 2026-11-12" }],
+    steg: [{ vag: "/nav2/moten", body: { handling: "uppfoljning_andra", kedja: "k1", fore: null, datum: "2026-11-20", text: null }, angra: null }] };
+  u.fetch = async () => strom([{ h: "hamtar", text: "Förbereder uppgifter att godkänna." }, { h: "svar", text: "Jag har förberett det. Det väntar på Godkänn.", tal: [], obelagda: 0, kalla: "Skrivet av AI, inte ur Navs tal eller kunskapsbasen", kort: [KORT, FLYTT] }]);
   const skrivet = [];
-  u.ndSkriv = async (url, data) => { skrivet.push([url, data]); return skrivet.length === 2 && u.__fall ? { fel: "Uppgiften sparades inte." } : { ok: "Uppgiften är upplagd." }; };
+  u.ndSkriv = async (url, data) => { skrivet.push([url, data]); return u.__fall && skrivet.length === u.__fall ? { fel: "Det sparades inte." } : { ok: "Sparat.", id: `ny${skrivet.length}`, uppfoljning_andrad: "v2" }; };
   u.ndSvar = (x) => x;
   const omlast = [];
   u.ndOmlas = (d) => { omlast.push(d); return Promise.resolve(true); };
+  u.NDOMLAS = {};
   u.S.hv.q = "Lägg upp att jag ringer Hagby i morgon";
   await u.hvFraga();
-  const ut = u.hvHem();
-  ok("utkastet visas med knappen Lägg i min dag, och inget är skapat", ut.includes('data-hvchattlagg="0"') && ut.includes("Lägg i min dag") && ut.includes("Inget är skapat än") && skrivet.length === 0, ut.slice(ut.indexOf("hv-utk"), ut.indexOf("hv-utk") + 500));
-  ok("utkastets titel kan inte bli kod, och en uppgift utan dag säger det", ut.includes("Ring &lt;b&gt;Hagby&lt;/b&gt; Glas") && ut.includes("utan dag"));
-  u.__fall = true;
-  await u.hvChattLagg(0);
-  ok("faller den andra uppgiften står knappen kvar", skrivet.length === 2 && u.hvHem().includes('data-hvchattlagg="0"') && omlast.includes("upg"));
-  u.__fall = false;
-  await u.hvChattLagg(0);
-  ok("ett nytt tryck lägger bara in den som saknas", skrivet.length === 3 && skrivet[2][1].titel === "Skicka offerten" && skrivet[2][1].dag === null && skrivet[0][0] === "/nav2/uppgifter" && skrivet[0][1].handling === "skapa" && skrivet[0][1].dag === "2026-11-17", JSON.stringify(skrivet));
-  ok("sedan är knappen borta och rutan säger att det är tillagt", !u.hvHem().includes("data-hvchattlagg") && u.hvHem().includes("Tillagt i dina uppgifter"));
-  await u.hvChattLagg(0);
-  ok("ett tryck till skapar ingenting", skrivet.length === 3);
+  let ut = u.hvHem();
+  ok("kortet säger exakt vad som ska göras, med Godkänn och Avbryt, och inget är gjort", ut.includes('data-hvchattgodkann="0:0"') && ut.includes('data-hvchattavbryt="0:0"') && ut.includes("Lägg upp 2 uppgifter") && ut.includes("Inget är gjort än") && skrivet.length === 0, ut.slice(ut.indexOf("hv-utk"), ut.indexOf("hv-utk") + 600));
+  ok("kortets text kan inte bli kod, och raden säger dag och åt vem", ut.includes("Ring &lt;b&gt;Hagby&lt;/b&gt; Glas") && ut.includes("åt Sara &lt;i&gt;Lind&lt;/i&gt;") && ut.includes("utan dag") && !ut.includes("<b>Hagby</b>"));
+  ok("två kort i samma svar står var för sig, och varningen står före Godkänn", ut.includes('data-hvchattgodkann="0:1"') && ut.includes("Ändra dagen för uppföljningen") && ut.indexOf("Går inte att ångra här efteråt.") < ut.indexOf('data-hvchattgodkann="0:1"') && ut.indexOf("Går inte att ångra här efteråt.") > ut.indexOf('data-hvchattgodkann="0:0"'));
+  ok("källraden är den servern skickade", ut.includes("Skrivet av AI, inte ur Navs tal eller kunskapsbasen"));
+  u.__fall = 2;
+  await u.hvChattGodkann(0, 0);
+  ut = u.hvHem();
+  ok("faller det andra steget står Godkänn kvar, Avbryt är borta och kortet säger hur långt det kom", skrivet.length === 2 && ut.includes('data-hvchattgodkann="0:0"') && !ut.includes('data-hvchattavbryt="0:0"') && ut.includes("1 av 2 är gjorda.") && omlast.includes("upg"), ut.slice(ut.indexOf("hv-utk"), ut.indexOf("hv-utk") + 700));
+  u.__fall = 0;
+  await u.hvChattGodkann(0, 0);
+  ok("ett nytt tryck gör bara det som saknas, med exakt det kortet sa", skrivet.length === 3 && skrivet[2][1].titel === "Skicka offerten" && skrivet[2][1].dag === null && skrivet[0][0] === "/nav2/uppgifter" && skrivet[0][1].handling === "skapa" && skrivet[0][1].dag === "2026-11-17" && skrivet[0][1].till === "p-sara", JSON.stringify(skrivet));
+  ut = u.hvHem();
+  ok("sedan står kvittot med Ångra, och Godkänn är borta", !ut.includes('data-hvchattgodkann="0:0"') && ut.includes("Uppgifterna är upplagda.") && ut.includes('data-hvchattangra="0:0"'));
+  await u.hvChattGodkann(0, 0);
+  ok("ett tryck till gör ingenting", skrivet.length === 3);
+  await u.hvChattAngra(0, 0);
+  ok("Ångra tar tillbaka stegen i omvänd ordning, med id:t rutten svarade", skrivet.length === 5 && skrivet[3][1].handling === "avbryt" && skrivet[3][1].id === "ny3" && skrivet[4][1].id === "ny1" && u.hvHem().includes("Ångrat.") && !u.hvHem().includes('data-hvchattangra="0:0"'), JSON.stringify(skrivet.slice(3)));
+  klick(u, { hvchattgodkann: "0:1" });
+  await new Promise((r) => setTimeout(r, 0));
+  ut = u.hvHem();
+  ok("ett kort utan Ångra visar bara kvittot, och Möten läses om", skrivet.length === 6 && skrivet[5][0] === "/nav2/moten" && skrivet[5][1].handling === "uppfoljning_andra" && ut.includes("Uppföljningen är ändrad.") && !ut.includes('data-hvchattangra="0:1"') && omlast.includes("hv"), JSON.stringify([skrivet[5], omlast]));
+
+  // Avbryt gör ingenting, och efter Avbryt går kortet inte att godkänna.
+  const avb = hem({ chef: false });
+  avb.ND.hem.chatt = true;
+  avb.fetch = async () => strom([{ h: "svar", text: "Förberett.", tal: [], obelagda: 0, kalla: "Skrivet av AI", kort: [KORT] }]);
+  const avSkrivet = [];
+  avb.ndSkriv = async (url, data) => { avSkrivet.push([url, data]); return { ok: "Sparat.", id: "x" }; };
+  avb.ndSvar = (x) => x; avb.ndOmlas = () => Promise.resolve(true); avb.NDOMLAS = {};
+  avb.S.hv.q = "Lägg upp det";
+  await avb.hvFraga();
+  klick(avb, { hvchattavbryt: "0:0" });
+  await avb.hvChattGodkann(0, 0);
+  ok("Avbryt gör ingenting, och ett avbrutet kort går inte att godkänna", avSkrivet.length === 0 && avb.hvHem().includes("Avbrutet. Inget är gjort.") && !avb.hvHem().includes("data-hvchattgodkann"));
+  // Svarar rutten utan det Ångra behöver finns ingen Ångra-knapp: hellre ingen knapp än en som inte fungerar.
+  const ua = hem({ chef: false });
+  ua.ND.hem.chatt = true;
+  ua.fetch = async () => strom([{ h: "svar", text: "Förberett.", tal: [], obelagda: 0, kalla: "Skrivet av AI", kort: [KORT] }]);
+  ua.ndSkriv = async () => ({ ok: "Sparat." });
+  ua.ndSvar = (x) => x; ua.ndOmlas = () => Promise.resolve(true); ua.NDOMLAS = {};
+  ua.S.hv.q = "Lägg upp det";
+  await ua.hvFraga();
+  await ua.hvChattGodkann(0, 0);
+  ok("utan id i ruttens svar finns ingen Ångra-knapp", ua.hvHem().includes("Uppgifterna är upplagda.") && !ua.hvHem().includes("data-hvchattangra"));
 
   // Taket, avböjandet och avstängningen.
   const t = hem({ chef: false });

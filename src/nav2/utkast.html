@@ -9263,6 +9263,7 @@ button.hv-kfot:hover,.hv-tal:hover .hv-kfot{color:var(--hv-ink)}
 .hv-utk li small{flex:none;color:var(--hv-ink-3);font-size:12.5px}
 .hv-utk p{margin:0}
 .hv-utkrad{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.hv-utkvarn{margin:0 0 10px!important}
 .hv-cforbr{list-style:none;margin:10px 0 0;padding:0;display:grid;gap:6px;font-size:13px}
 .hv-cforbr li{display:flex;justify-content:space-between;gap:16px}
 .hv-cforbr li span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -35066,8 +35067,9 @@ function hvFraga(){
 
 /* ---------- Chatten (designdokumentet, Steg 3): skrivrutan frågar Claude när chatten är påslagen ----------
    Claude skriver texten, Nav sätter in talen. Varje tal är en knapp som visar sin källa, ett tal utan
-   belägg är utmärkt, och källraden säger att texten är skriven av AI. Claude gör ingenting: ett utkast
-   till uppgifter läggs in först när personen trycker. Samtalet finns bara i fliken och sparas inte här.
+   belägg är utmärkt, och källraden säger att texten är skriven av AI och var den kommer ifrån. Claude gör
+   ingenting: den förbereder ett kort, och det körs först när personen trycker på Godkänn. Samtalet finns bara
+   i fliken och sparas inte här.
    Svarar rutten nej (avstängd, tak, avböjt) säger rutan varför och erbjuder sökrutan. */
 const hvChattRen = t => String(t || '').replace(/⟦(?:t\d+|obelagt):([^⟧]*)⟧/g, '$1');
 async function hvChattFraga(q){
@@ -35076,7 +35078,7 @@ async function hvChattFraga(q){
   H.q = '';
   const historia = T.filter(t => t.svar).slice(-3).map(t => ({fraga:t.fraga, svar:hvChattRen(t.svar.text)}));
   const bilagor = H.bilagor || []; H.bilagor = [];
-  const tur = {fraga:q, filer:bilagor.map(b => b.namn), hamtar:[], svar:null, fel:'', laddar:true, visa:null, lagt:false, lagger:false, lagda:0};
+  const tur = {fraga:q, filer:bilagor.map(b => b.namn), hamtar:[], svar:null, fel:'', laddar:true, visa:null, lage:[]};
   T.push(tur);
   // Frågan blir ett inlägg i tråden, efter det som redan ligger där.
   const inl = {sort:'chatt', id:String(T.length - 1), nr:++hvNr};
@@ -35123,12 +35125,20 @@ function hvChattText(t, ti){
     : `<button class="hv-siffra num" data-hvtal="${ti}:${id}" aria-expanded="${t.visa === id}" title="Visa källan">${v}</button>`)
     .split(/\n{2,}/).map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
 }
-function hvChattUtkast(t, i){
-  const u = t.svar.utkast;
-  return `<div class="hv-glass hv-utk"><b>${u.length === 1 ? 'Utkast till en uppgift' : `Utkast till ${hvOrd(u.length).toLowerCase()} uppgifter`}</b>
-    <ul>${u.map(x => `<li><span>${esc(x.titel)}</span><small>${x.dag ? esc(frKort(x.dag)) : 'utan dag'}</small></li>`).join('')}</ul>
-    ${t.lagt ? `<p class="hv-tank">Tillagt i dina uppgifter.</p>` : `<p class="hv-utkrad"><button class="hv-kn" data-hvchattlagg="${i}"${t.lagger ? ' disabled' : ''}>Lägg i min dag</button><span class="hv-tank">Inget är skapat än.</span></p>`}
-  </div>`;
+// Ett kort säger exakt vad som ska göras. Ingenting händer förrän personen trycker på Godkänn, och varje steg går
+// till Navs vanliga rutt som den inloggade: samma behörighet och samma logg som när personen gör det för hand.
+// Efter Godkänn står ett kvitto, och Ångra när det går att ångra. Går det inte säger kortet det före Godkänn.
+const hvKortLage = (t, n) => t.lage[n] || (t.lage[n] = {gjorda:[], gor:false, slut:''});
+function hvChattKort(t, i){
+  return (t.svar.kort || []).map((k, n) => { const l = hvKortLage(t, n), av = l.gor ? ' disabled' : '', nr = i + ':' + n;
+    const fot = l.slut === 'avbrutet' ? '<p class="hv-tank">Avbrutet. Inget är gjort.</p>'
+      : l.slut === 'angrat' ? '<p class="hv-tank">Ångrat.</p>'
+      : l.slut === 'klart' ? `<p class="hv-utkrad"><span class="hv-kvi"><i class="hv-ok">${I('check')}</i><span>${esc(k.klart || 'Klart.')}</span></span>${l.gjorda.length && l.gjorda.every(g => g.angra) ? `<button class="hv-kn" data-hvchattangra="${nr}"${av}>Ångra</button>` : ''}</p>`
+      : `${k.varning ? `<p class="hv-tank hv-utkvarn">${esc(k.varning)}</p>` : ''}<p class="hv-utkrad"><button class="hv-kn" data-hvchattgodkann="${nr}"${av}>Godkänn</button>${l.gjorda.length ? '' : `<button class="hv-kn" data-hvchattavbryt="${nr}"${av}>Avbryt</button>`}<span class="hv-tank">${l.gjorda.length ? `${l.gjorda.length} av ${k.steg.length} är gjorda.` : 'Inget är gjort än.'}</span></p>`;
+    return `<div class="hv-glass hv-utk"><b>${esc(k.rubrik)}</b>
+    <ul>${k.rader.map(x => `<li><span>${esc(x.text)}</span><small>${esc([x.dag ? frKort(x.dag) : '', x.not].filter(Boolean).join(' · '))}</small></li>`).join('')}</ul>
+    ${fot}
+  </div>`; }).join('');
 }
 function hvArkChatt(nr){
   const alla = S.hv.chatt || [], visa = nr === null || nr === undefined ? alla.map((t, i) => i) : [+nr];
@@ -35138,27 +35148,51 @@ function hvArkChatt(nr){
     const obel = s && s.obelagda ? `<p class="hv-tank">${s.obelagda === 1 ? 'Det markerade talet kunde jag inte belägga.' : 'De markerade talen kunde jag inte belägga.'}</p>` : '';
     const kalla = k ? `<p class="hv-talk"><span class="hv-mono">${esc(k.om || 'Källan går inte att visa.')}</span></p>` : '';
     const fel = t.fel ? `<p>${esc(t.fel)}</p><p><button class="hv-kn" data-hvchattsok="${i}">Sök i stället</button></p>` : '';
-    return `<div class="hv-tur"><p class="hv-q">${esc(t.fraga)}${(t.filer || []).length ? `<small class="hv-qfil">${t.filer.map(esc).join(' · ')}</small>` : ''}</p>${hvNavSager(`${hamtar}${s ? hvChattText(t, i) + obel + kalla : ''}${fel}`)}${s && (s.utkast || []).length ? hvChattUtkast(t, i) : ''}${s ? hvKalla(s.kalla || 'Skrivet av AI ur Navs tal') : ''}</div>`;
+    return `<div class="hv-tur"><p class="hv-q">${esc(t.fraga)}${(t.filer || []).length ? `<small class="hv-qfil">${t.filer.map(esc).join(' · ')}</small>` : ''}</p>${hvNavSager(`${hamtar}${s ? hvChattText(t, i) + obel + kalla : ''}${fel}`)}${s && (s.kort || []).length ? hvChattKort(t, i) : ''}${s ? hvKalla(s.kalla || 'Skrivet av AI') : ''}</div>`;
   }).join('')}</div>`;
 }
-// Utkastet läggs in en uppgift i taget. Faller en står knappen kvar, och nästa tryck lägger bara in de som saknas.
-async function hvChattLagg(i){
-  const t = (S.hv.chatt || [])[i]; if (!t || !t.svar || t.lagt || t.lagger) return;
-  const u = t.svar.utkast || [];
-  t.lagger = true; render();
-  let klara = 0, fel = '';
-  for (const x of u.slice(t.lagda)){
-    const s = ndSvar(await ndSkriv('/nav2/uppgifter', {handling:'skapa', titel:x.titel, dag:x.dag}, {knapp:null}));
-    if (!s || s.fel || !s.ok){ fel = (s && s.fel) || 'Det gick inte att spara.'; break; }
-    klara++;
+// Stegen körs ett i taget. Faller ett står knappen kvar, och nästa tryck gör bara det som saknas.
+// "$fält" i ett stegs Ångra byts mot fältet i ruttens svar: uppgiftens id, uppföljningens nya version.
+const hvKortFyll = (o, r) => { const a = Object.fromEntries(Object.entries(o).map(([k, v]) => [k, typeof v === 'string' && v[0] === '$' ? r[v.slice(1)] : v])); return Object.values(a).some(v => v === undefined) ? null : a; };
+const hvKortOmlas = k => [...new Set(k.steg.map(s => s.vag === '/nav2/uppgifter' ? 'upg' : s.vag === '/nav2/moten' && NDOMLAS['mo-latt'] ? 'mo-latt' : 'hv'))].forEach(v => ndOmlas(v));
+const hvKortFor = (i, n) => { const t = (S.hv.chatt || [])[i], k = t && t.svar && (t.svar.kort || [])[n]; return k ? {k, l:hvKortLage(t, n)} : null; };
+async function hvChattGodkann(i, n){
+  const x = hvKortFor(i, n); if (!x || x.l.gor || x.l.slut) return;
+  const {k, l} = x;
+  l.gor = true; render();
+  let fel = '';
+  for (const s of k.steg.slice(l.gjorda.length)){
+    const r = ndSvar(await ndSkriv(s.vag, s.body, {knapp:null}));
+    if (!r || r.fel || !r.ok){ fel = (r && r.fel) || 'Det gick inte att spara.'; break; }
+    l.gjorda.push({vag:s.vag, angra:s.angra ? hvKortFyll(s.angra, r) : null});
   }
-  t.lagda += klara; t.lagger = false;
-  if (t.lagda >= u.length) t.lagt = true;
-  if (klara) ndOmlas('upg');
-  toast(fel ? (t.lagda ? `${t.lagda} av ${u.length} uppgifter är upplagda. ${fel}` : fel) : (u.length === 1 ? 'Uppgiften är upplagd.' : `${u.length} uppgifter är upplagda.`));
+  l.gor = false;
+  if (l.gjorda.length >= k.steg.length) l.slut = 'klart';
+  if (l.gjorda.length) hvKortOmlas(k);
+  if (fel) toast(l.gjorda.length ? `${l.gjorda.length} av ${k.steg.length} är gjorda. ${fel}` : fel);
   if (S.view === 'hem') render();
 }
-
+function hvChattAvbryt(i, n){
+  const x = hvKortFor(i, n); if (!x || x.l.gor || x.l.slut || x.l.gjorda.length) return;
+  x.l.slut = 'avbrutet'; render();
+}
+// Ångra tar tillbaka stegen i omvänd ordning. Faller ett står Ångra kvar för det som återstår.
+async function hvChattAngra(i, n){
+  const x = hvKortFor(i, n); if (!x || x.l.gor || x.l.slut !== 'klart' || !x.l.gjorda.every(g => g.angra)) return;
+  const {k, l} = x;
+  l.gor = true; render();
+  let fel = '';
+  while (l.gjorda.length){
+    const g = l.gjorda[l.gjorda.length - 1], r = ndSvar(await ndSkriv(g.vag, g.angra, {knapp:null}));
+    if (!r || r.fel || !r.ok){ fel = (r && r.fel) || 'Det gick inte att ångra.'; break; }
+    l.gjorda.pop();
+  }
+  l.gor = false;
+  if (!l.gjorda.length) l.slut = 'angrat';
+  hvKortOmlas(k);
+  if (fel) toast(fel);
+  if (S.view === 'hem') render();
+}
 /* ---------- Arket: ett öppnat kort tar ytan ---------- */
 function hvOppna(ark, id){
   Object.assign(S.hv, {ark, id:id || null, kvitto:null, fel:'', form:null, dra:false, kom:'', meny:null, mer:false});
@@ -35552,7 +35586,7 @@ ndOmlasAnmal('hv', {delar:['hem', 'uppgifter', 'moten', 'kalender']});
 
 function hvKlick(e){
   if (!hvPa() || S.view !== 'hem') return;
-  const t = e.target.closest && e.target.closest('[data-hvtr], [data-hvunderlag], [data-hvboka], [data-hvangradag], [data-hvbifoga], [data-hvtips], [data-hvtala], [data-hvbilx], [data-hvstang], [data-hvtal], [data-hvchattsok], [data-hvchattlagg], [data-hvgor], [data-hvforslag], [data-hvnasta], [data-hvval], [data-hvangra], [data-hvdra], [data-hvmer], [data-hvstat], [data-hvforbered], [data-hvigen], [data-hvfraga], [data-hvform], [data-hvformx], [data-hvmeny], [data-hvflagga], [data-hvdolj], [data-hvvisa], [data-hvga], [data-hvgratt], [data-hvark]');
+  const t = e.target.closest && e.target.closest('[data-hvtr], [data-hvunderlag], [data-hvboka], [data-hvangradag], [data-hvbifoga], [data-hvtips], [data-hvtala], [data-hvbilx], [data-hvstang], [data-hvtal], [data-hvchattsok], [data-hvchattgodkann], [data-hvchattavbryt], [data-hvchattangra], [data-hvgor], [data-hvforslag], [data-hvnasta], [data-hvval], [data-hvangra], [data-hvdra], [data-hvmer], [data-hvstat], [data-hvforbered], [data-hvigen], [data-hvfraga], [data-hvform], [data-hvformx], [data-hvmeny], [data-hvflagga], [data-hvdolj], [data-hvvisa], [data-hvga], [data-hvgratt], [data-hvark]');
   // En väg ut ur hemmet (kalendern, uppgifterna, en inställning) stänger arket, så att Hem är hemmet nästa gång. Klicket går vidare som vanligt.
   if (!t){ if (S.hv.ark && e.target.closest && e.target.closest('.hv [data-view], .hv [data-go]')) Object.assign(S.hv, {ark:null, id:null, kvitto:null, form:null, meny:null}); return; }
   // Kort som är en enda knapp (data-hvark) får inte svälja knapparna inuti sig.
@@ -35572,7 +35606,9 @@ function hvKlick(e){
   if (d.hvbilx !== undefined){ S.hv.bilagor = (S.hv.bilagor || []).filter((_b, i) => i !== +d.hvbilx); render(); return; }
   if (d.hvtal){ const [ti, id] = d.hvtal.split(':'), tur = S.hv.chatt[+ti]; if (tur){ tur.visa = tur.visa === id ? null : id; render(); } return; }
   if (d.hvchattsok !== undefined){ const tur = S.hv.chatt[+d.hvchattsok]; if (tur) hvSok(tur.fraga); return; }
-  if (d.hvchattlagg !== undefined){ hvChattLagg(+d.hvchattlagg); return; }
+  if (d.hvchattgodkann){ hvChattGodkann(...d.hvchattgodkann.split(':').map(Number)); return; }
+  if (d.hvchattavbryt){ hvChattAvbryt(...d.hvchattavbryt.split(':').map(Number)); return; }
+  if (d.hvchattangra){ hvChattAngra(...d.hvchattangra.split(':').map(Number)); return; }
   if (d.hvgor){ complete(d.hvgor); return; }
   if (d.hvforslag){ hvOppna('forslag', d.hvforslag); return; }
   if (d.hvnasta !== undefined){ const n = ((ND.hem.forslag && ND.hem.forslag.oppna) || []).length; S.hv.fi = n ? (S.hv.fi + 1) % n : 0; render(); return; }

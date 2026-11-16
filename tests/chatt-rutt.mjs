@@ -117,7 +117,7 @@ process.env.ANTHROPIC_WORKSPACE_ID = "prov-workspace";
 
 const { POST } = await import("../src/app/nav2/chatt/route.ts");
 const { avtryck, SYSTEMTEXT } = await import("../src/lib/nav2/chatt/systemtext.ts");
-const { VERKTYG, korVerktyg, periodFor, kallrad, dagUr } = await import("../src/lib/nav2/chatt/verktyg.ts");
+const { VERKTYG, korVerktyg, periodFor, kallrad, dagUr, affarUr, kallaFor, AFFARER_MAX, DOKUMENT_TECKEN } = await import("../src/lib/nav2/chatt/verktyg.ts");
 const { kostnadUsd, maxFragaUsd, sattInTal } = await import("../src/lib/nav2/chatt/chattforma.ts");
 
 const PA = [
@@ -150,8 +150,23 @@ function kallor(roller, id, lasta) {
     vantar: async () => ({ sammanfattning: "Inget väntar.", rader: [] }),
     dag: async () => ({ poster: [], uppgifter: [] }),
     provision: async () => null,
+    // Som Möten: den som leder ser alla kort, en säljare ser dem hen är med i. Kretsen snävar sedan in i verktyget.
+    affarer: async () => { lasta.push("affarer"); return krets === null || roller.includes("team_lead") ? AFFARER : AFFARER.filter((a) => a.deltagare.includes(id)); },
+    kunskap: async (sokord) => { lasta.push(`kunskap:${sokord}`); return /transport/i.test(sokord) ? { dokument: [DOK], allaOrden: !/priser/i.test(sokord) } : { dokument: [], allaOrden: false }; },
+    kunskapMiss: async (sokord) => { lasta.push(`miss:${sokord}`); },
   };
 }
+
+// Onsdagen 2026-11-18: veckan slutar söndagen 2026-11-22.
+const aff = (kedja, bolag, vem, steg, rang, belopp, mote, uppfoljning, med = []) => ({ kedja, bolag, deltagare: [vem, ...med], ansvarig: vem, steg, rang, belopp, mote, uppfoljning });
+const AFFARER = [
+  aff("b1000000-0000-4000-8000-00000000000a", "Hagby Glas", S, "Offert skickad", 4, 60000, null, { datum: "2026-11-19", text: "Ring om offerten", ingetSvar: 0, andrad: "2026-11-10T08:00:00.000Z" }),
+  aff("b1000000-0000-4000-8000-00000000000b", "Solbacken Bygg", S, "Offert skickad", 4, null, null, { datum: "2026-11-12", text: null, ingetSvar: 2, andrad: null }),
+  aff("b1000000-0000-4000-8000-00000000000c", "Åkes Åkeri", S, "Bekräftat", 2, null, { tid: "2026-11-20 10:00", flyttningar: 2 }, null, [TL]),
+  aff("b1000000-0000-4000-8000-00000000000d", "Mälarö Rör", S, "Uppföljning", 3, null, null, { datum: "2026-11-27", text: null, ingetSvar: 0, andrad: null }),
+  aff("b1000000-0000-4000-8000-00000000000e", "Xerxes Kund", X, "Offert skickad", 4, 900000, null, { datum: "2026-11-18", text: null, ingetSvar: 0, andrad: null }),
+];
+const DOK = { rubrik: "Sökord: transport", omrade: "Kunskap/Branscher", text: "Åkeri: åkeri stockholm, godstransport.\nFlytt: flyttfirma, flytthjälp. " + "x".repeat(4000), andrad: "2026-11-02T09:00:00Z" };
 
 async function anropa(roller, id, kropp, o = {}) {
   const lasta = [];
@@ -267,7 +282,7 @@ rubrik("Ett svar: verktyget hämtar, servern sätter in talen");
   ok("inget är obelagt, och källraden säger att texten är AI", r.svar?.obelagda === 0 && r.svar.kalla === "Skrivet av AI ur Navs tal");
   ok("ett möte utanför kretsen räknas inte", r.svar?.tal?.[1]?.varde === 3);
   const a = r.ai[0] ?? {};
-  ok("verktygsvalet är auto och verktygen är strikta", a.tool_choice?.type === "auto" && a.tools?.length === 6 && a.tools.every((t) => t.strict === true && t.input_schema.additionalProperties === false), JSON.stringify(a.tool_choice));
+  ok("verktygsvalet är auto och verktygen är strikta", a.tool_choice?.type === "auto" && a.tools?.length === 9 && a.tools.every((t) => t.strict === true && t.input_schema.additionalProperties === false), JSON.stringify(a.tool_choice));
   ok("effort är satt uttryckligen och tänkandet lämnas orört", a.output_config?.effort === "low" && !("thinking" in a));
   ok("reservmodellen är med för Sonnet", a.fallbacks === "default" && a.betas?.includes("server-side-fallback-2026-07-01"), JSON.stringify(a.betas));
   ok("systemtexten är den fasta, med cachemärke", a.system?.[0]?.text === SYSTEMTEXT && a.system[0].cache_control?.type === "ephemeral" && a.model === "claude-sonnet-5-5");
@@ -310,14 +325,116 @@ rubrik("En person utanför kretsen");
 rubrik("Claude förbereder, en människa godkänner");
 {
   const r = await anropa(["salesperson"], S, { fraga: "Lägg upp att jag ringer Hagby i morgon" }, {
-    ai: [verktygstur("forbered_uppgifter", { uppgifter: [{ titel: "Ring Hagby Glas", dag: "2026-11-17" }, { titel: "Skicka offerten", dag: "" }] }), textsvar("Jag har förberett {{t:1.uppgifter}} uppgifter. Tryck på Lägg i min dag om de stämmer.")],
+    ai: [verktygstur("forbered_uppgifter", { uppgifter: [{ titel: "Ring Hagby Glas", dag: "2026-11-17" }, { titel: "Skicka offerten", dag: "" }] }), textsvar("Jag har förberett {{t:1.uppgifter}} uppgifter. Tryck på Godkänn om de stämmer.")],
   });
-  ok("utkastet följer med svaret", r.svar?.utkast?.length === 2 && r.svar.utkast[0].titel === "Ring Hagby Glas" && r.svar.utkast[0].dag === "2026-11-17" && r.svar.utkast[1].dag === null, JSON.stringify(r.svar?.utkast));
+  const k0 = r.svar?.kort?.[0];
+  ok("kortet följer med svaret och säger exakt vad som läggs upp", r.svar?.kort?.length === 1 && k0.rubrik === "Lägg upp 2 uppgifter" && k0.rader[0].text === "Ring Hagby Glas" && k0.rader[0].dag === "2026-11-17" && k0.rader[1].dag === null && k0.rader[1].not === "utan dag" && k0.varning === null, JSON.stringify(r.svar?.kort));
+  ok("varje steg är ett anrop till Navs vanliga rutt, med sitt Ångra", k0.steg.length === 2 && k0.steg.every((s) => s.vag === "/nav2/uppgifter" && s.body.handling === "skapa" && !("till" in s.body) && s.angra.handling === "avbryt" && s.angra.id === "$id" && /Ångrad/.test(s.angra.note)) && k0.steg[0].body.titel === "Ring Hagby Glas" && k0.steg[0].body.dag === "2026-11-17" && k0.steg[1].body.dag === null, JSON.stringify(k0.steg));
+  ok("ett kort Claude själv har förberett är ingen källa", r.svar?.kalla === "Skrivet av AI, inte ur Navs tal eller kunskapsbasen", r.svar?.kalla);
   ok("ingenting skapas i uppgifterna", r.ovrigt.length === 0 && r.logg.length === 1, r.ovrigt.join(", "));
   const tvatt = await anropa(["salesperson"], S, FRAGA, { ai: [verktygstur("forbered_uppgifter", { uppgifter: [{ titel: "Du har sålt 40 order", dag: "" }] }), textsvar("{{t:1.utkast.0.titel}}, och {{t:1.uppgifter}} uppgift är förberedd."), textsvar("{{t:1.utkast.0.titel}}, och {{t:1.uppgifter}} uppgift är förberedd.")] });
   ok("Claudes egna ord i ett utkast kan aldrig bli ett belagt tal, bara antalet servern räknat", (tvatt.svar?.tal ?? []).length === 1 && tvatt.svar.tal[0].kalla.falt === "uppgifter" && tvatt.svar?.obelagda === 1 && !/40/.test(tvatt.svar.text), JSON.stringify(tvatt.svar));
   const s = await anropa(["salesperson"], S, FRAGA, { ai: [verktygstur("forbered_uppgifter", { uppgifter: [{ titel: "", dag: "i morgon" }] }), textsvar("Det gick inte.")] });
-  ok("ett utkast utan titel eller med en dag som inte är ett datum nekas", (s.svar?.utkast ?? []).length === 0 && /fel/.test(s.ai[1]?.messages?.at(-1)?.content?.[0]?.content ?? ""));
+  ok("ett kort utan titel eller med en dag som inte är ett datum nekas", (s.svar?.kort ?? []).length === 0 && /fel/.test(s.ai[1]?.messages?.at(-1)?.content?.[0]?.content ?? ""));
+  const tva = await anropa(["salesperson"], S, FRAGA, { ai: [verktygstur("forbered_uppgifter", { uppgifter: [{ titel: "Ring Hagby Glas", dag: "", till: "jag" }] }), verktygstur("forbered_uppfoljning", { bolag: "Hagby Glas", dag: "2099-01-04" }), textsvar("De väntar på Godkänn.")] });
+  const upg = (titel, id) => verktygstur("forbered_uppgifter", { uppgifter: [{ titel, dag: "", till: "jag" }] }, id);
+  const fyra = await anropa(["salesperson"], S, FRAGA, { ai: [upg("A", "tu_1"), upg("B", "tu_2"), upg("B", "tu_3"), upg("C", "tu_4"), upg("D", "tu_5"), textsvar("De väntar på Godkänn.")] });
+  const sista = JSON.parse(fyra.ai[5]?.messages?.at(-1)?.content?.[0]?.content ?? "{}");
+  ok("samma kort två gånger visas en gång, och ett kort som inte ryms sägs till Claude i stället för att tappas tyst", fyra.svar?.kort?.length === 3 && fyra.svar.kort.map((k) => k.rader[0].text).join("") === "ABC" && /visas inte/.test(sista.fel ?? "") && !("utkast" in sista), JSON.stringify([fyra.svar?.kort?.length, sista]));
+  ok("två förberedda saker blir två kort, inget tappas", tva.svar?.kort?.length === 2 && tva.svar.kort[1].rubrik === "Ändra dagen för uppföljningen", JSON.stringify(tva.svar?.kort?.map((k) => k.rubrik)));
+}
+
+rubrik("Affärerna: de öppna affärerna, närmast avslut först");
+{
+  const ctx = (roller, id, lasta = []) => ({ mig: id, idag: "2026-11-18", kallor: kallor(roller, id, lasta) });
+  const mina = (await korVerktyg("las_affarer", { vem: "jag", mal_kr: 100000 }, ctx(["salesperson"], S), 1)).svar;
+  ok("summan står med antalet och hur många som har belopp", mina.oppna === 4 && mina.medBelopp === 1 && mina.summa === 60000, JSON.stringify([mina.oppna, mina.medBelopp, mina.summa]));
+  ok("ordningen är steg, sedan nästa stegs dag, sedan belopp", mina.affarer.map((a) => a.bolag).join("|") === "Solbacken Bygg|Hagby Glas|Mälarö Rör|Åkes Åkeri", mina.affarer.map((a) => a.bolag).join("|"));
+  ok("det som har nästa steg senast söndag räknas för sig", mina.iVeckan.antal === 3 && mina.iVeckan.medBelopp === 1 && mina.iVeckan.summa === 60000 && mina.iVeckan.senast === "2026-11-22" && mina.affarer[2].iVeckan === false, JSON.stringify(mina.iVeckan));
+  ok("beloppet personen nämner räknas av servern, aldrig av Claude", mina.mal.belopp === 100000 && mina.mal.saknas === 40000 && mina.mal.saknasIVeckan === 40000, JSON.stringify(mina.mal));
+  ok("en uppföljning vars dag har passerat säger hur många dagar, och försöken utan svar", mina.affarer[0].forsenadDagar === 6 && mina.affarer[0].ingetSvarIRad === 2 && mina.forsenade === 1 && mina.affarer[1].forsenadDagar === null, JSON.stringify(mina.affarer[0]));
+  ok("ett möte är nästa steg med dag och tid, och säger hur ofta det har flyttats", mina.affarer[3].nastaSteg === "Möte" && mina.affarer[3].nastaDag === "2026-11-20" && mina.affarer[3].nastaTid === "10.00" && mina.affarer[3].motetFlyttat === 2 && mina.affarer[1].nastaSteg === "Kontakta kunden" && mina.affarer[1].anteckning === "Ring om offerten", JSON.stringify(mina.affarer[3]));
+  ok("chansen är för tidig att säga, och svaret säger vad det inte ser", /För tidigt att säga/.test(mina.chans) && /återkomster/.test(mina.serInte) && mina.dataPer === "2026-11-18");
+  ok("en kollegas affär syns aldrig i ens egna", !JSON.stringify(mina).includes("Xerxes") && !("ansvarig" in mina.affarer[0]));
+  const utanMal = (await korVerktyg("las_affarer", { vem: "jag", mal_kr: 0 }, ctx(["salesperson"], S), 1)).svar;
+  ok("utan belopp i frågan finns inget mål, och ett orimligt belopp räknas inte", utanMal.mal === null && (await korVerktyg("las_affarer", { vem: "jag", mal_kr: -5 }, ctx(["salesperson"], S), 1)).svar.mal === null && (await korVerktyg("las_affarer", { vem: "jag", mal_kr: 1.5 }, ctx(["salesperson"], S), 1)).svar.mal === null);
+
+  const lasta = [];
+  const nej = (await korVerktyg("las_affarer", { vem: "Xerxes Prov", mal_kr: 0 }, ctx(["salesperson"], S, lasta), 1)).svar;
+  ok("en säljare får inte en kollegas affärer, och de läses aldrig", nej.fel === "Det får du inte se." && !lasta.includes("affarer") && !("affarer" in nej), JSON.stringify(nej));
+  ok("och inte lagets", (await korVerktyg("las_affarer", { vem: "laget", mal_kr: 0 }, ctx(["salesperson"], S), 1)).svar.fel === "Det får du inte se.");
+  const lag = (await korVerktyg("las_affarer", { vem: "laget", mal_kr: 0 }, ctx(["team_lead"], TL), 1)).svar;
+  ok("teamledaren ser sitt lags affärer med vem som har dem, inte ett annat lags", lag.oppna === 4 && lag.affarer.every((a) => a.ansvarig === "Sara Prov") && !JSON.stringify(lag).includes("Xerxes"), JSON.stringify(lag.affarer.map((a) => a.ansvarig)));
+  ok("teamledaren får inte en säljare i ett annat lag", (await korVerktyg("las_affarer", { vem: "Xerxes Prov", mal_kr: 0 }, ctx(["team_lead"], TL), 1)).svar.fel === "Det får du inte se.");
+  const sara = (await korVerktyg("las_affarer", { vem: "Sara", mal_kr: 100000 }, ctx(["team_lead"], TL), 1)).svar;
+  ok("samma svar på en kollegas data för den som får se den", sara.vem === "Sara Prov" && sara.summa === mina.summa && sara.mal.saknas === 40000 && sara.affarer.map((a) => a.bolag).join("|") === mina.affarer.map((a) => a.bolag).join("|"));
+  const chef = (await korVerktyg("las_affarer", { vem: "laget", mal_kr: 0 }, ctx(["sales_manager"], TL), 1)).svar;
+  ok("den som ser alla får hela företagets", chef.vem === "Hela företaget" && chef.oppna === 5 && chef.summa === 960000 && chef.medBelopp === 2);
+  const manga = { ...ctx(["sales_manager"], TL), kallor: { ...kallor(["sales_manager"], TL, []), affarer: async () => Array.from({ length: 40 }, (_x, i) => aff(`k${i}`, `Bolag ${i}`, S, "Bokat", 1, 1000, { tid: "2026-11-25 09:00", flyttningar: 0 }, null)) } };
+  const m = (await korVerktyg("las_affarer", { vem: "laget", mal_kr: 0 }, manga, 1)).svar;
+  ok("många affärer: de första räknas upp, summan gäller alla", m.affarer.length === AFFARER_MAX && m.visar === AFFARER_MAX && m.oppna === 40 && m.summa === 40000);
+  const trasig = { ...ctx(["salesperson"], S), kallor: { ...kallor(["salesperson"], S, []), affarer: async () => { throw new Error("nere"); } } };
+  ok("går affärerna inte att läsa säger verktyget det, utan tal", (await korVerktyg("las_affarer", { vem: "jag", mal_kr: 0 }, trasig, 1)).svar.fel === "Det gick inte att läsa just nu.");
+  ok("källraden för ett tal säger vad det är och vem det gäller", kallrad({ _verktyg: "las_affarer", ...mina }, "summa") === "Summan av beloppen på de öppna affärerna · Du · data per 2026-11-18" && kallrad({ _verktyg: "las_affarer", ...mina }, "affarer.1.belopp").startsWith("Offertens belopp"), kallrad({ _verktyg: "las_affarer", ...mina }, "summa"));
+
+  const kort = { kedja: "k1", namn: "Hagby Glas", fas: "bekraftat", deltagare: [S], mote: { tid: "2026-11-20 10:00", flyttningar: 1, hallsAv: S }, uppfoljning: null, senast: null };
+  const namn = { bokat: "Bokat", att_bekrafta: "Att bekräfta", bekraftat: "Klart för möte", hos_saljaren: "Hos säljaren", avgjort: "Avgjort" };
+  const a1 = affarUr(kort, namn);
+  ok("stegets namn är företagets eget namn på kolumnen", a1.steg === "Klart för möte" && a1.rang === 2 && a1.ansvarig === S && a1.belopp === null);
+  const a2 = affarUr({ ...kort, fas: "avgjort", mote: null, uppfoljning: { datum: "2026-11-21", text: null, offert: true, offertBelopp: 45000, ingetSvar: 0, andrad: null }, senast: { hallsAv: X } }, namn);
+  const a3 = affarUr({ ...kort, fas: "avgjort", mote: null, uppfoljning: { datum: "2026-11-21", text: null, offert: false, offertBelopp: 45000, ingetSvar: 0, andrad: null }, senast: null }, namn);
+  ok("en skickad offert är närmast avslut och bär beloppet, en uppföljning utan offert bär inget", a2.steg === "Offert skickad" && a2.rang === 4 && a2.belopp === 45000 && a2.ansvarig === X && a3.steg === "Uppföljning" && a3.rang === 3 && a3.belopp === null && a3.ansvarig === null);
+}
+
+rubrik("Kunskapsbasen: svaret kommer ur företagets dokument");
+{
+  const lasta = [];
+  const ctx = { mig: S, idag: "2026-11-18", kallor: kallor(["salesperson"], S, lasta) };
+  const t = (await korVerktyg("sok_kunskap", { sokord: "sökord transport" }, ctx, 1)).svar;
+  ok("en träff bär dokumentets rubrik, område, text och dagen det ändrades", t.traffar === 1 && t.dokument[0].rubrik === "Sökord: transport" && t.dokument[0].omrade === "Kunskap/Branscher" && t.dokument[0].andrad === "2026-11-02" && t.dokument[0].text.startsWith("Åkeri: åkeri stockholm"), JSON.stringify(t).slice(0, 200));
+  ok("ett långt dokument kortas och säger det", t.dokument[0].text.length === DOKUMENT_TECKEN && t.dokument[0].avkortad === true);
+  ok("en träff sparas inte som en lucka", !lasta.some((x) => x.startsWith("miss:")) && !("obs" in t));
+  const m = (await korVerktyg("sok_kunskap", { sokord: "sökord tandläkare" }, ctx, 1)).svar;
+  ok("ingen träff: svaret säger det, bär inga dokument, och sökningen sparas i listan över det som saknas", m.traffar === 0 && !("dokument" in m) && /sparad/.test(m.besked) && lasta.includes("miss:sökord tandläkare"), JSON.stringify(m));
+  const d = (await korVerktyg("sok_kunskap", { sokord: "priser transport" }, ctx, 1)).svar;
+  ok("träff på bara något av orden: dokumenten följer med, med en varning, och sökningen sparas", d.traffar === 1 && /något av dem/.test(d.obs) && lasta.includes("miss:priser transport"));
+  ok("en tom sökning nekas utan att läsa", (await korVerktyg("sok_kunskap", { sokord: " " }, ctx, 1)).svar.fel === "Skriv vad som ska sökas.");
+  const trasig = { ...ctx, kallor: { ...ctx.kallor, kunskapMiss: async () => { throw new Error("nere"); } } };
+  ok("går listan inte att skriva kommer svaret ändå", (await korVerktyg("sok_kunskap", { sokord: "tandläkare" }, trasig, 1)).svar.traffar === 0);
+  ok("källraden säger var svaret kommer ifrån", kallaFor([{ _verktyg: "sok_kunskap", ...t }]) === "Skrivet av AI ur företagets kunskapsbas (Sökord: transport)"
+    && kallaFor([{ _verktyg: "las_affarer", oppna: 1 }, { _verktyg: "sok_kunskap", ...t }]) === "Skrivet av AI ur Navs tal och företagets kunskapsbas (Sökord: transport)"
+    && kallaFor([{ _verktyg: "las_matt", antal: 2 }]) === "Skrivet av AI ur Navs tal"
+    && kallaFor([{ _verktyg: "sok_kunskap", ...m }]) === "Skrivet av AI, inte ur Navs tal eller kunskapsbasen"
+    && kallaFor([{ _verktyg: "las_matt", fel: "Det får du inte se." }]) === "Skrivet av AI, inte ur Navs tal eller kunskapsbasen"
+    && kallaFor([]) === "Skrivet av AI, inte ur Navs tal eller kunskapsbasen", kallaFor([{ _verktyg: "sok_kunskap", ...t }]));
+}
+
+rubrik("Korten: exakt vad som görs, och bara det personen själv får göra");
+{
+  const ctx = (roller, id) => ({ mig: id, idag: "2026-11-18", kallor: kallor(roller, id, []) });
+  const tl = await korVerktyg("forbered_uppgifter", { uppgifter: [{ titel: "Ring Åkes Åkeri", dag: "2026-11-19", till: "Sara" }] }, ctx(["team_lead"], TL), 1);
+  ok("en teamledare lägger en uppgift åt någon i sitt lag, och kortet säger åt vem", tl.kort?.steg[0].body.till === S && tl.kort.rader[0].not === "åt Sara Prov" && tl.kort.rubrik === "Lägg upp en uppgift" && tl.svar.utkast[0].till === "Sara Prov", JSON.stringify(tl.kort));
+  const sj = await korVerktyg("forbered_uppgifter", { uppgifter: [{ titel: "Ring", dag: "", till: "Xerxes Prov" }] }, ctx(["salesperson"], S), 1);
+  ok("en säljare kan inte lägga en uppgift åt en kollega", !sj.kort && /sitt eget lag/.test(sj.svar.fel), JSON.stringify(sj.svar));
+  ok("en teamledare inte åt någon i ett annat lag", !(await korVerktyg("forbered_uppgifter", { uppgifter: [{ titel: "Ring", dag: "", till: "Xerxes Prov" }] }, ctx(["team_lead"], TL), 1)).kort);
+  ok("inte åt hela laget på en gång, och inte åt ett namn som inte finns", /en person i taget/.test((await korVerktyg("forbered_uppgifter", { uppgifter: [{ titel: "Ring", dag: "", till: "laget" }] }, ctx(["team_lead"], TL), 1)).svar.fel) && /hittar ingen/.test((await korVerktyg("forbered_uppgifter", { uppgifter: [{ titel: "Ring", dag: "", till: "Nisse" }] }, ctx(["sales_manager"], TL), 1)).svar.fel));
+  const mig = await korVerktyg("forbered_uppgifter", { uppgifter: [{ titel: "Ring", dag: "", till: "Sara Prov" }, { titel: "Mejla", dag: "" }] }, ctx(["salesperson"], S), 1);
+  ok("sitt eget namn, \"jag\" eller inget namn är personen själv", mig.kort?.steg.every((s) => !("till" in s.body)) && mig.kort.rader.every((r) => r.not === "utan dag"));
+  ok("ett fel i en uppgift fäller hela kortet", !(await korVerktyg("forbered_uppgifter", { uppgifter: [{ titel: "Ring", dag: "" }, { titel: "Mejla", dag: "2026-13-45" }] }, ctx(["salesperson"], S), 1)).kort);
+
+  const u = await korVerktyg("forbered_uppfoljning", { bolag: "hagby glas", dag: "2026-11-25" }, ctx(["salesperson"], S), 1);
+  const st = u.kort?.steg[0];
+  ok("ny dag för uppföljningen: kortet säger bolaget, den nya dagen och den förra", u.kort?.rubrik === "Ändra dagen för uppföljningen" && u.kort.rader[0].text === "Hagby Glas" && u.kort.rader[0].dag === "2026-11-25" && u.kort.rader[0].not === "förut 2026-11-19" && u.kort.varning === null, JSON.stringify(u.kort));
+  ok("steget är Mötens egen ändring, med versionen som stod och raden på kortet orörd", st.vag === "/nav2/moten" && st.body.handling === "uppfoljning_andra" && st.body.kedja === AFFARER[0].kedja && st.body.fore === "2026-11-10T08:00:00.000Z" && st.body.datum === "2026-11-25" && st.body.text === "Ring om offerten", JSON.stringify(st));
+  ok("Ångra sätter tillbaka den förra dagen på den nya versionen", st.angra.handling === "uppfoljning_andra" && st.angra.datum === "2026-11-19" && st.angra.fore === "$uppfoljning_andrad" && st.angra.text === "Ring om offerten" && st.angra.kedja === st.body.kedja);
+  const gammal = await korVerktyg("forbered_uppfoljning", { bolag: "Solbacken", dag: "2026-11-20" }, ctx(["salesperson"], S), 1);
+  ok("har den förra dagen passerat går det inte att ångra, och kortet säger det före Godkänn", gammal.kort?.steg[0].angra === null && /Går inte att ångra/.test(gammal.kort.varning) && gammal.kort.steg[0].body.fore === null && gammal.kort.steg[0].body.text === null, JSON.stringify(gammal.kort));
+  const fel = async (bolag, dag, roller = ["salesperson"], id = S) => { const r = await korVerktyg("forbered_uppfoljning", { bolag, dag }, ctx(roller, id), 1); return r.kort ? "kort" : r.svar.fel; };
+  ok("en affär med bokat möte ändras inte här", /bokat möte/.test(await fel("Åkes Åkeri", "2026-11-25")));
+  ok("en dag bakåt, en dag som inte finns och samma dag som redan står nekas", /senare dag/.test(await fel("Hagby Glas", "2026-11-17")) && /ÅÅÅÅ-MM-DD/.test(await fel("Hagby Glas", "fredag")) && /redan/.test(await fel("Hagby Glas", "2026-11-19")));
+  ok("ett namn som matchar flera affärer leder till en fråga, aldrig en gissning", /Flera/.test(await fel("a", "2026-11-25")) && /vilket bolag/.test(await fel("", "2026-11-25")));
+  ok("en kollegas affär finns inte för en säljare", /hittar ingen/.test(await fel("Xerxes Kund", "2026-11-25")));
+  ok("den som leder och ser affären i Möten får förbereda ändringen", (await fel("Xerxes Kund", "2026-11-25", ["sales_manager"], TL)) === "kort");
 }
 
 rubrik("Avböjande, avbrott och fel");
@@ -373,7 +490,7 @@ rubrik("Samtalet: tidigare svar skickas utan sina tal");
 
 rubrik("Verktygen, var för sig");
 {
-  ok("verktygen är sex, i fast ordning", VERKTYG.map((v) => v.name).join(",") === "las_matt,las_forslag,las_vantar,las_dag,las_provision,forbered_uppgifter");
+  ok("verktygen är nio, i fast ordning", VERKTYG.map((v) => v.name).join(",") === "las_matt,las_forslag,las_vantar,las_dag,las_provision,las_affarer,sok_kunskap,forbered_uppgifter,forbered_uppfoljning");
   ok("perioderna räknas ur dagen", JSON.stringify(periodFor("forra-veckan", "2026-11-18")) === JSON.stringify({ fran: "2026-11-09", till: "2026-11-15", manad: null, text: "förra veckan" })
     && periodFor("denna-vecka", "2026-11-18").fran === "2026-11-16" && periodFor("denna-vecka", "2026-11-18").till === "2026-11-18"
     && JSON.stringify(periodFor("forra-manaden", "2026-01-05")) === JSON.stringify({ fran: "2025-12-01", till: "2025-12-31", manad: "2025-12", text: "förra månaden" })
@@ -507,7 +624,7 @@ rubrik("Provet av modellerna: frågorna, rättningen och skriptet som väntar");
   const { korSamtal, fragetur } = await import("../src/lib/nav2/chatt/samtal.ts");
   const P = JSON.parse(readFileSync(join(rot, "tests", "chatt-fragor.json"), "utf8"));
   const k = kontrolleraFragor(P);
-  ok("trettio frågor, alla med krav och en roll som finns", P.fragor.length === 30 && k.fel.length === 0, k.fel.join(" | "));
+  ok("femtio frågor, alla med krav och en roll som finns", P.fragor.length === 50 && k.fel.length === 0, k.fel.join(" | "));
   ok("de svåra fallen finns med: data saknas, fel period, en person man inte får se, text som ser ut som en instruktion", ["data-saknas", "fel-period", "far-inte-se", "instruktion"].every((f) => P.fragor.filter((q) => q.fall === f).length >= 2), JSON.stringify(k.fall));
 
   // Fixturen bär varje känt svar: verktyget kört på den ger ett värde för varje krävt tal.
@@ -516,12 +633,17 @@ rubrik("Provet av modellerna: frågorna, rättningen och skriptet som väntar");
   const tomma = [];
   for (const q of P.fragor) for (const t of q.krav.tal ?? []) {
     const v = (await korVerktyg(t.verktyg, forsta(t.input), ctxFor(q.som), 1)).svar;
-    const varde = t.falt.split(".").reduce((x, d) => x?.[d], v);
-    if (varde === undefined || varde === null) tomma.push(`${q.id}: ${t.falt} ${JSON.stringify(v).slice(0, 120)}`);
+    for (const namn of [t.falt].flat()) {
+      const varde = namn.split(".").reduce((x, d) => x?.[d], v);
+      if (varde === undefined || varde === null) tomma.push(`${q.id}: ${namn} ${JSON.stringify(v).slice(0, 120)}`);
+    }
   }
   ok("varje krävt tal har ett känt svar i fixturen", tomma.length === 0, tomma.join(" | "));
   const s16 = (await korVerktyg("las_matt", { matt: "moten.hallna-av-alla", vem: "Omar", period: "forra-veckan" }, ctxFor("saljare"), 1)).svar;
   ok("i fixturen får säljaren inte se kollegans tal", s16.fel === "Det får du inte se.");
+  const t35 = (await korVerktyg("las_affarer", { vem: "Omar", mal_kr: 0 }, ctxFor("teamledare"), 1)).svar;
+  const t45 = (await korVerktyg("las_affarer", { vem: "Xerxes", mal_kr: 0 }, ctxFor("teamledare"), 1)).svar;
+  ok("i fixturen ser teamledaren lagets affärer, och inte en säljares utanför laget", (t35.affarer ?? []).some((a) => a.bolag === "Nordtak") && !JSON.stringify(t45).includes("Lindholmen"), JSON.stringify([t35, t45]).slice(0, 300));
   const t24 = (await korVerktyg("las_matt", { matt: "moten.uteblivna", vem: "laget", period: "forra-manaden" }, ctxFor("teamledare"), 1)).svar;
   ok("i fixturen saknas möten förra månaden, och verktyget säger att underlaget inte räcker", t24.av === 0 && t24.procent === null && t24.rackerForJamforelse === false, JSON.stringify(t24));
 
