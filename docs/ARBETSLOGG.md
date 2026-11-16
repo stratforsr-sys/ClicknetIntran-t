@@ -33,6 +33,12 @@ ger ingen egen notis (den följer med i "bokade ett möte åt dig"), och går an
 **Prov.** Se NASTA_SESSION. Mötens gamla klickprov: 660 gröna; g10 räknar bladets fält i exakt ordning och ser det
 nya fältet; g2/g19/g400 är röda också på main (provfilen ligger efter `d4a026d`).
 
+**På main.** Beställaren sa "pusha till main" och, på frågan, ja till 0310 före mergen. 0310 kördes 14:42 UTC
+(25 inlägg på 24 kort ur de gamla målen, 65 sett-rader), `main` snabbspolades till `f953642` 14:43 UTC och
+produktionsbygget var grönt 14:45 UTC. Ordningen spelar roll: koden tål att tabellerna saknas (tavlan visar ingen
+tråd, bokningens anteckning ger en varning), men varningen hade synts i produktionen tills migrationen körts.
+Inte provat i produktionens gränssnitt; skarpt prov med två konton och telefonen kvar.
+
 ## 2026-11-16 · Möten: den som gjorde det står på kalenderns notiser (0309)
 
 **Felet.** Beställaren (Zen) flyttade Nordic Grön & Markservice AB:s möte i Möten 10:56 och fick notisen "Mick
