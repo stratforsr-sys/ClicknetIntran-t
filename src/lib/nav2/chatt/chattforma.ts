@@ -37,7 +37,11 @@ const TIDER: RegExp[] = [
   new RegExp(`${FORE}(?:år|året)\\s+(?:19|20)\\d{2}${EFTER}`, "giu"),
   new RegExp(`${FORE}(?:vecka|veckorna|v\\.)\\s*\\d{1,2}(?:(?:\\s+(?:och|till)\\s+|[–-])\\d{1,2})*${EFTER}`, "giu"),
 ];
-const SIFFROR = new RegExp(`${FORE}(?:\\d{1,3}(?:[ \\u00a0\\u202f]\\d{3})+|\\d+)(?:[.,]\\d+)?(?:\\s?%)?`, "gu");
+/**
+ * Siffror i alla skrivsätt (`\p{N}`), inte bara 0–9: "７", "٣", "⑦" och "⁷" är också tal (granskningen). För 0–9 är
+ * regeln densamma som förut. Ett datum eller klockslag med andra siffror än 0–9 skyddas inte av TIDER och märks.
+ */
+const SIFFROR = new RegExp(`${FORE}(?:\\p{N}{1,3}(?:[ \\u00a0\\u202f]\\p{N}{3})+|\\p{N}+)(?:[.,]\\p{N}+)?(?:\\s?%)?`, "gu");
 /** Delarna ett tal i bokstäver byggs av. Längre delar först, så att "sjutton" inte läses som "sju". */
 const TALDEL = "ettusen|noll|tretton|fjorton|femton|sexton|sjutton|arton|nitton|tjugo|trettio|fyrtio|femtio|sextio|sjuttio|åttio|nittio|hundra|tusen|elva|tolv|två|tre|fyra|fem|sex|sju|åtta|nio|tio|ett|en";
 /**
@@ -388,8 +392,140 @@ export function lasChattInst(rader: readonly { key: string; value: unknown }[]):
   };
 }
 
-/** Ett tidigare svar som skickas med i samtalet: utan märken och utan tal, så att ett gammalt tal inte kan återanvändas utan källa. */
-export const utanTal = (text: string): string => utanMarken(text).replace(/\d+(?:[\s.,:]\d+)*/g, "[tal]");
+/**
+ * Ett tidigare svar som skickas med i samtalet: utan märken och utan tal, så att ett gammalt tal inte kan återanvändas utan källa.
+ * Datum, klockslag och veckonummer står kvar (A2-1), med samma regel som `sattInTal` släpper igenom dem i svaret (`TIDER`):
+ * en följdfråga som "Lägg den dagen efter" behöver dagen. Texten kommer från klienten, så märken och platshållare tvättas först.
+ */
+export const utanTal = (text: string): string => {
+  const tider: string[] = [];
+  let t = tvatta(utanMarken(text));
+  for (const re of TIDER) t = t.replace(re, (m) => { if (tider.length >= 3000) return m; tider.push(m); return plats(0xe002, tider.length - 1); });
+  // Siffror i alla skrivsätt (`\p{N}`), som i SIFFROR: "７" och "⑦" är också tal och får inte nå Claude ur en tidigare tur.
+  return t.replace(/\p{N}+(?:[\s.,:]\p{N}+)*/gu, "[tal]").replace(platsRe(0xe002), (_m, c: string) => tider[c.charCodeAt(0) - 0xe100] ?? "");
+};
+
+/** Kortets läge i historiken (A2-2): utfallen (`UTFALL`), och ett kort som fortfarande väntar på personen. */
+const KORTLAGE: Record<string, string> = { godkant: "godkändes", delvis: "gjordes delvis", avbrutet: "avbröts", angrat: "ångrades", vantar: "väntar på Godkänn" };
+/** Högst så här många steg och kort per tur i historiken, och så lång blir raden. */
+export const HISTORIA_STEG = 4;
+export const HISTORIA_KORT = 3;
+const HISTORIA_RAD_TECKEN = 400;
+/**
+ * Text från klienten i historikraden och i Om: inga styrtecken, märken, platshållare, citattecken eller parenteser, och
+ * kort. Först NFKC, så att tecken i full bredd ("＂", "（") och andra skrivsätt blir de vanliga och tas bort, och sedan
+ * alla parenteser och citattecken (`\p{Ps}`, `\p{Pe}`, `\p{Pi}`, `\p{Pf}`), inte bara de vanligaste (granskningen):
+ * texten kan då varken stänga formen eller härma en ny. Kortas sist, för NFKC kan göra texten längre.
+ */
+const radText = (v: unknown, n: number): string =>
+  tvatta(typeof v === "string" ? v.normalize("NFKC") : "").replace(/[\u0000-\u001f\u007f-\u009f"\p{Ps}\p{Pe}\p{Pi}\p{Pf}]/gu, " ").replace(/\s+/g, " ").trim().slice(0, n).trim();
+
+/**
+ * Den sista raden i ett tidigare svars tur (A2-2): vad som hämtades och vad som hände med korten, till exempel
+ * "(Hämtat: hållna möten för laget, förra veckan. Kortet ”Ring Hagby Glas” godkändes.)". Raden byggs ur det klienten
+ * skickar med turen: `hamtat`, texterna i `hamtar` för stegen som svarade, och `kortUtfall`, varje korts text och läge.
+ * Den är data om turen, aldrig en instruktion: formen är fast, texterna tvättas och kortas, ett okänt läge tas inte med,
+ * och talen tas bort med `utanTal`, som i svaret. Tom när inget finns att säga.
+ */
+export function historiaRad(hamtat: unknown, kortUtfall: unknown): string {
+  const steg = (Array.isArray(hamtat) ? (hamtat as unknown[]) : [])
+    .map((s) => radText(s, 120).replace(/^(?:Hämtar|Söker i) /, "").replace(/\.$/, ""))
+    .filter((s) => s && !/^(?:Förbereder|Kontrollerar) /.test(s))
+    .slice(0, HISTORIA_STEG);
+  const kort = (Array.isArray(kortUtfall) ? (kortUtfall as unknown[]) : [])
+    .flatMap((k) => {
+      const o = (k && typeof k === "object" ? k : {}) as { text?: unknown; lage?: unknown };
+      const text = radText(o.text, 80);
+      const lage = typeof o.lage === "string" && Object.hasOwn(KORTLAGE, o.lage) ? KORTLAGE[o.lage] : "";
+      return text && lage ? [`Kortet ”${text}” ${lage}.`] : [];
+    })
+    .slice(0, HISTORIA_KORT);
+  const inne = [steg.length ? `Hämtat: ${steg.join("; ")}.` : "", ...kort].filter(Boolean).join(" ");
+  return inne ? `(${utanTal(inne).slice(0, HISTORIA_RAD_TECKEN)})` : "";
+}
+
+/* ------------------------------------------------------------------------ */
+/* Om den här (O)                                                            */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * Det en fråga kan gälla: en sak personen tittar på i Nav, och orden den får i frågans tur. Bara sådant ett verktyg kan
+ * läsa: Väntar (las_vantar), ett möte eller en uppgift (las_dag, las_vecka) och ett tal i Din månad (las_matt,
+ * las_provision). Inget verktyg flyttar eller ändrar något, och listan lovar inte det heller.
+ */
+export const OM_SORTER = { vantar: "en rad i Väntar på dig", mote: "ett möte i kalendern", uppgift: "en uppgift", manad: "ett tal i Din månad" } as const;
+/** Så lång blir titeln i frågans tur. */
+export const OM_TECKEN = 120;
+/** Formens början. Systemtexten säger samma början, så att de aldrig skiljer sig. */
+export const OM_BORJAN = "(Om:";
+
+/**
+ * Raden före frågan när den gäller något personen tittar på (O), till exempel
+ * "(Om: en rad i Väntar på dig ”Skicka offert till Solbacken: frist 16 nov.”)". Formen är fast. Titeln är text från
+ * skärmen och data, aldrig en instruktion: den tvättas som historikens rad (inga styrtecken, märken, citattecken eller
+ * parenteser, så att den inte kan stänga formen eller börja en ny rad), utan osynliga formattecken, kortas till
+ * OM_TECKEN tecken, och talen byts mot "[tal]" (`utanTal`), för titeln är inget belägg. Datum och klockslag står kvar.
+ * "" utan något (`undefined` eller `null`); `null` när det inte går att läsa (en sort utanför listan, ingen titel).
+ */
+export function omRad(om: unknown): string | null {
+  if (om === undefined || om === null) return "";
+  if (typeof om !== "object" || Array.isArray(om)) return null;
+  const o = om as { sort?: unknown; titel?: unknown };
+  if (typeof o.sort !== "string" || !Object.hasOwn(OM_SORTER, o.sort)) return null;
+  const titel = utanTal(radText(typeof o.titel === "string" ? o.titel.replace(/\p{Cf}/gu, "") : "", OM_TECKEN));
+  return titel ? `${OM_BORJAN} ${OM_SORTER[o.sort as keyof typeof OM_SORTER]} ”${titel}”)` : null;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Fråga tillbaka (B2)                                                       */
+/* ------------------------------------------------------------------------ */
+
+/** Valet under en fråga tillbaka: frågan och knapparna. Ett klick ställer alternativet som nästa fråga, med historik. */
+export type Val = { fraga: string; alternativ: string[] };
+/**
+ * Högst så många knappar, och så långa. Kortare än tre tecken går inte att ställa som en fråga (rutten svarar 400).
+ * Längden är kandidaternas längsta (ett bolag, 120 tecken i verktyg.ts), så att ingen kandidat stryks för sin längd.
+ */
+export const VAL_MAX = 4;
+export const VAL_TECKEN = 120;
+const VAL_FRAGA_TECKEN = 300;
+const likt = (s: string): string => s.replace(/\s+/g, " ").trim().toLocaleLowerCase("sv-SE");
+
+/**
+ * Valet ur Claudes anrop till fraga_tillbaka (B2). Ett alternativ står kvar bara om det står ordagrant (versaler och
+ * mellanrum räknas inte) bland `kandidater` i ett av den här frågans verktygssvar, eller som hela ord i personens egen
+ * fråga, eller som `bolag` på en rad i ett svar från las_affarer när bolaget har ett helt ord gemensamt med personens fråga
+ * (provet 2026-11-17: Claude listade affärerna och frågade direkt, utan att gå vägen som ger kandidater), och om det
+ * inte ger ett obelagt tal (`sattInTal`). Knappen bär källans egen text, aldrig Claudes. Inget annat är
+ * en källa, varken historiken eller det frågan gäller (Om): ett klick ställer alternativet som personens fråga.
+ * Dubbletter och alternativ kortare än tre eller längre än VAL_TECKEN tecken stryks, och högst VAL_MAX står kvar.
+ * Stryks ett alternativ ur källan för att det bär ett tal ("Bygg 24 AB") visas inga knappar alls: ett halvt urval kunde
+ * läsas som hela (granskningen). Blir färre än två kvar visar slingan frågan som vanlig text.
+ */
+export function valUr(input: unknown, svar: readonly Record<string, unknown>[], fraga: string): Val {
+  const i = (input && typeof input === "object" ? input : {}) as { fraga?: unknown; alternativ?: unknown };
+  const text = (typeof i.fraga === "string" ? i.fraga : "").replace(/[\u0000-\u001f\u007f-\u009f]/g, " ").replace(/\s+/g, " ").trim().slice(0, VAL_FRAGA_TECKEN);
+  const kandidater = svar.flatMap((s) => (s && Array.isArray(s.kandidater) ? (s.kandidater as unknown[]).filter((k): k is string => typeof k === "string") : []));
+  // Ett bolag ur affärslistan räknas bara när det delar ett helt ord (minst tre tecken) med frågan: det är det otydliga namnet.
+  const ord = new Set((fraga.match(/[\p{L}\p{N}]{3,}/gu) ?? []).map((w) => w.toLocaleLowerCase("sv-SE")));
+  const bolag = svar.flatMap((s) => (s && s._verktyg === "las_affarer" && Array.isArray(s.affarer) ? (s.affarer as unknown[]) : []))
+    .map((a) => (a && typeof a === "object" ? (a as { bolag?: unknown }).bolag : null))
+    .filter((b): b is string => typeof b === "string" && (b.match(/[\p{L}\p{N}]{3,}/gu) ?? []).some((w) => ord.has(w.toLocaleLowerCase("sv-SE"))));
+  const alternativ: string[] = [];
+  let talStruket = false;
+  for (const a of Array.isArray(i.alternativ) ? (i.alternativ as unknown[]) : []) {
+    if (typeof a !== "string" || alternativ.length >= VAL_MAX) continue;
+    const n = a.replace(/\s+/g, " ").trim();
+    if (!n) continue;
+    const monster = n.replace(/[.*+?^$|()[\]{}\\]/g, "\\$&").replace(/ /g, "\\s+");
+    const iFragan = new RegExp(FORE + monster + EFTER, "iu").exec(fraga)?.[0];
+    const kalla = (kandidater.find((k) => likt(k) === likt(n)) ?? iFragan ?? bolag.find((b) => likt(b) === likt(n)) ?? "").replace(/\s+/g, " ").trim();
+    if (kalla.length < 3 || kalla.length > VAL_TECKEN || alternativ.some((x) => likt(x) === likt(kalla))) continue;
+    if (sattInTal(kalla, [...svar]).obelagda > 0) { talStruket = true; continue; }
+    alternativ.push(kalla);
+  }
+  return { fraga: text, alternativ: talStruket ? [] : alternativ };
+}
 
 /* ------------------------------------------------------------------------ */
 /* Reservmodellen                                                            */
@@ -785,14 +921,19 @@ export function median(tal: readonly number[]): number | null {
  * `tider`) räknas inte, och finns ingen alls står det att den saknas, aldrig noll.
  */
 export function medianRad(korningar: readonly unknown[]): string {
-  const matta = korningar.flatMap((r) => {
+  const matta = mattaKorningar(korningar);
+  if (!matta.length) return "Median per körning: saknas (ingen körning bar mätningen).";
+  const ms = Math.round(median(matta.map((m) => m.ms)) ?? 0);
+  return `Median per körning: ${ms} ms och ${median(matta.map((m) => m.varv))} varv, av ${matta.length} ${matta.length === 1 ? "körning" : "körningar"}.`;
+}
+
+/** Körningarna som bar mätningen (A1-6): varv och ms. En sparad körning från före mätningen räknas inte. */
+function mattaKorningar(korningar: readonly unknown[]): { varv: number; ms: number }[] {
+  return korningar.flatMap((r) => {
     const x = (r ?? {}) as { varv?: unknown; tider?: { totalt?: unknown } | null };
     const ms = x.tider?.totalt;
     return typeof x.varv === "number" && Number.isFinite(x.varv) && typeof ms === "number" && Number.isFinite(ms) ? [{ varv: x.varv, ms }] : [];
   });
-  if (!matta.length) return "Median per körning: saknas (ingen körning bar mätningen).";
-  const ms = Math.round(median(matta.map((m) => m.ms)) ?? 0);
-  return `Median per körning: ${ms} ms och ${median(matta.map((m) => m.varv))} varv, av ${matta.length} ${matta.length === 1 ? "körning" : "körningar"}.`;
 }
 
 /**
@@ -800,8 +941,71 @@ export function medianRad(korningar: readonly unknown[]): string {
  * svar, reservmodellen, frågorna som föll och medianraden (A1-6) sist. Här, och inte i skriptet, så att texten går att
  * pröva utan att provet körs (det kostar pengar).
  */
-export function provAnteckning(r: { varv: number; omskrivna: number; korningar: number; reserv: number; fall: readonly { id: string }[]; median: string }): string {
-  return `${r.varv} varv per fråga. Omskrivna svar: ${r.omskrivna} av ${r.korningar}. Reservmodellen tog över ${r.reserv} ${r.reserv === 1 ? "gång" : "gånger"}. Föll: ${r.fall.map((f) => f.id).join(", ") || "inga"}. ${r.median}`;
+export function provAnteckning(r: { varv: number; omskrivna: number; korningar: number; reserv: number; fall: readonly { id: string }[]; median: string; grupper?: readonly Provgrupp[] }): string {
+  // B-satsen: grupperna (de femtio godkända och de nya, var för sig) står sist, så att nästa jämförelse går att räkna ur raden.
+  return `${r.varv} varv per fråga. Omskrivna svar: ${r.omskrivna} av ${r.korningar}. Reservmodellen tog över ${r.reserv} ${r.reserv === 1 ? "gång" : "gånger"}. Föll: ${r.fall.map((f) => f.id).join(", ") || "inga"}. ${r.median}${r.grupper?.length ? ` ${r.grupper.map((g) => g.rad).join(" ")}` : ""}`;
+}
+
+/* ------------------------------------------------------------------------ */
+/* B-satsens godkännande                                                     */
+/* ------------------------------------------------------------------------ */
+
+/** Avtrycket vars godkända rad i `nav_chatt_prov` B-satsen jämförs med (chatt-plan.md, B, överst). */
+export const FORE_AVTRYCK = "485de06db391";
+
+/** En grupp frågor i provet, räknad ur körningarna: de femtio godkända eller de nya. `rad` är det provet skriver. */
+export type Provgrupp = { namn: string; ratt: number; fragor: number; omskrivna: number; korningar: number; medianVarv: number | null; rad: string };
+
+/** Gruppen ur frågornas utfall: en fråga är rätt bara när varje körning av den är rätt. */
+export function provgrupp(namn: string, utfallen: readonly { ratt: boolean; matningar: readonly unknown[] }[]): Provgrupp {
+  const m = utfallen.flatMap((x) => x.matningar);
+  const ratt = utfallen.filter((x) => x.ratt).length;
+  const omskrivna = m.filter((r) => Boolean((r as { omskrivet?: unknown } | null)?.omskrivet)).length;
+  return {
+    namn, ratt, fragor: utfallen.length, omskrivna, korningar: m.length, medianVarv: median(mattaKorningar(m).map((x) => x.varv)),
+    rad: `${namn}: ${ratt} av ${utfallen.length} rätt. Omskrivna svar: ${omskrivna} av ${m.length}. ${medianRad(m)}`,
+  };
+}
+
+/**
+ * B-satsens fyra villkor (chatt-plan.md, B, överst), ett per rad med "ja", "nej" eller "går inte att räkna" och skälet:
+ * (1) de femtio godkända frågorna har minst lika många rätt som den godkända raden för FORE_AVTRYCK, (2) de nya frågorna
+ * är rätta, (3) median-varv och (4) andelen omskrivna svar har inte ökat. 3 och 4 gäller de femtio, för bara de har en
+ * före-rad: talen ur radens anteckning ("Omskrivna svar: a av b", "Median per körning: … och n varv"). Bär anteckningen
+ * de femtios egen grupp (provAnteckning med grupper) jämförs den, med gruppens rätt; annars de första talen. `fore` är raden
+ * (`ratt`, `fragor`, `anteckning`), "ingen" när databasen är läst och modellen inte har någon godkänd rad, null när
+ * raden inte är läst; `antal` är hur många frågor varje grupp har i frågefilen, så att ett delprov aldrig räknas som
+ * hela. Raderna avgör inget: en människa godkänner raden för hand.
+ */
+export function godkannandet(
+  fore: { ratt: number; fragor: number; anteckning: string | null } | "ingen" | null,
+  femtio: Provgrupp | null,
+  nya: Provgrupp | null,
+  antal: { femtio: number; nya: number },
+): string[] {
+  const jaNej = (ok: boolean) => (ok ? "ja" : "nej");
+  const ejKord = (g: Provgrupp | null, alla: number) => (!g ? `går inte att räkna: de kördes inte` : g.fragor !== alla ? `går inte att räkna: ${g.fragor} av ${alla} kördes` : null);
+  const ejRad = fore === "ingen" ? `går inte att räkna: modellen har ingen godkänd rad för ${FORE_AVTRYCK}` : `går inte att räkna: den godkända raden för ${FORE_AVTRYCK} är inte läst`;
+  const rad = fore === "ingen" ? null : fore;
+  // En rad i den nya formen bär de femtios grupp sist, och då jämförs den: talen först gäller hela körningen, med de nya
+  // frågorna (granskningen). En rad i den gamla formen, som den godkända för FORE_AVTRYCK, har bara hela körningens tal.
+  const namn = femtio?.namn.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const grupp = rad && namn ? new RegExp(`${namn}: (\\d+) av (\\d+) rätt\\. Omskrivna svar: (\\d+) av (\\d+)\\. Median per körning: (?:\\d+ ms och (\\d+(?:\\.\\d+)?) varv|saknas)`).exec(rad.anteckning ?? "") : null;
+  const forstaOm = /Omskrivna svar: (\d+) av (\d+)/.exec(rad?.anteckning ?? "");
+  const forstaVarv = /Median per körning: \d+ ms och (\d+(?:\.\d+)?) varv/.exec(rad?.anteckning ?? "");
+  const foreRad = rad && grupp ? { ratt: Number(grupp[1]), fragor: Number(grupp[2]) } : rad;
+  const omFore = grupp ? [grupp[3], grupp[4]] : forstaOm ? [forstaOm[1], forstaOm[2]] : null;
+  const varvFore = grupp ? (grupp[5] ?? null) : (forstaVarv?.[1] ?? null);
+  const f = ejKord(femtio, antal.femtio);
+  const n = ejKord(nya, antal.nya);
+  const g = femtio!;
+  return [
+    `1. De ${antal.femtio} godkända frågorna har minst lika många rätt som den godkända raden: ${f ?? (!foreRad ? ejRad : foreRad.fragor !== g.fragor ? `går inte att räkna: raden har ${foreRad.fragor} frågor` : `${g.ratt} av ${g.fragor} mot ${foreRad.ratt} av ${foreRad.fragor}: ${jaNej(g.ratt >= foreRad.ratt)}`)}.`,
+    `2. De nya frågorna är rätta: ${n ?? `${nya!.ratt} av ${nya!.fragor}: ${jaNej(nya!.ratt === nya!.fragor)}`}.`,
+    `3. Median-varv för de ${antal.femtio} har inte ökat: ${f ?? (!rad ? ejRad : !varvFore ? "går inte att räkna: den godkända radens anteckning saknar medianen (raden är från före mätningen)" : g.medianVarv === null ? "går inte att räkna: körningarna bar ingen mätning" : `${g.medianVarv} mot ${varvFore}: ${jaNej(g.medianVarv <= Number(varvFore))}`)}.`,
+    `4. Andelen omskrivna svar för de ${antal.femtio} har inte ökat: ${f ?? (!rad ? ejRad : !omFore ? "går inte att räkna: den godkända radens anteckning saknar antalet" : `${g.omskrivna} av ${g.korningar} mot ${omFore[0]} av ${omFore[1]}: ${jaNej(g.omskrivna * Number(omFore[1]) <= Number(omFore[0]) * g.korningar)}`)}.`,
+    "Raderna avgör inget. En människa jämför och godkänner raden för hand.",
+  ];
 }
 
 /**
@@ -860,9 +1064,9 @@ export function lasKommando(x: unknown): { ok: true; kommando: Kommando } | { ok
  */
 const TILL_PERSONEN: Record<string, string> = {
   "En uppgift läggs åt en person i taget. Fråga vem som ska göra den.": "En uppgift läggs åt en person i taget. Skriv vem som ska göra den.",
-  "Flera heter så. Fråga med hela namnet.": "Flera heter så. Skriv hela namnet.",
+  "Flera heter så.": "Flera heter så. Skriv hela namnet.",
   "Fråga vilket bolag det gäller.": "Skriv vilket bolag det gäller.",
-  "Flera öppna affärer matchar namnet. Fråga vilket bolag som menas.": "Flera öppna affärer matchar namnet. Skriv hela bolagsnamnet.",
+  "Flera öppna affärer matchar namnet.": "Flera öppna affärer matchar namnet. Skriv hela bolagsnamnet.",
 };
 export const kommandoFel = (fel: string): string => TILL_PERSONEN[fel] ?? fel;
 /** Texterna kommandoFel byter, för provet: varje sådan text ska finnas i verktyg.ts, annars byts den aldrig. */

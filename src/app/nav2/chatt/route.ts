@@ -2,13 +2,13 @@ import Anthropic from "@anthropic-ai/sdk";
 import { after } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { svenskKlocka, svensktDatum } from "@/lib/klocka";
 import { sammaUrsprung } from "@/lib/nav2/skrivlage";
-import { CHATT_NYCKLAR, EJ_KLAR_BESKED, PAGAR_BESKED, PAGAR_MS, arRadId, bilagaLogg, bilagaUsd, bilageBlock, farSlasPa, forePagar, kommandoFel, kortensUtfall, lasBilagor, lasChattInst, lasKommando, lasUtfall, maxFragaUsd, medUtfall, provNyckel, takBesked, utanTal, vantarSlutrad } from "@/lib/nav2/chatt/chattforma";
+import { CHATT_NYCKLAR, EJ_KLAR_BESKED, PAGAR_BESKED, PAGAR_MS, arRadId, bilagaLogg, bilagaUsd, bilageBlock, farSlasPa, forePagar, kommandoFel, kortensUtfall, lasBilagor, lasChattInst, lasKommando, lasUtfall, maxFragaUsd, medUtfall, omRad, provNyckel, takBesked, vantarSlutrad } from "@/lib/nav2/chatt/chattforma";
 import { skapaKallor } from "@/lib/nav2/chatt/kallor";
 import { chattMiljo } from "@/lib/nav2/chatt/logg";
-import { BESKED_AI, KORT_MAX, MAX_UT, MAX_VARV, fragetur, harReserv, korSamtal, loggKostnadUsd, type Handelse, type Klient, type Samtalssvar, type Tur } from "@/lib/nav2/chatt/samtal";
+import { BESKED_AI, KORT_MAX, MAX_UT, MAX_VARV, fragetur, harReserv, historiaTurer, korSamtal, loggKostnadUsd, type Handelse, type Klient, type Samtalssvar, type Tur } from "@/lib/nav2/chatt/samtal";
 import { FORSLAG_NYCKLAR, harNyttHem, lasForslagInst } from "@/lib/nav2/forslagforma";
+import { INST_NYCKLAR, lasInstallningar, lokalDag, lokalKlockan } from "@/lib/nav2/motesflode";
 import { avtryck } from "@/lib/nav2/chatt/systemtext";
 import { KRETSFEL, VERKTYGSFEL, korVerktyg } from "@/lib/nav2/chatt/verktyg";
 
@@ -18,14 +18,16 @@ export const maxDuration = 120;
 /**
  * Nav 2.0: chatten med Claude (designdokumentet, Steg 3).
  *
- *   POST {fraga, historia?: [{fraga, svar}], bilagor?: [{sort, namn, data}]}   svaret strömmas som händelser (text/event-stream):
+ *   POST {fraga, historia?: [{fraga, svar, hamtat?, kortUtfall?}], bilagor?: [{sort, namn, data}], om?: {sort, titel}}   svaret strömmas som händelser (text/event-stream):
  *     {h: "rad", id}                             alltid först: loggradens id, för stopp, utfall och Stämmer inte
  *     {h: "hamtar", text, anrop?, verktyg?}      vad som hämtas; `anrop` (från 1) finns för ett verktyg, inte för omskrivningen:
  *                                                utan `anrop` kontrolleras talen, och ett synligt utkast står kvar nedtonat
  *     {h: "klart", anrop, ok, text, ms}          verktyget med det numret är klart: källraden, eller felet när ok är falskt
  *     {h: "text", text, tal}                     utkastet: hela svaret så långt det får visas, i samma form som svar.text och
  *                                                svar.tal (inte ett tillägg). `text: ""` drar tillbaka det. Högst var 120:e ms.
- *     {h: "svar", text, tal, obelagda, kalla, kallor, kort, nasta, ja, underlag?, varv, tider}   ersätter utkastet helt
+ *     {h: "svar", text, tal, obelagda, kalla, kallor, kort, nasta, ja, underlag?, val?, varv, tider}   ersätter utkastet helt;
+ *                                                `val: {fraga, alternativ}` när Claude frågar tillbaka (B2): ett klick
+ *                                                ställer alternativet som nästa fråga, med historik
  *     {h: "avbojt", text} | {h: "fel", text, kod} felraden säger vad rutan kan göra (`Felkod` i samtal.ts); ett synligt
  *                                                utkast dras tillbaka (`text: ""`) före dem
  *   Efter svar, avbojt eller fel kommer inget mer. Strömmen stängs först när loggraden är rättad (R1): utfall och
@@ -61,9 +63,10 @@ export const maxDuration = 120;
  * CLAUDE SKRIVER ALDRIG ETT TAL. Den hänvisar till ett fält i ett verktygssvar, och `sattInTal` sätter in
  * värdet med källa. En siffra utan hänvisning märks ut och räknas i loggen.
  *
- * CLAUDE GÖR INGENTING. Sju verktyg läser, med den inloggades behörighet (`verktyg.ts`). Två förbereder
+ * CLAUDE GÖR INGENTING. Åtta verktyg läser, med den inloggades behörighet (`verktyg.ts`). Två förbereder
  * ett kort som säger exakt vad som ska göras. Trycker personen på Godkänn skickar webbläsaren kortets steg
- * till Navs vanliga rutter, som den inloggade. Den här rutten skriver aldrig något annat än sin egen logg.
+ * till Navs vanliga rutter, som den inloggade. Ett (fraga_tillbaka) ställer en fråga tillbaka med knappar, och ett
+ * klick är bara nästa fråga. Den här rutten skriver aldrig något annat än sin egen logg.
  *
  * VARJE FRÅGA LOGGAS, också en som avböjdes eller föll: kostnaden ska räknas mot gränsen ändå.
  * Loggraden skrivs av reservationen, före anropet, och rättas till den verkliga kostnaden när svaret är
@@ -156,7 +159,7 @@ export async function POST(request: Request) {
   if (b.kommando !== undefined) {
     const k = lasKommando(b.kommando);
     if (!k.ok) return json({ fel: k.fel }, 400);
-    const { data: instRader, error: instFel } = await supabaseAdmin().from("nav_setting").select("key, value").in("key", [...Object.values(CHATT_NYCKLAR), FORSLAG_NYCKLAR.hemNytt]).limit(50);
+    const { data: instRader, error: instFel } = await supabaseAdmin().from("nav_setting").select("key, value").in("key", [...Object.values(CHATT_NYCKLAR), FORSLAG_NYCKLAR.hemNytt, INST_NYCKLAR.tidszon]).limit(50);
     // Inställningarna gick inte att läsa: det är ett läsfel som kan försökas igen, inte "Chatten är inte påslagen.".
     if (instFel) {
       console.error(`chatt: inställningarna gick inte att läsa: ${instFel.message}`);
@@ -164,7 +167,7 @@ export async function POST(request: Request) {
     }
     const rader = (instRader ?? []) as { key: string; value: unknown }[];
     if (!lasChattInst(rader).pa || !harNyttHem(lasForslagInst(rader), mig.id)) return json({ fel: "Chatten är inte påslagen." }, 409);
-    const r = await korVerktyg(k.kommando.verktyg, k.kommando.input, { mig: mig.id, idag: svensktDatum(new Date()), kallor: skapaKallor(user) }, 1);
+    const r = await korVerktyg(k.kommando.verktyg, k.kommando.input, { mig: mig.id, idag: lokalDag(new Date(), lasInstallningar(rader).tidszon), kallor: skapaKallor(user) }, 1);
     if (!r.kort) {
       // En källa som inte gick att läsa (också kretsen) är 503 och kan försökas igen; en regel som sa nej är 422.
       const fel = typeof r.svar.fel === "string" ? r.svar.fel : VERKTYGSFEL;
@@ -175,6 +178,11 @@ export async function POST(request: Request) {
   // Styrtecken tas bort: Postgres tar inte emot dem i en text, och en fråga som inte går att logga får inte ställas.
   const fraga = String(b.fraga ?? "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim().slice(0, 1000);
   if (fraga.length < 3) return json({ fel: "Frågan är för kort." }, 400);
+  // O, "Om den här": det frågan gäller, en sort ur en fast lista och en kort titel. Det står som data på raden före
+  // frågan (`omRad`, samma form i provet). Går det inte att läsa svarar rutten 400 i stället för att tyst släppa det:
+  // annars visar klienten något som Claude aldrig fick.
+  const om = omRad(b.om);
+  if (om === null) return json({ fel: "Ogiltig begäran." }, 400);
   // Bilder och PDF går till Claude i frågans tur. De sparas aldrig, och loggen får bara antal och sort.
   const bil = lasBilagor(b.bilagor);
   if (!bil.ok) return json({ fel: bil.fel }, 400);
@@ -183,7 +191,7 @@ export async function POST(request: Request) {
   const db = supabaseAdmin();
   // Inställningarna och de godkända proven läses samtidigt: båda behövs före första livstecknet, ingen beror på den andra.
   const [{ data: instRader, error: instFel }, { data: prov, error: provFel }] = await Promise.all([
-    db.from("nav_setting").select("key, value").in("key", [...Object.values(CHATT_NYCKLAR), FORSLAG_NYCKLAR.hemNytt]).limit(50),
+    db.from("nav_setting").select("key, value").in("key", [...Object.values(CHATT_NYCKLAR), FORSLAG_NYCKLAR.hemNytt, INST_NYCKLAR.tidszon]).limit(50),
     db.from("nav_chatt_prov").select("modell, avtryck, godkand").eq("godkand", true).limit(200),
   ]);
   // Ett läsfel är inte "Chatten är inte påslagen." och inte "Modellen har inget godkänt prov.": det är tillfälligt, och
@@ -210,7 +218,7 @@ export async function POST(request: Request) {
   const modell = inst.modell;
   // Kan reservmodellen ta över räknas det mesta frågan kan kosta till den dyraste modellens pris.
   const hogst = maxFragaUsd(harReserv(modell) ? "okand" : modell, MAX_UT, MAX_VARV) + bilagaUsd(harReserv(modell) ? "okand" : modell, bilagor, MAX_VARV);
-  const { data: resSvar, error: resFel } = await db.rpc("nav_chatt_reservera", { p_miljo: miljo, p_employee: mig.id, p_modell: modell, p_max_usd: hogst, p_fraga: fraga + bilagaLogg(bilagor) });
+  const { data: resSvar, error: resFel } = await db.rpc("nav_chatt_reservera", { p_miljo: miljo, p_employee: mig.id, p_modell: modell, p_max_usd: hogst, p_fraga: (om ? `${om} ` : "") + fraga + bilagaLogg(bilagor) });
   const res = resSvar as { ok?: unknown; id?: unknown; skal?: unknown } | null;
   if (resFel || !res || typeof res.ok !== "boolean") return json({ fel: UTRYMME_BESKED, kod: "tillfalligt" }, 503);
   if (!res.ok) return json({ fel: takBesked(res.skal), tak: true, kod: "tak" }, 429);
@@ -227,15 +235,13 @@ export async function POST(request: Request) {
   }
 
   const nu = new Date();
-  const idag = svensktDatum(nu);
-  const historia = (Array.isArray(b.historia) ? (b.historia as Record<string, unknown>[]) : [])
-    .filter((h) => h && typeof h.fraga === "string" && typeof h.svar === "string" && h.fraga.trim() && h.svar.trim())
-    .slice(-3);
-  const turer: Tur[] = historia.flatMap((h): Tur[] => [
-    { role: "user", content: String(h.fraga).slice(0, 1000) },
-    { role: "assistant", content: utanTal(String(h.svar)).slice(0, 2000) },
-  ]);
-  const fragan = fragetur({ idag, klocka: svenskKlocka(nu), fornamn: mig.first_name, roller: user.roles, fraga });
+  // Dagen och klockan i företagets tidszon (`moten.tidszon`, förvalt Europe/Stockholm), läst i samma runda som chattens
+  // inställningar. Verktygens perioder och "data per" räknas från samma dag.
+  const tidszon = lasInstallningar(rader).tidszon;
+  const idag = lokalDag(nu, tidszon);
+  // Historiken byggs av samma funktion som provet använder (A2-3).
+  const turer: Tur[] = historiaTurer(b.historia);
+  const fragan = fragetur({ idag, klocka: lokalKlockan(nu, tidszon), fornamn: mig.first_name, roller: user.roles, fraga, om: b.om });
   turer.push({ role: "user", content: bilagor.length ? [...bilageBlock(bilagor), { type: "text", text: fragan }] : fragan });
 
   const klient = new Anthropic({

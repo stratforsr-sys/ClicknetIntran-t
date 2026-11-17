@@ -73,6 +73,16 @@ const PERIODER = ["denna-vecka", "forra-veckan", "denna-manad", "forra-manaden"]
 type PeriodNyckel = (typeof PERIODER)[number];
 const MATTNYCKLAR = Object.keys(MATT) as MattNyckel[];
 const DATUM = /^\d{4}-\d{2}-\d{2}$/;
+/** En hel månad som period (B3): "ÅÅÅÅ-MM". */
+const HEL_MANAD = /^(\d{4})-(0[1-9]|1[0-2])$/;
+/**
+ * Så många månader bakåt går en hel månad att läsa, den pågående oräknad (B3). Mätt 2026-11-17 mot provdatabasen
+ * (nav-prov): mötena tolv månader bakåt var 16 rader på en sida och tog 88–92 ms, lika lång tid som en månad bakåt
+ * (93–99 ms); databasen har 16 möten. Det säger inget om produktionen. Läsningen går från månadens första dag fram
+ * till i dag (`kallor.moten`), så den äldsta månaden är den dyraste: taket är det planens text säger.
+ */
+export const MANADER_BAKAT = 12;
+const MANADNAMN = ["januari", "februari", "mars", "april", "maj", "juni", "juli", "augusti", "september", "oktober", "november", "december"];
 /** Under så här många rader säger verktyget att underlaget är för litet för en jämförelse. */
 export const JAMFOR_MINST = 10;
 export const UTKAST_MAX = 5;
@@ -94,7 +104,7 @@ export const VERKTYG = [
     input_schema: obj({
       matt: { type: "string", enum: MATTNYCKLAR, description: "Måttets nyckel i registret." },
       vem: { type: "string", description: "\"jag\" för personen som frågar, \"laget\" för alla vars tal personen får se (för den som ser alla är det hela företaget), eller en kollegas namn." },
-      period: { type: "string", enum: [...PERIODER] },
+      period: { type: "string", description: "denna-vecka, forra-veckan, denna-manad, forra-manaden, eller en hel månad som ÅÅÅÅ-MM upp till ett år bakåt." },
     }),
   },
   {
@@ -114,6 +124,12 @@ export const VERKTYG = [
     description: "Läser personens kalender och uppgifter för en dag.",
     strict: true,
     input_schema: obj({ dag: { type: "string", description: "Dagen som ÅÅÅÅ-MM-DD." } }),
+  },
+  {
+    name: "las_vecka",
+    description: "Läser personens kalender och uppgifter för en hel vecka, måndag till söndag, dag för dag och med summorna för veckan. Samma slags fält per dag som las_dag.",
+    strict: true,
+    input_schema: obj({ dag: { type: "string", description: "En dag i veckan som ÅÅÅÅ-MM-DD." } }),
   },
   {
     name: "las_provision",
@@ -162,15 +178,47 @@ export const VERKTYG = [
       dag: { type: "string", description: "Den nya dagen som ÅÅÅÅ-MM-DD." },
     }),
   },
+  {
+    name: "fraga_tillbaka",
+    description: "Ställer en fråga tillbaka när frågan kan betyda flera saker som ger olika svar: vilken kollega, vilket bolag, vilken period. Personen ser frågan med alternativen som knappar och väljer ett. Använd det bara när ett verktygssvar eller frågan visar flera möjliga svar, aldrig för att bekräfta något som redan är tydligt.",
+    strict: true,
+    input_schema: obj({
+      fraga: { type: "string", description: "Frågan, som en kort mening utan tal." },
+      alternativ: { type: "array", items: { type: "string" }, description: "Två till fyra alternativ, ordagrant ur verktygssvarets kandidater eller ur frågan." },
+    }),
+  },
 ] as const;
+
+/** B2: verktyget som avslutar frågan med ett val i stället för ett svar. Slingan kör det aldrig som en läsning (samtal.ts). */
+export const FRAGA_TILLBAKA = "fraga_tillbaka";
+/** Högst så många `kandidater` i ett svar som säger att flera matchar. fraga_tillbaka visar två till fyra av dem. */
+export const KANDIDATER_MAX = 10;
 
 const utc = (dag: string) => new Date(`${dag}T12:00:00Z`);
 const plus = (dag: string, n: number) => new Date(utc(dag).getTime() + n * 86_400_000).toISOString().slice(0, 10);
 const PERIODTEXT: Record<PeriodNyckel, string> = { "denna-vecka": "den här veckan", "forra-veckan": "förra veckan", "denna-manad": "den här månaden", "forra-manaden": "förra månaden" };
 
-/** Perioden i svenska dagar. En pågående period slutar i dag. `manad` är satt för månadsperioderna. */
+/** En hel månad ("2026-10") som den läses: "oktober 2026". Undefined för allt annat. */
+const manadText = (period: string): string | undefined => {
+  const m = HEL_MANAD.exec(period);
+  return m ? `${MANADNAMN[Number(m[2]) - 1]} ${m[1]}` : undefined;
+};
+
+/**
+ * Perioden i svenska dagar. En pågående period slutar i dag. `manad` är satt för månadsperioderna. En hel månad
+ * ("ÅÅÅÅ-MM", B3) går högst MANADER_BAKAT månader bakåt och aldrig framåt; den pågående månaden slutar i dag.
+ */
 export function periodFor(period: string, idag: string): { fran: string; till: string; manad: string | null; text: string } | null {
-  if (!(PERIODER as readonly string[]).includes(period) || !DATUM.test(idag)) return null;
+  if (!DATUM.test(idag)) return null;
+  const hel = HEL_MANAD.exec(period);
+  if (hel) {
+    const ar = Number(hel[1]), man = Number(hel[2]);
+    const bakat = (Number(idag.slice(0, 4)) - ar) * 12 + (Number(idag.slice(5, 7)) - man);
+    if (bakat < 0 || bakat > MANADER_BAKAT) return null;
+    const sista = new Date(Date.UTC(ar, man, 0, 12)).toISOString().slice(0, 10);
+    return { fran: `${period}-01`, till: bakat === 0 ? idag : sista, manad: period, text: manadText(period)! };
+  }
+  if (!(PERIODER as readonly string[]).includes(period)) return null;
   const p = period as PeriodNyckel;
   const text = PERIODTEXT[p];
   const mandag = plus(idag, -((utc(idag).getUTCDay() + 6) % 7));
@@ -198,12 +246,14 @@ export function hamtarText(namn: string, input: Record<string, unknown>): string
     case "las_matt": {
       const vem = kort(input.vem, 40).toLowerCase();
       const for_ = arJag(vem) ? "dig" : arLaget(vem) ? "laget" : kort(input.vem, 40) || "dig";
-      const p = PERIODTEXT[input.period as PeriodNyckel];
+      // Perioden är en fri text sedan B3: bara de kända nycklarna och en hel månad blir ord.
+      const p = typeof input.period === "string" && Object.hasOwn(PERIODTEXT, input.period) ? PERIODTEXT[input.period as PeriodNyckel] : manadText(String(input.period ?? ""));
       return `Hämtar ${MATTNAMN[input.matt as MattNyckel] ?? "ett mått"} för ${for_}${p ? `, ${p}` : ""}.`;
     }
     case "las_forslag": return "Hämtar Navs förslag och det som ändrats.";
     case "las_vantar": return "Hämtar det som väntar på dig.";
     case "las_dag": return `Hämtar kalendern och uppgifterna för ${DATUM.test(String(input.dag)) ? String(input.dag) : "dagen"}.`;
+    case "las_vecka": return `Hämtar kalendern och uppgifterna för veckan med ${DATUM.test(String(input.dag)) ? String(input.dag) : "dagen"}.`;
     case "las_provision": return "Hämtar din provision.";
     case "las_affarer": {
       const vem = kort(input.vem, 40).toLowerCase();
@@ -220,8 +270,15 @@ const NEJ = "Det får du inte se.";
 /** Kretsen gick inte att läsa: en källa som föll, inte en regel som sa nej. */
 export const KRETSFEL = "Det gick inte att läsa vilka du får se.";
 
-/** Vems tal frågan gäller, och om den som frågar får se dem. */
-async function vemKrets(vem: unknown, c: Ctx): Promise<{ krets: readonly string[] | null; namn: string } | { fel: string }> {
+/** Ett fel från `vemKrets` som verktygets svar, med kandidaterna när flera heter så (B2). */
+const vemFel = (v: { fel: string; kandidater?: string[] }): { fel: string; kandidater?: string[] } => (v.kandidater ? { fel: v.fel, kandidater: v.kandidater } : { fel: v.fel });
+
+/**
+ * Vems tal frågan gäller, och om den som frågar får se dem. Heter flera så får svaret `kandidater` (B2), bara de
+ * personen får se: ett namn utanför kretsen når aldrig Claude. Ser personen ingen av dem är svaret detsamma som för en
+ * enda person utanför kretsen.
+ */
+async function vemKrets(vem: unknown, c: Ctx): Promise<{ krets: readonly string[] | null; namn: string } | { fel: string; kandidater?: string[] }> {
   const k = await c.kallor.krets();
   if (k === undefined) return { fel: KRETSFEL };
   const v = kort(vem, 80).toLowerCase();
@@ -234,22 +291,33 @@ async function vemKrets(vem: unknown, c: Ctx): Promise<{ krets: readonly string[
   const hela = folk.filter((p) => p.namn.toLowerCase() === v);
   const traffar = hela.length ? hela : folk.filter((p) => p.namn.toLowerCase().split(" ")[0] === v);
   if (!traffar.length) return { fel: "Jag hittar ingen med det namnet." };
-  if (traffar.length > 1) return { fel: "Flera heter så. Fråga med hela namnet." };
+  if (traffar.length > 1) {
+    const synliga = traffar.filter((p) => p.id === c.mig || k === null || k.includes(p.id));
+    if (!synliga.length) return { fel: NEJ };
+    // Felet säger bara att flera heter så, inte hur Claude ska fråga: det säger systemtexten (fraga_tillbaka med kandidaterna).
+    return { fel: "Flera heter så.", kandidater: [...new Set(synliga.map((p) => kort(p.namn, 80)))].slice(0, KANDIDATER_MAX) };
+  }
   const p = traffar[0];
   if (p.id !== c.mig && k !== null && !k.includes(p.id)) return { fel: NEJ };
   return { krets: [p.id], namn: p.id === c.mig ? "Du" : p.namn };
+}
+
+/** Felet för en period som inte finns räknar upp de som finns (B3), med månaderna i ord så att de inte läses som tal. */
+function perioderFel(idag: string): string {
+  const aldsta = new Date(Date.UTC(Number(idag.slice(0, 4)), Number(idag.slice(5, 7)) - 1 - MANADER_BAKAT, 1, 12)).toISOString().slice(0, 7);
+  return `Den perioden kan jag inte läsa. Perioderna som finns är denna-vecka, forra-veckan, denna-manad, forra-manaden och en hel månad från ${manadText(aldsta)} till ${manadText(idag.slice(0, 7))}.`;
 }
 
 async function lasMatt(input: Record<string, unknown>, c: Ctx): Promise<Record<string, unknown>> {
   const nyckel = String(input.matt ?? "") as MattNyckel;
   if (!MATTNYCKLAR.includes(nyckel)) return { fel: "Det måttet finns inte i registret." };
   const p = periodFor(String(input.period ?? ""), c.idag);
-  if (!p) return { fel: "Den perioden kan jag inte läsa." };
+  if (!p) return { fel: perioderFel(c.idag) };
   const m = MATT[nyckel];
   const order = nyckel === "order.netto" || nyckel === "order.makulerade";
   if (order && !p.manad) return { fel: "Order räknas per månad. Fråga om den här månaden eller förra månaden." };
   const vem = await vemKrets(input.vem, c);
-  if ("fel" in vem) return { fel: vem.fel };
+  if ("fel" in vem) return vemFel(vem);
   const gemensamt = { matt: nyckel, vad: m.text, vem: vem.namn, period: p.text, fran: p.fran, till: p.till, dataPer: c.idag, serInte: m.serInte };
 
   if (order) {
@@ -286,12 +354,43 @@ async function lasDag(input: Record<string, unknown>, c: Ctx): Promise<Record<st
     dag, dataPer: c.idag,
     kalenderposter: d.poster.length, poster: d.poster.slice(0, 30).map((x) => ({ rubrik: kort(x.rubrik, 120), tid: x.tid })),
     uppgifterKvar: kvar.length, uppgifterKlara: forGammal ? null : d.uppgifter.length - kvar.length, uppgifter: kvar.slice(0, 30).map((u) => kort(u.titel, 120)),
-    serInte: `Ser inte kalendrar utanför Nav, inte uppgifter utan dag och inte uppgifter som blev klara för mer än ${KLARA_DAGAR} dagar sedan. Frister, ledighet och möten du tackat nej till räknas inte som kalenderposter.`,
+    serInte: DAG_SER_INTE,
+  };
+}
+
+/** Högst så många kalenderposter, och så många uppgifter, per dag i las_vecka. Antalen (`kalenderposter`, `uppgifterKvar`) räknar alla. */
+export const VECKA_POSTER = 10;
+
+/**
+ * B5: en hel vecka, måndag till söndag, dag för dag med samma slags fält som las_dag (kalenderposter, poster, uppgifter kvar
+ * och deras titlar; inte de klara), och summorna för veckan. Summorna räknas
+ * här, ur samma dagar, aldrig av Claude. Dagarna läses med `kallor.dag`, som läser kalendern en gång per vecka och
+ * uppgifterna en gång per fråga (N1): sju dagar är en läsning av varje.
+ */
+async function lasVecka(input: Record<string, unknown>, c: Ctx): Promise<Record<string, unknown>> {
+  const dag = String(input.dag ?? "");
+  if (!DATUM.test(dag) || Number.isNaN(utc(dag).getTime())) return { fel: "Dagen ska skrivas som ÅÅÅÅ-MM-DD." };
+  const fran = plus(dag, -((utc(dag).getUTCDay() + 6) % 7));
+  const dagar = await Promise.all(Array.from({ length: 7 }, (_x, n) => plus(fran, n)).map(async (d) => {
+    const x = await c.kallor.dag(d);
+    // Uppgifternas titlar per dag, som i las_dag: beskrivningen lovar samma slags fält, och "Vilka uppgifter har jag
+    // nästa vecka?" ska inte kräva sju las_dag (granskningen). Tillägget B5:s svarsform saknade dem.
+    const kvar = x.uppgifter.filter((u) => !u.klar);
+    return { dag: d, kalenderposter: x.poster.length, poster: x.poster.slice(0, VECKA_POSTER).map((p) => ({ rubrik: kort(p.rubrik, 120), tid: p.tid })), uppgifterKvar: kvar.length, uppgifter: kvar.slice(0, VECKA_POSTER).map((u) => kort(u.titel, 120)) };
+  }));
+  return {
+    fran, till: plus(fran, 6), dataPer: c.idag,
+    kalenderposter: dagar.reduce((n, d) => n + d.kalenderposter, 0),
+    uppgifterKvar: dagar.reduce((n, d) => n + d.uppgifterKvar, 0),
+    dagar,
+    serInte: DAG_SER_INTE,
   };
 }
 
 /** Så långt bak bär Navs uppgiftslista det som blivit klart (`byggUppgifter`). */
 const KLARA_DAGAR = 14;
+/** Vad las_dag och las_vecka inte ser. */
+const DAG_SER_INTE = `Ser inte kalendrar utanför Nav, inte uppgifter utan dag och inte uppgifter som blev klara för mer än ${KLARA_DAGAR} dagar sedan. Frister, ledighet och möten du tackat nej till räknas inte som kalenderposter.`;
 /** Slagen i kalendern som är en bokad tid. Frister, ledighet och uppgifter är det inte. */
 const BOKADE_SLAG = ["mote", "enskilt", "leverans", "coachning"];
 
@@ -316,7 +415,9 @@ export function dagUr(
 }
 
 async function lasProvision(input: Record<string, unknown>, c: Ctx): Promise<Record<string, unknown>> {
-  const p = periodFor(String(input.manad ?? ""), c.idag);
+  // Bara de två månaderna i verktygets schema: hela månader bakåt (B3) gäller las_matt.
+  const manad = String(input.manad ?? "");
+  const p = manad === "denna-manad" || manad === "forra-manaden" ? periodFor(manad, c.idag) : null;
   if (!p?.manad) return { fel: "Provisionen läses per månad: den här eller förra." };
   const u = await c.kallor.provision(p.manad);
   if (!u) return { fel: "Provisionsunderlaget saknas eller går inte att läsa för den månaden." };
@@ -363,7 +464,7 @@ const dagarMellan = (fran: string, till: string) => Math.round((utc(till).getTim
 async function lasAffarer(input: Record<string, unknown>, c: Ctx): Promise<Record<string, unknown>> {
   if (!DATUM.test(c.idag)) return { fel: "Dagen gick inte att läsa." };
   const vem = await vemKrets(input.vem, c);
-  if ("fel" in vem) return { fel: vem.fel };
+  if ("fel" in vem) return vemFel(vem);
   const mal = Number.isInteger(input.mal_kr) && (input.mal_kr as number) > 0 && (input.mal_kr as number) <= 1_000_000_000 ? (input.mal_kr as number) : 0;
   const sondag = plus(c.idag, 6 - ((utc(c.idag).getUTCDay() + 6) % 7));
   const flera = vem.krets === null || vem.krets.length > 1;
@@ -446,7 +547,7 @@ async function forberedUppgifter(input: Record<string, unknown>, c: Ctx): Promis
     if (till && !arJag(till.toLowerCase())) {
       if (arLaget(till.toLowerCase())) return { svar: { fel: "En uppgift läggs åt en person i taget. Fråga vem som ska göra den." } };
       const v = await vemKrets(till, c);
-      if ("fel" in v) return { svar: { fel: v.fel === NEJ ? "Här går det bara att lägga uppgifter åt sig själv och åt sitt eget lag." : v.fel } };
+      if ("fel" in v) return { svar: v.fel === NEJ ? { fel: "Här går det bara att lägga uppgifter åt sig själv och åt sitt eget lag." } : vemFel(v) };
       if (v.krets?.length === 1 && v.krets[0] !== c.mig) person = { id: v.krets[0], namn: v.namn };
     }
     utkast.push({ titel, dag: dag || null, till: person?.namn ?? null });
@@ -473,7 +574,8 @@ async function forberedUppfoljning(input: Record<string, unknown>, c: Ctx): Prom
   const hela = alla.filter((a) => a.bolag.toLowerCase() === sok);
   const traffar = hela.length ? hela : alla.filter((a) => a.bolag.toLowerCase().includes(sok));
   if (!traffar.length) return { svar: { fel: "Jag hittar ingen öppen affär med det bolaget." } };
-  if (traffar.length > 1) return { svar: { fel: "Flera öppna affärer matchar namnet. Fråga vilket bolag som menas." } };
+  // B2: kandidaterna är affärer personen redan ser i Möten (källan läser bara dem). Felet säger inte hur Claude ska fråga.
+  if (traffar.length > 1) return { svar: { fel: "Flera öppna affärer matchar namnet.", kandidater: [...new Set(traffar.map((a) => kort(a.bolag, 120)))].slice(0, KANDIDATER_MAX) } };
   const a = traffar[0];
   if (a.mote) return { svar: { fel: "Affären har ett bokat möte. Dagen ändras genom att flytta mötet i Möten." } };
   const fore = a.uppfoljning?.datum ?? null;
@@ -517,6 +619,7 @@ export async function korVerktyg(namn: string, input: unknown, c: Ctx, anrop: nu
         return { svar: { ...marke, dataPer: c.idag, sammanfattning: kort(v.sammanfattning, 300), rader: v.rader.slice(0, 30).map((r) => kort(r, 200)), serInte: "Visar de första raderna av varje sort, inte alla. Raderna räknas inte: ett antal finns bara i sammanfattningens text, och skrivs då som ett ordagrant citat av den." } };
       }
       case "las_dag": return { svar: { ...marke, ...(await lasDag(i, c)) } };
+      case "las_vecka": return { svar: { ...marke, ...(await lasVecka(i, c)) } };
       case "las_provision": return { svar: { ...marke, ...(await lasProvision(i, c)) } };
       case "las_affarer": return { svar: { ...marke, ...(await lasAffarer(i, c)) } };
       case "sok_kunskap": return { svar: { ...marke, ...(await sokKunskap(i, c)) } };
@@ -525,6 +628,9 @@ export async function korVerktyg(namn: string, input: unknown, c: Ctx, anrop: nu
         const f = await (namn === "forbered_uppgifter" ? forberedUppgifter(i, c) : forberedUppfoljning(i, c));
         return { svar: { ...marke, ...f.svar }, kort: f.kort };
       }
+      // B2: läser ingenting. Slingan avslutar frågan med valet och skickar inget svar tillbaka till Claude; det här är
+      // bara anropets plats i listan, så att numren stämmer. Det bär Claudes egna ord och är ingen källa.
+      case FRAGA_TILLBAKA: return { svar: { ...marke, _egnaOrd: true } };
       default: return { svar: { ...marke, fel: "Okänt verktyg." } };
     }
   } catch (e) {
@@ -539,6 +645,10 @@ const FALTNAMN: Record<string, string> = {
   "las_dag.kalenderposter": "Kalenderposter",
   "las_dag.uppgifterKvar": "Uppgifter kvar",
   "las_dag.uppgifterKlara": "Klara uppgifter",
+  "las_vecka.kalenderposter": "Kalenderposter i veckan",
+  "las_vecka.uppgifterKvar": "Uppgifter kvar i veckan",
+  "las_vecka.dagar.kalenderposter": "Kalenderposter en dag",
+  "las_vecka.dagar.uppgifterKvar": "Uppgifter kvar en dag",
   "las_provision.summa": "Provision, summa",
   "las_provision.bokfort": "Provision, bokförd",
   "las_provision.signerade": "Signerade order",
@@ -597,8 +707,11 @@ export function kallrad(svar: Record<string, unknown> | undefined, falt = ""): s
     : falt === "vantarPaGodkannande" ? "Order som väntar på godkännande"
     : "";
   const faltnamn = FALTNAMN[`${String(svar._verktyg ?? "")}.${falt.replace(/\.\d+\./g, ".")}`] ?? "";
-  const period = s("period") ? (s("fran") && s("till") ? `${s("period")} (${s("fran")} till ${s("till")})` : s("period")) : s("dag");
-  const vad = egen || faltnamn || s("vad") || ({ las_forslag: "Navs förslag", las_vantar: "Väntar på dig", las_dag: "Kalender och uppgifter", las_provision: "Din provision", sok_kunskap: "Företagets kunskapsbas", forbered_uppgifter: "Uppgifter att godkänna", forbered_uppfoljning: "Uppföljning att godkänna" } as Record<string, string>)[s("_verktyg")] || "";
+  // las_vecka (B5) har ingen period i ord: veckan är fran till till, och ett tal ur en dag (`dagar.2.…`) gäller den dagen.
+  const iVeckan = /^dagar\.(\d+)\./.exec(falt);
+  const enDag = iVeckan && Array.isArray(svar.dagar) ? (svar.dagar[Number(iVeckan[1])] as { dag?: unknown } | undefined)?.dag : undefined;
+  const period = s("period") ? (s("fran") && s("till") ? `${s("period")} (${s("fran")} till ${s("till")})` : s("period")) : typeof enDag === "string" && enDag ? enDag : s("fran") && s("till") ? `${s("fran")} till ${s("till")}` : s("dag");
+  const vad = egen || faltnamn || s("vad") || ({ las_forslag: "Navs förslag", las_vantar: "Väntar på dig", las_dag: "Kalender och uppgifter", las_vecka: "Kalender och uppgifter", las_provision: "Din provision", sok_kunskap: "Företagets kunskapsbas", forbered_uppgifter: "Uppgifter att godkänna", forbered_uppfoljning: "Uppföljning att godkänna" } as Record<string, string>)[s("_verktyg")] || "";
   return [vad, s("vem"), period, s("dataPer") ? `data per ${s("dataPer")}` : ""].filter(Boolean).join(" · ");
 }
 

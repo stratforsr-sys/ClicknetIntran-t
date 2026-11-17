@@ -14,13 +14,16 @@
  *   - svaret säger det som krävs (`sager`) och inte det som är förbjudet (`sagerInte`)
  *   - en fråga om något personen inte får se bär inget tal alls (`ingaTal`)
  *   - korten att godkänna har rätt antal steg
+ *   - högst så många anrop till Claude som frågan tillåter (`varvHogst`, omskrivningen oräknad), och inget uteslutet
+ *     verktyg (`inteVerktyg`)
+ *   - i fallet vanlig ingen fråga tillbaka som blev ett val, och i fallet otydlig ett val ur det personen får se (`val`, B2)
  *
  * Rena funktioner. Skriptet som kör provet står i `scripts/chatt-prov.mjs`.
  */
 import type { TeamOrder } from "../hemforma.ts";
 import type { StatMote } from "../motesstatforma.ts";
 import type { Samtalssvar } from "./samtal.ts";
-import { utanDatacitat } from "./chattforma.ts";
+import { omRad, utanDatacitat } from "./chattforma.ts";
 import { korVerktyg, type Affar, type Dokument, type Kallor } from "./verktyg.ts";
 
 type Roll = { mig: string; fornamn: string; roller: string[]; krets: string[] | null };
@@ -47,9 +50,21 @@ type Talkrav = { verktyg: string; input: Record<string, unknown>; falt: string |
 export type Fraga = {
   id: string;
   som: string;
-  fall: "vanlig" | "data-saknas" | "fel-period" | "far-inte-se" | "instruktion";
+  fall: "vanlig" | "data-saknas" | "fel-period" | "far-inte-se" | "instruktion" | "otydlig";
   fraga: string;
-  krav: { verktyg?: Anropskrav[]; tal?: Talkrav[]; ingaTal?: boolean; sager?: string[]; sagerInte?: string[]; steg?: number };
+  /** Tidigare utbyten, i den form klienten skickar dem. Provet bygger turerna med `historiaTurer`, som rutten (A2-3). */
+  historia?: { fraga: string; svar: string; hamtat?: string[]; kortUtfall?: { text: string; lage: string }[] }[];
+  /** Det frågan gäller (O), som klienten skickar det. Provet bygger frågans tur med `fragetur`, som rutten. */
+  om?: { sort: string; titel: string };
+  /**
+   * `varvHogst`: högst så många anrop till Claude (B1, oberoende verktyg i samma steg). Omskrivningen av ett svar med
+   * ett tal utan källa räknas inte hit: den mäts för sig, som andelen omskrivna svar (beställaren 2026-11-17).
+   * `inteVerktyg`: verktyg som inte får anropas (B5, en dag läses med las_dag). I fallet vanlig får fraga_tillbaka
+   * inte sluta i ett val, utan att det står här (B2). Ett "Ska jag …?" som fråga tillbaka utan knappar visas som text
+   * och fäller inte frågan (beställaren 2026-11-17). `val`: frågan slutar med fraga_tillbaka och minst två knappar,
+   * alla ur den här listan, alltså det personen får se (B2).
+   */
+  krav: { verktyg?: Anropskrav[]; tal?: Talkrav[]; ingaTal?: boolean; sager?: string[]; sagerInte?: string[]; steg?: number; varvHogst?: number; inteVerktyg?: string[]; val?: string[] };
 };
 export type Fragor = { fixtur: Fixtur; fragor: Fraga[] };
 
@@ -79,7 +94,7 @@ export function fixturKallor(f: Fixtur, som: string): Kallor {
   };
 }
 
-const FALL = ["vanlig", "data-saknas", "fel-period", "far-inte-se", "instruktion"];
+const FALL = ["vanlig", "data-saknas", "fel-period", "far-inte-se", "instruktion", "otydlig"];
 
 /** Är frågefilen hel? Fel här är fel i provet, inte i modellen. */
 export function kontrolleraFragor(p: Fragor): { fel: string[]; fall: Record<string, number> } {
@@ -93,8 +108,15 @@ export function kontrolleraFragor(p: Fragor): { fel: string[]; fall: Record<stri
     if (!p.fixtur.roller[q.som]) fel.push(`${q.id}: rollen ${q.som} finns inte i fixturen`);
     if (!FALL.includes(q.fall)) fel.push(`${q.id}: okänt fall ${q.fall}`);
     if (!q.fraga || q.fraga.length < 5) fel.push(`${q.id}: frågan saknas`);
+    // En historik som rutten skulle hoppa över provar ingenting: varje post ska ha både frågan och svaret.
+    if (q.historia !== undefined && (!Array.isArray(q.historia) || !q.historia.length || q.historia.some((h) => typeof h?.fraga !== "string" || !h.fraga.trim() || typeof h?.svar !== "string" || !h.svar.trim()))) fel.push(`${q.id}: historiken saknar en fråga eller ett svar`);
+    // Ett om som rutten skulle svara 400 på provar ingenting.
+    if (q.om !== undefined && !omRad(q.om)) fel.push(`${q.id}: om ska ha en sort ur listan och en titel`);
     const k = q.krav ?? {};
-    if (!k.verktyg?.length && !k.tal?.length && !k.sager?.length && !k.ingaTal && k.steg === undefined) fel.push(`${q.id}: inget krav`);
+    if (!k.verktyg?.length && !k.tal?.length && !k.sager?.length && !k.ingaTal && k.steg === undefined && !k.val?.length) fel.push(`${q.id}: inget krav`);
+    if (k.val !== undefined && !(Array.isArray(k.val) && k.val.length >= 2 && k.val.every((v) => typeof v === "string" && v.trim()))) fel.push(`${q.id}: val ska vara minst två alternativ`);
+    if (k.varvHogst !== undefined && !(Number.isInteger(k.varvHogst) && k.varvHogst >= 1)) fel.push(`${q.id}: varvHogst ska vara ett heltal från 1`);
+    if (k.inteVerktyg !== undefined && !(Array.isArray(k.inteVerktyg) && k.inteVerktyg.length && k.inteVerktyg.every((v) => typeof v === "string" && v))) fel.push(`${q.id}: inteVerktyg ska vara en lista med verktygens namn`);
     for (const r of [...(k.sager ?? []), ...(k.sagerInte ?? [])]) {
       try { new RegExp(r, "i"); } catch { fel.push(`${q.id}: ogiltigt uttryck ${r}`); }
     }
@@ -137,6 +159,23 @@ export async function bedom(q: Fraga, r: Samtalssvar, f: Fixtur): Promise<{ ratt
   for (const v of k.verktyg ?? []) {
     if (!r.anrop.some((a) => a.namn === v.namn && inputStammer(v.input, a.input))) skal.push(`verktyget ${v.namn} anropades inte med ${JSON.stringify(v.input ?? {})}`);
   }
+  for (const namn of new Set(k.inteVerktyg ?? [])) if (r.anrop.some((a) => a.namn === namn)) skal.push(`verktyget ${namn} anropades`);
+  // B2: i fallet vanlig är frågan tydlig, och den får inte sluta i ett val (planen: förvalt för vanlig). Ett "Ska jag …?"
+  // som fråga tillbaka blir inga knappar: personen ser text och en fråga, och det fäller inte (beställaren 2026-11-17).
+  // Ett uttryckligt inteVerktyg ovan gäller som förut, vare sig frågan tillbaka blev ett val eller inte.
+  const blevVal = (r.val?.alternativ ?? []).length >= 2;
+  if (q.fall === "vanlig" && blevVal && !(k.inteVerktyg ?? []).includes("fraga_tillbaka") && !(k.verktyg ?? []).some((v) => v.namn === "fraga_tillbaka")) skal.push("frågan slutade i ett val, fast den är tydlig");
+  if (k.val) {
+    const ser = new Set(k.val.map((v) => v.trim().toLowerCase()));
+    const visade = r.val?.alternativ ?? [];
+    if (visade.length < 2) skal.push(`frågan slutade inte med ett val (${visade.length} alternativ)`);
+    const utanfor = visade.filter((a) => !ser.has(a.trim().toLowerCase()));
+    if (utanfor.length) skal.push(`valet har alternativ utanför det personen ser: ${utanfor.join(", ")}`);
+  }
+  // En sparad körning från före mätningen har inga varv: den kan inte visa att kravet hölls.
+  // Omskrivningen är ett anrop till, och den räknas inte mot kravet: den mäts för sig (beställaren 2026-11-17).
+  const varvUtan = typeof r.varv === "number" ? r.varv - (r.omskrivet ? 1 : 0) : null;
+  if (k.varvHogst !== undefined && !(varvUtan !== null && varvUtan <= k.varvHogst)) skal.push(varvUtan !== null ? `${varvUtan} anrop till Claude${r.omskrivet ? " utan omskrivningen" : ""}, högst ${k.varvHogst}` : "antalet anrop till Claude saknas");
   const ctx = { mig: f.roller[q.som].mig, idag: f.idag, kallor: fixturKallor(f, q.som) };
   for (const t of k.tal ?? []) {
     const anrop = r.anrop.map((a, i) => ({ a, nr: i + 1 })).filter(({ a }) => a.namn === t.verktyg && inputStammer(t.input, a.input));
@@ -149,7 +188,8 @@ export async function bedom(q: Fraga, r: Samtalssvar, f: Fixtur): Promise<{ ratt
     if (!alt.some(({ namn, facit }) => r.tal.some((x) => anrop.some(({ nr }) => x.kalla.anrop === nr) && x.kalla.falt === namn && x.varde === facit))) skal.push(`talet ${t.verktyg}.${alt.map((x) => `${x.namn} (${String(x.facit)})`).join(" eller ")} är inte insatt ur rätt anrop`);
   }
   if (k.ingaTal && r.tal.length) skal.push(`svaret bär ${r.tal.length} tal fast personen inte får se dem`);
-  const text = r.ren ?? "";
+  // Knapparna under en fråga tillbaka är också något personen läser (B2): ett namn hen inte får se får inte stå där heller.
+  const text = [r.ren ?? "", ...(r.val?.alternativ ?? [])].join("\n");
   for (const s of k.sager ?? []) if (!new RegExp(s, "i").test(text)) skal.push(`svaret säger inte /${s}/`);
   // Ett ordagrant citat ur datan är inte något Claude säger: "det är gjort" i en uppgiftstitel är uppgiftens ord.
   const egen = utanDatacitat(text, r.svar);

@@ -27,9 +27,9 @@ import { appendFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { KANDA_MODELLER, kostnadKr, medianRad, provAnteckning, sattInTal, utanMarken } from "../src/lib/nav2/chatt/chattforma.ts";
+import { FORE_AVTRYCK, KANDA_MODELLER, godkannandet, kostnadKr, medianRad, provAnteckning, provgrupp, sattInTal, utanMarken } from "../src/lib/nav2/chatt/chattforma.ts";
 import { bedom, fixturKallor, kontrolleraFragor } from "../src/lib/nav2/chatt/prov.ts";
-import { fragetur, korSamtal } from "../src/lib/nav2/chatt/samtal.ts";
+import { fragetur, historiaTurer, korSamtal } from "../src/lib/nav2/chatt/samtal.ts";
 import { avtryck } from "../src/lib/nav2/chatt/systemtext.ts";
 
 const rot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -52,6 +52,22 @@ if (!fragor.length) {
   console.error(`--bara ${BARA.join(",")} matchar ingen fråga.`);
   process.exit(1);
 }
+/**
+ * B-satsen (chatt-plan.md, B): godkännandet jämför de femtio godkända frågorna med den godkända raden, och kräver att de
+ * nya är rätta och att median-varv och andelen omskrivet inte ökar. Därför skrivs de två grupperna för sig, och de fyra
+ * villkoren räknas ur dem (`godkannandet`). Skriptet avgör inget: en människa godkänner raden för hand.
+ */
+const GODKANDA = new Set(P.fragor.slice(0, 50).map((q) => q.id));
+const ANTAL = { femtio: GODKANDA.size, nya: P.fragor.length - GODKANDA.size };
+const grupper = (utfallen) => {
+  const femtio = utfallen.filter((x) => GODKANDA.has(x.id)), nya = utfallen.filter((x) => !GODKANDA.has(x.id));
+  return { femtio: femtio.length ? provgrupp("De 50 godkända frågorna", femtio) : null, nya: nya.length ? provgrupp("De nya frågorna", nya) : null };
+};
+const skrivGrupper = (g) => { for (const x of [g.femtio, g.nya]) if (x) console.log(`  ${x.rad}`); };
+const skrivGodkannandet = (modell, fore, g) => {
+  console.log(`\n${modell}, B-satsens godkännande mot den godkända raden för ${FORE_AVTRYCK}:`);
+  for (const rad of godkannandet(fore, g.femtio, g.nya, ANTAL)) console.log(`  ${rad}`);
+};
 const OMRATTA = flagga("--omratta");
 if (OMRATTA) {
   // Talen märks om ur Claudes egen text, så att en ändrad märkning också slår igenom. Inget sparas.
@@ -68,6 +84,7 @@ if (OMRATTA) {
     console.log(`\n${modell}`);
     let ratt = 0, obelagda = 0, omskrivna = 0;
     const matningar = [];
+    const utfallen = [];
     for (const [id, korningar] of fragor) {
       const q = P.fragor.find((x) => x.id === id);
       if (!q) { console.log(`  ? ${id} finns inte i frågefilen`); continue; }
@@ -86,10 +103,15 @@ if (OMRATTA) {
       }
       if (skal.length) console.log(`  ✗ ${id} (${q.fall})\n      ${skal.join("\n      ")}`);
       else { ratt++; console.log(`  ✓ ${id} (${q.fall})`); }
+      utfallen.push({ id, ratt: !skal.length, matningar: korningar.map((x) => x.r) });
     }
     console.log(`  ${ratt} av ${fragor.size} frågor rätt i alla sparade varv. Obelagda tal: ${obelagda}. Omskrivna svar: ${omskrivna}.`);
     // A1-6: tiden och antalet anrop, som de mättes när svaren sparades. En rad från före mätningen räknas inte.
     console.log(`  ${medianRad(matningar)}`);
+    const g = grupper(utfallen);
+    skrivGrupper(g);
+    // Omrättningen läser aldrig databasen, så villkoren mot den godkända raden står som "går inte att räkna".
+    skrivGodkannandet(modell, null, g);
   }
   process.exit(0);
 }
@@ -140,14 +162,19 @@ for (const modell of modeller) {
   let ratt = 0, obelagda = 0, kostnad = 0, cacheLas = 0, intoken = 0, reserv = 0, omskrivna = 0;
   const fall = [];
   const matningar = [];
+  const utfallen = [];
   for (const q of fragor) {
     const roll = P.fixtur.roller[q.som];
     const skal = [];
+    const egna = [];
     for (let v = 0; v < varv; v++) {
       const r = await korSamtal({
         klient, modell, sand: () => {},
         ctx: { mig: roll.mig, idag: P.fixtur.idag, kallor: fixturKallor(P.fixtur, q.som) },
-        turer: [{ role: "user", content: fragetur({ idag: P.fixtur.idag, klocka: "09.00", fornamn: roll.fornamn, roller: roll.roller, fraga: q.fraga }) }],
+        // Historiken byggs av samma funktion som rutten använder (A2-3). Klockan skrivs som rutten skriver den (tt:mm), och
+        // frågan följer med som i rutten: fraga_tillbaka får alternativ ur personens egen fråga (B2).
+        turer: [...historiaTurer(q.historia), { role: "user", content: fragetur({ idag: P.fixtur.idag, klocka: "09:00", fornamn: roll.fornamn, roller: roll.roller, fraga: q.fraga, om: q.om }) }],
+        fraga: q.fraga,
       });
       kostnad += r.kostnadUsd * KR_PER_DOLLAR;
       obelagda += r.obelagda;
@@ -156,12 +183,14 @@ for (const modell of modeller) {
       cacheLas += r.usage.cache_read_input_tokens;
       intoken += r.usage.input_tokens + r.usage.cache_read_input_tokens + r.usage.cache_creation_input_tokens;
       matningar.push(r);
+      egna.push(r);
       appendFileSync(sparfil, JSON.stringify({ modell, id: q.id, varv: v + 1, r }) + "\n");
       const b = await bedom(q, r, P.fixtur);
       if (!b.ratt) skal.push(`varv ${v + 1}: ${b.skal.join("; ")}${r.ren ? ` | svaret: ${r.ren.slice(0, 200)}` : ""}`);
     }
     if (skal.length) fall.push({ id: q.id, fall: q.fall, skal });
     else ratt++;
+    utfallen.push({ id: q.id, ratt: !skal.length, matningar: egna });
     console.log(`  ${skal.length ? "✗" : "✓"} ${q.id} (${q.fall})${skal.length ? `\n      ${skal.join("\n      ")}` : ""}`);
   }
   const perFraga = kostnad / korningar;
@@ -169,28 +198,53 @@ for (const modell of modeller) {
   // A1-6: median-ms för hela samtalet och median-varv per körning, före varje påstående om tid.
   const median = medianRad(matningar);
   console.log(`  ${median}`);
-  resultat.push({ modell, ratt, obelagda, reserv, omskrivna, perFraga, fall, median });
+  const g = grupper(utfallen);
+  skrivGrupper(g);
+  resultat.push({ modell, ratt, obelagda, reserv, omskrivna, perFraga, fall, median, grupper: g });
 }
 
 if (BARA) {
   console.log(`\nDelprov: inget sparades i nav_chatt_prov.`);
 } else if (process.env.DATABASE_URL) {
   const { default: pg } = await import("pg");
-  const db = new pg.Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
-  await db.connect();
-  try {
+  // Databasens pool kan vara full just då (EMAXCONNSESSION). Körningen är redan betald och svaren står i sparfilen:
+  // pröva igen i upp till tio minuter innan raden ges upp.
+  let db = null;
+  for (let n = 1; n <= 40 && !db; n++) {
+    const c = new pg.Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    try { await c.connect(); db = c; }
+    catch (e) {
+      console.log(`Databasen svarade inte (${e instanceof Error ? e.message : String(e)}). Försök ${n} av 40${n < 40 ? ", nytt om 15 s" : ""}.`);
+      try { await c.end(); } catch { /* aldrig ansluten */ }
+      if (n < 40) await new Promise((k) => setTimeout(k, 15_000));
+    }
+  }
+  if (!db) {
+    console.error(`\nIngen rad sparades i nav_chatt_prov: databasen gick inte att nå. Svaren står i ${sparfil}.`);
+    for (const r of resultat) skrivGodkannandet(r.modell, null, r.grupper);
+  } else try {
     for (const r of resultat) {
       // Raden sparas alltid som ej godkänd (kolumnens förval). Godkännandet görs för hand av en människa.
       await db.query(
         `insert into nav_chatt_prov (modell, avtryck, fragor, ratt, obelagda, kostnad_per_fraga_kr, anteckning) values ($1, $2, $3, $4, $5, $6, $7)`,
-        [r.modell, avtryck(), P.fragor.length, r.ratt, r.obelagda, r.perFraga, provAnteckning({ varv, omskrivna: r.omskrivna, korningar, reserv: r.reserv, fall: r.fall, median: r.median })],
+        [r.modell, avtryck(), P.fragor.length, r.ratt, r.obelagda, r.perFraga, provAnteckning({ varv, omskrivna: r.omskrivna, korningar, reserv: r.reserv, fall: r.fall, median: r.median, grupper: [r.grupper.femtio, r.grupper.nya].filter(Boolean) })],
       );
     }
     console.log(`\n${resultat.length} ${resultat.length === 1 ? "rad sparad" : "rader sparade"} i nav_chatt_prov, ej godkända.`);
+    // B-satsens villkor räknas mot den godkända raden för det gamla avtrycket, samma modell. Bara läsning. Raderna ovan
+    // är redan sparade: går läsningen inte står villkoren som inte lästa, och körningen slutar som vanligt.
+    let fore = null;
+    try {
+      fore = (await db.query(`select modell, ratt, fragor, anteckning from nav_chatt_prov where avtryck = $1 and godkand order by godkand_nar desc`, [FORE_AVTRYCK])).rows;
+    } catch (e) {
+      console.log(`\nDen godkända raden för ${FORE_AVTRYCK} gick inte att läsa: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    for (const r of resultat) skrivGodkannandet(r.modell, fore ? (fore.find((x) => x.modell === r.modell) ?? "ingen") : null, r.grupper);
   } finally {
     await db.end();
   }
 } else {
-  console.log(`\nDATABASE_URL saknas, så inget sparades i nav_chatt_prov.`);
+  console.log(`\nDATABASE_URL saknas, så inget sparades i nav_chatt_prov, och den godkända raden lästes inte.`);
+  for (const r of resultat) skrivGodkannandet(r.modell, null, r.grupper);
 }
 console.log(`Kravet (beslutat 2026-11-15): inga allvarliga fel, alltså inget fel tal, inget tal om någon personen inte får se, inget "det är gjort" som inte är gjort och inget fel kort att godkänna. Läs skälen ovan: det räknas inte åt dig. Tal utan källa visas märkta och mäts för sig. En människa godkänner raden.`);

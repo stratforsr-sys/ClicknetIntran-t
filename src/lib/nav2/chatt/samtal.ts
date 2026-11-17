@@ -12,10 +12,11 @@
  *   - Systemtexten och verktygslistan är desamma i varje anrop, så att de cachas.
  *   - Varje anrop räknas i kostnaden, också när frågan slutar i ett fel.
  *   - Verktygen i ett varv körs samtidigt, men svaren läggs tillbaka i Claudes ordning.
+ *   - fraga_tillbaka avslutar frågan med ett val, utan ett nytt anrop. Inget kort förbereds i samma varv (B2).
  */
-import { UTKAST_MS, efterReserv, sammaModell, forsok, hanvisningsfel, jaFraga, kostnadUsd, nastaFragor, sattInTal, slappUtkast, talfalt, underlagUr, utanMarken, type InsattTal, type Nasta, type Underlag, type Usage } from "./chattforma.ts";
+import { UTKAST_MS, efterReserv, sammaModell, forsok, hanvisningsfel, historiaRad, jaFraga, kostnadUsd, nastaFragor, omRad, sattInTal, slappUtkast, talfalt, underlagUr, utanMarken, utanTal, valUr, type InsattTal, type Nasta, type Underlag, type Usage, type Val } from "./chattforma.ts";
 import { EFFORT, OMSKRIV, SYSTEMTEXT } from "./systemtext.ts";
-import { VERKTYG, VERKTYGSFEL, hamtarText, kallaFor, kallaTillagg, kallrad, korVerktyg, type Ctx, type Handlingskort, type KallaTillagg, type Verktygssvar } from "./verktyg.ts";
+import { FRAGA_TILLBAKA, VERKTYG, VERKTYGSFEL, hamtarText, kallaFor, kallaTillagg, kallrad, korVerktyg, type Ctx, type Handlingskort, type KallaTillagg, type Verktygssvar } from "./verktyg.ts";
 
 /** Högst så här många anrop till Claude per fråga. */
 export const MAX_VARV = 6;
@@ -119,7 +120,7 @@ export type Handelse =
   | { h: "hamtar"; text: string; anrop?: number; verktyg?: string }
   | { h: "klart"; anrop: number; ok: boolean; text: string; ms: number }
   | { h: "text"; text: string; tal: TalUt[] }
-  | { h: "svar"; text: string; tal: TalUt[]; obelagda: number; kalla: string; kallor: KallaUt[]; kort: KortUt[]; nasta: Nasta[]; ja: boolean; underlag?: Underlag & { rubrik: string }; varv: number; tider: Tider }
+  | { h: "svar"; text: string; tal: TalUt[]; obelagda: number; kalla: string; kallor: KallaUt[]; kort: KortUt[]; nasta: Nasta[]; ja: boolean; underlag?: Underlag & { rubrik: string }; val?: Val; varv: number; tider: Tider }
   | { h: "avbojt"; text: string }
   | { h: "fel"; text: string; kod: Felkod };
 
@@ -137,9 +138,11 @@ export type Samtalssvar = {
   /**
    * Verktygsanropen i ordning. `ok` är falskt när verktyget svarade med ett fel; `ms` är hur länge det tog. `kort` är
    * sant bara på det förbered-anrop vars kort visades i svaret (inte en dubblett, inte ett kort över KORT_MAX): bara
-   * där tar loggen emot ett utfall (`medUtfall`). Det står i loggens `verktyg`, aldrig i det Claude får.
+   * där tar loggen emot ett utfall (`medUtfall`). Det står i loggens `verktyg`, aldrig i det Claude får. Ett anrop som
+   * aldrig kördes (fraga_tillbaka, och ett förbered-anrop i samma steg som den) har varken `ok` eller `ms`. `alternativ`
+   * står bara på fraga_tillbaka: knapparna som visades efter att de obelagda strukits (B2), också när de var för få.
    */
-  anrop: { namn: string; input: unknown; ok?: boolean; ms?: number; kort?: true }[];
+  anrop: { namn: string; input: unknown; ok?: boolean; ms?: number; kort?: true; alternativ?: string[] }[];
   /** Verktygssvaren, i anropens ordning. */
   svar: Record<string, unknown>[];
   /** Claudes egen text, med hänvisningarna (`{{t:1.antal}}`). Provet sparar den, så att rättningen kan göras om. */
@@ -152,6 +155,8 @@ export type Samtalssvar = {
   obelagda: number;
   /** Korten Claude har förberett, i den ordning de kom. Inget av dem är utfört: personen godkänner vart och ett. */
   kort: KortUt[];
+  /** Valet när frågan slutade med fraga_tillbaka och minst två alternativ stod kvar (B2), annars null. */
+  val: Val | null;
   /** Antal anrop till Claude. */
   varv: number;
   tider: Tider;
@@ -178,7 +183,7 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
   const kvar = () => slut - klocka();
   const verktygMs = i.verktygMs ?? VERKTYG_MS;
   const turer = [...i.turer];
-  const ut: Samtalssvar = { stopp: "fel", usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, kostnadUsd: 0, reserv: 0, omskrivet: false, ofullstandig: false, anrop: [], svar: [], ra: null, text: null, ren: null, tal: [], obelagda: 0, kort: [], varv: 0, tider: { ai: [], verktyg: [], forstaText: null, totalt: 0 } };
+  const ut: Samtalssvar = { stopp: "fel", usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, kostnadUsd: 0, reserv: 0, omskrivet: false, ofullstandig: false, anrop: [], svar: [], ra: null, text: null, ren: null, tal: [], obelagda: 0, kort: [], val: null, varv: 0, tider: { ai: [], verktyg: [], forstaText: null, totalt: 0 } };
   const talUt = (tal: InsattTal[]): TalUt[] => tal.map((t) => ({ ...t, om: kallrad(ut.svar[t.kalla.anrop - 1], t.kalla.falt), ...kallaTillagg(ut.svar[t.kalla.anrop - 1], t.kalla.falt) }));
 
   // UTKASTET: svaret visas mening för mening medan det skrivs, med talen insatta som i slutsvaret. En mening släpps
@@ -227,6 +232,35 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
       }
     };
     return { pa, stang: () => { tyst = true; } };
+  };
+
+  /**
+   * Slutsvaret, för ett svar och för en fråga tillbaka (B2): texten med talen, källorna, underlaget och händelsen `svar`.
+   * `val` finns bara när frågan slutade med fraga_tillbaka och minst två alternativ stod kvar.
+   */
+  const slutsvar = (ra: string, insatt: { text: string; tal: InsattTal[]; obelagda: number }, o: { nasta: Nasta[]; ja: boolean; val: Val | null }) => {
+    ut.ra = ra;
+    ut.text = insatt.text;
+    ut.ren = utanMarken(insatt.text);
+    ut.tal = insatt.tal;
+    ut.obelagda = insatt.obelagda;
+    ut.val = o.val;
+    // Varje läsning som svarade blir en källa som går att öppna. Korten är inga källor.
+    const kallor: KallaUt[] = [];
+    ut.anrop.forEach((a, n) => {
+      const s = ut.svar[n];
+      if (a.ok !== true || !s || typeof s.fel === "string" || s._egnaOrd === true || a.namn.startsWith("forbered_") || kallor.some((k) => k.verktyg === a.namn)) return;
+      kallor.push({ verktyg: a.namn, anrop: n + 1, text: kallrad(s) });
+    });
+    // Underlaget får rubriken ur verktygets egen källrad, samma text som under talet.
+    const rader = underlagUr(ut.svar, insatt.tal);
+    const underlag = rader ? { ...rader, rubrik: kallrad(ut.svar[rader.anrop - 1]) } : null;
+    ut.varv = ut.tider.ai.length;
+    ut.tider.totalt = Math.max(0, klocka() - borjan);
+    sand({
+      h: "svar", text: insatt.text, tal: talUt(insatt.tal), obelagda: insatt.obelagda, kalla: kallaFor(ut.svar), kallor, kort: ut.kort,
+      nasta: o.nasta, ja: o.ja, ...(underlag ? { underlag } : {}), ...(o.val ? { val: o.val } : {}), varv: ut.varv, tider: { ...ut.tider, ai: [...ut.tider.ai], verktyg: [...ut.tider.verktyg] },
+    });
   };
 
   const stoppad = (): boolean => {
@@ -332,6 +366,10 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
         // Numren delas ut i Claudes ordning innan något körs, så att `{{t:N.fält}}` pekar dit den gjorde. Verktygen körs
         // samtidigt (källorna läses en gång per fråga, så två verktyg på samma källa läser den en gång), och svaren läggs
         // tillbaka i Claudes ordning: Claude ser exakt det den hade sett om de körts ett i taget.
+        // FRÅGA TILLBAKA (B2): finns fraga_tillbaka i steget körs läsningarna och loggas, men inget förbered-anrop i samma
+        // steg (inget kort före valet), och frågan slutar med valet utan ett nytt anrop till Claude. Det som inte körs
+        // får ingen rad hos personen (`hamtar`), men sin plats i listan, så att numren stämmer.
+        const fragar = innehall.some((b) => b.type === "tool_use" && b.name === FRAGA_TILLBAKA);
         const verktygStart = klocka();
         const jobb = innehall.flatMap((block) => {
           if (block.type !== "tool_use") return [];
@@ -339,6 +377,8 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
           const input = (block.input ?? {}) as Record<string, unknown>;
           ut.anrop.push({ namn, input });
           const nr = ut.anrop.length;
+          if (namn === FRAGA_TILLBAKA) return [{ id: block.id, namn, input, nr, r: korVerktyg(namn, input, ctx, nr) }];
+          if (fragar && namn.startsWith("forbered_")) return [{ id: block.id, namn, input, nr, r: Promise.resolve<Verktygssvar>({ svar: { _verktyg: namn, _anrop: nr, fel: "Förbereddes inte: personen väljer först." } }) }];
           sand({ h: "hamtar", text: hamtarText(namn, input), anrop: nr, verktyg: namn });
           return [{ id: block.id, namn, input, nr, r: ettVerktyg(namn, input, nr) }];
         });
@@ -360,6 +400,28 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
           ut.svar.push(svar);
           resultat.push({ type: "tool_result", tool_use_id: j.id, content: JSON.stringify(svar) });
         });
+        const tillbaka = jobb.find((j) => j.namn === FRAGA_TILLBAKA);
+        if (tillbaka) {
+          // Ett stopp medan läsningarna kördes är ett stopp mellan två varv, som i en vanlig fråga: inget val visas.
+          if (stoppad()) return ut;
+          // Knapparna bara ur den här frågans kandidater eller personens egen fråga, utan obelagda tal (`valUr`).
+          const v = valUr(tillbaka.input, ut.svar, i.fraga ?? "");
+          ut.anrop[tillbaka.nr - 1].alternativ = v.alternativ;
+          if (!v.fraga) {
+            sand({ h: "fel", text: "Jag fick inget svar. Försök igen.", kod: "tomt" });
+            return ut;
+          }
+          ut.stopp = FRAGA_TILLBAKA;
+          // Claudes egen text i samma steg står före frågan: den kan vara själva svaret, och frågan gäller det som kommer
+          // sedan. Talen sätts in som i ett svar, och inget skrivs om. Står frågan redan sist i texten upprepas den inte.
+          const egen = innehall.flatMap((x) => (x.type === "text" && x.text ? [x.text] : [])).join("\n").trim();
+          const ra = !egen ? v.fraga : egen.replace(/\s+/g, " ").endsWith(v.fraga) ? egen : `${egen}\n${v.fraga}`;
+          const insatt = sattInTal(ra, ut.svar);
+          const val = v.alternativ.length >= 2 ? { fraga: utanMarken(sattInTal(v.fraga, ut.svar).text), alternativ: v.alternativ } : null;
+          // Utan knappar är det en vanlig fråga: slutar den med "Ska jag …?" får personen Ja-knappen, som efter ett svar.
+          slutsvar(ra, insatt, { nasta: [], ja: val ? false : jaFraga(insatt.text, ut.kort.length), val });
+          return ut;
+        }
         turer.push({ role: "user", content: resultat });
         continue;
       }
@@ -385,11 +447,6 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
         sand({ h: "hamtar", text: "Kontrollerar talen i svaret." });
         continue;
       }
-      ut.ra = text;
-      ut.text = insatt.text;
-      ut.ren = utanMarken(insatt.text);
-      ut.tal = insatt.tal;
-      ut.obelagda = insatt.obelagda;
       // Följdfrågorna byggs av regler ur verktygen som svarade. Kretsen är redan läst av samma verktyg (en gång per fråga).
       let nasta: Nasta[] = [];
       try {
@@ -398,22 +455,7 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
       } catch {
         nasta = [];
       }
-      // Varje läsning som svarade blir en källa som går att öppna. Korten är inga källor.
-      const kallor: KallaUt[] = [];
-      ut.anrop.forEach((a, n) => {
-        const s = ut.svar[n];
-        if (a.ok !== true || !s || typeof s.fel === "string" || s._egnaOrd === true || a.namn.startsWith("forbered_") || kallor.some((k) => k.verktyg === a.namn)) return;
-        kallor.push({ verktyg: a.namn, anrop: n + 1, text: kallrad(s) });
-      });
-      // Underlaget får rubriken ur verktygets egen källrad, samma text som under talet.
-      const rader = underlagUr(ut.svar, insatt.tal);
-      const underlag = rader ? { ...rader, rubrik: kallrad(ut.svar[rader.anrop - 1]) } : null;
-      ut.varv = ut.tider.ai.length;
-      ut.tider.totalt = Math.max(0, klocka() - borjan);
-      sand({
-        h: "svar", text: insatt.text, tal: talUt(insatt.tal), obelagda: insatt.obelagda, kalla: kallaFor(ut.svar), kallor, kort: ut.kort,
-        nasta, ja: jaFraga(insatt.text, ut.kort.length), ...(underlag ? { underlag } : {}), varv: ut.varv, tider: { ...ut.tider, ai: [...ut.tider.ai], verktyg: [...ut.tider.verktyg] },
-      });
+      slutsvar(text, insatt, { nasta, ja: jaFraga(insatt.text, ut.kort.length), val: null });
       return ut;
     }
   } catch (e) {
@@ -435,7 +477,37 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
   }
 }
 
+/** Högst så här många tidigare utbyten följer med en fråga. */
+export const HISTORIA_MAX = 3;
+/**
+ * Historiken till Claude (A2-3): de tidigare utbytena som turer före frågan. Rutten och provet bygger den med just den
+ * här funktionen, så att det provet godkänner är det som körs (samma slinga, överst). Bara poster där både frågan och
+ * svaret är icke-tomma texter, de HISTORIA_MAX sista. Frågan klipps vid 1000 tecken och svaret vid 2000. Svarets tal
+ * byts mot "[tal]" (`utanTal`): ett tal ur en tidigare tur får aldrig återanvändas utan källa, men datum, klockslag och
+ * veckonummer står kvar (A2-1). Efter svaret, utanför klippningen, står vad som hämtades och vad som hände med korten
+ * (`historiaRad`, A2-2), som data i svarets egen tur och aldrig i frågans. Inget annat i posten följer med, varken
+ * underlag eller kortens innehåll.
+ */
+export function historiaTurer(historia: unknown): Tur[] {
+  const poster = (Array.isArray(historia) ? (historia as unknown[]) : [])
+    .filter((h): h is { fraga: string; svar: string; hamtat?: unknown; kortUtfall?: unknown } => !!h && typeof h === "object" && typeof (h as { fraga?: unknown }).fraga === "string" && typeof (h as { svar?: unknown }).svar === "string" && !!(h as { fraga: string }).fraga.trim() && !!(h as { svar: string }).svar.trim())
+    .slice(-HISTORIA_MAX);
+  return poster.flatMap((h): Tur[] => {
+    const rad = historiaRad(h.hamtat, h.kortUtfall);
+    return [
+      { role: "user", content: h.fraga.slice(0, 1000) },
+      { role: "assistant", content: `${utanTal(h.svar).slice(0, 2000)}${rad ? `\n\n${rad}` : ""}` },
+    ];
+  });
+}
+
 const VECKODAG = ["söndag", "måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag"];
-/** Användarens tur: allt som varierar står här, aldrig i systemtexten. */
-export const fragetur = (x: { idag: string; klocka: string; fornamn: string; roller: readonly string[]; fraga: string }): string =>
-  `Idag är ${x.idag} (${VECKODAG[new Date(`${x.idag}T12:00:00Z`).getUTCDay()]}), klockan ${x.klocka}. Jag heter ${x.fornamn}. Mina roller i Nav: ${x.roller.join(", ") || "inga"}.\n\n${x.fraga}`;
+/**
+ * Användarens tur: allt som varierar står här, aldrig i systemtexten. Gäller frågan något personen tittar på (`om`, O)
+ * står det i en fast form på raden före frågan (`omRad`), som data. Utan `om` är turen exakt som förut. Rutten och
+ * provet bygger turen här, så att formen är densamma.
+ */
+export const fragetur = (x: { idag: string; klocka: string; fornamn: string; roller: readonly string[]; fraga: string; om?: unknown }): string => {
+  const om = omRad(x.om);
+  return `Idag är ${x.idag} (${VECKODAG[new Date(`${x.idag}T12:00:00Z`).getUTCDay()]}), klockan ${x.klocka}. Jag heter ${x.fornamn}. Mina roller i Nav: ${x.roller.join(", ") || "inga"}.\n\n${om ? `${om}\n` : ""}${x.fraga}`;
+};

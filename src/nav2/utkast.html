@@ -9693,6 +9693,8 @@ button.hv-mitt{cursor:pointer}
 /* Navs facit (funktion 5): källan i Nav föreslår är en knapp som ser ut som källan i vila, med länkens färg vid hovring och fokus. */
 @media (hover:hover){.hv-sekh>button.hv-mono:hover{color:var(--hv-ink)}}
 .hv-sekh>button.hv-mono:focus-visible{color:var(--hv-ink)}
+/* Fråga tillbaka (B2): alternativen är källans text, upp till 120 tecken. En lång knapp bryter raden i stället för att gå utanför tråden. */
+.hv-chip[data-hvchattval]{height:auto;min-height:34px;padding-block:6px;white-space:normal;text-align:left;max-width:100%}
 </style>
 
 <div class="proto" role="region" aria-label="Prototypinställningar">
@@ -35416,10 +35418,15 @@ function hvTopp(D = hvD()){
     team.forEach(([, l]) => antal[l] = (antal[l] || 0) + 1);
     const pa = antal.inne || 0;
     vanster = team.length ? `<button class="hv-lg" data-hvdra aria-expanded="${!!H.dra}" aria-label="Laget just nu: ${pa} av ${team.length} på plats. Visa vilka."><b class="num"><span data-roll="pa">${pa}</span><small>/${team.length}</small></b><span class="t">på plats</span><span class="hv-lgbar" aria-hidden="true">${['inne', 'sjuk', 'ledig', 'ej'].filter(k => antal[k]).map(k => `<i style="flex:${antal[k]};background:var(--hv-p-${k})"></i>`).join('')}</span>${hvI('chev')}</button>` : '';
+    // Vägen tillbaka till tråden efter Hem eller Esc, där tråden har sin Hem: bara när tråden har turer. Genvägarnas
+    // rad har ingen plats (den bröts i riggen vid 1444 px).
+    if ((H.chatt || []).length) vanster += '<button class="hv-kn" data-hvtilltrad>Till tråden</button>';
     dra = H.dra && team.length ? `<div class="hv-dra" role="region" aria-label="Laget just nu">${team.map(([n, l, d]) => { const dt = hvLagDetalj(l, d).replace(/\b(\d{2}):(\d{2})\b/g, '$1.$2'); return `<div class="hv-prow"><span class="hv-av" aria-hidden="true">${esc(String(n)[0] || '')}</span><span>${esc(n)}</span><span class="hv-st"><i style="background:var(--hv-p-${l})"></i>${esc(LAGE[l].l)}${dt ? ` <small>${esc(dt)}</small>` : ''}</span></div>`; }).join('')}</div>` : '';
   } else {
     // Utanför hemmet dockar urtavlan här: dagen syns medan man pratar med Nav eller har ett ark öppet.
     vanster = `<button class="hv-kn" data-hvstang>${hvI('vanster')}Hem</button><button class="hv-dock" data-hvark="dag" aria-label="Min dag">${hvUrtavla(D, {storlek:'mini', dag:'idag'})}${hvDockRad(D)}</button><button class="hv-kn hv-brinn${R.nu ? '' : ' lugn'}" data-hvark="vantar"><i></i><span data-roll="trad-brinn">${R.nu ? `${R.nu} brinner` : 'Inget brinner'}</span></button>`;
+    // Ny tråd (N6) står bara i tråden, och bara när den har turer att lämna.
+    if (lage === 'trad' && (H.chatt || []).length) vanster += '<button class="hv-kn" data-hvnytrad>Ny tråd</button>';
   }
   // Stämpla in står för alla när stämplingen är på: också den vars roll inte måste stämpla får göra det.
   const stamplar = ndKopplad('tid') && ND.tid && ND.tid.modulPa, inne = stampLage() === 'in', sist = S.events[S.events.length - 1], sedan = sist ? ' sedan ' + hvHm(sist.t) : '';
@@ -35586,7 +35593,9 @@ function hvSkriv(D = hvD()){
   const H = S.hv, bil = H.bilagor || [], chatt = hvChattPa();
   const om = chatt ? 'Svaren skrivs av AI ur Navs tal. Talen sätter Nav in.' + (typeof ND.hem.chattAnvant === 'number' ? ` ${ND.hem.chattAnvant} % av månadens AI-utrymme är använt.` : '') : 'Svaren kommer ur Navs sökruta, inte från AI.';
   const send = H.strom ? `<button type="button" class="hv-send stopp" data-hvstopp aria-label="Stoppa svaret" title="Stoppa svaret (esc)">${hvI('stopp')}</button>` : `<button type="submit" class="hv-send" aria-label="Skicka">${hvI('upp')}</button>`;
-  const bilagor = bil.length ? `<div class="hv-bilagor">${bil.map((b, k) => `<span class="hv-bil">${esc(b.namn)}<button type="button" data-hvbilx="${k}" aria-label="Ta bort ${esc(b.namn)}">${hvI('x')}</button></span>`).join('')}</div>` : '';
+  // Om den här (O): det nästa fråga gäller står först bland det som följer med, och går att ta bort som en fil.
+  const omBil = chatt && H.om ? `<span class="hv-bil">Om: ${esc(H.om.titel)}<button type="button" data-hvomx aria-label="${esc(`Frågan gäller inte ${H.om.titel}`)}">${hvI('x')}</button></span>` : '';
+  const bilagor = bil.length || omBil ? `<div class="hv-bilagor">${omBil}${bil.map((b, k) => `<span class="hv-bil">${esc(b.namn)}<button type="button" data-hvbilx="${k}" aria-label="Ta bort ${esc(b.namn)}">${hvI('x')}</button></span>`).join('')}</div>` : '';
   const hojd = H.qh ? ` style="height:${H.qh}px"${H.qh >= HVQMAX ? ' class="hv-hog"' : ''}` : '';
   return `<form class="hv-skriv" data-hvskriv title="${esc(om)}">${bilagor}
     <textarea id="hvQ" rows="1" placeholder="${chatt ? 'Fråga Nav eller be om något…' : 'Sök i Nav…'}" aria-label="${chatt ? 'Skriv till Nav' : 'Sök i Nav'}" aria-describedby="hvQom" data-hvfalt="q"${hojd}>${esc(H.q || '')}</textarea>
@@ -35752,9 +35761,9 @@ function hvSok(q){
 function hvFraga(){
   // En tom ruta skickar ingenting. Fokus läggs i rutan, så att trycket ändå leder någonstans.
   const q = String(S.hv.q || '').trim(); if (!q){ const el = document.getElementById('hvQ'); if (el) el.focus(); return; }
-  if (hvChattPa()) return hvChattFraga(q);
+  if (hvChattPa()) return hvChattFraga(q, S.hv.om);
   if ((S.hv.bilagor || []).length){ toast('Filer går bara att skicka när chatten är påslagen.'); return; }
-  S.hv.q = ''; S.hv.qh = 0; hvUtkast('');
+  S.hv.q = ''; S.hv.qh = 0; S.hv.om = null; hvUtkast('');
   hvSok(q);
 }
 
@@ -35784,7 +35793,36 @@ const HVCHATTMS = 130000;
 // Ändra frågan när den behöver bli smalare, och Sök i stället när AI inte svarar på den alls.
 const HVKODIGEN = ['tillfalligt', 'ofullstandigt', 'tomt', 'pagar', 'nat', 'vakt', 'stoppad', 'omladdad'];
 const HVKODANDRA = ['tid', 'steg', 'langt', 'for-stor', 'fil'];
-function hvChattFraga(q){
+// Historiken (A2-1, A2-2, b-server-api.md §1): varje tidigare tur bär vad som hämtades och hur korten gick, så att
+// "Ja, gör det." och en följdfråga vet vad som redan är läst och gjort. hamtat är texterna för stegen som svarade
+// (ok), i stegens ordning, högst fyra. Förbereder och Kontrollerar räknas inte (rutten tar inte med dem, korten står
+// i kortUtfall). kortUtfall är varje korts första rad och läget nu, högst tre. Ett kort vars läge Nav inte vet (det
+// görs just nu, eller sidan laddades om medan det gjordes) tas inte med: Claude läser läget som ett faktum.
+const HVHAMTAT = 4, HVKORTUTFALL = 3;
+function hvKortLageNu(l){
+  if (!l) return 'vantar';
+  if (l.gor || (l.omladdad && !l.slut)) return '';
+  if (l.slut === 'klart') return 'godkant';
+  if (l.slut === 'avbrutet' || l.slut === 'angrat') return l.slut;
+  return (l.gjorda || []).length ? 'delvis' : 'vantar';
+}
+function hvHistoriaPost(t){
+  const hamtat = (t.steg || []).filter(s => s && s.ok === true && typeof s.text === 'string' && s.text.trim() && !/^(?:Förbereder|Kontrollerar) /.test(s.text)).map(s => s.text).slice(0, HVHAMTAT);
+  const kortUtfall = ((t.svar && t.svar.kort) || []).map((k, n) => {
+    const r = k && Array.isArray(k.rader) && k.rader[0];
+    return {text:r && typeof r.text === 'string' ? r.text : '', lage:hvKortLageNu((t.lage || [])[n])};
+  }).filter(x => x.text.trim() && x.lage).slice(0, HVKORTUTFALL);
+  return {fraga:t.fraga, svar:hvChattRen(t.svar.text), hamtat, kortUtfall};
+}
+// Om den här (O, b-server-api.md §1.1): sorten ur ruttens fasta lista och den text personen ser, högst 120 tecken. En
+// titel utan en enda bokstav eller siffra går inte att läsa för rutten (400): då skickas inget om.
+const HVOMSORT = ['vantar', 'mote', 'uppgift', 'manad'];
+function hvOmGiltig(o){
+  if (!o || typeof o !== 'object' || !HVOMSORT.includes(o.sort) || typeof o.titel !== 'string') return null;
+  const titel = o.titel.replace(/\s+/g, ' ').trim().slice(0, 120).trim();
+  return /[\p{L}\p{N}]/u.test(titel) ? {sort:o.sort, titel} : null;
+}
+function hvChattFraga(q, om){
   const H = S.hv, T = H.chatt;
   if (H.strom){ toast('Nav svarar fortfarande. Esc stoppar svaret.'); return; }
   if (H.laser){ toast('Filen läses fortfarande. Skicka om en stund.'); return; }
@@ -35792,8 +35830,11 @@ function hvChattFraga(q){
   if (hvAnnanFlik()){ toast('Nav svarar i en annan flik. Skicka när det svaret är klart.'); return; }
   H.q = ''; H.qh = 0; hvUtkast(''); hvUtkastVilar = false;
   const bilagor = H.bilagor || []; H.bilagor = [];
+  // Om den här (O): det frågan gäller följer turen, så att Försök igen och en omladdning skickar samma sak. Det som
+  // valdes i en lista (H.om) följer bara frågan från skrivrutan (hvFraga), aldrig en knapp under ett svar.
+  const omNu = hvOmGiltig(om); if (om && om === H.om) H.om = null;
   // Filerna sparas på turen, så att Försök igen skickar samma fråga med samma filer.
-  const tur = {fraga:q, filer:bilagor.map(b => b.namn), bilagor, steg:[], svar:null, fel:'', kod:'', laddar:true, visa:null, lage:[]};
+  const tur = {fraga:q, filer:bilagor.map(b => b.namn), bilagor, om:omNu, steg:[], svar:null, fel:'', kod:'', laddar:true, visa:null, lage:[]};
   T.push(tur);
   // Frågan blir ett inlägg i tråden, efter det som redan ligger där, och tråden följer svaret.
   const inl = {sort:'chatt', id:String(T.length - 1), nr:++hvNr};
@@ -35846,7 +35887,7 @@ function hvChattHandelse(tur, h){
 }
 async function hvChattKor(tur){
   const H = S.hv, T = H.chatt, i = T.indexOf(tur);
-  const historia = T.slice(0, i).filter(t => t.svar).slice(-3).map(t => ({fraga:t.fraga, svar:hvChattRen(t.svar.text)}));
+  const historia = T.slice(0, i).filter(t => t.svar).slice(-3).map(hvHistoriaPost);
   const ctl = new AbortController(), kor = ++hvKorNr;
   // Varje körning av turen har ett nummer: läser en äldre körning ännu klart (efter svaret) rör den inte en ny.
   const min = () => tur.kor === kor;
@@ -35874,7 +35915,7 @@ async function hvChattKor(tur){
     if (hvDrar){ const v = hvDrar; await Promise.race([v, new Promise(k => setTimeout(k, HVCHATTMS))]); if (!min() || tur.stoppad) return; }
     hvDrar = dragen;
     if (hvStoppar){ const v = hvStoppar; hvStoppar = null; await v; if (tur.stoppad) return; }
-    const res = await fetch('/nav2/chatt', {method:'POST', credentials:'same-origin', headers:{'content-type':'application/json'}, signal:ctl.signal, body:JSON.stringify({fraga:tur.fraga, historia, ...(tur.bilagor.length ? {bilagor:tur.bilagor} : {})})});
+    const res = await fetch('/nav2/chatt', {method:'POST', credentials:'same-origin', headers:{'content-type':'application/json'}, signal:ctl.signal, body:JSON.stringify({fraga:tur.fraga, historia, ...(tur.bilagor.length ? {bilagor:tur.bilagor} : {}), ...(tur.om ? {om:tur.om} : {})})});
     if (tur.stoppad) return;
     if (!res.ok || !res.body || !String(res.headers.get('content-type') || '').includes('event-stream')){
       let d = null; try { d = await res.json(); } catch(_){ d = null; }
@@ -35951,6 +35992,37 @@ function hvChattStopp(skal){
   if (skal !== 'vakt') hvSkrivFokus();
 }
 let hvKorNr = 0, hvDrar = null;
+// Ny tråd (N6): ett nytt ämne blandas inte ihop med det förra. Frågan som pågår stoppas först (som Stopp), sedan töms
+// turerna, och den sparade tråden i fliken med dem: nästa fråga går utan historik. Andra inlägg i tråden (Teamet,
+// månaden) står kvar. Medan ett kort görs väntar Ny tråd: kortets utfall hör till sin tur.
+function hvNyTrad(){
+  const H = S.hv, T = H.chatt || [];
+  if (!T.length) return;
+  if (T.some(t => (t.lage || []).some(l => l && l.gor))){ toast('Ett kort görs just nu. Börja en ny tråd när det är klart.'); return; }
+  if (H.strom) hvChattStopp();
+  H.chatt = [];
+  H.trad = (H.trad || []).filter(t => t.sort !== 'chatt');
+  Object.assign(H, {ratta:null, nere:false, visaNr:null, folj:true});
+  if (H.ark === 'chatt') Object.assign(H, {ark:null, id:null});
+  hvTradSpara();
+  hvFlipNu(); render(); hvSkrivFokus();
+  hvSrSag('Ny tråd. Nästa fråga börjar utan den förra.');
+}
+// Vägen tillbaka: från hemmet till tråden, vid det sista svaret. Bara när tråden har turer (hvGenv).
+function hvTillTraden(){
+  const H = S.hv, T = H.chatt || []; if (!T.length) return;
+  Object.assign(H, {ark:'chatt', id:String(T.length - 1), kvitto:null, fel:'', form:null, meny:null, mer:false, folj:true});
+  hvFlipNu(); render(); hvTillBotten(); hvSkrivFokus();
+}
+// Om den här (O): det personen tittar på följer nästa fråga. Valet står i skrivrutan (hvSkriv) tills frågan går eller
+// personen tar bort det. En rad i Väntar på dig (en uppgift heter uppgift), och talen i Din månad.
+function hvOmSatt(om){ const o = hvOmGiltig(om); if (!o || !hvChattPa()) return; S.hv.om = o; render(); hvSkrivFokus(true); }
+function hvOmRad(id){ const r = ndHemRad.find(x => x.id === id); if (r) hvOmSatt({sort:String(r.id).startsWith('upg-') ? 'uppgift' : 'vantar', titel:String(r.t || '')}); }
+function hvOmManad(){
+  if (hvManadSaknas()) return;
+  const M = hvManad(), u = M.u;
+  hvOmSatt({sort:'manad', titel:`${u.antal.netto} order i ${M.man}${M.kronor ? `, ${kr(u.summa)} godkänt` : ''}`});
+}
 /* ---------- Chattens minne, skärmläsaren och andra flikar (A1-2 och A1-7) ----------
    Skärmläsaren: tråden ritas om ofta, så den har ingen aria-live. En dold nod utanför det som ritas om (role=status)
    säger det första steget, "Svar klart." eller felet, en gång var. Utkastet läses aldrig upp, bara slutsvaret. */
@@ -35985,7 +36057,7 @@ function hvTradSpara(){
   if (hvGick) return;
   const H = S.hv; if (!ND || !ND.jag || !ND.jag.id) return;
   const nu = now(), ms = Date.now();
-  const turer = (H.chatt || []).slice(-HVTRADMAX).map(t => ({fraga:t.fraga, filer:t.filer || [], steg:(t.steg || []).map(({nr, verktyg, text, ok, ms:m, kalla}) => ({nr, verktyg, text, ok, ms:m, kalla})),
+  const turer = (H.chatt || []).slice(-HVTRADMAX).map(t => ({fraga:t.fraga, filer:t.filer || [], om:t.om || null, steg:(t.steg || []).map(({nr, verktyg, text, ok, ms:m, kalla}) => ({nr, verktyg, text, ok, ms:m, kalla})),
     svar:t.svar ? Object.fromEntries(Object.entries(t.svar).filter(([k]) => k !== 'tider' && k !== 'varv')) : null, fel:t.fel || '', kod:t.kod || '', stoppad:!!t.stoppad, laddar:!!t.laddar, rad:t.rad || null,
     ms:t.ms || 0, nar:typeof t.narMin === 'number' ? ms - (nu - t.narMin) * 60000 : null, lage:(t.lage || []).map(l => l ? {gjorda:l.gjorda, gor:!!l.gor, slut:l.slut, godkand:l.godkand || '', fel:l.fel || '', omladdad:!!l.omladdad, andrat:l.andrat || [], utfallSkickat:!!l.utfallSkickat} : null), flagg:t.flagg && t.flagg.klar ? {klar:t.flagg.klar} : null}));
   try {
@@ -36004,7 +36076,7 @@ function hvTradLas(){
   if (!d || !Array.isArray(d.turer)) return;
   const nu = now(), ms = Date.now();
   const turer = d.turer.filter(t => t && typeof t.fraga === 'string' && (t.nar === null || (typeof t.nar === 'number' && nu - (ms - t.nar) / 60000 >= 0))).slice(-HVTRADMAX).map(t => {
-    const tur = {fraga:t.fraga, filer:Array.isArray(t.filer) ? t.filer : [], bilagor:[], steg:Array.isArray(t.steg) ? t.steg : [], svar:t.svar && typeof t.svar === 'object' ? t.svar : null,
+    const tur = {fraga:t.fraga, filer:Array.isArray(t.filer) ? t.filer : [], bilagor:[], om:hvOmGiltig(t.om), steg:Array.isArray(t.steg) ? t.steg : [], svar:t.svar && typeof t.svar === 'object' ? t.svar : null,
       fel:String(t.fel || ''), kod:String(t.kod || ''), stoppad:!!t.stoppad, laddar:false, rad:t.rad || null, ms:+t.ms || 0, visa:null, stegOppen:false, kopierat:false, oppen:false,
       lage:(Array.isArray(t.lage) ? t.lage : []).map(l => l ? {gjorda:Array.isArray(l.gjorda) ? l.gjorda : [], gor:false, slut:String(l.slut || ''), godkand:l.godkand || '', fel:String(l.fel || ''), omladdad:!!(l.gor || l.omladdad), andrat:Array.isArray(l.andrat) ? l.andrat.filter(f => HVKORTFALT[f]) : [], utfallSkickat:!!l.utfallSkickat} : null), flagg:t.flagg && typeof t.flagg.klar === 'string' ? {klar:t.flagg.klar} : null};
     if (typeof t.nar === 'number') tur.narMin = nu - (ms - t.nar) / 60000;
@@ -36238,8 +36310,10 @@ function hvTurVy(i, attr = ''){
   const ingen = klar && Array.isArray(s.kallor) && !s.kallor.length;
   const las = (t.steg || []).filter(x => x.nr !== null), ingetLast = klar && las.length > 0 && las.every(x => x.ok === false);
   const kallaUt = !klar ? '' : ingen ? `<p class="hv-kalla hv-ingen"><b>Ingen källa</b> · ${esc(s.kalla || 'Skrivet av AI')}</p>` : hvKalla(s.kalla || 'Skrivet av AI');
-  return `<div class="hv-tur" data-tur="${i}"${attr}><p class="hv-q">${esc(t.fraga)}${(t.filer || []).length ? `<small>${t.filer.map(esc).join(' · ')}</small>` : ''}</p>
-    ${hvNavSager(`${hvChattSteg(t, i)}${ingetLast ? '<p class="hv-tank hv-ingen">Navs data gick inte att läsa.</p>' : ''}${s ? `<div class="hv-svar" aria-busy="${!!t.laddar}">${hvChattText(t, i)}</div>` : utk}${kallaRad}${obel}${hvChattFel(t, i)}${klar && (s.kort || []).length ? hvChattKort(t, i) : ''}${klar ? kallaUt + hvChattUlag(t, i) + hvChattAtg(t, i) + hvChattNasta(t, i) : ''}`)}</div>`;
+  // Under frågan: det den gäller (O) och filerna, så att personen ser vad Nav fick med frågan.
+  const under = [t.om ? `Om: ${t.om.titel}` : '', ...(t.filer || [])].filter(Boolean);
+  return `<div class="hv-tur" data-tur="${i}"${attr}><p class="hv-q">${esc(t.fraga)}${under.length ? `<small>${under.map(esc).join(' · ')}</small>` : ''}</p>
+    ${hvNavSager(`${hvChattSteg(t, i)}${ingetLast ? '<p class="hv-tank hv-ingen">Navs data gick inte att läsa.</p>' : ''}${s ? `<div class="hv-svar" aria-busy="${!!t.laddar}">${hvChattText(t, i)}</div>${klar ? hvChattVal(t, i) : ''}` : utk}${kallaRad}${obel}${hvChattFel(t, i)}${klar && (s.kort || []).length ? hvChattKort(t, i) : ''}${klar ? kallaUt + hvChattUlag(t, i) + hvChattAtg(t, i) + hvChattNasta(t, i) : ''}`)}</div>`;
 }
 // Stegen körs ett i taget. Faller ett står knappen kvar, och nästa tryck gör bara det som saknas.
 // "$fält" i ett stegs Ångra byts mot fältet i ruttens svar: uppgiftens id, uppföljningens nya version.
@@ -36377,10 +36451,26 @@ function hvChattUlag(t, i){
 // Följdfrågorna (A1-3): högst två, byggda av regler ur verktygen som svarade, aldrig ur AI:ns text. Ett klick ställer
 // frågan som en vanlig fråga. Bara under det sista svaret, och bara när chatten är på.
 const hvNastaLista = t => (t && t.svar && Array.isArray(t.svar.nasta) ? t.svar.nasta : []).filter(x => x && typeof x.text === 'string' && x.text.trim() && typeof x.knapp === 'string' && x.knapp.trim()).slice(0, 2);
+// Ja-knappen (B4): servern säger ja när svaret slutar med "Ska jag …?" och saknar kort. Klicket ställer "Ja, gör det."
+// som en vanlig fråga, med historiken, så att Claude ser sitt eget förslag. Den lovar inget: ett kort väntar på Godkänn.
+const HVJA = 'Ja, gör det.';
+const hvJa = t => !!(t && t.svar && t.svar.ja === true && !(t.svar.kort || []).length && !hvValLista(t).length);
 function hvChattNasta(t, i){
   if (i !== S.hv.chatt.length - 1 || t.stoppad || t.fel || !hvChattPa()) return '';
-  const N = hvNastaLista(t);
-  return N.length ? `<div class="hv-atg hv-nasta" role="group" aria-label="Fråga vidare">${N.map((x, n) => `<button class="hv-chip" data-hvchattnasta="${i}:${n}" title="${esc(x.text)}" aria-label="${esc(`Fråga: ${x.text}`)}">${esc(x.knapp)}</button>`).join('')}</div>` : '';
+  const N = hvNastaLista(t), ja = hvJa(t) ? `<button class="hv-chip" data-hvchattja="${i}">Ja, gör det</button>` : '';
+  return N.length || ja ? `<div class="hv-atg hv-nasta" role="group" aria-label="Fråga vidare">${ja}${N.map((x, n) => `<button class="hv-chip" data-hvchattnasta="${i}:${n}" title="${esc(x.text)}" aria-label="${esc(`Fråga: ${x.text}`)}">${esc(x.knapp)}</button>`).join('')}</div>` : '';
+}
+// Fråga tillbaka (B2): Nav vet inte vilket av flera som menas. Frågan står redan som svaret (svar.text), alternativen
+// blir knappar under den, med källans egen text. Ett klick ställer alternativet som nästa fråga. Bara på trådens sista
+// tur, och inte efter ett val (då är valet en ny tur). Färre än två alternativ ritar inget: frågan står som text.
+const hvValLista = t => {
+  const v = t && t.svar && t.svar.val, a = v && Array.isArray(v.alternativ) ? v.alternativ.filter(x => typeof x === 'string' && x.trim()).slice(0, 4) : [];
+  return a.length >= 2 ? a : [];
+};
+function hvChattVal(t, i){
+  if (i !== S.hv.chatt.length - 1 || t.stoppad || t.fel || !hvChattPa()) return '';
+  const A = hvValLista(t);
+  return A.length ? `<div class="hv-atg hv-nasta" role="group" aria-label="Välj ett svar">${A.map((x, n) => `<button class="hv-chip" data-hvchattval="${i}:${n}" aria-label="${esc(`Svara: ${x}`)}">${esc(x)}</button>`).join('')}</div>` : '';
 }
 /* ---------- Arket: ett öppnat kort tar ytan ---------- */
 function hvOppna(ark, id){
@@ -36678,7 +36768,8 @@ function hvArkManad(){
   const forst = M.kronor
     ? `Du har <b>${u.antal.netto} order</b> i ${esc(M.man)}. <b>${kr(u.summa)}</b> är godkänt.${M.vant ? ` ${M.vant} order väntar på godkännande och räknas in när ${M.vant === 1 ? 'den är godkänd' : 'de är godkända'}.` : ''}`
     : `Du har <b>${u.antal.netto} order</b> i ${esc(M.man)}.${M.vant ? ` ${M.vant} väntar på godkännande.` : ''} Ingen provisionsregel gäller för dig, så jag visar inga kronor.`;
-  return hvNavSager(`<p>${forst}</p>${hvKalla('Räknat av regler · samma uträkning som lönen bygger på')}
+  const om = hvChattPa() ? '<div class="hv-atg"><button class="hv-atgk" data-hvommanad>Fråga Nav om månaden</button></div>' : '';
+  return hvNavSager(`<p>${forst}</p>${hvKalla('Räknat av regler · samma uträkning som lönen bygger på')}${om}
     <p class="hv-tank">${antal ? `${antal === 1 ? 'Den godkända ordern' : `Alla ${antal} godkända order`} i ${esc(M.man)}` : `Inga godkända order i ${esc(M.man)} än.`}</p>${antal || vantar ? `<div class="hv-lista">${rader}${vantar}</div>` : ''}
     <p class="hv-tank">Det här ser jag inte: om en order makuleras senare. Då dras provisionen den månaden.</p>
     ${steg}${prognos}`);
@@ -36954,7 +37045,8 @@ function hvRattaRad(x){
   const sort = HVSORTER.includes(x.bkind) ? x.bkind : '', namn = sort ? (KIND_LABEL[sort] || sort) : '';
   const flagga = S.flagged.has(x.id) ? '<span class="hv-mono">Markerad som fel</span>' : `<button class="hv-atgk" data-hvflagga="${esc(x.id)}" aria-label="${esc(`Stämmer inte: ${x.t}`)}">Stämmer inte</button>`;
   const dold = !sort ? '' : S.hiddenKinds.has(sort) ? `<button class="hv-atgk" data-hvvisa="${esc(sort)}" aria-label="${esc(`Visa ${namn} på hemmet igen`)}">Visa på hemmet</button>` : `<button class="hv-atgk" data-hvdolj="${esc(sort)}" aria-label="${esc(`Visa inte ${namn} på hemmet`)}">Visa inte på hemmet</button>`;
-  return `<span class="hv-atg">${flagga}${dold}</span>`;
+  const om = hvChattPa() ? `<button class="hv-atgk" data-hvomrad="${esc(x.id)}" aria-label="${esc(`Fråga Nav om: ${x.t}`)}">Fråga Nav om den här</button>` : '';
+  return `<span class="hv-atg">${om}${flagga}${dold}</span>`;
 }
 
 // Ritar om och lämnar fokus och markören där de stod (skrivrutan tappar dem annars när Mer stängs av ett klick i den).
@@ -36966,7 +37058,7 @@ function hvRitaBehall(){
 }
 function hvKlick(e){
   if (!hvPa() || S.view !== 'hem') return;
-  const t = e.target.closest && e.target.closest('[data-hvtr], [data-hvperson], [data-hvunderlag], [data-hvboka], [data-hvangradag], [data-hvkvittoangra], [data-hvbifoga], [data-hvtips], [data-hvtala], [data-hvbilx], [data-hvstang], [data-hvtoastangra], [data-hvfokus], [data-hvtal], [data-hvchattsok], [data-hvstopp], [data-hvnere], [data-hvchattigen], [data-hvchattandra], [data-hvchattkop], [data-hvchattsteg], [data-hvchattgodkann], [data-hvchattavbryt], [data-hvchattangra], [data-hvchattnasta], [data-hvchattulag], [data-hvchattstammer], [data-hvtalvidare], [data-hvkortratta], [data-hvgor], [data-hvforslag], [data-hvnasta], [data-hvval], [data-hvangra], [data-hvdra], [data-hvmer], [data-hvstat], [data-hvforbered], [data-hvigen], [data-hvfraga], [data-hvform], [data-hvformx], [data-hvmeny], [data-hvflagga], [data-hvdolj], [data-hvvisa], [data-hvga], [data-hvgratt], [data-hvrad], [data-hvater], [data-hvutfall], [data-hvark]');
+  const t = e.target.closest && e.target.closest('[data-hvtr], [data-hvperson], [data-hvunderlag], [data-hvboka], [data-hvangradag], [data-hvkvittoangra], [data-hvbifoga], [data-hvtips], [data-hvtala], [data-hvbilx], [data-hvstang], [data-hvtoastangra], [data-hvfokus], [data-hvtal], [data-hvchattsok], [data-hvstopp], [data-hvnere], [data-hvchattigen], [data-hvchattandra], [data-hvchattkop], [data-hvchattsteg], [data-hvchattgodkann], [data-hvchattavbryt], [data-hvchattangra], [data-hvchattnasta], [data-hvchattval], [data-hvchattja], [data-hvnytrad], [data-hvtilltrad], [data-hvomrad], [data-hvommanad], [data-hvomx], [data-hvchattulag], [data-hvchattstammer], [data-hvtalvidare], [data-hvkortratta], [data-hvgor], [data-hvforslag], [data-hvnasta], [data-hvval], [data-hvangra], [data-hvdra], [data-hvmer], [data-hvstat], [data-hvforbered], [data-hvigen], [data-hvfraga], [data-hvform], [data-hvformx], [data-hvmeny], [data-hvflagga], [data-hvdolj], [data-hvvisa], [data-hvga], [data-hvgratt], [data-hvrad], [data-hvater], [data-hvutfall], [data-hvark]');
   // Mer och Laget stängs av ett klick utanför dem, som en meny brukar. Klicket går ändå vidare dit det skulle.
   if (S.hv.mer || S.hv.dra){
     const iMer = e.target.closest && e.target.closest('.hv-merv'), iLag = e.target.closest && e.target.closest('.hv-dra, [data-hvdra]');
@@ -37016,6 +37108,14 @@ function hvKlick(e){
   if (d.hvchattavbryt){ hvChattAvbryt(...d.hvchattavbryt.split(':').map(Number)); return; }
   if (d.hvchattangra){ hvChattAngra(...d.hvchattangra.split(':').map(Number)); return; }
   if (d.hvchattnasta){ const [ti, n] = d.hvchattnasta.split(':').map(Number), tur = S.hv.chatt[ti], x = hvNastaLista(tur)[n]; if (x) hvChattFraga(String(x.text)); return; }
+  // B2 och B4: knapparna gäller bara trådens sista tur (de ritas inte på andra, och ett klick på en gammal gör inget).
+  if (d.hvchattval){ const [ti, n] = d.hvchattval.split(':').map(Number), T = S.hv.chatt; if (ti !== T.length - 1) return; const x = hvValLista(T[ti])[n]; if (x) hvChattFraga(x); return; }
+  if (d.hvchattja !== undefined){ const ti = +d.hvchattja, T = S.hv.chatt; if (ti === T.length - 1 && hvJa(T[ti])) hvChattFraga(HVJA); return; }
+  if (d.hvnytrad !== undefined){ hvNyTrad(); return; }
+  if (d.hvtilltrad !== undefined){ hvTillTraden(); return; }
+  if (d.hvomrad !== undefined){ hvOmRad(d.hvomrad); return; }
+  if (d.hvommanad !== undefined){ hvOmManad(); return; }
+  if (d.hvomx !== undefined){ S.hv.om = null; hvRitaBehall(); hvSkrivFokus(true); return; }
   if (d.hvchattulag !== undefined){ const tur = S.hv.chatt[+d.hvchattulag]; if (tur){ tur.ulag = !tur.ulag; render(); } return; }
   if (d.hvchattstammer !== undefined){ hvChattStammer(+d.hvchattstammer); return; }
   if (d.hvtalvidare){ const [ti, id] = d.hvtalvidare.split(':'), tur = S.hv.chatt[+ti], k = tur && tur.svar && (tur.svar.tal || []).find(x => x.id === id), v = hvTalVidare(k); if (v) v[1](); return; }
@@ -37033,7 +37133,9 @@ function hvKlick(e){
   // index (sel, J/K/E/Enter) sätts till samma rad, så att E och Enter gäller raden som är markerad.
   if (d.hvrad){ hvRadOppna(d.hvrad); return; }
   if (d.hvstat !== undefined){ S.moStat = true; S.moTillbaka = null; ndGa('/moten'); return; }
-  if (d.hvforbered){ hvChattFraga(d.hvforbered); return; }
+  // Förbered gäller ett möte (O): mötets tid och bolag följer frågan som det den gäller. Tiden skrivs "kl. 11.00",
+  // den form rutten låter stå kvar (en ensam 11.00 blir [tal] i titeln).
+  if (d.hvforbered){ const m = /^Förbered mitt möte (.+)$/.exec(d.hvforbered); hvChattFraga(d.hvforbered, m ? {sort:'mote', titel:'kl. ' + m[1]} : null); return; }
   if (d.hvigen !== undefined){ hvHamta(S.hv.ark, S.hv.id); render(); return; }
   if (d.hvfraga !== undefined){ hvFragaOmRad(+d.hvfraga); return; }
   if (d.hvform){ hvFormOppna(d.hvform); return; }
@@ -37260,7 +37362,7 @@ function hvStegKlocka(){
    något bett om den (hvFlipNu: lägesbyte, Klar, Nästa, Ångra), aldrig vid Navs vanliga omritningar. */
 let hvFore = null;
 const hvFlipNu = (ms = HVT_LUGN) => { S.hv.flipTill = Date.now() + ms; };
-const HVFOKUS = ['data-hvgor', 'data-hvrad', 'data-hvtal', 'data-hvchattgodkann', 'data-hvchattangra', 'data-hvchattkop', 'data-hvchattsteg', 'data-hvperson', 'data-hvunderlag', 'data-hvval', 'data-hvgratt', 'data-hvforslag', 'data-m', 'data-hvark', 'data-hvdra', 'data-hvmer', 'data-hvforbered', 'data-hvboka', 'data-hvga', 'data-hvkvittoangra', 'data-hvangradag', 'data-hvstang'];
+const HVFOKUS = ['data-hvgor', 'data-hvrad', 'data-hvtal', 'data-hvchattgodkann', 'data-hvchattangra', 'data-hvchattkop', 'data-hvchattsteg', 'data-hvperson', 'data-hvunderlag', 'data-hvval', 'data-hvgratt', 'data-hvforslag', 'data-m', 'data-hvark', 'data-hvdra', 'data-hvmer', 'data-hvforbered', 'data-hvboka', 'data-hvga', 'data-hvkvittoangra', 'data-hvangradag', 'data-hvstang', 'data-hvchattval', 'data-hvchattja', 'data-hvtilltrad', 'data-hvnytrad'];
 // Märket på urtavlan, länken i lägesmeningen och mitten delar data-m, och Hela listan och "2 till" delar data-hvark:
 // nyckeln bär därför elementets slag och första klass (den som inte kommer och går), och vilken i ordningen det är.
 function hvFokusNyckel(x, rot){
