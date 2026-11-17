@@ -97,6 +97,8 @@ export const TYP_ETIKETT: Record<Handelsetyp, { rubrik: string; beskrivning: str
  *      annars svalt den tyst.
  */
 export const MODUL: Record<string, string> = {
+  // 0303: triggern på nav_setting skriver bara "installning", utan punkt (se typFor).
+  installning: "Inställning",
   employee: "Anställd",
   role: "Roll",
   permission: "Behörighet",
@@ -238,6 +240,8 @@ function slutarPa(andelse: string, lista: string[]): boolean {
  */
 export function typFor(action: string | null | undefined): Handelsetyp | null {
   if (!action) return null;
+  // 0303: en ändrad inställning loggas som "installning", utan ändelse.
+  if (action === "installning") return "andring";
   const bitar = String(action).split(".");
   if (bitar.length < 2) return null;
 

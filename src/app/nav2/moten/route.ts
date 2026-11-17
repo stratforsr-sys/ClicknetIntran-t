@@ -80,6 +80,7 @@ import { lokal } from "@/lib/nav2/leads";
 import { faltFor, lasInstallningar, motesTz, niva, nivaSvar, omfattas, provaAngra, provaInstallning, radernaStammer, type Lage, type MotenInst } from "@/lib/nav2/motesflode";
 import { ManadenStangs, ProvisionKonflikt, andraProvision, harLastProvision, harOmbokning, ifragasattProvision, latStaProvision, lasProvision, lastaRader, provisionsmottagare } from "@/lib/nav2/motesprovision-server";
 import { medNyckel } from "@/lib/nav2/nyckel";
+import { forslagEfterFlytt } from "@/lib/nav2/forslag";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
 import { bokningsDetalj, idIndata, textIndata } from "@/lib/nav2/motesanteckning";
 import { randomUUID } from "node:crypto";
@@ -1009,6 +1010,8 @@ export async function POST(request: Request) {
       objectId: m.id,
       meta: { kedja: m.kedja_id, fran: m.mote_tid, till: ny.toISOString(), antal_flyttningar: m.antal_flyttningar + 1 },
     });
+    // Hemvyn (0303): hade mötet ett öppet förslag till den som flyttade sparas valet Flytta nu, när flytten är gjord.
+    await forslagEfterFlytt(db, m.id, mig);
     return svar({ ok: `Mötet är flyttat till ${nar(ny)}.`, mote: m.id, mote_tid: ny.toISOString(), ...(m.event_id ? {} : { varning: "Mötet saknar kalenderhändelse. Kalendern är orörd." }) });
   }
 

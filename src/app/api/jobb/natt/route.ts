@@ -23,6 +23,8 @@ import { stangPlaneradeAvslut } from "@/lib/nav2/anstallda-avslut";
 import { rensaForraBilder } from "@/lib/nav2/profilbild";
 import { svensktDatum } from "@/lib/klocka";
 import { gallra } from "@/lib/nav2/gallring";
+import { korForslagNatt } from "@/lib/nav2/forslag-jobb";
+import { rensaChattText } from "@/lib/nav2/chatt/logg";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -196,6 +198,11 @@ export async function GET(request: NextRequest) {
     // inte längre "inga fel" utan kan betyda "rapporteringen är trasig".
     // Steget skriver, så det står bakom samma brytare som Fel i Nav 2.0.
     ["felrapportering", () => (SKRIVLAGE.fel ? provaFelrapporteringen(db) : Promise.resolve({ hoppade_over: "Fel i Nav 2.0 är i läsläge" }))],
+    // Hemvyn (0303): stäng förslag som ingen valde i, döm de rader vars domsdag har kommit, stäm av ändringarna,
+    // spara Navs facit och takten. Så länge `forslag.pa` är av räknar steget bara och skriver i sitt kvitto.
+    ["forslag", () => korForslagNatt(db)],
+    // Chatten (0304): frågans och svarets text sparas i 90 dagar. Raden står kvar utan text.
+    ["chatt", () => rensaChattText(db)],
   ];
 
   for (const [namn, kor] of steg) {

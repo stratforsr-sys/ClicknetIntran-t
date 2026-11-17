@@ -5,6 +5,488 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-17 · Hemvyn och chatten till main
+
+Beställaren: "nu kan du pusha till main", och före det "ska du inte rätta det här först" om listan Inte rättat.
+
+- **Migrationerna:** 0303–0307 och 0312 var redan körda i produktionen (läst ur `schema_migrations`, bara läsning).
+  Ingen migration kördes.
+- **Mains fem commits** (Möten 0311 och 0313) togs in. Fem konflikter: `package.json` (båda grenarnas prov i
+  `test:alla`), `motenforma.ts` (`holl` från main och `belopp`/`paket` från grenen, båda behövs),
+  `tests/moten.mjs` (mains prov för ny tid efter Offert skickad får ett belopp, som grenen kräver),
+  `motesanteckning-db.mjs` och överlämningen.
+- **Rättat före mergen:** (1) misslyckas också andra läsningen av inställningarna står "Hemmets inställningar gick
+  inte att läsa" ovanför det vanliga hemmet, med Försök igen (`renderHemInstFel`). (3) `sok_kunskap` säger till
+  webbläsaren när sökningen faktiskt skrevs i listan (`missSparad`, bara när raden skrevs: inte vid taket eller
+  skrivfel), och chatten visar "Saknas i kunskapsbasen · sparat". Claude får samma verktygssvar som förut, avtrycket
+  är oförändrat. (5) Hemmets uppgiftsrader läser också TASKS läge, så en bockad uppgift försvinner direkt i stället
+  för när uppgifterna hämtats om.
+- **Urtavlan står mitt i vyn:** sidofälten är lika breda (beställaren, skärmbild). Skissens 1.12fr/.92fr är ersatt.
+- **Inte gjort:** produktionens provrad för `44349a171864` (beställaren godkänner). Chatten är av i produktionen
+  tills dess.
+
+## 2026-11-17 · Hemvyn som skiss A v2, funktionsvarvet och chattens B-sats (grenen hemvy-chatt, sju pushar)
+
+Beställaren godkände skiss A v2 ("gör inte en enda dugg annorlunda") och bad sedan om ett funktionsvarv ("bra
+funktioner som är innovativa … inte funktioner överallt"). Allt ligger på `hemvy-chatt`, inte på main.
+
+- **Pushar:** `6b8488c` (hemmet som skissen), `d90ea9d` (stort fönster förstoras som skissen, `hvSkala`), `fa2e538`
+  (hemmets läge står inte kvar i Möten), `c38bf5a` (funktionsvarvet: chatten skriver fram svaret, minns tråden per
+  flik, Stopp, Stämmer inte, motvikten vid talet, rätta kortet före Godkänn, hemmet säger när det inte vet, mötet
+  bakom märket, väg tillbaka för dolda rader, skrivrutan hittar i hela Nav, Navs facit, Klar med Ångra), `27864f0`
+  (en omladdning mitt i ett svar säger "Sidan laddades om", inte nätfel: mätt i Chrome att ordningen är
+  beforeunload, brottet, pagehide), `8044f3a` (B-satsen).
+- **B-satsen:** historiken bär `hamtat` och `kortUtfall`; `fraga_tillbaka` ger knappar bara ur källan (kandidater,
+  frågans hela ord, eller ett bolag ur `las_affarer` som delar ett helt ord med frågan: det sista lades till efter
+  provets c65, där Claude listade affärerna och frågade direkt); `svar.ja` ger "Ja, gör det"; `om` (Fråga Nav om den
+  här) från Väntar på dig, Din månad och Förbered; Ny tråd och Till tråden.
+- **Provet (beställarens ja: Sonnet, 20–30 kr, fem val):** 21,93 kr, 0,094 kr per körning, 92 % cachat. 73 av 78 i
+  alla tre varv; de 50 gamla 49 av 50 (s40 sa "går inte att säga än" i stället för "för tidigt"); nya 24 av 28 (c65
+  utan knappar, rättat i kod efteråt utan nytt avtryck; s53 och s56 ett obelagt tal i ett av tre varv; t55 "Vill du
+  att jag" i stället för "Ska jag"). Omskrivna svar för de 50: 10 av 150 (förra gången 19 av 150). Median 2 varv,
+  går inte att jämföra (den gamla raden saknar medianen). Inget allvarligt fel enligt kravet 2026-11-15.
+- **Godkännandet:** beställaren sa "jag godkänner och pusha". Att sätta `godkand` på raden nekades Claude av
+  behörighetskontrollen (en AI ska inte godkänna sitt eget prov), så beställaren kör det själv.
+- **Omskrivna prov (regeländringar som beställaren beslutat):** i `tests/chatt-rutt.mjs` B1–B4 (fem val), i
+  `tests/chattforma.mjs` "bara kandidater högst upp …" (nu också bolag ur affärslistan när frågan nämner det), i
+  `tests/nav2-hemvy.mjs` "ingen Ja-knapp ritas när servern inte säger ja (B4)".
+- **Kvar:** se slutrapporten i sessionen; de viktigaste: andra läsningen av inställningarna kan falla tyst, sex
+  anropare av `lasInst` får förval vid läsfel, A1-8 "Saknas i kunskapsbasen · sparat" saknar fält från servern, två
+  flikar är bara prövade med stubbar, Förbered skickar nu `om` vid varje klick.
+
+---
+
+## 2026-11-16 · AI-assistenten, fas 2, del 1: kunskapsbasen i Inställningar (0312 KÖRD)
+
+Beställaren efter fas 1: "jag godkänner. Nu gå vidare med fas 2". Jag läste det som ja till de två saker som
+väntade: provraden och förslaget om kunskapsbasen (PRD:n, "Kunskapsbasen i Inställningar").
+
+- **Provraden är godkänd.** Sonnet-raden i `nav_chatt_prov` med avtryck `485de06db391` (50 av 50) står som godkänd
+  av beställaren, på samma sätt som den förra raden. `chatt.pa` stod redan på sant, så chatten svarar nu i previewn
+  med fas 1. `hem.nytt` är fortfarande bara beställaren.
+- **0312 (körd):** `kunskap_dokument` (titel, område, filens namn, hela texten), `kunskap_stycke` (dokumentet delat
+  i stycken med svenskt sökindex; titeln och rubrikerna väger tyngst) och `kunskap_miss` (sökningar utan svar, utan
+  person). Alla inloggade läser dokument och stycken. Ingen skrivpolicy finns: bara servern skriver.
+  `kunskap_spara` skriver dokumentet och styckena i en transaktion, `kunskap_sok` söker som den som frågar och ger
+  bäst träff först. Additiv: main läser inget av det.
+- **Delningen** (`kunskapforma.ts`): vid rubriker (`#`), högst 2 500 tecken per stycke (under de 3 000 chatten
+  läser ur ett dokument). Små avsnitt intill varandra hålls ihop, så ett kort dokument blir ett stycke. En mening
+  delas aldrig om den ryms: chatten får bara säga ett tal ur ett dokument som ett ordagrant citat av en hel mening.
+- **Rutten `/nav2/kunskap`:** lägg till (skriven text eller fil), ändra, ta bort, stryk en sökning ur listan. Bara
+  admin och uppåt (`farSkotaKunskap`). Av en fil sparas bara texten: PDF läses med `pdfText`, .txt och .md som de
+  är, högst 3 MB. Word läses inte (kräver ett nytt paket). Varje skrivning bokförs i `audit_log`
+  (`kunskap.added`, `kunskap.changed`, `kunskap.removed`).
+- **Inställningar → Kunskapsbas** (blocket `KUNSKAPSBASEN (prefix kun)` i `utkast.html`): en egen flik för den som
+  sköter företagets inställningar. Ladda upp flera filer (en rad per fil säger hur det gick), skriv eller klistra
+  in, ändra, ta bort, och listan "Det chatten inte hittade". Allt går att ångra: Ångra efter Ta bort lägger
+  tillbaka dokumentet, efter Spara sätter den tillbaka den förra texten. Datan hämtas först när fliken öppnas.
+- **Chatten** (`kallor.ts`): `sok_kunskap` söker i kunskapsbasen först och fyller på med publicerade rutiner.
+  Varje dokument i svaret säger var det ligger, och källraden skiljer "företagets kunskapsbas" från "företagets
+  rutiner". Sökningar utan svar går till `kunskap_miss` i stället för Rutiners lista. Verktygslistan och
+  systemtexten är orörda, så avtrycket är kvar (`485de06db391`) och det godkända provet gäller.
+- **Mina val:** en egen flik i stället för en ruta i Administration (listan behöver platsen); admin och uppåt sköter
+  den; filen sparas inte; ingen utkast-status (det som läggs in gäller direkt, som beställaren bad om).
+- **Inte gjort:** utkastet "Sökord: transport" är inte inlagt. Det är min text och inte avstämd mot sökdata, så
+  beställaren laddar upp den själv (`~/nav-produkt/kunskapsbas/sokord-transport.md`). Gamla rader i `kunskap_miss`
+  gallras inte än (raderna har ingen person; taket är 60 per minut).
+- **Prov:** `tests/kunskap.mjs` (delningen, prövningen, rutten), `tests/kunskap-db.mjs` (0312 i en transaktion som
+  rullas tillbaka: sparning, sökning med svensk stamning, behörighet), två nya kontroller i `chatt-rutt.mjs`.
+- **Avbrottet samma kväll:** strax efter att 0312 kördes (16.52) och flera databasprov gick i rad, samtidigt som
+  Mötens session körde sina, svarade REST-lagret 503 `PGRST002` i ungefär en timme. Schemaläsningen fastnade på
+  `pg_timezone_names` (150 s mot rollens gräns på 8 s): Nano har inte minne nog att hålla katalogen varm. Ingen
+  inställning ändrades av oss; REST kom tillbaka och sviten kördes först därefter. Lärdom: mät att `select 1` och
+  REST är snabba före migration och prov, och kör inte två sessioners prov samtidigt.
+
+## 2026-11-16 · AI-assistenten, fas 1: affärerna, kunskapsbasen och Godkänn-kortet (INTE pushat, provet INTE kört)
+
+Beställaren gav uppdraget "gör Navs AI-assistent allomfattande och säljbar" och bad om en PRD med faser.
+PRD:n ligger i `docs/superpowers/specs/2026-11-16-ai-assistent-design.md`. Tre riktiga frågor visade felet:
+sökord för transport, "hur får jag in 100 000 kr i veckan" och samma fråga om en anställd. Chatten saknade
+data, kunskap och förmågan att göra något.
+
+**Besluten (beställaren):** kravet "svar inom 3 sekunder" är struket. Chatten utför handlingar, men bara efter
+Godkänn, en sak per tryck. En affär är ett bolag på väg mot en order, ordnad efter steg, sedan nästa stegs dag,
+sedan belopp. Ingen procent per steg förrän den går att räkna. En summa står aldrig ensam.
+
+**Det som byggdes, och varför så litet:**
+- `las_affarer` läser samma kort som tavlan i Möten (`byggMoten`, som den inloggade, RLS). Ingen ny fråga mot
+  databasen och inget nytt sätt att räkna. Verktyget ordnar, summerar och räknar hur långt beloppen räcker mot
+  ett belopp personen nämner (`mal_kr`), eftersom Claude aldrig räknar. Kretsen prövas som för måtten.
+- `sok_kunskap` söker i Rutiners dokument (`document`, publicerade, RLS avgör målgruppen). Kunskapsbasen är
+  alltså Rutiner: redigerare, versioner och sökning fanns redan. En sökning utan fullträff skrivs i
+  `document_search_miss`, listan redaktören redan ser i Rutiner. Ingen migration.
+- Godkänn-kortet (`Handlingskort`): `forbered_uppgifter` (åt sig själv eller sitt lag) och
+  `forbered_uppfoljning` (ny dag för när kunden ska kontaktas). Verktyget bygger ett kort med stegen.
+  Webbläsaren skickar stegen till Navs vanliga rutter (`/nav2/uppgifter`, `/nav2/moten`) som den inloggade,
+  först vid Godkänn. Chattens rutt skriver fortfarande bara sin egen logg. Ångra byggs av ruttens svar
+  (`$id`, `$uppfoljning_andrad`). Går det inte att ångra säger kortet det före Godkänn.
+- Systemtexten: första meningen svarar, kort svar, nästa steg sist, aldrig bara "det kan jag inte" (utom för
+  behörighet), fråga i stället för att gissa. Ordet säljbolag är borta. Källraden räknas av servern
+  (`kallaFor`): Navs tal, kunskapsbasen med dokumentens rubriker, eller ingetdera.
+- Uppgiftsrutten tar `till` (mottagaren) vid `skapa`. Samma sak gick redan med `@namn` i snabbraden.
+
+**Provat:** `tests/chatt-rutt.mjs` (affärerna, kunskapsbasen, korten, behörigheten), `tests/nav2-hemvy.mjs`
+(kortet i gränssnittet: Godkänn, Avbryt, Ångra, ett steg som faller), `tests/chattforma.mjs`, `npx tsc --noEmit`.
+Sökfrågan är provad mot produktionen (bara antal): den går, och tål konstiga tecken.
+
+**Provet av modellen är kört 2026-11-16, efter beställarens ja ("kör det men försök att cacha, bryt ner det").**
+Sonnet 5.5, avtryck `485de06db391`, 50 frågor (20 nya, 15 om behörighet och lurförsök), tre varv var:
+50 av 50 rätt i alla varv, 0 tal utan källa, 19 av 150 svar omskrivna en gång, 12,38 kr (0,083 kr per körning,
+92 % av intoken ur cachen). Raden ligger i `nav_chatt_prov`, EJ godkänd: en människa godkänner den. Till dess
+svarar chatten i previewn "inte påslagen".
+
+Så hölls kostnaden nere (allt tillsammans ungefär 21 kr, mot överslaget 107 kr som räknar utan cache):
+- Cachen var redan på (systemtexten och verktygen, `cache_control` i `samtal.ts`).
+- Nytt: `--bara s31,far-inte-se` i `scripts/chatt-prov.mjs` kör ett delprov (id eller fall). Ett delprov sparas
+  aldrig i `nav_chatt_prov`. De 20 nya frågorna kördes först, ett varv var (2 kr): 18 rätt.
+- Felen rättades och provades om på bara de berörda frågorna innan hela provet kördes en gång.
+
+Det delprovet fällde, och vad som gjordes:
+- t35 (teamledaren frågar om Omars affärer): fixturen gav teamledaren bara sina egna affärer. Fel i fixturen,
+  inte i chatten: RLS i Möten visar lagets. `fixturKallor` följer nu kretsen, med ett eget prov i `chatt-rutt.mjs`
+  (teamledaren ser lagets affärer och inte en säljares utanför laget).
+- k32 ("100 000 kr den här veckan"): beloppet ur frågan skrevs med siffror i första meningen. En mening i
+  systemtexten: beloppet står i `mal.belopp`, hänvisa dit.
+- k32 igen: svaret gav veckans summa (`iVeckan.summa`) och provet krävde hela summan (`summa`). Frågan gäller
+  veckan, så båda är rätt svar. Kravet tar nu ett av flera fält (`falt` får vara en lista). ÄNDRAT KRAV, sagt
+  till beställaren: talet ska fortfarande vara insatt ur rätt anrop med rätt värde.
+- Affärssvaren skrevs om nästan varje gång, för "de två offerterna", "båda" och numrerade listor. Två meningar i
+  systemtexten (skriv antalet som hänvisning eller inte alls, numrera inte listor). Numreringen försvann.
+  "Båda" och "två" kommer fortfarande ibland, och fångas av omskrivningen: 19 av 150 i hela provet. En
+  omskrivning kostar ungefär 0,12 kr och några sekunder.
+
+**Det som brister, sagt rakt:**
+- Produktionen har noll publicerade dokument. Frågan om sökord får svaret "kunskapsbasen har inget" tills
+  någon lägger in ett dokument i Rutiner.
+- Återkomster och samtalsutfall ligger i dialern, som Nav inte kan läsa. Svaret säger det. Fas 2.
+- Orderbelopp, en kollegas kalender och uppgifter, och inställningar är inte med. Fas 2 och 3.
+- `las_affarer` kostar lika mycket som att öppna Möten, en gång per fråga om affärer.
+- Att en handling kom via chatten syns i chattens logg (verktygsanropet), inte i `audit_log`, som bara säger
+  vem som gjorde vad och när.
+
+**Tillägg samma dag, efter beställarens svar.** "Boka en återkomst" och "ändra en inställning" stod i listan
+beställaren godkände och kom inte med. Beställaren: en återkomst går att lägga som en uppgift, och inställningarna
+"ville jag ju ha med", sedan "sätt dem i nästa fas". Gjort: en mening i systemtexten (höra av sig till någon en
+viss dag, eller en påminnelse, förbereds som en uppgift med den dagen) och fråga s50 i provet, som nu har 50
+frågor. Avtrycket blev då `27fbd6f9e46b` (efter provets rättningar `485de06db391`). Inställningarna och återkomsten i dialern står i PRD:ns fas 2.
+Inställningarna föll bort av mitt fel: jag hade inte kartlagt vilka som finns, vem som får ändra dem och hur
+Ångra ska få tillbaka det gamla värdet. Webbsökning: beställaren frågade om AI:n inte kan läsa på webben. Den
+kan (Claudes sökverktyg, 10 dollar per 1 000 sökningar plus inläst text). Förslaget står i PRD:n under beslut
+som väntar. Ett utkast till dokumentet "Sökord: transport" ligger i `~/nav-produkt/kunskapsbas/`, utanför
+repot, för beställaren att läsa och publicera i Rutiner.
+
+## 2026-11-16 · Klickprovet, del 1: menyraden går ihop med fönstrets topp och är byggd som skiss 9
+
+Beställaren såg previewn (126b121): "den går inte ihop med toppen av fönstret". Orsaken var att provremsans höjd satt
+fast i stilen. Provremsan (`.proto`, 34 px) finns bara i utkastet, men rälsen (`top:34px`,
+`height:calc(100vh - 34px)`), den fästa att göra-panelen och kalendern (`.ol`) räknade med den också i den riktiga
+Nav, där remsan är dold. Det gav en glipa på 34 px överst. Höjden är nu en variabel, `--proto-h`, som är 34 px i
+utkastet och 0 i den riktiga Nav (`body.nd-riktig`). Kalenderns höjd i mobilen (`100vh - 34px - 64px`) är lämnad
+som den var och provas i mobilbredd.
+
+Menyraden mättes sedan mot skiss 9 i Chrome, utfälld och smal, och byggdes om efter skissens mått:
+
+- **Utfälld:** märket med undertext, klockan, sökrutan, raderna (vikt 400, den aktiva 550), gruppernas rubriker,
+  prickarna och profilen. Raden Sidopanel har tre lägesrutor, ritade som i skissen.
+- **Smal (Hopfälld, och Hovra innan den fälls ut):** bara ikonerna syns, och tal och rubriker är dolda. Hopfälld
+  behåller knappen Fäll ut. Hovra fäller ut med en skugga. Det finns ingen inre rörelse, eftersom `renderRail` byter
+  DOM.
+
+Två mindre fynd rättades samtidigt. Min dag skrev "om 12.4 min" när klockan hade sekunder; nu står hela minuter.
+Arkens huvudrad är nu som skissen (ikonen 28 px, rubriken, Stäng esc utan ram).
+
+Efter pushen (c209c86) såg beställaren en grön ring inne i skrivrutan när man skrev ("ta bort den, gör den så att det är
+en hel fri ruta"). Rutans egen `outline:0` (tyngd 0,1,1) förlorade mot hemvyns allmänna fokusregel
+`.hv :is(…,[tabindex]):focus-visible` (0,3,0). I skiss 9 vinner rutans regel. Nu har textfältet en egen regel,
+`.hv .hv-skriv textarea:focus-visible{outline:0}`, och knapparna behåller sin ring.
+
+Previewen var seg (beställaren: "det är bara vitt"). Servern skickar sidans skal på 0,4 s och datan (`ndData`) efter
+12–25 s, mot cirka 5 s i produktionen. Orsaken: `NAV2_PG_URL` finns bara i Production och Preview (nav2-utkast), så
+grenens preview kör alla frågor via PostgREST, på en Nano som swappar (408 MB, 673 MB swap använd).
+
+**Lägg inte `NAV2_PG_URL` på en preview.** Den lades in för Preview (hemvy-chatt) med beställarens ja och togs bort
+efter åtta minuter. Varje serverinstans öppnar upp till 10 anslutningar (`NAV2_PG_ANSLUTNINGAR`) i poolerns sessionsläge.
+Poolens tak på Nano ligger kring 15 (16 `nav2_pg` sågs, alla overksamma). Previewens vilande instanser höll platserna,
+och produktionen fick köa: sidan tog 31–34 s klockan 11.08–11.14 i stället för 4,5 s. Previewens egen laddning tog
+91 s (1 495 s sammanlagd väntan på en plats, 124 frågor till REST, 5 fel). Previewen byggdes om utan nyckeln
+klockan 11.12, och produktionen var tillbaka på 4,5 s klockan 11.15 (448 frågor i pg, 0 till REST).
+
+Två fynd är kvar. Grenens data räknar 2,4–6,0 s CPU mot 0,8 s på main, och det måste ner före main. Produktionens
+pg-väg tål bara ungefär en instans i taget: två samtidiga instanser köar. Det kan vara vad som gav 504 klockan 08.05.
+
+I `tests/nav2-hemvy.mjs` finns fem nya avsnitt, och vart och ett föll först. Stilen lades in i previewen för hand och
+mättes mot skissen pixel för pixel före pushen. Kvar av klickprovet: Veckan (veckodagen står två gånger, och möten
+som börjar samtidigt ritas ovanpå varandra), Möten, Min statistik, Mer, mörk ton och mobilbredd.
+
+## 2026-11-16 · Hemvyn: byggd exakt som skiss 9, chatten och förslagen påslagna, på grenen `hemvy-chatt`
+
+Beställaren gick igenom 42 skillnader mellan previewn och skiss 9 och beslutade om varje (se planen
+`docs/superpowers/plans/2026-11-15-hemvyn-som-skiss-9.md`, avsnittet "Beställarens svar"). Byggt i 16 uppgifter,
+varje med ett prov som föll först (`tests/nav2-hemvy.mjs` avsnitten "Skiss 9 exakt", nya `tests/hemdag.mjs` och
+`tests/kedja.mjs`, utökade `hemtext`, `forslagforma`, `chattforma`):
+
+- **Tonen** följer Inställningar för hela Nav; hemvyns egen tonknapp är borta.
+- **Överraden:** "på plats" ritas alltid (hela laget ur `chef.lag`, också på en söndag: dagsbilden listar bara
+  avvikelser), och Stämpla in syns när stämplingen är på, också för en stämpelfri roll.
+- **Korten:** som skissen. Nav föreslår har `kort {tal, vad, text, knapp}` från servern (`textKortForslag`);
+  talet är 1 (ett obekräftat möte), aldrig ett påhittat belopp. Det som ändrats har `andratKort` (följs, nästa dom,
+  den bästa ändringens tal ur `matt.kort`).
+- **Fönstret** är fast (`100dvh`), arken och tråden rullar inuti, och varje genväg läggs till i en tråd under den
+  förra, som skissen. Escape går hem när rutan är tom.
+- **Min dag:** `hvPlaneraDag` lägger uppgifterna (med `estimate_minutes`) i luckorna mellan mötena inom schemat
+  (`work_schedule`) och rasten (`scheduled_break`, ny `hemdag.ts`); Boka tiden i kalendern sätter uppgiftens tid,
+  med Ångra.
+- **Veckan:** fem dagkolumner; i dag öppnar Min dag, de andra kalendern.
+- **Teamet:** per person kedjan samtal · svar · bokade · hållna · order (`kedja.ts`: färg när ett led ligger
+  utanför personens eget spann två veckor i rad), eget mål ur `sales_target`, orsak bara när den går att visa, och
+  "Varför vet jag inte." annars. Svar-ledet står alltid som "ser jag inte" (F1). Facit "Takten sa / Det blev" och
+  "Till målet" med decimalkomma. Samtalen läses sida för sida (`phone_call`, 70 dagar).
+- **Skrivrutan:** Bifoga skickar bilder och PDF till Claude (`bilageBlock`; högst 3 filer och 3 MB, under Vercels
+  4,5 MB; reservationen räknar med bilagorna, loggen skriver bara antal och sort), Tala med webbläsarens taligenkänning,
+  tipset fyller i en fråga. AI-upplysningen står i rutans title. Avtrycket ändrades inte (`dd3097dba5f0`).
+- **Mer:** Golvet, Teamet i månaden och Coachning öppnas i chattrutan (F2). Statistik väntar: den ska bli en
+  dashboard i chattrutan.
+- **Menyraden** med skissens mått för hela Nav; profilen längst ned på nya hemmet.
+- **Mobilen** som Claude: skrivrutan fast nere i full bredd med säker kant, genvägarna i en svepbar rad (Mer fälls ut
+  i raden), korten två och två och mycket mindre (F6), Veckan som en lista per dag, Navs flikrad dold på hemmet och
+  en menyknapp uppe till vänster som öppnar Navs meny.
+
+Slutgranskningen (egen, utan underagenter) rättade två saker: chefens hem läste 11 578 samtal i tolv sidor i följd
+(0,9–2,3 s), nu vecka för vecka samtidigt (`veckofonster`, 0,5–0,7 s); och `tests/chatt-rutt.mjs` föll strax efter
+midnatt en måndag, för att provet räknade veckan i UTC och rutten i svensk tid (felet fanns redan på basen).
+`tests/chatt-db.mjs` nollställer nu `chatt.pa` och godkända prov i sin transaktion, så att provet går också när
+chatten är på. `Connection terminated unexpectedly` i provet under natten berodde inte på databasen. Datorn sov
+med locket stängt (`pmset -g log`), och poolern stängde den tysta anslutningen. Det gav 25 gröna körningar av 25 när
+datorn var vaken. Kör `npm test` med `caffeinate -i` och locket öppet.
+
+**Påslaget med beställarens ja:** Sonnet-provet godkänt (Zen), `chatt.avtal`, `chatt.pa`, `forslag.pa`.
+Förslagsjobbet kördes för hand en gång (F4): 1 förslag, nattjobbet 0 fel. Main läser inga av nycklarna.
+Kvar: klickprovet i Chrome mot previewn, chattprovet före main (F5), sedan `hem.nytt` bort.
+
+## 2026-11-15 · Hemvyn: rättad efter beställarens skärmbild, som skiss 9
+
+Beställaren såg previewen (eb30d54) och skrev "jätte buggit". Chrome-tillägget nådde inte sessionen
+(kopplingen startar Claude Code 2.1.322, VS Code kör 2.1.325), så skiss 9 fotades i Chrome utan fönster
+och jämfördes med skärmbilden. Rättat:
+
+- Genvägarna låg under skrivrutan när sidan var högre än skärmen. De står nu i samma grupp som rutan (`.hv-botten`).
+- Nästa att göra stod utfälld över skrivrutan. I det nya hemmet är den ihopfälld med en ring, som i skissen
+  (`pillHv`, `S.hvPillUt`). Utfälld lyfts den över rutan.
+- Teamet: rubriken bröts på två rader och texten var ett helt stycke. Nu "dag 10 av 21" och skissens rad
+  "I samma takt blir det ungefär 40. I oktober sa takten 38, det blev 44." (`textTaktKort`). En månad räknad i
+  efterhand sägs "hade takten sagt". Uträkningen och alla månader står i genomgången.
+- Väntar på dig: tre rader (det som brinner och det senare i dag), foten "N till som kan vänta".
+- Överraden fick veckonumret, hälsningen Lyssna (det gamla hemmets uppläsning).
+- Genvägarna som i skissen: Förbered (bara när chatten är på), Min dag, Veckan som kommer, Möten, Min statistik
+  (chefen, Mötens statistik), Mer (Golvet, Coachning, Personalen, Nyheter).
+- Inte som i skissen, med flit: skrivrutans text säger att svaren kommer ur sökrutan så länge chatten är av,
+  och knapparna Bifoga och Tala finns inte (de gör ingenting än). Tonknappen i överraden är kvar.
+
+Klickprovet i Chrome återstår. `hem.nytt` står fortfarande på Zen i produktionen för det provet.
+
+## 2026-11-15 · Chatten: provet av modellerna och rättelserna efter det (0307), på grenen `hemvy-chatt`
+
+- **Provet kört fyra gånger** (beställarens ja, "kör bara på haiku och sonnet"), 30 frågor × 3 varv mot fixturen i
+  `tests/chatt-fragor.json`, aldrig mot produktionen. Ungefär 30 kr av godkända 67 kr.
+  - Körning 1: Sonnet 9/30, Haiku 11/30. Felen låg mest i märkningen och rättningen, inte i svaren.
+  - Körning 2: båda 23/30.
+  - Körning 3 (avtryck `9209e03ec16a`): Sonnet 30/30, 0 obelagda; Haiku 27/30.
+  - Körning 4, slutkoden (avtryck `dd3097dba5f0`, effort `low`): Sonnet 28/30 (efter en rättad rättning, se nedan),
+    0 allvarliga fel, 6,00 kr, 90 % cachat, 11 av 90 svar omskrivna, reservmodellen 0 gånger. Haiku 26/30, 0,37 kr,
+    1 allvarligt fel: "Jag har förberett ett utkast" utan att ha anropat `forbered_uppgifter`.
+- **Beslut:** Sonnet 5.5, effort `low`, kravet delat (allvarliga fel = 0, tal utan källa märkta och mätta). Haiku
+  används inte, och dess lucka (påstått utkast) stängs därför inte i koden. Raderna i `nav_chatt_prov` är INTE
+  godkända.
+- **Sonnets två missar i körning 4** (s08 och s12, varv 2): Claude räknade punkter i sin egen lista ("Det är tre order
+  som ger provision", "båda är försenade"). Märkningen fångade båda även efter omskrivningen, så inget tal utan källa
+  visades omärkt.
+- **Rättningen rättad, öppet:** t24 och s25 föll på "Jag kan inte ge dig någon andel … det finns inget att räkna
+  andelen på", som är ett rätt svar. Mönstret i `sager` vidgades efter att resultatet setts, och svaren rättades om
+  gratis med `--omratta`. Inget annat i rättningen ändrades efter körningen.
+- **Rättat i koden mellan körningarna** (`e55993e`, `ce823e0`, `f8befda`, `3acc5e1`, granskat med Fable 5.2):
+  datumspann är datum; citat ur datan räknas bara när det är ett helt fält eller en hel mening; mängdord är tal;
+  nekande före ett påstående räknas i rättningen; ett svar med tal utan källa skrivs om en gång (`OMSKRIV`);
+  utkastets antal går att hänvisa till; "laget" är hela företaget för chefen; små antal står i systemtexten;
+  avtrycket täcker omskrivning, effort och märkregler; `omskrivet` loggas (0307 KÖRD); provet kan spara svar
+  (`--spara`) och rätta om dem utan kostnad (`--omratta`).
+- **Prov:** `chattforma`, `chatt-rutt`, tsc (bara det gamla felet Pling.tsx/pling.ts), och hela `npm test` före push.
+- **Main inmergad i grenen** (Mötens statistik, `112f8ce`). Krockarna (package.json, moten.ts, motesstatforma.ts,
+  navnyheter, docs) löstes genom att båda sidor behölls.
+- **`test:handelselogg` grönt igen:** triggern från 0303 skriver action `installning` utan punkt. Den står nu i
+  `MODUL` ("Inställning") och klassas som en ändring (`typFor`), med prov i `tests/handelselogg.mjs`.
+- **Misstag rättat före push:** `21640f4` fick med worktreens symlänk `node_modules` (`.gitignore` hade
+  `node_modules/`, som inte matchar en länk). När grenen checkades ut ersatte länken paketen i `~/nav-hemvy`. Länken
+  är borttagen ur grenen, `.gitignore` säger nu `node_modules`, och `npm ci` är kört igen.
+
+## 2026-11-15 · Chatten: slutgranskningens tre små fel rättade (0306), på grenen `hemvy-chatt`
+
+Beställaren: "lägg en plan för att fixa allt detta", sedan "kör". Inget slogs på.
+
+- **Tal utan källa som inte märktes.** `TALORD` kände bara igen ett ord i taget, så "tvåhundra" och "femtiotusen"
+  slank igenom. Nu byggs ordet av taldelar från början till slut (`TALDEL`, längre delar först, "ettusen" med ett
+  t). "en" och "ett" ensamma är fortfarande artiklar. Veckoregeln slukade "vecka 46, 12 möten" som två veckor;
+  kommat är borta ur den, "veckorna 45 och 46" och "vecka 47–48" går fortfarande. "15/11" och "09.00" utan "kl."
+  märks i onödan, och det får stå: att släppa dem kunde släppa "3/4".
+- **Reservmodellen.** Anthropics typer (`BetaFallbackMessageIterationUsage`) och dokumentation: toppens `usage`
+  gäller bara sista försöket, `usage.iterations` har varje försök med sin modell. `forsok()` läser ut dem och
+  `kostnadUsd()` summerar varje försök till sin modells pris. Reservmodellerna (Opus 5, Opus 4.8) kostar 5/25
+  dollar per miljon, dyrare än Opus 5.5 (4/20), så den gamla regeln "okänd = Opus 5.5" underskattade. Nu är
+  okänd = det dyraste Nav känner (5/25), modellnamn med datum på slutet känns igen, och Haiku räknas 0,50/2,50 över
+  100 000 token. `efterReserv()` tar bort tänkande och verktygsanrop före sista `fallback`-blocket innan turen
+  skickas tillbaka (annars 400), och bara verktygen efter bytet körs. Loggen fick `reserv` (0306).
+- **120 sekunder.** Värsta fallet var sex varv à 60 s och två försök. Nu har hela frågan en frist på 100 s
+  (`FRIST_MS`): varje anrop får en `AbortSignal` som löper ut vid fristen (också mellan SDK:ns omförsök), varje
+  verktyg tävlar mot samma klocka, och ett nytt varv startar inte efter fristen. Avbröts ett anrop vet ingen vad
+  det kostade, så raden behåller reservationen (`loggKostnadUsd`).
+- **Prov:** `chattforma` (märkningen, försöken, priserna, reservturen) och `chatt-rutt` (bytet mitt i en fråga,
+  klockan). De nya ruttproven föll alla sex på den gamla slingan innan rättelsen.
+
+## 2026-11-15 · Hemvyn, steg 3: chatten med Claude, byggd och avstängd (0304, 0305), på grenen `hemvy-chatt`
+
+**Vad:** skrivrutan i det nya hemmet kan fråga Claude. Claude läser färdiga mått med sex verktyg och skriver
+texten. Talen sätter servern in. Ingenting är påslaget, och rutten har aldrig pratat med Claude på riktigt.
+
+**Varför så här:**
+
+- **Claude skriver aldrig ett tal.** Den hänvisar till ett fält i ett verktygssvar (`{{t:1.antal}}`), och
+  `sattInTal` sätter in värdet med källa. En siffra utan hänvisning märks ut och räknas i loggen. Då kan ett
+  tal inte hamna hos fel person eller fel period utan att det syns. Svaret skickas därför i ett stycke och inte
+  tecken för tecken: en halv hänvisning ska aldrig synas.
+- **Behörigheten sitter i verktygen, inte i systemtexten.** Varje verktyg går med den inloggades krets
+  (`mote_statkrets()`). Verktygslistan är densamma för alla, så att alla delar samma cache.
+- **Claude gör ingenting.** Fem verktyg läser. Det sjätte förbereder ett utkast till uppgifter, och personen
+  trycker själv på Lägg i min dag (den vanliga rutten för uppgifter).
+- **Spärren sitter i databasen.** Triggern `nav_chatt_sparr` nekar `chatt.pa` utan bekräftat avtal och ett
+  godkänt prov för modellen. Rutten prövar samma sak vid varje fråga, och dessutom att provet gäller den
+  systemtext och de verktyg som körs nu (avtrycket), och att personen har det nya hemmet (`hem.nytt`).
+- **Gränserna för kostnaden (0305, beställaren 2026-11-15)** räknas i dollar ur loggens token och modellens
+  pris: per person och för företaget, varje kalendermånad, per miljö. De är data i `nav_chatt_tak` (en rad per
+  installation, standard 10 och 50 dollar), inte inställningar. 0304 hade ett tak i kronor och frågor per dag;
+  det är ersatt. "Per företag" blev en rad per installation: ingen anställd har ett `company_id`, så det finns
+  inget att dela upp på.
+- **En fråga reserverar sin högsta kostnad innan Claude anropas** (`nav_chatt_reservera`): gränserna prövas och
+  loggraden skrivs i samma steg, under ett lås, och raden rättas till den verkliga kostnaden när svaret är
+  klart. Två skäl, båda ur granskningen: femtio frågor samtidigt kunde annars alla läsa samma förbrukning och
+  gå igenom, och en fråga vars flik stängdes skrev aldrig sin rad och kostade då ingenting mot gränsen. Det
+  mesta en fråga kan kosta räknas som sex varv fulla uttoken, till den dyraste modellens pris när en
+  reservmodell kan ta över (0,24 dollar). Intoken är inte med i det påslaget.
+- **Samma slinga i rutten och i provet** (`samtal.ts`), så att det provet godkänner är det som körs.
+- **Provet kör mot en påhittad fixtur**, aldrig mot produktionen. Det kända svaret är inte skrivet för hand:
+  rättningen kör verktyget på fixturen och jämför med det modellen hänvisade till.
+
+**Beslut som avviker från eller lägger till designdokumentet:**
+
+- `las_vantar` läser palettens tre svar (besluta, kvittera, försenat). Kortets lista byggs i webbläsaren och
+  finns inte på servern. Verktyget bär därför raderna men inget antal (palettens listor är kapade vid sex), och
+  säger att antalet står på kortet. Av samma skäl bär `las_forslag` inget antal för det som ändrats.
+- `las_dag` räknar bokade tider (möte, 1:1, leverans, coachning) som personen inte tackat nej till. Frister,
+  ledighet och avbrutna uppgifter räknas inte, och klara uppgifter äldre än 14 dagar sägs inte som ett antal.
+- Källraden bakom ett tal väljs efter fältet: motviktens tal bär motviktens förklaring.
+- Ett utkast som Claude själv skrivit går inte att hänvisa till som källa (`_egnaOrd`): annars kunde ett
+  påhittat tal bli belagt genom det.
+- Order läses bara per månad. Veckofrågor om order får svaret att de räknas per månad.
+- Samtalet minns högst tre utbyten, och talen i gamla svar byts mot `[tal]` innan de skickas tillbaka.
+- Ny inställning `chatt.avtal` (bekräftat biträdesavtal), som både triggern och rutten kräver.
+- Chattens inställningar har ingen ruta att ändra i. Inställningar visar läget, vad som saknas, gränserna och
+  månadens förbrukning per person (superadmin). Var och en ser sin egen andel i procent under skrivrutan.
+- Källorna bakom verktygen (`kallor.ts`) är tunna anrop till befintliga byggfunktioner. De är typkontrollerade
+  men inte körda: i ruttprovet är de utbytta. Första riktiga körningen blir när chatten provas i previewn.
+
+**Inte gjort:** provet av modellerna (väntar på beställarens ja), klickprovet, och raden i Navnyheter (skrivs
+när chatten slås på). Provkörningen skriver inga loggrader och räknas inte mot gränserna.
+
+**Kvar från granskningen (små):** rutten litar på att reservmodellens svar går att lägga tillbaka oförändrat
+(kontrolleras i första riktiga körningen, liksom hur `model` ser ut i svaret), och märkningen av obelagda tal
+missar sammansatta talord ("tvåhundra") och märker vissa datumformer ("15/11") i onödan.
+
+**Prov:** `chattforma`, `chatt-rutt`, `chatt-db`, `nav2-hemvy` (avsnittet Chatten i skrivrutan).
+
+## 2026-11-15 · Hemvyn, steg 2: det nya hemmet i utkastet, på grenen `hemvy-chatt`
+
+Fortsättning på steg 1 här under. Ingen migration. Inget är påslaget: ingen ser det nya hemmet förrän någon står i
+`hem.nytt`.
+
+- **Hemmets data** (`hem.ts`, `hem-team.ts`, `hemforma.ts`): `byggHem` läser inställningarna en gång och hämtar
+  förslagen och lagets månad bara för den som har nya hemmet. För alla andra tillkommer en läsning. Teamet i månaden
+  är nettoorder mot summan av säljarnas mål, takten som en uträkning och taktens eget facit vid samma antal gångna
+  arbetsdagar. Genomgången (`las=team`) har en rad per person med antal, ingen dom.
+- **Det nya hemmet** (`utkast.html`, prefix `hv`): ett glasfönster kant i kant, mörkt eller ljust, med överraden
+  (på plats, datum, Stämpla in), hälsningen, fyra kort och skrivrutan. Ett öppnat kort tar ytan, genomgången hämtas
+  när kortet öppnas, och kvittot med Ångra står i ytans fot. `render()` väljer: det gamla hemmets funktioner är inte
+  ändrade.
+- **Första kedjan i gränssnittet:** förslaget med Navs tre rader (servern skickar dem färdiga), tre lika val, Flytta
+  öppnar Mötens vanliga flytta, personens egen rad, och domen dagen efter i Det som ändrats.
+- **Det som ändrats:** servern skickar åt vilket håll det gick, om raden är stängd, vem den gäller och trendregelns
+  rad. Kortet gissar ingenting. En ändring utan slutdom visar nattens senaste mätning.
+- **Din månad:** det stora talet är det motorn redan har räknat. Väntande order står som antal i kortet och med
+  ungefärligt belopp först i uträkningen. "Fråga om raden" går till kön för fel (`flagga` med `var: "manad"`) och
+  raden göms aldrig.
+- **Inställningarna:** rutan Nya hemmet i Inställningar, Administration. Brytarna (vilka som har hemmet, och om Nav
+  skapar förslag) och gränserna för Navs domar är bara för superadmin. Admin-nivån ändrar klockslaget för
+  obekräftade möten. Den som blir dömd ska inte kunna flytta ribban för sin egen dom.
+- **Det gamla hemmets saker** (`docs/hemvy-gamla-hemmet.md`): allt har en plats. Tre fick byggas, eftersom de bara
+  fanns på det gamla hemmet: hela listan bakom Väntar på dig (Sedan du tittade, Lyssna, källan, Stämmer inte, Visa
+  inte här, pricken nytt sedan sist, tangenterna J K E Enter), genvägen **Veckan** (nästa arbetsdag, veckan, dagens
+  slut, kvällsnotisen) och genvägen **Golvet** (dagens order och Grattis).
+- **Varför Golvet fick en genväg** trots att beställaren bestämt att Golvet bor på Säljtavlan: tavlan går inte att
+  gratulera på. Utan genvägen hade Grattis försvunnit för den som har nya hemmet. Den är en knapp som går att ta bort.
+- **Misstag på vägen:** kortet Det som ändrats skrev "hos dig" på en inställning som gäller hela företaget. Servern
+  skickar nu vem raden gäller (`galler`). Kvällsnotisens förhandsvisning ritades först under fönstret, där klicket
+  inte ledde någonstans; den bor nu i Veckan.
+- **Rådgivarens genomgång av steg 2** hittade åtta saker. Alla är rättade, var och en med ett prov som föll först:
+  1. *Klicken svaldes.* Fönstrets rot bar `data-hvton`, som klicklyssnaren lyssnar efter. Varje klick utan egen
+     väljare (Min dag, Stämpla in, Lyssna, Skicka, Öppna kalendern) fångades av roten. Tonen står nu i
+     `data-hvtema`, och provet läser väljarlistan ur koden och nekar varje annat element än en knapp att bära den.
+  2. *En efterhämtning kastade ett annat arks svar.* Varje ark har nu sin egen hämtning (`hvHamta`), ett fel
+     visas bara i arket det hör till, och ett ark som lämnats hämtas inte om. Kvittot kommer då som en rad med Ångra.
+  3. *Ett Escape stängde både paletten och arket under.* `hvTangent` lyssnar före Navs vanliga lyssnare och gör
+     ingenting när paletten, en panel, Att göra, klockan eller Inställningar är öppet.
+  4. *"De slås på i Inställningar"* visades för den som inte har brytaren. Nu står bara att förslagen är avstängda.
+  5. *En teamledare kunde ändra gränserna för Navs domar,* också för sitt eget lag. Gränserna är nu superadmins.
+  6. *Din månad kunde visa utkastets exempeltal* när provisionens data saknas. Nu står "Provisionen går inte att
+     läsa just nu." och inga tal, som det gamla hemmet som döljer kortet.
+  7. *Tysta tak på tusen rader.* REST-lagret kapar ett svar vid 1000 rader utan att säga det, och `.limit(5000)`
+     hjälper inte. Lagets order och möten, månadens order i nattjobbet och alla dömda förslag läses nu sida för sida
+     (`lasSidvis`). Produktionen har 35 order och 32 möten (2026-11-15), så inget tal har varit fel. Provens
+     attrapper kapar nu vid 1000 som REST-lagret, så att samma misstag faller nästa gång.
+  8. *Formuläret Berätta om en ändring listade alla kollegor,* fast servern nekar den som står utanför kretsen.
+     `las=andrat` skickar nu kretsen, och formuläret listar bara den.
+- **Inte rättat här:** `moten-jobb.ts` har fyra läsningar med `.limit(5000)` som fanns före grenen. De har samma
+  tysta tak. De rörs inte i den här ändringen.
+
+---
+
+## 2026-11-15 · Hemvyn, steg 1: underlaget (0303), på grenen `hemvy-chatt`
+
+Beställaren godkände designdokumentet v3 ("Bygg allting … gör det 100% nu", provet av Claude-modellerna väntar).
+Spec: `docs/superpowers/specs/2026-11-15-hemvyn-kort-chatt-design.md`. Plan:
+`docs/superpowers/plans/2026-11-15-hemvyn-kort-chatt.md`. Steg 1 är allt som måste finnas innan någon ser något.
+
+- **Reglerna är rena och prövade var för sig** (`src/lib/nav2/`): `statistik.ts` (Fishers exakta prov, "tidigast
+  vid"), `takt.ts` (takten och dess eget facit vid samma dag), `matt.ts` (måttregistret, med motvikt och version),
+  `forslagforma.ts` (när ett obekräftat möte blir ett förslag, läget, facit per val, domen över en ändring,
+  trendregeln, inställningarna), `hemtext.ts` (alla texter: mallar, aldrig AI).
+- **0303, KÖRD:** `nav_forslag` och `nav_forslag_handelse` tar bara emot nya rader (trigger; provrader går att ta
+  bort, och personraderingen når dem). Läget läses ur vyn `nav_forslag_lage`. RLS: personen själv, kretsen enligt
+  `leads_employee`, lagets teamledare, och säljchef, vd och admin. Ett val per förslag tvingas i databasen
+  (`nav_forslag_valj` låser raden). `nav_facit_dom` och `nav_takt_dag` sparar vad Nav sa. En trigger på
+  `nav_setting` skriver gammalt och nytt värde i händelseloggen. `mote_kedja` får `offert_belopp` och
+  `offert_paket`. `mote_bekrafta_overta` lämnar över bekräftelseuppgiften till den som håller mötet.
+- **Rutten `/nav2/forslag`:** välj, ångra, personens egen rad, Berätta om en ändring, Pröva med laget och
+  inställningarna. Flytta mötet sparas av Mötens rutt när flytten är gjord.
+- **Jobben** (`forslag-jobb.ts`): ett steg i mötesjobbet och ett i nattjobbet. **Så länge `forslag.pa` är av skriver
+  de ingenting**, de räknar och svarar i kvittot. Granskningsfokus 6 kom ur rådgivarens sjätte varv: rättas ett
+  utfall efter domen skrivs en ny dom, och den gamla står kvar.
+- **Det enda användaren ser i steg 1:** fältet Belopp i rutan Offert skickad, beloppet på kortet och raden om
+  väntande offerter i statistiken.
+- **Varför så här:** en logg som inte går att skriva om är det som gör Navs facit värt något. Därför är Ångra en
+  egen rad, "ingen valde" och "låt stå" följs som de andra valen, och det Nav trodde skrivs på raden innan någon
+  väljer. Inget slås på av bygget: `forslag.pa`, `hem.nytt` och `chatt.pa` står av tills beställaren säger till.
+- **Misstag på vägen:** databasprovet skickade mötets tid genom JavaScript (millisekunder) till
+  `mote_uppgift_skapa`, som jämför mot mikrosekunder och svarade null. Provet använder hela sekunder.
+
+---
+
 
 ## 2026-11-16 · Möten: vem som höll mötet, utfallet och uppföljningar (0313)
 

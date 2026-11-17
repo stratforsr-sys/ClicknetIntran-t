@@ -78,6 +78,53 @@ har du redan sagt ja.`,
     href: "/moten",
   },
   {
+    slug: "nya-hemmet-fyra-kort",
+    rubrik: "Nya hemmet: fyra kort, Nav föreslår och en chatt",
+    ingress: "Ett nytt hem är byggt. Det är avstängt för alla och slås på per person i Inställningar, så att ni kan prova det själva först.",
+    text: `**Slå på det** i **Inställningar**, under **Administration**, i rutan **Nya hemmet**. Välj vilka som ska ha det,
+eller alla. Ingen annan märker något, och det gamla hemmet finns kvar tills ni säger till.
+
+Det nya hemmet har fyra kort:
+
+- **Väntar på dig.** Det som brinner först. Klicka för hela listan, med ungefär hur lång tid det tar när uppgifterna
+  har en tid.
+- **Nav föreslår.** Ett första möte som är obekräftat sin sista dag blir ett förslag till den som håller mötet.
+  Dagen efter mötet säger Nav hur det gick.
+- **Teamet i månaden** för den som leder ett lag, och **Din månad** för säljaren. Klicka för varje person mot sitt
+  eget mål, kedjan från samtal till order och orsaken när den går att visa. Det Nav inte ser står utskrivet.
+- **Det som ändrats.** Berätta om en ändring, så följer Nav måttet och säger om det blev bättre, sämre eller om det
+  är för tidigt att säga.
+
+Under korten finns **Min dag** (dagen som en tidslinje, som går att boka i kalendern), **Veckan som kommer**,
+**Möten** och **Mer** (Golvet, Teamet och Coachning). Allt öppnas i samma fönster, och **← Hem** tar dig tillbaka.
+
+**Skrivrutan är en chatt med AI** (Claude) när den är påslagen. Den läser bara det du själv får se i Nav, visar var
+varje tal kommer ifrån och gör ingenting utan att du väljer det. Du kan bifoga en bild eller en PDF och prata in
+frågan. Talen i korten är Navs egna uträkningar, inte AI.
+
+I telefonen ligger skrivrutan längst ned, genvägarna går att svepa och menyn finns uppe till vänster.
+
+Nav ringer eller skriver aldrig till en kund, och gör inget utan att någon har valt det.`,
+    datum: "2026-11-15",
+    roller: ["ceo", "admin"],
+    href: "/nav2",
+  },
+  {
+    slug: "moten-offertens-belopp",
+    rubrik: "Offerten får ett belopp",
+    ingress: "När du sätter Offert skickad på ett möte skriver du nu vad offerten är på. Då syns det hur mycket som ligger ute hos kunderna.",
+    text: `I **Möten**, när ett möte har hållits och du väljer **Offert skickad**, finns ett nytt fält: **Belopp**, i hela
+kronor. Väljer du ett paket och en bindningstid fylls beloppet i, och du kan skriva över det. Beloppet måste fyllas
+i: en offert har ett pris.
+
+Beloppet står sedan på kortet i Följ upp, bredvid **Offert ute**. Chefer ser i Mötens statistik hur många offerter
+som väntar och vad de är på tillsammans, till exempel *5 offerter väntar, 3 med belopp: 212 000 kr*. Offerter som
+skickades innan fältet fanns saknar belopp och räknas därför bara i antalet.`,
+    datum: "2026-11-15",
+    roller: [],
+    href: "/moten",
+  },
+  {
     slug: "moten-statistik-panel",
     rubrik: "Möten: statistiken går att läsa på några sekunder",
     ingress: "Show rate, no-show rate, svar på bekräftelsen, kvalificerade och closing rate i stora rutor, med det som väntar i dag längst ner.",

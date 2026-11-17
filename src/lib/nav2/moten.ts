@@ -7,7 +7,7 @@ import { lasForegaende } from "@/lib/nav2/motesprovision-server";
 import { dagarBakat, svenskTidpunkt, svenskVeckodag, svensktDatum } from "@/lib/klocka";
 import { lokal } from "./leads";
 import { antalNya } from "./motesanteckning";
-import { arHallare, arKapad, nejSkal, saljarePerKedja, senastAvgjorda, skivor, slaIhopAvgjorda, sorteraAvgjorda, farAndraInstallning, farRattaUtfall, farSeInstallningar, KOLUMNER, MOTE_PLATS, platsTyp, type Kolumn, type Platstyp } from "./motenforma";
+import { arHallare, arKapad, nejSkal, offertPaketVal, saljarePerKedja, senastAvgjorda, skivor, slaIhopAvgjorda, sorteraAvgjorda, farAndraInstallning, farRattaUtfall, farSeInstallningar, KOLUMNER, MOTE_PLATS, platsTyp, type Kolumn, type Platstyp } from "./motenforma";
 import {
   bekraftelseFonster, bradska, fordela, kortFas, lasInstallningar, manadFor, motesVal, PIPE_KOLUMNER, ringIgenTid, skaBekraftas, sorteraFas, sparadeSvar, ursprungligBokare, fyllForegaende,
   type MotenInst, type MotesVal, type PipeKolumn,
@@ -95,7 +95,8 @@ export type NdMoteKort = {
     /** Var mötet hålls (kalenderhändelsens `plats` och `online_url`): telefon, Teams med länk, eller adressen. */
     plats: { typ: Platstyp; text: string; lank: string | null };
   } | null;
-  uppfoljning: { datum: string; text: string | null; offert: boolean; ingetSvar: number; andrad: string | null } | null;
+  /** `offertBelopp`: offertens belopp i hela kronor (0303). Null utan offert, och för äldre offerter som saknar det. */
+  uppfoljning: { datum: string; text: string | null; offert: boolean; offertBelopp: number | null; ingetSvar: number; andrad: string | null } | null;
   historik: { id: string; tid: string; text: string }[];
   /** Anteckningarna på kortet (0310): hur många inlägg, och hur många från andra jag inte sett. Null när de inte gick
    *  att läsa (då visar tavlan ingen markering, och panelen läser tråden själv). */
@@ -166,6 +167,8 @@ export type NdMoten = {
    */
   vecka: { affar: number; nej: number; kedjor: { kedja: string; namn: string; avslut: "affar" | "nej"; nar: string; skal: string | null; saljare: string; order: string | null }[] };
   saljare: { id: string; namn: string }[];
+  /** Rutan Offert skickad (0303): paketen och vad de kostar per bindningstid, så att beloppet kan fyllas i. */
+  offertPaket: ReturnType<typeof offertPaketVal>;
   /** Alla som inte har slutat, att lägga till som kollegor i ett möte. */
   kollegor: { id: string; namn: string }[];
   chef: boolean;
@@ -266,7 +269,7 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
   const instTom = lasInstallningar([]);
   const tom: NdMoten = {
     kort: [], avgjorda: [], inst: { bekraftaDagar: instTom.bekraftaDagar, kolumnnamn: instTom.kolumnnamn, fragor: instTom.fragor, rubrikPrefix: instTom.rubrikPrefix, val: motesVal() },
-    installningar: null, provisionPaSpel: null, vecka: { affar: 0, nej: 0, kedjor: [] }, saljare: [], kollegor: [], chef,
+    installningar: null, provisionPaSpel: null, vecka: { affar: 0, nej: 0, kedjor: [] }, saljare: [], offertPaket: [], kollegor: [], chef,
   };
   if (!user.employee) return tom;
   const jag = user.employee.id;
@@ -277,7 +280,7 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
   const manadFran = new Date(Date.UTC(nu.getUTCFullYear(), nu.getUTCMonth() - 1, 25)).toISOString();
   const manadTill = new Date(Date.UTC(nu.getUTCFullYear(), nu.getUTCMonth() + 1, 2)).toISOString();
 
-  const [kortSorterat, veckaSvar, personSvar, instSvar, avgjortSvar] = await Promise.all([
+  const [kortSorterat, veckaSvar, personSvar, instSvar, avgjortSvar, paketSvar] = await Promise.all([
     // Sorterat före taket (F5.3): uppföljningskorten utan möte först, sedan mötena i tidsordning. Når taket kapas
     // då mötena längst fram i tiden, inte ett godtyckligt urval. `mote_tid` står i vyn (0261).
     supabase.from("mote_kort").select("*").order("mote_tid", { ascending: true, nullsFirst: true }).limit(MAX_KORT),
@@ -291,6 +294,8 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
       .gte("mote_tid", manadFran)
       .lt("mote_tid", manadTill)
       .limit(MAX_MOTEN),
+    // Paketen till rutan Offert skickad (0303). Går de inte att läsa visas bara fältet Belopp.
+    supabaseAdmin().from("sales_package").select("id, label, list_price").order("id", { ascending: true }).limit(50),
   ]);
   // Går inte den sorterade läsningen läses korten som förut, osorterat: sorteringen får inte ta tavlan med sig.
   const kortSvar = kortSorterat.error ? await supabase.from("mote_kort").select("*").limit(MAX_KORT) : kortSorterat;
@@ -432,6 +437,17 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
     }
   }
 
+  // Offertens belopp (0303) står på kedjan, inte i vyn. Bara korten med en offert ute läses, genom läsarens klient
+  // (RLS som korten). Går läsningen inte står offerten utan belopp, som en äldre offert.
+  const offertBelopp = new Map<string, number>();
+  {
+    const medOffert = rader.filter((r) => r.offert === true).map((r) => r.kedja_id);
+    const br = medOffert.length
+      ? await lasISkivor<{ id: string; offert_belopp: number | string | null }>(medOffert, (ids) => supabase.from("mote_kedja").select("id, offert_belopp").in("id", ids).not("offert_belopp", "is", null).limit(MAX_KORT))
+      : [];
+    for (const b of br ?? []) if (b.offert_belopp !== null) offertBelopp.set(b.id, Number(b.offert_belopp));
+  }
+
   const kort: NdMoteKort[] = rader.map((r) => {
     const f = r.mote_id ? flode.get(r.mote_id) : undefined;
     const oppet = !!(r.mote_id && r.mote_tid);
@@ -486,7 +502,7 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
           }
         : null,
     uppfoljning: r.uppfoljning_datum
-      ? { datum: String(r.uppfoljning_datum).slice(0, 10), text: r.uppfoljning_text, offert: r.offert === true, ingetSvar: r.inget_svar_i_rad ?? 0, andrad: r.uppfoljning_andrad }
+      ? { datum: String(r.uppfoljning_datum).slice(0, 10), text: r.uppfoljning_text, offert: r.offert === true, offertBelopp: r.offert === true ? offertBelopp.get(r.kedja_id) ?? null : null, ingetSvar: r.inget_svar_i_rad ?? 0, andrad: r.uppfoljning_andrad }
       : null,
     historik: historik.get(r.kedja_id) ?? [],
     trad: trad.get(r.kedja_id) ?? (tradOk ? { antal: 0, nya: 0 } : null),
@@ -694,6 +710,7 @@ export async function byggMoten(supabase: SupabaseClient, user: CurrentUser): Pr
     provisionPaSpel,
     vecka,
     saljare,
+    offertPaket: offertPaketVal((paketSvar.data ?? []) as unknown as { id: number; label: string; list_price: number | string | null }[]),
     kollegor,
     chef,
     ...(arKapad(rader.length, MAX_KORT) ? { kapad: true as const } : {}),

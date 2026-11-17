@@ -7,6 +7,7 @@ import { gallandeSchema } from "@/lib/raster";
 import { hamtaLage } from "@/lib/sparrar";
 import { stampelfri } from "@/lib/stampelfri";
 import { hamtaDagsbild } from "@/lib/dagslage-server";
+import { stampelfriaAnstallda } from "@/lib/stampelfri-server";
 import type { Dagsrad } from "@/lib/dagslage";
 import { oppnaDagar } from "@/lib/lonerapport";
 import { dagarBakat, svensktDatum, svenskaMinuter, svenskKlocka, svenskDygnsstart, svenskTidpunkt, svenskVeckodag } from "@/lib/klocka";
@@ -73,6 +74,8 @@ export type NdTid = {
     dagsbild: Dagsrad[];
     bedomda: number;
     paPlats: { id: string; namn: string; sedan: string }[];
+    /** Alla i kretsen som stämplar (inte stämpelfria, inte avslutade): nämnaren i hemmets "på plats". */
+    lag: { id: string; namn: string }[];
     rattelser: { id: string; pid: string; namn: string; kind: string; fran: string | null; till: string; dag: string; note: string | null; begard: string; timmar: number }[];
     ogiltig: { id: string; pid: string; namn: string; dag: string; min: number; status: string; ordning: number | null; atgard: string | null; beslutad: string | null; not: string | null }[];
     sena30: { pid: string; namn: string; dagar: { dag: string; min: number }[]; kommentar: string | null }[];
@@ -160,7 +163,7 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
   const manadStart = idag.slice(0, 8) + "01";
   const chefForstaP = chef
     ? tidig(Promise.all([
-        sparrP.then((s) => hamtaDagsbild(supabase, nu, s.stampling)),
+        sparrP.then((s) => Promise.all([hamtaDagsbild(supabase, nu, s.stampling), s.stampling ? stampelfriaAnstallda(supabase) : Promise.resolve(new Set<string>())])),
         supabase.from("employee").select("id, first_name, last_name, team_id, employee_number, status"),
         supabase.from("time_event").select(STAMPELKOLUMNER + ", employee_id").gte("occurred_at", svenskDygnsstart(nu)).in("kind", ["in", "out"]).order("occurred_at"),
         supabase.from("time_event").select(STAMPELKOLUMNER + ", employee_id").eq("correction_state", "pending").order("created_at"),
@@ -300,7 +303,7 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
 
   if (!chef || !chefForstaP || !chefAndraP) return ut;
 
-  const [dagsbild, { data: personal }, { data: idagAlla }, { data: vantande }, { data: ogiltig }, { data: sena30 }, { data: perioder }, { data: trappa }, { data: manaden }, { data: teamRader }] = await chefForstaP;
+  const [[dagsbild, stampelfria], { data: personal }, { data: idagAlla }, { data: vantande }, { data: ogiltig }, { data: sena30 }, { data: perioder }, { data: trappa }, { data: manaden }, { data: teamRader }] = await chefForstaP;
 
   // Det som beror på chefens första omgång, i en omgång: rättelsernas förra tid och stöd, den skrivna periodens underlag och den pågående periodens.
   const vant = (vantande ?? []) as unknown as (Handelse & { employee_id: string; note: string | null; created_at: string })[];
@@ -487,6 +490,7 @@ export async function byggTid(supabase: SupabaseClient, user: CurrentUser): Prom
     dagsbild: dagsbild.rader,
     bedomda: dagsbild.bedomda,
     paPlats,
+    lag: pers.filter((p) => !stampelfria.has(p.id)).map((p) => ({ id: p.id, namn: namn.get(p.id)! })).sort((a, b) => a.namn.localeCompare(b.namn, "sv")),
     rattelser: vant.map((v) => ({
       id: v.id,
       pid: v.employee_id,

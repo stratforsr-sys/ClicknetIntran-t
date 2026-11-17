@@ -10,6 +10,9 @@ import { sammanfogaSidor } from "@/lib/pdftext";
  *
  * ===========================================================================
  * ANROPAS BARA FRAN BILAGEVAGEN. ALDRIG PA ETT LAKARINTYG.
+ * (Och fran kunskapsbasen, /nav2/kunskap, 0312: dar laddar den som skoter
+ * foretagets installningar upp foretagets egna dokument. Ett lakarintyg har
+ * ingen vag dit heller.)
  *
  * Ett lakarintyg ar en PDF som innehaller en diagnos. Kors den har funktionen
  * pa den hamnar diagnosen i en textkolumn och darefter i ett sokindex — och

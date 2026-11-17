@@ -18,6 +18,7 @@ import { arArbetsdag, dagPlus } from "../saljtakt.ts";
 import { MOTES_NEJ_SKAL, MOTES_NULAGE, niva, nivaSvar, type Fraga, type NivaSvar } from "./motesflode.ts";
 import { normaliseraEpost, normaliseraTelefon } from "../leads.ts";
 import { nivaFor } from "./forma.ts";
+import { LOPTIDER, ordervardeFor } from "../order.ts";
 
 export const KOLUMNER = ["bokat", "bekraftat", "utfall_saknas", "folj_upp", "tyst"] as const;
 export type Kolumn = (typeof KOLUMNER)[number];
@@ -441,6 +442,10 @@ export type UtfallIn = {
   nyTid?: { dag: string; start: string } | null;
   /** Bara för `hallet`: den som höll mötet, när det inte var den som står som hållare (2026-11-16). */
   holl?: string;
+  /** Bara för `offert`: offertens belopp i hela kronor (0303). En offert har ett pris. */
+  belopp?: number | null;
+  /** Bara för `offert`: paketet offerten gäller, när säljaren valde ett. */
+  paket?: number | null;
 };
 
 /**
@@ -521,6 +526,9 @@ export function efterUtfall(
         uppfoljning_text: text ?? "Offert skickad",
         inget_svar_i_rad: 0,
         offert_nar: nu,
+        // Beloppet och paketet hör ihop: en ny offert med belopp skriver över båda. Utan belopp (en väg som inte
+        // bär det) står det som redan finns kvar.
+        ...(typeof inn.belopp === "number" ? { offert_belopp: inn.belopp, offert_paket: inn.paket ?? null } : {}),
       },
       nyttMote: inn.nyTid ? { art: "uppfoljning", dag: inn.nyTid.dag, start: inn.nyTid.start } : null,
     };
@@ -1152,6 +1160,26 @@ export function rattaUtfallIndata(body: unknown): Resultat<{ mote: string; utfal
   return s.ok ? { ok: true, varden: { mote: b.mote, utfall: b.utfall, svar: s.varden } } : s;
 }
 
+export const OFFERT_BELOPP_MAX = 100_000_000;
+
+/** Ett belopp i hela kronor, 0 till 100 000 000, som tal eller som text med mellanslag ("212 000"). Annars null. */
+export function offertBelopp(v: unknown): number | null {
+  const n = typeof v === "number" ? v : typeof v === "string" && /^\d[\d\s\u00a0]*$/.test(v.trim()) ? Number(v.replace(/[\s\u00a0]/g, "")) : NaN;
+  return Number.isInteger(n) && n >= 0 && n <= OFFERT_BELOPP_MAX ? n : null;
+}
+
+/**
+ * Paketen i rutan Offert skickad: väljer säljaren ett paket och en bindningstid fylls beloppet i med samma
+ * uträkning som ordervärdet (månadspris gånger löptid). Beloppet går att skriva över. Räknas på servern, så att
+ * klienten aldrig räknar pengar.
+ */
+export function offertPaketVal(paket: readonly { id: number; label: string; list_price: number | string | null }[]): { id: number; l: string; belopp: Record<number, number> }[] {
+  return paket
+    .filter((p) => p.list_price !== null && Number.isFinite(Number(p.list_price)))
+    .map((p) => ({ id: p.id, l: p.label, belopp: Object.fromEntries(LOPTIDER.map((l) => [l, ordervardeFor(Number(p.list_price), l)])) as Record<number, number> }))
+    .sort((a, b) => a.id - b.id);
+}
+
 export function utfallIndata(body: unknown): Resultat<{ mote: string; inn: UtfallIn; svar: { id: string; ja: boolean }[] | null }> {
   const b = (body ?? {}) as Record<string, unknown>;
   if (!ID(b.mote)) return nej("Mötet stämmer inte.");
@@ -1171,6 +1199,19 @@ export function utfallIndata(body: unknown): Resultat<{ mote: string; inn: Utfal
   if (!tom(b.skal)) {
     if (typeof b.skal !== "string" || !(NEJ_SKAL as readonly string[]).includes(b.skal)) return nej("Välj ett skäl.");
     inn.skal = b.skal;
+  }
+  // Offertens belopp (0303). En offert har ett pris, och beloppet hör bara till Offert skickad.
+  const arOffert = b.utfall === "hallet" && b.resultat === "offert";
+  if (!arOffert && (!tom(b.belopp) || !tom(b.paket))) return nej("Beloppet hör till Offert skickad.");
+  if (arOffert) {
+    if (tom(b.belopp)) return nej("Skriv offertens belopp.");
+    const belopp = offertBelopp(b.belopp);
+    if (belopp === null) return nej("Beloppet ska vara hela kronor, högst 100 000 000.");
+    inn.belopp = belopp;
+    if (!tom(b.paket)) {
+      if (typeof b.paket !== "number" || !Number.isInteger(b.paket) || b.paket < 1 || b.paket > 32767) return nej("Paketet stämmer inte.");
+      inn.paket = b.paket;
+    }
   }
   if (!tom(b.nyTid)) {
     if (b.utfall !== "uteblev" && !(b.utfall === "hallet" && (b.resultat === "uppfoljning" || b.resultat === "offert"))) return nej("En ny tid går bara att boka efter Uteblev, som en uppföljning eller efter en offert.");

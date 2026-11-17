@@ -26,7 +26,8 @@ export const SOKMISSAR_PER_MINUT = 60;
 
 type Tak =
   | { tabell: "nav_question_miss"; kolumn: "dag"; fran: string }
-  | { tabell: "document_search_miss"; kolumn: "searched_at"; fran: string };
+  | { tabell: "document_search_miss"; kolumn: "searched_at"; fran: string }
+  | { tabell: "kunskap_miss"; kolumn: "nar"; fran: string };
 
 /** Sant om en rad till får skrivas: färre än `tak` rader från och med `fran`. */
 export async function underTak(db: SupabaseClient, { tabell, kolumn, fran }: Tak, tak: number): Promise<boolean> {
@@ -35,5 +36,5 @@ export async function underTak(db: SupabaseClient, { tabell, kolumn, fran }: Tak
   return count < tak;
 }
 
-/** Fönstret för Rutiners sökmissar: den senaste minuten. */
+/** Fönstret för sökmissarna (Rutiner och kunskapsbasen): den senaste minuten. */
 export const senasteMinuten = (nu: Date = new Date()) => new Date(nu.getTime() - 60_000).toISOString();

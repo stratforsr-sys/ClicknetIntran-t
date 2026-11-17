@@ -40,6 +40,7 @@ const kastar = (f) => {
 const { arbetsdagar } = await import("../src/lib/nav2/anstalldaforma.ts");
 const { SKAL } = await import("../src/lib/nav2/leadsforma.ts");
 const M = await import("../src/lib/nav2/motenforma.ts");
+const ORDER = await import("../src/lib/order.ts");
 
 rubrik("Konstanter");
 ok("fem kolumner i tavlans ordning", JSON.stringify(M.KOLUMNER) === JSON.stringify(["bokat", "bekraftat", "utfall_saknas", "folj_upp", "tyst"]));
@@ -415,11 +416,39 @@ rubrik("A7: andringForKund, farAndraKedja och indata för mötets knappar");
 
   // utfall
   const u = (o) => M.utfallIndata({ mote: ID, ...o });
-  ok("utfallIndata: Hållet + Offert + datum + text", (() => { const r = u({ utfall: "hallet", resultat: "offert", datum: "2026-11-03", text: " Ring tisdag " }); return r.ok && r.varden.mote === ID && r.varden.inn.utfall === "hallet" && r.varden.inn.resultat === "offert" && r.varden.inn.datum === "2026-11-03" && r.varden.inn.text === "Ring tisdag"; })());
+  ok("utfallIndata: Hållet + Offert + datum + text", (() => { const r = u({ utfall: "hallet", resultat: "offert", datum: "2026-11-03", text: " Ring tisdag ", belopp: 212000 }); return r.ok && r.varden.inn.belopp === 212000 && r.varden.mote === ID && r.varden.inn.utfall === "hallet" && r.varden.inn.resultat === "offert" && r.varden.inn.datum === "2026-11-03" && r.varden.inn.text === "Ring tisdag"; })());
+  // Offertens belopp (0303): en offert har ett pris.
+  ok("utfallIndata: Offert utan belopp nekas", u({ utfall: "hallet", resultat: "offert", datum: "2026-11-03" }).fel === "Skriv offertens belopp.", JSON.stringify(u({ utfall: "hallet", resultat: "offert", datum: "2026-11-03" })));
+  ok("utfallIndata: ett tomt belopp är ett saknat belopp", u({ utfall: "hallet", resultat: "offert", belopp: "" }).fel === "Skriv offertens belopp." && u({ utfall: "hallet", resultat: "offert", belopp: null }).fel === "Skriv offertens belopp.");
+  ok("utfallIndata: belopp i hela kronor, 0 till 100 000 000", u({ utfall: "hallet", resultat: "offert", belopp: 0 }).ok && u({ utfall: "hallet", resultat: "offert", belopp: 100000000 }).ok && u({ utfall: "hallet", resultat: "offert", belopp: 100000000 }).varden.inn.belopp === 100000000);
+  ok("utfallIndata: ett belopp som text med mellanslag tolkas", (() => { const r = u({ utfall: "hallet", resultat: "offert", belopp: "212 000" }); return r.ok && r.varden.inn.belopp === 212000; })());
+  ok("utfallIndata: negativt, för stort, ören och text nekas", [-1, 100000001, 1.5, "tolv", "12,50", true, {}].every((b) => u({ utfall: "hallet", resultat: "offert", belopp: b }).fel === "Beloppet ska vara hela kronor, högst 100 000 000."), JSON.stringify([-1, 100000001, 1.5, "tolv", "12,50", true, {}].map((b) => u({ utfall: "hallet", resultat: "offert", belopp: b }).fel)));
+  ok("utfallIndata: belopp på något annat än offert nekas", u({ utfall: "hallet", resultat: "uppfoljning", datum: "2026-11-03", belopp: 5000 }).fel === "Beloppet hör till Offert skickad." && u({ utfall: "uteblev", belopp: 5000 }).fel === "Beloppet hör till Offert skickad." && u({ utfall: "hallet", resultat: "nej", skal: "För dyrt", paket: 2 }).fel === "Beloppet hör till Offert skickad.");
+  ok("utfallIndata: paketet följer med offerten", (() => { const r = u({ utfall: "hallet", resultat: "offert", belopp: 71760, paket: 2 }); return r.ok && r.varden.inn.paket === 2; })());
+  ok("utfallIndata: ett paket som inte är ett helt tal nekas", ["två", 0, -1, 1.5, 40000].every((p) => u({ utfall: "hallet", resultat: "offert", belopp: 1, paket: p }).fel === "Paketet stämmer inte."));
+  ok("utfallIndata: utan paket är paketet inte satt", (() => { const r = u({ utfall: "hallet", resultat: "offert", belopp: 1 }); return r.ok && r.varden.inn.paket == null; })());
+  {
+    const a = M.efterUtfall({ utfall: "hallet", resultat: "offert", belopp: 71760, paket: 2 }, "2026-10-29", false, "2026-10-29T10:00:00Z");
+    ok("efterUtfall: beloppet och paketet skrivs på kedjan", a.kedja?.offert_belopp === 71760 && a.kedja?.offert_paket === 2 && a.kedja?.offert_nar === "2026-10-29T10:00:00Z", JSON.stringify(a.kedja));
+    const utanPaket = M.efterUtfall({ utfall: "hallet", resultat: "offert", belopp: 0 }, "2026-10-29", false, "2026-10-29T10:00:00Z");
+    ok("efterUtfall: belopp 0 skrivs, och utan paket töms paketet", utanPaket.kedja?.offert_belopp === 0 && utanPaket.kedja?.offert_paket === null, JSON.stringify(utanPaket.kedja));
+    const utan = M.efterUtfall({ utfall: "hallet", resultat: "offert" }, "2026-10-29", false, "2026-10-29T10:00:00Z");
+    ok("efterUtfall: utan belopp rörs inte kedjans belopp", !("offert_belopp" in utan.kedja) && !("offert_paket" in utan.kedja), JSON.stringify(utan.kedja));
+    const upp = M.efterUtfall({ utfall: "hallet", resultat: "uppfoljning", datum: "2026-11-03" }, "2026-10-29", false);
+    ok("efterUtfall: en uppföljning rör inte beloppet", !("offert_belopp" in upp.kedja));
+  }
+  {
+    // Paketet fyller i beloppet: månadspris gånger bindningstid, samma uträkning som ordervärdet.
+    const val = M.offertPaketVal([{ id: 2, label: "Mellan", list_price: 2990 }, { id: 1, label: "Bas", list_price: 1490 }]);
+    ok("offertPaketVal: ett val per paket, i paketens ordning", val.length === 2 && val[0].id === 1 && val[0].l === "Bas" && val[1].id === 2, JSON.stringify(val));
+    ok("offertPaketVal: beloppet per bindningstid är månadspris gånger månader", val[1].belopp[12] === 35880 && val[1].belopp[24] === 71760 && val[1].belopp[36] === 107640 && val[0].belopp[24] === 35760, JSON.stringify(val));
+    ok("offertPaketVal: samma tal som ordervärdet", [12, 24, 36].every((l) => val[1].belopp[l] === ORDER.ordervardeFor(2990, l)));
+    ok("offertPaketVal: ett paket utan pris hoppas över", M.offertPaketVal([{ id: 3, label: "Utan", list_price: null }]).length === 0);
+  }
   ok("utfallIndata: Uteblev + ny tid", (() => { const r = u({ utfall: "uteblev", nyTid: { dag: "2026-11-02", start: "09:00" } }); return r.ok && r.varden.inn.nyTid.dag === "2026-11-02" && r.varden.inn.nyTid.start === "09:00"; })());
   ok("utfallIndata: okänt utfall och mote som inte är ett id", !u({ utfall: "kanske" }).ok && !M.utfallIndata({ mote: "x", utfall: "hallet" }).ok);
   ok("utfallIndata: ny tid bara med Uteblev, Uppföljning eller Offert, och bara en riktig tid", !u({ utfall: "hallet", resultat: "nej", skal: "För dyrt", nyTid: { dag: "2026-11-02", start: "09:00" } }).ok && !u({ utfall: "avbokat", nyTid: { dag: "2026-11-02", start: "09:00" } }).ok && !u({ utfall: "uteblev", nyTid: { dag: "2026-11-02", start: "9" } }).ok);
-  ok("utfallIndata: Hållet + Offert + ny tid", (() => { const r = u({ utfall: "hallet", resultat: "offert", nyTid: { dag: "2026-11-04", start: "10:15" } }); return r.ok && r.varden.inn.resultat === "offert" && r.varden.inn.nyTid.dag === "2026-11-04" && r.varden.inn.nyTid.start === "10:15"; })());
+  ok("utfallIndata: Hållet + Offert + ny tid", (() => { const r = u({ utfall: "hallet", resultat: "offert", belopp: 1, nyTid: { dag: "2026-11-04", start: "10:15" } }); return r.ok && r.varden.inn.resultat === "offert" && r.varden.inn.nyTid.dag === "2026-11-04" && r.varden.inn.nyTid.start === "10:15"; })());
   ok("utfallIndata: Hållet + Uppföljning + ny tid", (() => { const r = u({ utfall: "hallet", resultat: "uppfoljning", nyTid: { dag: "2026-11-04", start: "10:15" } }); return r.ok && r.varden.inn.nyTid.start === "10:15"; })());
   ok("utfallIndata: okänt resultat avvisas, Nej kräver skäl ur listan", !u({ utfall: "hallet", resultat: "kanske" }).ok && u({ utfall: "hallet", resultat: "nej", skal: "För dyrt" }).ok && u({ utfall: "hallet", resultat: "nej", skal: "För dyrt" }).varden.inn.skal === "För dyrt");
   ok("utfallIndata: för lång text avvisas", !u({ utfall: "hallet", resultat: "uppfoljning", datum: "2026-11-03", text: "x".repeat(1001) }).ok);
@@ -612,8 +641,8 @@ rubrik("Uppgift 6: vem bedömer, och svaren i anropen");
   ok("svarIndata: ja måste vara sant eller falskt", !M.svarIndata([{ id: "syfte", ja: "ja" }]).ok);
   ok("svarIndata: samma fråga två gånger nekas", !M.svarIndata([{ id: "syfte", ja: true }, { id: "syfte", ja: false }]).ok);
   ok("svarIndata: inget id nekas", !M.svarIndata([{ ja: true }]).ok && !M.svarIndata("ja").ok);
-  ok("utfallIndata: Hållet tar svaren", (() => { const r = M.utfallIndata({ mote: ID6, utfall: "hallet", resultat: "offert", svar: JA }); return r.ok && r.varden.svar?.length === 2; })());
-  ok("utfallIndata: utan svar är svaren null", (() => { const r = M.utfallIndata({ mote: ID6, utfall: "hallet", resultat: "offert" }); return r.ok && r.varden.svar === null; })());
+  ok("utfallIndata: Hållet tar svaren", (() => { const r = M.utfallIndata({ mote: ID6, utfall: "hallet", resultat: "offert", belopp: 45000, svar: JA }); return r.ok && r.varden.svar?.length === 2; })());
+  ok("utfallIndata: utan svar är svaren null", (() => { const r = M.utfallIndata({ mote: ID6, utfall: "hallet", resultat: "offert", belopp: 45000 }); return r.ok && r.varden.svar === null; })());
   ok("utfallIndata: svar efter Uteblev nekas", !M.utfallIndata({ mote: ID6, utfall: "uteblev", svar: JA }).ok);
   ok("bedomIndata: mötet och svaren", (() => { const r = M.bedomIndata({ mote: ID6, svar: JA }); return r.ok && r.varden.mote === ID6 && r.varden.svar.length === 2; })());
   ok("bedomIndata: svaren krävs", !M.bedomIndata({ mote: ID6 }).ok);

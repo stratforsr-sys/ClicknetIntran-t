@@ -174,7 +174,7 @@ rubrik("1. Byte före mötet: raden först, sedan kalendern");
 }
 
 rubrik("2. Utfall med vem som höll mötet: hållaren i samma skrivning som utfallet");
-const utfallKropp = { handling: "utfall", mote: M, utfall: "hallet", resultat: "offert", datum: new Date(Date.now() + 5 * 864e5).toISOString().slice(0, 10), holl: X };
+const utfallKropp = { handling: "utfall", mote: M, utfall: "hallet", resultat: "offert", belopp: 12000, datum: new Date(Date.now() + 5 * 864e5).toISOString().slice(0, 10), holl: X };
 {
   const r = await anropa(["salesperson"], X, utfallKropp, tabellerFor(TIDIGARE));
   const forsta = r.logg.find((x) => x.op === "update" && x.tabell === "mote");

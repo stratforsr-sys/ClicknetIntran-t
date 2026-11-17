@@ -12,6 +12,8 @@ import {
 } from "./motesflode";
 import { UTFALL_ROLLER } from "./motenforma";
 import { ManadenStangs, ProvisionKonflikt, lasProvision, reparationsKandidater } from "./motesprovision-server";
+import { skapaObekraftade, type ObekraftadeKvitto } from "./forslag-jobb";
+import { lasForslagInst } from "./forslagforma";
 
 /**
  * Möten, jobbet (pg_cron var kvart, `nav-moten`): bekräftelsen före mötet, påminnelserna efter mötet och
@@ -39,7 +41,7 @@ const DYGN = 24 * 3600 * 1000;
 const MAX_REPARATIONER = 50;
 
 type MoteRad = { id: string; kedja_id: string; mote_tid: string; langd_min: number | null; utfall: string | null; niva: string | null; utfall_nar: string | null; halls_av: string };
-export type MotenJobbKvitto = { utfallSaknas: number; bedomningSaknas: number; reparerade: number; hoppade: number; uppgifter: number; bekrafta: number; ringIgen: number; stadade: number; uppfoljning: number; hoppade_over?: string };
+export type MotenJobbKvitto = { utfallSaknas: number; bedomningSaknas: number; reparerade: number; hoppade: number; uppgifter: number; bekrafta: number; ringIgen: number; stadade: number; uppfoljning: number; forslag?: ObekraftadeKvitto; hoppade_over?: string };
 
 export async function korMotenJobb(db: Db, nu: Date = new Date()): Promise<MotenJobbKvitto> {
   const kvitto: MotenJobbKvitto = { utfallSaknas: 0, bedomningSaknas: 0, reparerade: 0, hoppade: 0, uppgifter: 0, bekrafta: 0, ringIgen: 0, stadade: 0, uppfoljning: 0 };
@@ -54,6 +56,15 @@ export async function korMotenJobb(db: Db, nu: Date = new Date()): Promise<Moten
     await bekraftelser(db, inst, gallerFran, nu, kvitto);
   } catch (e) {
     await skrivFel({ kind: "automatic", path: "/api/jobb/moten", digest: "moten-jobb-bekrafta", message: `Möten-jobbet: bekräftelsen föll: ${e instanceof Error ? e.message : String(e)}`, blocking: false });
+  }
+
+  // Hemvyn (0303): ett första möte som står obekräftat på sin sista bekräftelsedag blir ett förslag till den som
+  // håller mötet. Så länge `forslag.pa` är av räknar steget bara. Ett fel här stoppar aldrig resten av jobbet.
+  try {
+    const { data: fRader } = await db.from("nav_setting").select("key, value").like("key", "forslag.%").limit(50);
+    kvitto.forslag = await skapaObekraftade(db, inst, lasForslagInst((fRader ?? []) as { key: string; value: unknown }[]), nu);
+  } catch (e) {
+    await skrivFel({ kind: "automatic", path: "/api/jobb/moten", digest: "moten-jobb-forslag", message: `Möten-jobbet: förslagen föll: ${e instanceof Error ? e.message : String(e)}`, blocking: false });
   }
 
   // Påminnelserna: ett fönster bakåt räcker, för den sista påminnelsen går två dagar efter mötet (eller utfallet).

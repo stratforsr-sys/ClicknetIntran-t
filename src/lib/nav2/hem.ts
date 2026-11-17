@@ -3,10 +3,19 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { hasRole, type CurrentUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { svensktDatum } from "@/lib/klocka";
+import { lasSidvis } from "@/lib/sidvis";
+import { dagensRam, type NdDag, type RastRad, type SchemaRad } from "./hemdag";
 import { harGodkants, nettoAntal, ordervarde, type Order } from "@/lib/order";
 import { SKRIVLAGE } from "./skrivlage";
 import { vapidPublik } from "./push";
+import { byggForslag, harNyttHem, lasInst, lasKrets, type NdForslag } from "./forslag";
+import type { ForslagInst } from "./forslagforma";
+import { nivaFor } from "./forma";
+import { byggTeam, lagenJagLeder, type LettLag, type NdTeam } from "./hem-team";
+import { INST_FORVAL, lokalDag } from "./motesflode";
+import { kretsFor } from "./motesstatforma";
+import { textLagnamn } from "./hemtext";
+import { chattLage, type ChattLage } from "./chatt/logg";
 
 /**
  * Nav 2.0: startsidan.
@@ -18,7 +27,7 @@ import { vapidPublik } from "./push";
  *
  *   - valen i `nav_preference` (0094): när du senast tittade (`hem.sett`),
  *     sorterna du inte vill se i sammanfattningen (`hem.dolda`), raderna du
- *     sagt inte stämmer (`hem.flaggade`) och om du syns på Golvet (`hem.golvet`);
+ *     sagt inte stämmer (`hem.flaggade`) och det gamla valet om Golvet (`hem.golvet`, styr inget);
  *   - Golvet just nu: lagets order och ordervärde i månaden mot lagets mål,
  *     dagens godkända order och Grattis (0120 `order_grattis`). LAGETS MÅL ÄR
  *     SUMMAN AV SÄLJARNAS MÅL I PROVISION (`sales_target`, 0049), beställaren
@@ -56,7 +65,7 @@ export type NdGolvrad = {
 };
 
 export type NdGolvet = {
-  /** Lagets namn, eller null för hela bolaget. */
+  /** Lagets namn (flera lag: "Norr och Syd"), eller null för hela bolaget. */
   lag: string | null;
   manad: string;
   /** Summan av lagets mål i Provision: antal order och provision i kronor, null när ingen har ett. */
@@ -80,92 +89,197 @@ export type NdHem = {
   sett: string | null;
   dolda: string[];
   flaggade: string[];
-  /** Syns du på Golvet för kollegorna? Null = inte valt (då syns du inte). */
+  /** Det sparade valet `hem.golvet`. Det styr inte längre något: alla i laget ser lagets rader (se rubriken). */
   golvetSyns: boolean | null;
   /** Får läsaren sätta målen i Provision (säljchef och VD, 0049)? */
   malchef: boolean;
   /** Kvällsnotisen i mobilen (0121). Null när VAPID-nycklarna saknas i miljön. */
   push: { nyckel: string; enheter: number; ledare: boolean } | null;
+  /** Null när läsaren inte har något lag (se `golvetUtanLag`) eller när talen inte gick att läsa (`lasfel.golvet`). */
   golvet: NdGolvet | null;
+  /** Sant när Golvet saknas för att läsaren varken har eller leder ett lag: "Du är inte i något lag än." */
+  golvetUtanLag: boolean;
+  /** Har läsaren det nya hemmet (`hem.nytt`: en lista personer, eller alla)? Annars ritas hemmet som förut. */
+  nytt: boolean;
+  /** Nav föreslår och Det som ändrats. Null för den som inte har det nya hemmet: då läses ingenting. */
+  forslag: NdForslag | null;
+  /** Teamet i månaden. Null för den som inte har det nya hemmet, och för den som bara har sig själv i sin krets. */
+  team: NdTeam | null;
+  /** Rutan Nya hemmet i Inställningar: värdena, för admin och uppåt. `farBrytare`: får slå på och av och ändra gränserna (superadmin). */
+  inst: (ForslagInst & { farBrytare: boolean }) | null;
+  /** Frågar skrivrutan Claude? Sant bara för den som har det nya hemmet, när chatten är påslagen och får vara det (`farSlasPa`). */
+  chatt: boolean;
+  /** Chattens läge och vad som saknas, för rutan i Inställningar. Bara superadmin. */
+  chattLage: ChattLage | null;
+  /** Hur stor del av månadens AI-utrymme personen har använt, i procent (0–100). Bara när skrivrutan frågar Claude. */
+  chattAnvant: number | null;
+  /** Min dag: arbetsdagens start, slut och rasternas minuter i dag ur schemat. Null utan schema, och utan nya hemmet. */
+  dag: NdDag | null;
+  /** Kort vars läsning föll. Bara de som föll står med, och då med true: tomt (rätt) skiljs från fel. */
+  lasfel: NdHemFel;
 };
 
-const KL = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+/** Golvet, Teamet, Nav föreslår och Min dag: true när kortets läsning föll, i stället för att kortet försvinner tyst. */
+/** `inst`: inställningarna föll. Då går det inte att veta om läsaren har det nya hemmet, så `nytt` är false och inget räknas med förval. */
+export type NdHemFel = { golvet?: true; team?: true; forslag?: true; dag?: true; inst?: true };
 
-/** Laget Golvet gäller: ens eget, annars det man leder, annars hela bolaget. */
-export async function golvetsLag(user: CurrentUser): Promise<{ id: string | null; namn: string | null }> {
-  const db = supabaseAdmin();
-  const eget = user.employee?.team_id ?? null;
-  if (eget) {
-    const { data } = await db.from("team").select("id, name").eq("id", eget).maybeSingle();
-    return { id: eget, namn: (data?.name as string | undefined) ?? null };
-  }
-  const { data: leder } = await db.from("team").select("id, name").eq("lead_id", user.employee!.id).order("name").limit(1);
-  const t = (leder ?? [])[0] as { id: string; name: string } | undefined;
-  return t ? { id: t.id, namn: t.name } : { id: null, namn: null };
+/** Veckodag 1–7 med måndag först för ett kalenderdatum ("YYYY-MM-DD"). Datumet är redan räknat i rätt tidszon. */
+const veckodagFor = (dag: string): number => {
+  const [a, m, d] = dag.split("-").map(Number);
+  return ((new Date(Date.UTC(a, m - 1, d)).getUTCDay() + 6) % 7) + 1;
+};
+
+/**
+ * Dagens ram ur schemat och rasterna, med samma regel som Tid. Bara raderna som kan gälla läsaren läses: hens egna,
+ * lagets och bolagets, som trätt i kraft. Ett fel kastas, så att hemmet kan säga att Min dag inte gick att läsa.
+ */
+async function lasDag(supabase: SupabaseClient, user: CurrentUser, tz: string, nu: Date = new Date()): Promise<NdDag | null> {
+  const e = user.employee;
+  if (!e) return null;
+  const idag = lokalDag(nu, tz);
+  const vd = veckodagFor(idag);
+  const team = e.team_id ?? null;
+  const vems = [`employee_id.eq.${e.id}`, ...(team ? [`team_id.eq.${team}`] : []), "scope.eq.company"].join(",");
+  const [{ data: sr, error: se }, { data: rr, error: re }] = await Promise.all([
+    supabase.from("work_schedule").select("scope, employee_id, team_id, weekday, start_time, end_time, valid_from").eq("weekday", vd).lte("valid_from", idag).or(vems),
+    supabase.from("scheduled_break").select("scope, employee_id, team_id, weekday, sort, duration_minutes, valid_from").eq("weekday", vd).lte("valid_from", idag).or(vems),
+  ]);
+  if (se || re) throw new Error((se ?? re)?.message ?? "schemat");
+  return dagensRam((sr ?? []) as SchemaRad[], (rr ?? []) as RastRad[], e.id, team, idag, vd);
 }
 
-export async function byggGolvet(user: CurrentUser, nu: Date = new Date()): Promise<NdGolvet | null> {
+/** Installationens tidszon (`moten.tidszon`), med förvalet ur Mötens inställningar när inget är sparat. */
+export async function hemmetsTidszon(): Promise<string> {
+  return (await lasInst(supabaseAdmin())).m.tidszon;
+}
+
+type Sida<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>;
+type Person = { id: string; first_name: string | null; last_name: string | null; status: string | null };
+
+/** Golvets krets: lagen (null = hela bolaget), deras namn och personerna i dem. */
+export type GolvKrets = { lag: string[] | null; namn: string | null; folk: Person[] };
+
+async function lasFolk(db: SupabaseClient, lag: readonly string[] | null): Promise<Person[]> {
+  return lasSidvis<Person>((a, b) => {
+    let q = db.from("employee").select("id, first_name, last_name, status");
+    if (lag !== null) q = q.in("team_id", [...lag]);
+    return q.order("id").range(a, b) as unknown as Sida<Person>;
+  });
+}
+
+/**
+ * Laget Golvet gäller: ens eget, annars alla lag man leder, annars hela bolaget, men bara för den som redan ser
+ * hela bolaget i statistiken (säljchef, vd och admin, samma regel som `kretsFor`). Den som varken har eller leder
+ * ett lag får inget Golvet (null), aldrig bolagets order. Samma regel prövar Grattis i rutten.
+ */
+export async function golvetsKrets(user: CurrentUser, leder?: () => Promise<LettLag[]>): Promise<GolvKrets | null> {
+  if (!user.employee) return null;
+  const db = supabaseAdmin();
+  const eget = user.employee.team_id ?? null;
+  if (eget) {
+    const [{ data, error }, folk] = await Promise.all([db.from("team").select("name").eq("id", eget).maybeSingle(), lasFolk(db, [eget])]);
+    if (error) throw new Error(error.message);
+    return { lag: [eget], namn: (data?.name as string | undefined) ?? null, folk };
+  }
+  const lagen = await (leder ?? (() => lagenJagLeder(db, user.employee!.id)))();
+  if (lagen.length) {
+    const ids = lagen.map((t) => t.id);
+    return { lag: ids, namn: textLagnamn(lagen.map((t) => t.namn)), folk: await lasFolk(db, ids) };
+  }
+  if (kretsFor(null, user.roles as string[]) !== null) return null;
+  return { lag: null, namn: null, folk: await lasFolk(db, null) };
+}
+
+/**
+ * Golvet just nu. Null för den som inte har något lag (se `golvetsKrets`). Ett läsfel kastas: en halv läsning
+ * ser ut som en riktig nolla, och då är det bättre att kortet säger att talen inte gick att läsa.
+ *
+ * `o.tz` är installationens tidszon när den redan är läst, `o.leder` lagen läsaren leder (delas med Teamet).
+ */
+export async function byggGolvet(user: CurrentUser, nu: Date = new Date(), o: { tz?: string | Promise<string>; leder?: () => Promise<LettLag[]> } = {}): Promise<NdGolvet | null> {
   if (!user.employee) return null;
   const mig = user.employee.id;
   const db = supabaseAdmin();
-  const idag = svensktDatum(nu);
+  const [tz, k] = await Promise.all([o.tz ?? hemmetsTidszon(), golvetsKrets(user, o.leder)]);
+  if (!k) return null;
+  const idag = lokalDag(nu, tz);
   const manad = `${idag.slice(0, 7)}-01`;
   const vecka = new Date(nu.getTime() - 8 * 864e5).toISOString();
-  const lag = await golvetsLag(user);
-
-  let personFraga = db.from("employee").select("id, first_name, last_name");
-  if (lag.id) personFraga = personFraga.eq("team_id", lag.id);
-  const [{ data: personer }, { data: paket }] = await Promise.all([personFraga, db.from("sales_package").select("id, label")]);
-  const folk = (personer ?? []) as { id: string; first_name: string | null; last_name: string | null }[];
-  const ids = folk.map((p) => p.id);
   const ingetMal = { order: null, kronor: null, utan: 0 };
-  if (!ids.length) return { lag: lag.namn, manad: manad.slice(0, 7), mal: ingetMal, antal: 0, netto: 0, utanVarde: 0, idag: [], idagAntal: 0, idagSumma: 0, senast: null };
+  if (!k.folk.length) return { lag: k.namn, manad: manad.slice(0, 7), mal: ingetMal, antal: 0, netto: 0, utanVarde: 0, idag: [], idagAntal: 0, idagSumma: 0, senast: null };
+  // Hela bolaget läses utan id-lista: hundratals uuid i en URL kan nekas av API-lagret.
+  const ids = k.lag === null ? null : k.folk.map((p) => p.id);
 
+  type Rad = { id: string; salesperson_id: string; package_id: number | null; term_months: number | null; status: string; order_value: number | string | null; approved_at: string | null; company_name: string | null };
+  type MalRad = { employee_id: string; target_orders: number | null; target_amount: number | string | null };
+  type Grattis = { order_id: string; employee_id: string };
   const KOL = "id, salesperson_id, package_id, term_months, signed_on, period_month, status, order_value, buyout_amount, finance_amount, cancel_period_month, approved_at, company_name";
-  const [{ data: manadens }, { data: senaste }, { data: malen }] = await Promise.all([
-    db.from("sales_order").select(KOL).in("salesperson_id", ids).or(`period_month.eq.${manad},cancel_period_month.eq.${manad}`),
-    db.from("sales_order").select(KOL).in("salesperson_id", ids).in("status", ["signerad", "betald"]).gte("approved_at", vecka).order("approved_at", { ascending: false }),
-    db.from("sales_target").select("employee_id, target_orders, target_amount").eq("period_month", manad).in("employee_id", ids),
+  const [manadens, senaste, malen, paket, gratt] = await Promise.all([
+    lasSidvis<Rad>((a, b) => {
+      let q = db.from("sales_order").select(KOL).or(`period_month.eq.${manad},cancel_period_month.eq.${manad}`);
+      if (ids) q = q.in("salesperson_id", ids);
+      return q.order("id").range(a, b) as unknown as Sida<Rad>;
+    }),
+    lasSidvis<Rad>((a, b) => {
+      let q = db.from("sales_order").select(KOL).in("status", ["signerad", "betald"]).gte("approved_at", vecka);
+      if (ids) q = q.in("salesperson_id", ids);
+      return q.order("id").range(a, b) as unknown as Sida<Rad>;
+    }),
+    lasSidvis<MalRad>((a, b) => {
+      let q = db.from("sales_target").select("employee_id, target_orders, target_amount").eq("period_month", manad);
+      if (ids) q = q.in("employee_id", ids);
+      return q.order("id").range(a, b) as unknown as Sida<MalRad>;
+    }),
+    db.from("sales_package").select("id, label").limit(1000).then(({ data, error }) => {
+      if (error) throw new Error(error.message);
+      return (data ?? []) as { id: number; label: string }[];
+    }),
+    // Grattis ges bara på en order som godkänts i dag, så två dygn bakåt räcker i varje tidszon.
+    lasSidvis<Grattis>((a, b) =>
+      db.from("order_grattis").select("order_id, employee_id").gte("created_at", new Date(nu.getTime() - 2 * 864e5).toISOString()).order("order_id").order("employee_id").range(a, b) as unknown as Sida<Grattis>,
+    ),
   ]);
+  const iLaget = new Set(k.folk.map((p) => p.id));
+
   // Lagets mål = summan av säljarnas mål för månaden. Bara summan lämnar servern (0049: säljaren ser inte andras mål).
-  const mrader = (malen ?? []) as { employee_id: string; target_orders: number | null; target_amount: number | string | null }[];
+  const mrader = malen.filter((m) => iLaget.has(m.employee_id));
   const oMal = mrader.filter((m) => m.target_orders !== null), kMal = mrader.filter((m) => m.target_amount !== null);
+  const harOrder = new Set(manadens.map((o) => o.salesperson_id));
   const mal = {
     order: oMal.length ? oMal.reduce((s, m) => s + Number(m.target_orders), 0) : null,
     kronor: kMal.length ? kMal.reduce((s, m) => s + Number(m.target_amount), 0) : null,
-    utan: oMal.length ? folk.filter((p) => !oMal.some((m) => m.employee_id === p.id) && ((manadens ?? []) as { salesperson_id: string }[]).some((o) => o.salesperson_id === p.id)).length : 0,
+    // Den som slutat räknas inte som "utan mål", men hens order står kvar i summan.
+    utan: oMal.length ? k.folk.filter((p) => p.status !== "offboarded" && !oMal.some((m) => m.employee_id === p.id) && harOrder.has(p.id)).length : 0,
   };
 
-  const varde = ordervarde((manadens ?? []) as unknown as Order[], manad);
-  const antal = nettoAntal((manadens ?? []) as unknown as Order[], manad);
+  const varde = ordervarde(manadens as unknown as Order[], manad);
+  const antal = nettoAntal(manadens as unknown as Order[], manad);
 
-  const namn = new Map(folk.map((p) => [p.id, `${(p.first_name ?? "").trim()}${p.last_name ? ` ${p.last_name.trim().charAt(0)}.` : ""}`.trim()]));
-  const paketNamn = new Map(((paket ?? []) as { id: number; label: string }[]).map((p) => [p.id, p.label]));
-
-  type Rad = { id: string; salesperson_id: string; package_id: number | null; term_months: number | null; status: string; order_value: number | string | null; approved_at: string | null; company_name: string | null };
-  const godkanda = ((senaste ?? []) as unknown as Rad[]).filter((o) => o.approved_at && harGodkants(o.status as Order["status"]));
-  const dagens = godkanda.filter((o) => svensktDatum(new Date(o.approved_at as string)) === idag);
+  const namn = new Map(k.folk.map((p) => [p.id, `${(p.first_name ?? "").trim()}${p.last_name ? ` ${p.last_name.trim().charAt(0)}.` : ""}`.trim()]));
+  const paketNamn = new Map(paket.map((p) => [p.id, p.label]));
+  const dag = (o: Rad) => lokalDag(o.approved_at as string, tz);
+  const godkanda = senaste
+    .filter((o) => o.approved_at && harGodkants(o.status as Order["status"]))
+    .sort((a, b) => Date.parse(b.approved_at as string) - Date.parse(a.approved_at as string));
   // Alla i laget ser dagens rader (se rubriken).
-  const synliga = dagens;
-
-  const { data: gratt } = synliga.length
-    ? await db.from("order_grattis").select("order_id, employee_id").in("order_id", synliga.map((o) => o.id))
-    : { data: [] as { order_id: string; employee_id: string }[] };
-  const grattis = (gratt ?? []) as { order_id: string; employee_id: string }[];
+  const dagens = godkanda.filter((o) => dag(o) === idag);
+  const pidag = new Set(dagens.map((o) => o.id));
+  const grattis = gratt.filter((g) => pidag.has(g.order_id));
 
   const summa = (l: Rad[]) => l.reduce((s, o) => s + (o.order_value === null ? 0 : Number(o.order_value)), 0);
-  const tidigare = godkanda.filter((o) => svensktDatum(new Date(o.approved_at as string)) < idag);
-  const senastDag = tidigare.length ? svensktDatum(new Date(tidigare[0].approved_at as string)) : null;
-  const senastRader = senastDag ? tidigare.filter((o) => svensktDatum(new Date(o.approved_at as string)) === senastDag) : [];
+  const tidigare = godkanda.filter((o) => dag(o) < idag);
+  const senastDag = tidigare.length ? dag(tidigare[0]) : null;
+  const senastRader = senastDag ? tidigare.filter((o) => dag(o) === senastDag) : [];
+  const kl = new Intl.DateTimeFormat("sv-SE", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
   return {
-    lag: lag.namn,
+    lag: k.namn,
     manad: manad.slice(0, 7),
     mal,
     antal,
     netto: varde.netto,
     utanVarde: varde.utanVarde,
-    idag: synliga.map((o): NdGolvrad => {
+    idag: dagens.map((o): NdGolvrad => {
       const p = o.package_id !== null ? paketNamn.get(o.package_id) : undefined;
       return {
         id: o.id,
@@ -174,7 +288,7 @@ export async function byggGolvet(user: CurrentUser, nu: Date = new Date()): Prom
         kund: o.company_name ?? "",
         vad: p ? `${p}${o.term_months ? `, ${o.term_months} mån` : ""}` : "Fri order",
         belopp: o.order_value === null ? null : Number(o.order_value),
-        kl: KL.format(new Date(o.approved_at as string)),
+        kl: kl.format(new Date(o.approved_at as string)),
         grattis: grattis.filter((g) => g.order_id === o.id).length,
         jag: grattis.some((g) => g.order_id === o.id && g.employee_id === mig),
       };
@@ -185,14 +299,62 @@ export async function byggGolvet(user: CurrentUser, nu: Date = new Date()): Prom
   };
 }
 
+/** Loggar ett kort som föll och svarar med null, så att resten av hemmet ritas. */
+const loggaFel = (kort: string) => (e: unknown) => {
+  console.error(`hem: ${kort} gick inte att läsa: ${e instanceof Error ? e.message : String(e)}`);
+  return null;
+};
+
 export async function byggHem(supabase: SupabaseClient, user: CurrentUser): Promise<NdHem | null> {
   if (!user.employee) return null;
   const mig = user.employee.id;
-  const [{ data: val }, golvet, { count: enheter }] = await Promise.all([
-    supabase.from("nav_preference").select("key, value").eq("employee_id", mig).in("key", ["hem.sett", "hem.dolda", "hem.flaggade", "hem.golvet"]),
-    byggGolvet(user),
-    supabase.from("push_subscription").select("id", { count: "exact", head: true }).eq("employee_id", mig),
-  ]);
+  const nu = new Date();
+  const db = supabaseAdmin();
+  const niva = nivaFor(user.roles as string[]);
+  // Lagen läsaren leder läses högst en gång, och bara om Golvet eller Teamet behöver dem.
+  let lederP: Promise<LettLag[]> | null = null;
+  const leder = () => (lederP ??= lagenJagLeder(db, mig));
+
+  // Nya hemmet (0303): en läsning av inställningarna. Den ger också tidszonen, så Golvet väntar på den men inte tvärtom.
+  // Strikt: ett läsfel blir `lasfel.inst` nedan, i stället för förval som ser ut som att inget är inställt.
+  let instFel = false;
+  // Ett tillfälligt fel prövas en gång till, så att personen inte tyst får det gamla hemmet för den laddningen (nytt
+  // avgörs av samma läsning). Faller båda blir det lasfel.inst.
+  const instP = lasInst(db, true).catch(() => lasInst(db, true)).then((i) => i, (e: unknown) => { instFel = true; return loggaFel("inst")(e); });
+  const tzP = instP.then((i) => i?.m.tidszon ?? INST_FORVAL.tidszon);
+  // Golvet startar direkt och väntas in sist. Ett fel här fäller aldrig resten av hemmet.
+  const golvetP = byggGolvet(user, nu, { tz: tzP, leder }).then((g) => ({ g, fel: false }), (e: unknown) => ({ g: loggaFel("golvet")(e), fel: true }));
+  const kretsP = lasKrets(supabase, user).catch(() => undefined);
+  // Frågebyggarna skickar först vid then: `.then((r) => r)` startar dem nu, samtidigt med resten.
+  const valP = supabase.from("nav_preference").select("key, value").eq("employee_id", mig).in("key", ["hem.sett", "hem.dolda", "hem.flaggade", "hem.golvet"]).then((r) => r);
+  const pushP = supabase.from("push_subscription").select("id", { count: "exact", head: true }).eq("employee_id", mig).then((r) => r);
+
+  const inst = await instP;
+  const nytt = !!inst && harNyttHem(inst.f, mig);
+  const tz = inst?.m.tidszon ?? INST_FORVAL.tidszon;
+  // Chatten (0304): läses bara för den som har det nya hemmet, och för superadmin som ser läget i Inställningar.
+  const chattP = nytt || niva === "superadmin" ? chattLage(db, mig, niva === "superadmin").catch(loggaFel("chatt")) : Promise.resolve(null);
+  const lasfel: NdHemFel = {};
+  if (instFel) lasfel.inst = true;
+  let forslag: NdForslag | null = null;
+  let team: NdTeam | null = null;
+  let dag: NdDag | null = null;
+  if (nytt && inst) {
+    const fall = <T>(kort: keyof NdHemFel, p: Promise<T>): Promise<T | null> => p.catch((e: unknown) => { lasfel[kort] = true; return loggaFel(kort)(e); });
+    [forslag, team, dag] = await Promise.all([
+      fall("forslag", byggForslag(supabase, user, inst, nu)),
+      fall("team", kretsP.then((krets) => {
+        // Kretsen gick inte att läsa: för den som kan leda ett lag är det ett fel, för övriga finns inget kort att visa.
+        if (krets === undefined && hasRole(user, "team_lead", "sales_manager", "ceo", "admin")) throw new Error("kretsen (mote_statkrets) gick inte att läsa");
+        return byggTeam(user, krets, { tz, nu, leder });
+      })),
+      fall("dag", lasDag(supabase, user, tz, nu)),
+    ]);
+  }
+  const [{ data: val }, { count: enheter }, chatt, golv] = await Promise.all([valP, pushP, chattP, golvetP]);
+  if (golv.fel) lasfel.golvet = true;
+  const golvet = golv.g;
+  const chattPa = nytt && !!chatt && chatt.pa && chatt.skal === null;
   const nyckel = vapidPublik();
   const v = new Map(((val ?? []) as { key: string; value: unknown }[]).map((x) => [x.key, x.value]));
   const lista = (k: string): string[] => {
@@ -210,5 +372,15 @@ export async function byggHem(supabase: SupabaseClient, user: CurrentUser): Prom
     malchef: hasRole(user, "sales_manager", "ceo"),
     push: nyckel ? { nyckel, enheter: enheter ?? 0, ledare: hasRole(user, "sales_manager", "ceo", "team_lead") } : null,
     golvet,
+    golvetUtanLag: !golv.fel && golvet === null,
+    nytt,
+    forslag,
+    team,
+    inst: inst && niva !== "salesperson" ? { ...inst.f, farBrytare: niva === "superadmin" } : null,
+    chatt: chattPa,
+    chattLage: niva === "superadmin" ? chatt : null,
+    chattAnvant: chattPa && chatt?.utrymme ? Math.min(100, Math.round((chatt.utrymme.personUsd / chatt.utrymme.takPersonUsd) * 100)) : null,
+    dag,
+    lasfel,
   };
 }

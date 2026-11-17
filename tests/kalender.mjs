@@ -573,5 +573,112 @@ rubrik("Mejlpåminnelsen väntar i utkorgen och kan tas tillbaka (Resend-nyckeln
   ok("samma tid i annat format räknas som samma", paminnelsebeslut(pam, mote, "2026-11-20T09:30:00+00:00", vid("2026-11-20T09:30:00Z")).gor === "skicka");
 }
 
+rubrik("Mötet bakom märket: kundmötets id i Nav 2.0:s kalender (src/lib/nav2/kalender.ts)");
+{
+  // Modulen är server-only och läser databasen med service role. Här ersätts bara det som når utanför (databasen och
+  // de två serverläsningarna); `privata` och kopplingen till Möten körs som de är.
+  const { registerHooks } = await import("node:module");
+  const { existsSync } = await import("node:fs");
+  const { fileURLToPath, pathToFileURL } = await import("node:url");
+  const { join } = await import("node:path");
+  const rot = join(fileURLToPath(import.meta.url), "..", "..");
+  const stubb = (kod) => ({ url: "data:text/javascript," + encodeURIComponent(kod), shortCircuit: true });
+  registerHooks({
+    resolve(spec, ctx, nasta) {
+      if (spec === "server-only") return stubb("");
+      if (spec === "@/lib/supabase/server") return stubb("export const supabaseServer = async () => globalThis.__kalDb; export const supabaseAdmin = () => globalThis.__kalDb;");
+      if (spec === "@/lib/kalender-server") return stubb("export const hamtaDelningar = async () => [];");
+      if (spec === "@/lib/leveranskalender-server") return stubb("export const hamtaEnskilt = async () => null; export const hamtaHandelsedetalj = async () => null; export const hamtaLeveranskalender = async () => null;");
+      if (spec.startsWith("@/")) {
+        const bas = join(rot, "src", spec.slice(2));
+        const fil = [".ts", ".tsx", "/index.ts"].map((x) => bas + x).find((x) => existsSync(x)) ?? bas + ".ts";
+        return { url: pathToFileURL(fil).href, shortCircuit: true };
+      }
+      if ((spec.startsWith("./") || spec.startsWith("../")) && !/\.[cm]?[jt]sx?$/.test(spec) && ctx.parentURL?.startsWith("file:")) {
+        const fil = [".ts", ".tsx", "/index.ts"].map((x) => fileURLToPath(new URL(spec, ctx.parentURL)) + x).find((x) => existsSync(x));
+        if (fil) return { url: pathToFileURL(fil).href, shortCircuit: true };
+      }
+      return nasta(spec, ctx);
+    },
+  });
+  // En attrapp av supabase-js för läsningarna här: select, in, eq och not, och svaret som { data, error }.
+  // `tabeller["<tabell>!lasfel"]`: läsningen svarar som supabase-js vid ett fel, data null och `error`, utan att kasta.
+  const attrapp = (tabeller) => ({
+    from: (t) => {
+      const filter = [];
+      const q = {
+        select: () => q,
+        in: (k, v) => { filter.push((r) => v.includes(r[k])); return q; },
+        eq: (k, v) => { filter.push((r) => r[k] === v); return q; },
+        not: () => q,
+        then: (a, b) => Promise.resolve(tabeller[`${t}!lasfel`] ? { data: null, error: { message: tabeller[`${t}!lasfel`] } } : { data: (tabeller[t] ?? []).filter((r) => filter.every((f) => f(r))), error: null }).then(a, b),
+      };
+      return q;
+    },
+  });
+  const { privata } = await import("../src/lib/nav2/kalender.ts");
+  const JAG = "e0000000-0000-4000-8000-000000000001", ANNAN = "e0000000-0000-4000-8000-000000000002";
+  const ev = (id, o = {}) => ({ id, is_private: false, show_as: "upptagen", online_url: null, reminder_off: false, series_id: null, ...o });
+  const kp = (ref, o = {}) => ({ id: `p-${ref}`, slag: "mote", ref, serieId: null, agare: JAG, organisator: JAG, deltagare: [JAG], rubrik: "Möte med kunden", href: "/kalender", paminnelse: 15, dag: "2026-11-17", ...o });
+  const fixtur = {
+    calendar_event: [ev("h1"), ev("h2", { is_private: true }), ev("h3"), ev("h4"), ev("h5"), ev("h6"), ev("h7"), ev("h8")],
+    calendar_series: [],
+    mote: [
+      { id: "m1", event_id: "h1", kedja_id: "k1", utfall: null }, { id: "m2", event_id: "h2", kedja_id: "k1", utfall: null }, { id: "m3", event_id: "h3", kedja_id: "k1", utfall: null },
+      // Två öppna möten på samma händelse: vilket är det? Hellre ingen koppling än fel möte.
+      { id: "m4a", event_id: "h4", kedja_id: "k1", utfall: null }, { id: "m4b", event_id: "h4", kedja_id: "k1", utfall: null },
+      // Två möten på samma händelse, det ena avgjort: händelsen hör till det som saknar utfall.
+      { id: "m6gammal", event_id: "h6", kedja_id: "k1", utfall: "flyttat" }, { id: "m6", event_id: "h6", kedja_id: "k1", utfall: null },
+      // Två möten i olika kedjor (olika bolag) på samma händelse, det öppna först: bolaget ska höra till det valda mötet,
+      // inte till den rad som råkar komma sist (läsningen har ingen ordning).
+      { id: "m7", event_id: "h7", kedja_id: "k1", utfall: null }, { id: "m7flyttat", event_id: "h7", kedja_id: "k2", utfall: "flyttat" },
+      // Två öppna möten i olika bolag: inget möte, och då inget bolag heller (vilket skulle det vara?).
+      { id: "m8a", event_id: "h8", kedja_id: "k1", utfall: null }, { id: "m8b", event_id: "h8", kedja_id: "k2", utfall: null },
+    ],
+    mote_kedja: [{ id: "k1", bolag_id: "b1" }, { id: "k2", bolag_id: "b2" }],
+    mote_bolag: [{ id: "b1", namn: "PROV Bolaget AB" }, { id: "b2", namn: "PROV Annat AB" }],
+  };
+  globalThis.__kalDb = attrapp(fixtur);
+  const ut = await privata(JAG, [
+    kp("h1"),
+    // En privat post i en kollegas kalender, där jag inte är med.
+    kp("h2", { agare: ANNAN, organisator: ANNAN, deltagare: [ANNAN] }),
+    // En kollegas kundmöte som inte är privat, och där jag inte är med: bolaget syns, mötet är inte mitt.
+    kp("h3", { agare: ANNAN, organisator: ANNAN, deltagare: [ANNAN] }),
+    kp("h4"),
+    kp("h6"),
+    kp("h7"),
+    kp("h8"),
+    // Ett internt möte, utan rad i Möten.
+    kp("h5"),
+    // Bara tiden syns (delningsnivån): ingen rubrik, alltså inget bolag och inget möte.
+    kp("h1", { id: "p-h1-tid", rubrik: null }),
+  ]);
+  const hitta = (id) => ut.find((p) => p.id === id);
+  ok("mitt kundmöte bär mötets id i Möten, bredvid bolaget", JSON.stringify(hitta("p-h1").kund) === JSON.stringify({ bolag: "PROV Bolaget AB", mote: "m1" }), JSON.stringify(hitta("p-h1").kund));
+  ok("en privat post man inte är med på: varken bolag eller möte, och rubriken är Privat", JSON.stringify(hitta("p-h2").kund) === JSON.stringify({ bolag: null, mote: null }) && hitta("p-h2").rubrik === "Privat", JSON.stringify(hitta("p-h2")));
+  ok("en kollegas kundmöte där jag inte är med: bolaget syns, men mötets id är null (bara med insyn)", JSON.stringify(hitta("p-h3").kund) === JSON.stringify({ bolag: "PROV Bolaget AB", mote: null }), JSON.stringify(hitta("p-h3").kund));
+  ok("två öppna möten på samma händelse: bolaget står kvar, mötet är null", JSON.stringify(hitta("p-h4").kund) === JSON.stringify({ bolag: "PROV Bolaget AB", mote: null }), JSON.stringify(hitta("p-h4").kund));
+  ok("två möten på samma händelse, det ena avgjort: mötet utan utfall", JSON.stringify(hitta("p-h6").kund) === JSON.stringify({ bolag: "PROV Bolaget AB", mote: "m6" }), JSON.stringify(hitta("p-h6").kund));
+  ok("ett internt möte får ingen kund alls", hitta("p-h5").kund === undefined, JSON.stringify(hitta("p-h5")));
+  ok("bara tiden syns: varken bolag eller möte", JSON.stringify(hitta("p-h1-tid").kund) === JSON.stringify({ bolag: null, mote: null }), JSON.stringify(hitta("p-h1-tid").kund));
+  ok("två möten i olika bolag på samma händelse: bolaget hör till samma möte som id:t", JSON.stringify(hitta("p-h7").kund) === JSON.stringify({ bolag: "PROV Bolaget AB", mote: "m7" }), JSON.stringify(hitta("p-h7").kund));
+  ok("två öppna möten i olika bolag: varken bolag eller möte", JSON.stringify(hitta("p-h8").kund) === JSON.stringify({ bolag: null, mote: null }), JSON.stringify(hitta("p-h8").kund));
+
+  // Ett läsfel i kopplingen: ingen kund alls, aldrig ett möte utan sitt bolag ({bolag: null, mote: "m1"} fast rubriken
+  // syns). Kalendern läses ändå: posterna kommer tillbaka med rubrik.
+  const forut = console.error;
+  console.error = () => {};
+  try {
+    for (const t of ["mote", "mote_kedja", "mote_bolag"]) {
+      globalThis.__kalDb = attrapp({ ...fixtur, [`${t}!lasfel`]: "nere" });
+      const fel = await privata(JAG, [kp("h1"), kp("h7")]);
+      ok(`${t} går inte att läsa: ingen post får kund, och posterna står kvar`, fel.length === 2 && fel.every((p) => p.kund === undefined && p.rubrik === "Möte med kunden"), JSON.stringify(fel.map((p) => p.kund ?? null)));
+    }
+  } finally {
+    console.error = forut;
+  }
+}
+
 console.log(fel === 0 ? "\n\x1b[32mAlla kontroller gick igenom.\x1b[0m" : `\n\x1b[31m${fel} fel.\x1b[0m`);
 process.exit(fel === 0 ? 0 : 1);

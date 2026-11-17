@@ -26,6 +26,8 @@ export type StatKedja = {
   id: string; forstaBokatAv: string; forstaBokatNar: string; forstaMoteTid: string | null;
   forstaHallnaHallsAv: string | null; avslut: "affar" | "nej" | "avbokat" | null; avslutNar: string | null;
   affarForstaMote: boolean; offertNar: string | null; kolumn: string | null; kalla: string;
+  /** Offertens belopp i hela kronor (0303). Äldre offerter saknar det. */
+  offertBelopp?: number | null;
   /** Panelen: uppföljningsdagen och hur många "inget svar" i rad (mote_kedja). */
   uppfoljningDatum?: string | null;
   ingetSvarIRad?: number;
@@ -154,13 +156,30 @@ export function offerter(kedjor: StatKedja[], v: Period, krets: readonly string[
   const medOffert = kedjor.filter((k) => k.offertNar !== null && agd(k.forstaHallnaHallsAv));
   const avslutade = (avslut: "affar" | "nej") => medOffert.filter((k) => k.avslut === avslut && iVeckan(k.avslutNar, v));
   const affarer = avslutade("affar");
+  // Offerter som väntar just nu (0303). Äldre offerter saknar belopp, så talet leder alltid med antalet och
+  // summan står aldrig ensam.
+  const vantande = medOffert.filter((k) => k.avslut === null);
+  const medBelopp = vantande.filter((k) => typeof k.offertBelopp === "number");
+  const summa = medBelopp.reduce((s, k) => s + (k.offertBelopp as number), 0);
   return {
     skickade: medOffert.filter((k) => iVeckan(k.offertNar, v)).length,
     affar: affarer.length,
     nej: avslutade("nej").length,
     tysta: medOffert.filter((k) => k.avslut === null && k.kolumn === "tyst").length,
     medianDagar: median(affarer.map((k) => dagarMellan(k.offertNar as string, k.avslutNar as string))),
+    vantar: vantande.length,
+    medBelopp: medBelopp.length,
+    summa,
+    rad: offertRad(vantande.length, medBelopp.length, summa),
   };
+}
+
+/** "5 offerter väntar, 3 med belopp: 212 000 kr." Antalet först; utan belopp ingen summa alls. */
+export function offertRad(vantar: number, medBelopp: number, summa: number): string {
+  if (vantar === 0) return "Inga offerter väntar.";
+  const start = `${vantar} ${vantar === 1 ? "offert" : "offerter"} väntar`;
+  if (medBelopp === 0) return `${start}, ingen med belopp.`;
+  return `${start}, ${medBelopp} med belopp: ${new Intl.NumberFormat("sv-SE").format(summa)} kr.`;
 }
 
 type Hink = "0–1" | "2–3" | "4–7" | "8+";

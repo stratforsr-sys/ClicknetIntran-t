@@ -78,6 +78,7 @@ export const LASES_AVEN = [
   // S09: barnkallorna i BARN (registerutdrag.ts).
   "coaching_drill_answer", "coaching_habit_check", "essay_answer", "candidate_stage_event",
   "interview_scorecard", "candidate_note", "candidate_message", "candidate_booking", "candidate_merit_request",
+  "nav_forslag_handelse",
 ] as const;
 
 export function ordningFor(tabell: string): readonly string[] {
