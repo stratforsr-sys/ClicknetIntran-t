@@ -9649,6 +9649,16 @@ button.hv-mitt{cursor:pointer}
    satt av hvEfterRita) skjuter stegen så långt tillbaka. Utan variabeln är reglerna skissens. */
 .hv.in .an{animation-delay:calc(var(--i,0) * 30ms - var(--hv-gatt,0ms))}
 .hv.in .hv-ins .m{animation-delay:calc(90ms + var(--i,0) * 24ms - var(--hv-gatt,0ms))}
+/* Ett stort fönster (hvSkala, bara när :root har data-hvskala): hemmet förstoras som skissens hela ram, 1380 x 856 px
+   utan menyraden, så långt både bredden och höjden räcker. Blir fönstret bredare än ramen i förhållande till höjden
+   står hälsningen kvar vid vänsterkanten och läget vid högerkanten, på samma andel av bredden som i skissen, och den
+   extra bredden blir luft mellan spalterna (--hv-spridd). Arket gör likadant. Vid förstoring räknar webbläsaren dvh och
+   vw i det förstorade, så de byts mot hemmets egna mått. Utan attributet är allt skissens. */
+:root[data-hvskala] .main.hvmode .wrap>.hv{zoom:var(--hv-z,1);height:var(--hv-vh,100dvh);--hv-ur:clamp(232px, calc(var(--hv-vh,100dvh) - 292px), 432px)}
+:root[data-hvskala] .main.hvmode .hv-hemin{max-width:var(--hv-hemin,1280px);column-gap:calc(clamp(32px, calc(var(--hv-vw,100vw) * .04), 64px) + var(--hv-spridd,0px))}
+:root[data-hvskala] .main.hvmode .hv-arkin{max-width:var(--hv-arkin,1120px)}
+/* Navs ruta Nästa att göra står i skissens hörn, och följer med förstoringen. */
+:root[data-hvskala] body.hvbody .todopill{zoom:var(--hv-z,1)}
 </style>
 
 <div class="proto" role="region" aria-label="Prototypinställningar">
@@ -36536,8 +36546,44 @@ function hvVisare(rot){
     S.hv.visFore[k] = v;
   });
 }
+/* ---------- Ett stort fönster: hemmet förstoras som skissen, och står kvar på samma ställen ----------
+   Skissen är ritad för en ram på 1380 x 856 px (fönstret utan menyraden). Är fönstret större förstoras hemmet med CSS
+   zoom, så långt både bredden och höjden räcker: allt blir lika mycket större, urtavlan också, och höjden ritas som i
+   skissen. Är fönstret bredare än ramen i förhållande till höjden blir hemmet i förstoringen bredare än 1380 px. Då står
+   hälsningen kvar vid vänsterkanten och läget vid högerkanten på samma andel av bredden som i skissen, spalterna behåller
+   sin storlek, och den extra bredden blir luft mellan dem (--hv-hemin, --hv-spridd, --hv-arkin). Upp till 1380 x 856 är
+   allt som förut, och menyraden ändras aldrig. Webbläsaren räknar dvh och vw i det förstorade (de blir för stora), så
+   hemmet får sina egna mått i --hv-vh och --hv-vw. Stilen gäller bara när :root har data-hvskala. */
+const HVSKALA_BREDD = 1380, HVSKALA_HOJD = 856, HVSKALA_HEMIN = 1280, HVSKALA_ARKIN = 1120;
+let hvSkalaSist = null, hvSkalaRo = null, hvSkalaObs = null;
+function hvSkala(){
+  if (typeof document === 'undefined' || !document.documentElement || !document.querySelector) return;
+  const el = document.querySelector('.main.hvmode .wrap>.hv'); if (!el || !el.parentElement) return;
+  const w = el.parentElement.clientWidth, h = window.innerHeight, vw = window.innerWidth; if (!w || !h) return;
+  // Bredden ändras också när menyraden fälls ut eller in, utan att fönstret gör det.
+  if (typeof ResizeObserver === 'function' && hvSkalaObs !== el.parentElement){
+    if (!hvSkalaRo) hvSkalaRo = new ResizeObserver(() => hvSkala());
+    if (hvSkalaObs) hvSkalaRo.unobserve(hvSkalaObs);
+    hvSkalaRo.observe(el.parentElement); hvSkalaObs = el.parentElement;
+  }
+  // Förstoringen avrundas nedåt, så att det förstorade hemmet aldrig blir en bråkdel större än fönstret (ingen rullist).
+  const z = Math.floor(Math.max(1, Math.min(w / HVSKALA_BREDD, h / HVSKALA_HOJD)) * 10000) / 10000;
+  // Hur mycket bredare än skissens ram hemmet är i förstoringen. Avrundningen av zoomen ger högst några hundradelar.
+  const r0 = (w / z) / HVSKALA_BREDD, r = r0 < 1.0005 ? 1 : r0, ner = (x) => (Math.floor(x * 100) / 100).toFixed(2) + 'px';
+  const v = z > 1 || r > 1 ? {
+    '--hv-z':String(z), '--hv-vh':ner(h / z), '--hv-vw':ner((vw || w) - w + HVSKALA_BREDD),
+    '--hv-hemin':ner(HVSKALA_HEMIN * r), '--hv-spridd':ner(HVSKALA_HEMIN / 2 * (r - 1)), '--hv-arkin':ner(HVSKALA_ARKIN * r),
+  } : null;
+  const nyckel = JSON.stringify(v);
+  if (nyckel === hvSkalaSist) return; hvSkalaSist = nyckel;
+  const rot = document.documentElement;
+  ['--hv-z', '--hv-vh', '--hv-vw', '--hv-hemin', '--hv-spridd', '--hv-arkin'].forEach(k => v ? rot.style.setProperty(k, v[k]) : rot.style.removeProperty(k));
+  if (v) rot.setAttribute('data-hvskala', ''); else rot.removeAttribute('data-hvskala');
+}
+if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('resize', () => hvSkala(), {passive:true});
 function hvEfterRita(){
   const el = document.querySelector('.hv'); if (!el) return;
+  hvSkala();
   // Trappan (klassen in) bara vid första ritningen och när läget byts, som i skissen. Klassen sätts innan sidan hunnit
   // läsa av eller måla något, så trappan börjar från början. Den tas bort när sista steget har kommit, så att
   // omritningar därefter (Navs render) står still. Klassen sitter på ett element som render() byter ut: kommer en
@@ -36610,7 +36656,8 @@ function hvFlip(){
   el.querySelectorAll('[data-flip]').forEach(x => {
     const a = F.flip[x.dataset.flip]; if (!a) return;
     const b = x.getBoundingClientRect(); if (!b.width) return;
-    const dx = a.left - b.left, dy = a.top - b.top, sx = a.width / b.width;
+    // Rektanglarna är i skärmens bildpunkter, transform i hemmets: i ett förstorat hem (hvSkala) delas flytten med zoomen.
+    const z = x.currentCSSZoom || 1, dx = (a.left - b.left) / z, dy = (a.top - b.top) / z, sx = a.width / b.width;
     if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(sx - 1) < .01) return;
     x.style.transformOrigin = '0 0'; x.style.transition = 'none'; x.style.transform = `translate(${dx}px,${dy}px) scale(${sx})`;
     x.getBoundingClientRect();

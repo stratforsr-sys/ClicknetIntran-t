@@ -160,7 +160,7 @@ function hem({ chef, forslag = 1, andrat = ANDRAT, andratKort = AKORT, rader = n
     toastActs: (msg, acts) => { anrop.push(["navtoast", msg, acts.length]); },
   };
   kor(block, g, ["hvHem", "hvVantar", "hvForeslar", "hvTeam", "hvDinManad", "hvAndrat", "hvArk", "hvSkriv", "hvInstRuta", "hvPa", "hvFlagga", "hvDolj", "hvVisa", "hvGrattis", "hvHamta", "hvOppna", "hvValj", "hvTangent", "hvFraga", "hvChattGodkann", "hvChattAngra", "hvKlick", "hvStang", "hvPlaneraDag", "hvSseDela", "hvVidBotten", "hvChattStopp", "hvChattIgen", "hvBokaDag", "hvAngraDag", "hvKopiera",
-    "hvUrtavla", "hvUrMitt", "hvUrRam", "hvUrVink", "hvUrBage", "hvDagPlan", "hvVisadDag", "hvDagSlut", "hvHalsning", "hvTraffar", "hvTraffVy", "hvEfterRita", "hvFlip", "hvMinut", "hvD", "hvForeMat", "hvFokusNyckel", "hvHeroRad", "hvDockRad", "hvLys", "hvStegKlocka", "hvValjTraff", "hvBokaKnapp", "hvDagNyckel"]);
+    "hvUrtavla", "hvUrMitt", "hvUrRam", "hvUrVink", "hvUrBage", "hvDagPlan", "hvVisadDag", "hvDagSlut", "hvHalsning", "hvTraffar", "hvTraffVy", "hvEfterRita", "hvFlip", "hvMinut", "hvD", "hvForeMat", "hvFokusNyckel", "hvHeroRad", "hvDockRad", "hvLys", "hvStegKlocka", "hvValjTraff", "hvBokaKnapp", "hvDagNyckel", "hvSkala"]);
   g.anrop = anrop;
   return g;
 }
@@ -2509,6 +2509,55 @@ rubrik("Kontrollen, fynd 7b: märken och rader lyser upp tillsammans, och stegkl
     g.S.hv.strom = false; g.hvStegKlocka();
     ok("när svaret är klart stannar klockan", g.anrop.filter((a) => a[0] === "clearInterval").length === fore + 1);
   } finally { Date.now = gammal; }
+}
+
+{
+  rubrik("Ett stort fönster: hemmet förstoras som skissen och står kvar på samma ställen (hvSkala)");
+  const g = hem({ chef: true });
+  const p = {}, attr = new Set(), obs = [];
+  let satt = 0;
+  const forald = { clientWidth: 1380 };
+  const el = { parentElement: forald };
+  g.ResizeObserver = class { constructor(f) { this.f = f; obs.push(this); this.sedda = []; } observe(x) { this.sedda.push(x); } unobserve() {} };
+  g.document = { ...g.document,
+    documentElement: { style: { setProperty: (k, v) => { p[k] = v; satt++; }, removeProperty: (k) => { delete p[k]; } }, setAttribute: (k) => attr.add(k), removeAttribute: (k) => attr.delete(k) },
+    querySelector: (s) => (s === ".main.hvmode .wrap>.hv" ? el : null) };
+  const fonster = (b, h) => { forald.clientWidth = b - 64; g.window = { ...g.window, innerWidth: b, innerHeight: h }; g.hvSkala(); };
+  const px = (k) => parseFloat(p[k]);
+  fonster(1444, 856);
+  ok("i skissens storlek (1380 x 856 utan menyraden) förstoras ingenting och stilen är skissens", !Object.keys(p).length && !attr.has("data-hvskala"), JSON.stringify(p));
+  fonster(2560, 1170);
+  const z = +p["--hv-z"];
+  ok("2560 x 1170: förstoringen är höjden delad med skissens 856, eftersom fönstret är bredare än ramen", Math.abs(z - 1170 / 856) < 0.0001 && z <= 1170 / 856, p["--hv-z"]);
+  ok("och det förstorade hemmet är aldrig högre än fönstret", z * px("--hv-vh") <= 1170 && 1170 - z * px("--hv-vh") < 0.1, p["--hv-vh"]);
+  const r = 2496 / z / 1380;
+  ok("den extra bredden: spalternas yta växer med andelen (1280 x r) och luften mellan dem tar hela tillskottet", Math.abs(px("--hv-hemin") - 1280 * r) < 0.01 && Math.abs(px("--hv-spridd") - 640 * (r - 1)) < 0.01, `${p["--hv-hemin"]} ${p["--hv-spridd"]}`);
+  ok("arket breddas på samma sätt", Math.abs(px("--hv-arkin") - 1120 * r) < 0.01, p["--hv-arkin"]);
+  ok("vw räknas som i skissens fönster: menyraden plus 1380 px", p["--hv-vw"] === "1444.00px", p["--hv-vw"]);
+  ok("och stilen slås på med data-hvskala", attr.has("data-hvskala"));
+  fonster(1600, 1200);
+  ok("ett högt fönster förstoras efter bredden, och spalterna breddas inte", p["--hv-z"] === String(Math.floor(1536 / 1380 * 10000) / 10000) && Math.abs(px("--hv-spridd")) < 0.01, `${p["--hv-z"]} ${p["--hv-spridd"]}`);
+  fonster(1920, 800);
+  ok("ett brett men lågt fönster förstoras inte, men hälsningen och läget står ändå kvar vid kanterna", p["--hv-z"] === "1" && px("--hv-hemin") > 1280 && attr.has("data-hvskala"), `${p["--hv-z"]} ${p["--hv-hemin"]}`);
+  const fore = satt; fonster(1920, 800);
+  ok("samma fönster en gång till skriver ingenting", satt === fore);
+  fonster(1280, 900);
+  ok("ett fönster som är smalare än skissen tar bort allt, och stilen är skissens igen", !Object.keys(p).length && !attr.has("data-hvskala"), JSON.stringify(p));
+  ok("bredden bevakas (menyraden kan fällas ut utan att fönstret ändras), med en enda bevakare", obs.length === 1 && obs[0].sedda.length === 1 && obs[0].sedda[0] === forald, `${obs.length} ${obs[0] && obs[0].sedda.length}`);
+  g.document = { ...g.document, querySelector: () => null }; const f2 = satt; g.window = { ...g.window, innerWidth: 2560, innerHeight: 1170 }; g.hvSkala();
+  ok("utanför hemmet rör den ingenting", satt === f2);
+
+  // FLIP i ett förstorat hem: rektanglarna är i skärmens bildpunkter, flytten i hemmets.
+  const h = hem({ chef: true }); h.hvHem();
+  let n = 0; const rekt = [{ left: 300, top: 200, width: 100, height: 20 }, { left: 260, top: 160, width: 100, height: 20 }];
+  const x = { dataset: { flip: "k" }, style: {}, currentCSSZoom: 2, getBoundingClientRect: () => rekt[Math.min(n++, 1)] };
+  const hv = { dataset: { hvlage: "hem" }, classList: klassLista(), contains: () => false, querySelector: () => null, querySelectorAll: (s) => (s === "[data-flip]" ? [x] : []) };
+  h.document = { ...h.document, activeElement: null, body: {}, querySelector: (s) => (s === ".hv" ? hv : null), getElementById: () => null };
+  h.S.hv.flipTill = Date.now() + 10000;
+  h.hvForeMat(); let satt2 = null;
+  Object.defineProperty(x.style, "transform", { get: () => satt2 ?? "", set: (v) => { if (satt2 === null) satt2 = v; }, configurable: true });
+  h.hvFlip();
+  ok("glidningen vid zoom 2 flyttar hälften så många av hemmets bildpunkter som skärmens", satt2 === "translate(20px,20px) scale(1)", satt2);
 }
 
 console.log("\nKontroller per sort:");
