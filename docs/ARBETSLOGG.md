@@ -14,6 +14,9 @@ redan i en try/catch med ett ärligt besked: rutterna svarar med sitt felbesked,
 hemmet gör det till `lasfel.inst` som förut. Provet "lasInst utan strikt ger förvalen" är omskrivet till att
 läsningen kastar för alla, med ett nytt prov för nattjobbet.
 
+Samtidigt: `src/components/shell/pling.ts` heter nu `pling-lage.ts`. Den krockade med `Pling.tsx` på macOS, där
+skiftläget inte skiljer filnamn, så `tsc` aldrig blev grönt lokalt. Nu är `npx tsc --noEmit` helt rent.
+
 ## 2026-11-17 · Hemvyn och chatten till main
 
 Beställaren: "nu kan du pusha till main", och före det "ska du inte rätta det här först" om listan Inte rättat.
