@@ -5,10 +5,10 @@ varför-resonemangen; det här är bara läget just nu och vad som står på tur
 
 **Senast uppdaterad:** 2026-11-17 (sen kväll): **HEMVYN OCH CHATTEN ÄR PÅ MAIN** (beställarens ja: "nu kan du pusha
 till main"), en commit ihopslagen med mains Möten-ändringar (0313). Alla migrationer på grenen (0303–0307, 0312) var
-redan körda i produktionen (stämt mot `schema_migrations` före mergen). **Chatten svarar inte i produktionen än:**
-produktionens `nav_chatt_prov` har ingen godkänd rad för `44349a171864`, så rutten svarar 409 och hemmet visar
-sökrutan. Beställaren godkänner en rad (kopierad från nav-prov, märkt som kopia, eller ett nytt prov mot produktionen,
-cirka 22 kr). Det nya hemmet syns bara för den som står i `hem.nytt`. Rättat före mergen: beskedet när hemmets
+redan körda i produktionen (stämt mot `schema_migrations` före mergen). **Chatten svarar i produktionen:** raden för `44349a171864` är
+kopierad från nav-prov till produktionens `nav_chatt_prov` på beställarens ord ("Kopiera från nav-prov"), med samma id
+(`a06f4169…`) och en anteckning om att provet kördes i nav-prov, inte mot produktionen. Prövat med en fråga
+2026-11-17 kväll: svaret kom med källraden "Skrivet av AI ur Navs tal". Det nya hemmet syns bara för den som står i `hem.nytt`. Rättat före mergen: beskedet när hemmets
 inställningar inte går att läsa, "Saknas i kunskapsbasen · sparat" (`missSparad`), och att en bockad uppgift
 försvinner direkt. Kvar: sex andra läsare av `lasInst` får förval vid läsfel (egen uppgift). npm test stannar vid
 `handelselogg` i nav-prov (tre händelsetyper saknar rader), så resten måste köras skript för skript.

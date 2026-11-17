@@ -22,8 +22,9 @@ Beställaren: "nu kan du pusha till main", och före det "ska du inte rätta det
   är oförändrat. (5) Hemmets uppgiftsrader läser också TASKS läge, så en bockad uppgift försvinner direkt i stället
   för när uppgifterna hämtats om.
 - **Urtavlan står mitt i vyn:** sidofälten är lika breda (beställaren, skärmbild). Skissens 1.12fr/.92fr är ersatt.
-- **Inte gjort:** produktionens provrad för `44349a171864` (beställaren godkänner). Chatten är av i produktionen
-  tills dess.
+- **Provraden i produktionen:** beställaren valde "Kopiera från nav-prov". Raden `a06f4169…` kopierades med samma tal,
+  godkänd på beställarens konto i produktionen, och anteckningen säger att provet kördes i nav-prov. Chatten svarade
+  på en provfråga i produktionen direkt efteråt.
 
 ## 2026-11-17 · Hemvyn som skiss A v2, funktionsvarvet och chattens B-sats (grenen hemvy-chatt, sju pushar)
 
