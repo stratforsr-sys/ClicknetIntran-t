@@ -35904,10 +35904,14 @@ async function hvChattKor(tur){
         if (tur.svar || tur.fel) slapp(); else hvChattRita();
       }
       // Stängdes strömmen före svaret står utkastet kvar som det var, och felet säger var det bröts.
+      // Är sidan på väg bort väntar vi: går den försvinner vi här, och står den kvar gäller brottet som vanligt.
+      if (!tur.svar && !tur.fel && hvGarSnart) await hvStannarSidan();
       if (!tur.svar && !tur.fel){ tur.fel = 'Svaret bröts här.'; tur.kod = 'ofullstandigt'; if (tur.utkast) tur.tonad = true; hvSrSag(tur.fel); }
     }
   } catch(_){
     // Ett stopp avbryter hämtningen med ett fel: det är inget nätfel, och ett svar som redan kommit står kvar.
+    // En omladdning bryter den också, före pagehide: vänta, så att turen sparas som pågående (se hvGarSnart).
+    if (hvGarSnart && !tur.stoppad && !tur.svar && !tur.fel) await hvStannarSidan();
     if (min() && !tur.stoppad && !tur.svar && !tur.fel){ tur.fel = 'Nav svarade inte. Kontrollera nätet och försök igen.'; tur.kod = 'nat'; hvSrSag(tur.fel); }
   } finally {
     drar(); if (hvDrar === dragen) hvDrar = null;
@@ -35977,6 +35981,8 @@ const hvAnnanFlik = () => { hvKanal(); const t = S.hv.annanFlik; return typeof t
 const HVTRAD = 'nav2-hvutkast-trad', HVTRADMAX = 20;
 const hvTradNyckel = () => HVTRAD + ':' + ((ND && ND.jag && ND.jag.id) || '');
 function hvTradSpara(){
+  // Sidan har gått: bilden som sparades vid pagehide gäller, och inget som händer efter den skriver över den.
+  if (hvGick) return;
   const H = S.hv; if (!ND || !ND.jag || !ND.jag.id) return;
   const nu = now(), ms = Date.now();
   const turer = (H.chatt || []).slice(-HVTRADMAX).map(t => ({fraga:t.fraga, filer:t.filer || [], steg:(t.steg || []).map(({nr, verktyg, text, ok, ms:m, kalla}) => ({nr, verktyg, text, ok, ms:m, kalla})),
@@ -36019,8 +36025,17 @@ function hvSidanGar(){
     hvKanalSag('slut');
   }
   hvTradSpara();
+  hvGick = true;
 }
+// En omladdning bryter hämtningen redan före pagehide (mätt i Chrome 2026-11-17: beforeunload, brottet, pagehide). Det
+// brottet är inget nätfel: turen pågick, och ska efter omladdningen säga att sidan laddades om. hvGarSnart gäller från
+// beforeunload, och släpps efter tre sekunder om sidan står kvar (någon avbröt). hvGick gäller från pagehide.
+let hvGick = false, hvGarSnart = false;
+const hvStannarSidan = () => new Promise(k => setTimeout(k, 1500));
+window.addEventListener('beforeunload', () => { hvGarSnart = true; setTimeout(() => { hvGarSnart = false; }, 3000); });
 window.addEventListener('pagehide', hvSidanGar);
+// Kommer sidan tillbaka ur webbläsarens minne (bakåt och framåt) sparas tråden som vanligt igen.
+window.addEventListener('pageshow', () => { hvGick = false; hvGarSnart = false; });
 // Under strömmen ritas tråden om högst var 50:e ms. Det sista (svaret, felet, stoppet) ritas alltid direkt.
 let hvRitaT = null;
 function hvChattRita(nu, tur){

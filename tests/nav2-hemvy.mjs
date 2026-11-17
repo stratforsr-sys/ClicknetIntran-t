@@ -152,7 +152,7 @@ function hem({ chef, forslag = 1, andrat = ANDRAT, andratKort = AKORT, rader = n
     ndKopplad: (vy) => vy !== "kalender" || kalender, ndP: () => g.ND.provision, pvSt: () => {}, PVMAN: "2026-11", pvManNamn: () => "november", pvUnderlag: () => U,
     pvTakt: () => ({ prognos: { totalt: 30500 } }), oProv: (o) => o.prov, oDat: (d) => `${+d.slice(8)} nov`, frKort: (d) => `${+d.slice(8)} nov`,
     ndOmlasAnmal: () => {}, ndOmlas: () => Promise.resolve(true), render: () => {}, toast: () => {},
-    document: { addEventListener: () => {}, getElementById: () => null, querySelector: () => null }, window: { addEventListener: () => {}, scrollTo: () => {} },
+    document: { addEventListener: () => {}, getElementById: () => null, querySelector: () => null }, window: { lyssnare: {}, addEventListener(n, f){ (this.lyssnare[n] ||= []).push(f); }, scrollTo: () => {} },
     localStorage: { getItem: (k) => (k === "nav2-hvton" ? hvton : null), setItem: () => {} },
     openPal: () => { anrop.push(["pal"]); }, TextDecoder, AbortController,
     // Tickarna och Navs egen toast räknas, så att proven ser hur många som startas och vad som går till Nav.
@@ -2690,6 +2690,34 @@ rubrik("Funktionsvarvet K1, A1-2: tråden överlever en omladdning, och en omlad
   b.g.hvSidanGar();
   ok("pagehide stoppar frågan som pågår med keepalive och radens id", b.stopp.length === 1 && b.stopp[0].keepalive === true && b.stopp[0].b.rad === K1RAD);
   ok("och lyssnaren är satt på pagehide", /window\.addEventListener\('pagehide', hvSidanGar\);/.test(block));
+  // Efter pagehide skriver inget över den sparade tråden (strömmen kan brytas eller stängas strax efter).
+  sb.slut(); await pb;
+  const efterBrott = JSON.parse(b.lager.m.get(`nav2-hvutkast-trad:${b.g.ND.jag.id}`)).turer[0];
+  ok("strömmen som stängs efter pagehide skriver inte över den sparade tråden: turen står kvar som pågående, utan fel", efterBrott.laddar === true && efterBrott.fel === "" && efterBrott.kod === "", JSON.stringify({ laddar: efterBrott.laddar, fel: efterBrott.fel, kod: efterBrott.kod }));
+  {
+    // En riktig omladdning (mätt i Chrome 2026-11-17): beforeunload, sedan bryts hämtningen, sedan pagehide. Förut sparades
+    // turen då om som ett nätfel före pagehide, och sa efter omladdningen "Nav svarade inte" i stället för att sidan laddades om.
+    const d = k1Chatt({ lager: k1Lager() });
+    const fonster = (namn) => d.g.window.lyssnare[namn].forEach((f) => f());
+    d.g.S.hv.q = "Hur går månaden?";
+    const pd = d.g.hvFraga(); await k1Vanta();
+    const sd = d.strommar[0].st; sd.ge({ h: "rad", id: K1RAD }); await k1Vanta();
+    fonster("beforeunload");
+    sd.slut(); await k1Vanta(30);
+    const nyckelD = `nav2-hvutkast-trad:${d.g.ND.jag.id}`, mitt = JSON.parse(d.lager.m.get(nyckelD)).turer[0];
+    ok("bryts strömmen efter beforeunload sparas turen inte om som ett fel: den står kvar som pågående", mitt.laddar === true && mitt.fel === "" && d.g.S.hv.chatt[0].fel === "", JSON.stringify({ laddar: mitt.laddar, fel: mitt.fel }));
+    fonster("pagehide");
+    const e = k1Chatt({ lager: d.lager }); e.g.hvHem();
+    ok("och efter omladdningen säger den att sidan laddades om, med Försök igen", e.g.S.hv.chatt[0].kod === "omladdad" && /Sidan laddades om innan svaret var klart/.test(e.g.S.hv.chatt[0].fel), JSON.stringify(e.g.S.hv.chatt[0] && { kod: e.g.S.hv.chatt[0].kod }));
+    // Står sidan kvar (någon avbröt omladdningen) gäller brottet som vanligt, efter en kort väntan.
+    const f = k1Chatt({ lager: k1Lager() });
+    f.g.S.hv.q = "Hur går månaden?";
+    const pf = f.g.hvFraga(); await k1Vanta();
+    f.g.window.lyssnare.beforeunload.forEach((x) => x());
+    f.strommar[0].st.slut(); await pf;
+    ok("står sidan kvar efter beforeunload gäller brottet som vanligt: Svaret bröts här, med Försök igen", f.g.S.hv.chatt[0].kod === "ofullstandigt" && f.g.S.hv.chatt[0].laddar === false, JSON.stringify({ kod: f.g.S.hv.chatt[0].kod }));
+    ok("lyssnarna: beforeunload sätter läget och släpper det efter tre sekunder, pageshow nollställer", /window\.addEventListener\('beforeunload', \(\) => \{ hvGarSnart = true; setTimeout\(\(\) => \{ hvGarSnart = false; \}, 3000\); \}\);/.test(block) && /window\.addEventListener\('pageshow', \(\) => \{ hvGick = false; hvGarSnart = false; \}\);/.test(block));
+  }
   // Omladdningen: en ny flik med samma lagring.
   const sparat = b.lager;
   const c = k1Chatt({ lager: sparat });
