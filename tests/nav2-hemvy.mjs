@@ -1309,8 +1309,8 @@ rubrik("Skissens stil, tecken för tecken (kontraktet §2.2 och §3)", "MARKUP")
   // Varje regel i skissens stil.css rad 33–497 står i hemmets stil, med samma tecken. Mellanrum vid radbrytningar och
   // kommentarer räknas inte. .hv-nyckel och .hv-dagval får stå kvar som död stil eller utgå (§3); .hv-herok prövas för sig.
   const har = norm(hemCss);
-  // Beställaren 2026-11-17: skrivrutan får ingen grön ram vid fokus. Den regeln prövas för sig nedan, som borta.
-  const valfri = (r) => /^(?:\.hv-nyckel|\.hv-dagval)\b/.test(r) || r.startsWith(".hv-herok{") || r === ".hv-skriv:focus-within{border-color:var(--hv-brand)}";
+  // Beställaren 2026-11-17: skrivrutan får ingen grön ram vid fokus, och urtavlan står mitt i vyn. Båda prövas för sig nedan.
+  const valfri = (r) => /^(?:\.hv-nyckel|\.hv-dagval)\b/.test(r) || r.startsWith(".hv-herok{") || r === ".hv-skriv:focus-within{border-color:var(--hv-brand)}" || r.startsWith(".hv-hemin{");
   for (const [namn, regler] of skissAvsnitt) {
     const saknas = regler.filter((r) => !valfri(r) && !har.includes(r));
     okM(`${namn}: ${regler.filter((r) => !valfri(r)).length} regler som i skissen`, hemCss.length > 0 && saknas.length === 0, saknas.slice(0, 3).join("  |  "));
@@ -1593,6 +1593,7 @@ rubrik("Stilen: täckande ytor, få tider, tydliga lägen (skiss A)", "REGEL");
   ok("tryck: scale(.97) på knappar, chips och märken", css.includes(".hv :is(.hv-btn,.hv-chip,.hv-ik,.hv-send,.hv-stamp,.hv-kn,.hv-pin,.hv-atgk):active:not(:disabled){transform:scale(.97)}"));
   // Beställaren 2026-11-17: ingen grön ram runt skrivrutan när den får fokus. Markören i fältet visar fokus.
   ok("skrivrutan får ingen grön ram vid fokus (beställaren 2026-11-17)", !/\.hv-skriv:focus-within\{/.test(css));
+  ok("urtavlan står mitt i vyn: fälten till vänster och höger är lika breda (beställaren 2026-11-17)", /\.hv-hemin\{[^}]*grid-template-columns:minmax\(0,1fr\) var\(--hv-ur\) minmax\(0,1fr\);/.test(css));
   ok("utan chatten (sökrutan) står / , Tala och Skicka till höger, som i chattläget", /\.hv-srad>\.hv-kbd:first-child\{margin-left:auto\}/.test(css));
   ok("hemmet lämnar tabbordningen när man skriver", /\.hv-skriver \.hv-hem\{opacity:0;visibility:hidden;pointer-events:none;/.test(css) && !/\.hv-skriver \.hv-hem\{[^}]*transform/.test(css));
   ok("fältkanten har 3:1 mot ytan", /--hv-line-3:#5E7068/.test(tokens) && /--hv-line-3:#85938B/.test(regel('.hv[data-hvtema="ljus"]', css) ?? "") && /\.hv-egen input,\.hv-form :is\(input,select,textarea\)\{[^}]*border:1px solid var\(--hv-line-3\)/.test(css));
