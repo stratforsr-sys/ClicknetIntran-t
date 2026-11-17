@@ -6,7 +6,7 @@ import {
   PLING_INTERVALL_MS,
   plingetPa,
   type Plingpost,
-} from "./pling";
+} from "./pling-lage";
 
 /**
  * Lyssnaren. Ritar ingenting — den bor i skalet och plingar.

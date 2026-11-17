@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Ikon } from "@/components/shell/Ikon";
 import { cn } from "@/components/ui/cn";
-import { PLING_NYCKEL, plingetPa, sattPling } from "@/components/shell/pling";
+import { PLING_NYCKEL, plingetPa, sattPling } from "@/components/shell/pling-lage";
 
 /**
  * Knappen som slår på plinget.

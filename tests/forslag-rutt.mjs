@@ -484,7 +484,7 @@ rubrik("Hemmet säger när det inte vet: ett läsfel är inte ett tomläge");
   const hemFel = await hemmet(fel);
   ok("byggHem när förslagen inte går att läsa: lasfel.forslag är true och forslag null", hemFel?.lasfel?.forslag === true && hemFel.forslag === null, JSON.stringify({ lasfel: hemFel?.lasfel, forslag: hemFel?.forslag }));
   ok("resten av hemmet ritas ändå (svaret finns, nytt är kvar)", hemFel?.nytt === true && Array.isArray(hemFel.dolda));
-  // Inställningarna (lasInst, strikt i byggHem): ett läsfel är lasfel.inst, aldrig förvalen som om inget vore inställt.
+  // Inställningarna (lasInst kastar vid läsfel): ett läsfel är lasfel.inst, aldrig förvalen som om inget vore inställt.
   const instFel = await hemmet({ "nav_setting!lasfel": "nere" });
   ok("byggHem när inställningarna inte går att läsa: lasfel.inst är true, nytt falskt, och varken förslag eller inställningsrutan byggs på förval", instFel?.lasfel?.inst === true && instFel.nytt === false && instFel.forslag === null && instFel.inst === null, JSON.stringify({ lasfel: instFel?.lasfel, nytt: instFel?.nytt }));
   ok("utan fel sätts inget lasfel.inst (kontroll)", hemOk?.lasfel?.inst === undefined);
@@ -501,10 +501,14 @@ rubrik("Hemmet säger när det inte vet: ett läsfel är inte ett tomläge");
   }
   const { lasInst } = await import("../src/lib/nav2/forslag.ts");
   const instDb = attrapp(tabeller({ extra: { "nav_setting!lasfel": "nere" } }), {});
-  let kast = null; try { await lasInst(instDb, true); } catch (e) { kast = e instanceof Error ? e.message : String(e); }
-  ok("lasInst strikt kastar vid läsfel", typeof kast === "string" && kast.includes("inställningarna gick inte att läsa"), String(kast));
-  const forval = await lasInst(instDb);
-  ok("lasInst utan strikt ger förvalen som förut (övriga anropare)", Array.isArray(forval.f.hemNytt) && forval.f.hemNytt.length === 0 && typeof forval.m.tidszon === "string");
+  let kast = null; try { await lasInst(instDb); } catch (e) { kast = e instanceof Error ? e.message : String(e); }
+  ok("lasInst kastar vid läsfel, för alla anropare (aldrig förvalen som om inget vore inställt)", typeof kast === "string" && kast.includes("inställningarna gick inte att läsa"), String(kast));
+  const forval = await lasInst(attrapp(tabeller({}), {}));
+  ok("lasInst utan fel och utan sparade inställningar ger förvalen (kontroll)", Array.isArray(forval.f.hemNytt) && forval.f.hemNytt.length === 0 && typeof forval.m.tidszon === "string");
+  // Nattjobbet: ett läsfel av inställningarna blir ett fel i kvittot, inte ett torrt varv som om förslagen vore av.
+  const { korForslagNatt } = await import("../src/lib/nav2/forslag-jobb.ts");
+  let nattKast = null; try { await korForslagNatt(instDb); } catch (e) { nattKast = e instanceof Error ? e.message : String(e); }
+  ok("korForslagNatt kastar när inställningarna inte går att läsa", typeof nattKast === "string" && nattKast.includes("inställningarna gick inte att läsa"), String(nattKast));
 }
 
 rubrik("Teamet i månaden");

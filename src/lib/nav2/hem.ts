@@ -316,11 +316,11 @@ export async function byggHem(supabase: SupabaseClient, user: CurrentUser): Prom
   const leder = () => (lederP ??= lagenJagLeder(db, mig));
 
   // Nya hemmet (0303): en läsning av inställningarna. Den ger också tidszonen, så Golvet väntar på den men inte tvärtom.
-  // Strikt: ett läsfel blir `lasfel.inst` nedan, i stället för förval som ser ut som att inget är inställt.
+  // Ett läsfel blir `lasfel.inst` nedan, i stället för förval som ser ut som att inget är inställt.
   let instFel = false;
   // Ett tillfälligt fel prövas en gång till, så att personen inte tyst får det gamla hemmet för den laddningen (nytt
   // avgörs av samma läsning). Faller båda blir det lasfel.inst.
-  const instP = lasInst(db, true).catch(() => lasInst(db, true)).then((i) => i, (e: unknown) => { instFel = true; return loggaFel("inst")(e); });
+  const instP = lasInst(db).catch(() => lasInst(db)).then((i) => i, (e: unknown) => { instFel = true; return loggaFel("inst")(e); });
   const tzP = instP.then((i) => i?.m.tidszon ?? INST_FORVAL.tidszon);
   // Golvet startar direkt och väntas in sist. Ett fel här fäller aldrig resten av hemmet.
   const golvetP = byggGolvet(user, nu, { tz: tzP, leder }).then((g) => ({ g, fel: false }), (e: unknown) => ({ g: loggaFel("golvet")(e), fel: true }));

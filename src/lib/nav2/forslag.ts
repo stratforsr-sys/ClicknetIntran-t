@@ -146,13 +146,13 @@ function somAndratIn(rad: LageRad, x: NdAndring): AndratIn {
 /* ------------------------------------------------------------------------ */
 
 /**
- * Inställningarna för förslagen och Möten. `strikt`: ett läsfel kastas i stället för att ge förvalen. Hemmet läser
- * strikt (byggHem gör felet till `lasfel.inst`), så att ett fel aldrig ser ut som att inget är inställt. Övriga anropare
- * får förvalen vid fel, som förut.
+ * Inställningarna för förslagen och Möten. Ett läsfel KASTAS i stället för att ge förvalen, så att ett fel aldrig ser
+ * ut som att inget är inställt (fel tidszon, förslagen av, ingen i `hem.nytt`). Hemmet gör felet till `lasfel.inst`,
+ * rutterna till sitt felbesked och nattjobbet till ett fel i kvittot.
  */
-export async function lasInst(db: Db, strikt = false): Promise<{ f: ForslagInst; m: MotenInst }> {
+export async function lasInst(db: Db): Promise<{ f: ForslagInst; m: MotenInst }> {
   const { data, error } = await db.from("nav_setting").select("key, value").or(`key.like.forslag.%,key.like.moten.%,key.eq.${FORSLAG_NYCKLAR.hemNytt}`).limit(200);
-  if (error && strikt) throw new Error(`inställningarna gick inte att läsa: ${error.message}`);
+  if (error) throw new Error(`inställningarna gick inte att läsa: ${error.message}`);
   const rader = (data ?? []) as { key: string; value: unknown }[];
   return { f: lasForslagInst(rader), m: lasInstallningar(rader) };
 }
@@ -226,7 +226,7 @@ export async function fornamn(db: Db, ids: readonly (string | null | undefined)[
   const unika = [...new Set(ids.filter((x): x is string => !!x))];
   if (!unika.length) return new Map();
   const { data, error } = await db.from("employee").select("id, first_name").in("id", unika).limit(unika.length);
-  if (error && strikt) throw new Error(`namnen gick inte att läsa: ${error.message}`);
+  if (error) throw new Error(`namnen gick inte att läsa: ${error.message}`);
   return new Map(((data ?? []) as unknown as { id: string; first_name: string | null }[]).map((e) => [e.id, (e.first_name ?? "").trim()]));
 }
 

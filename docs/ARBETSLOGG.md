@@ -5,6 +5,18 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-17 · Inställningarna: ett läsfel ger aldrig förvalen
+
+`lasInst` (`src/lib/nav2/forslag.ts`) gav förvalen vid läsfel för alla utom hemmet. Det betydde att ett tillfälligt
+fel kunde se ut som att inget var inställt: fel tidszon i Teamet i månaden och i Golvets Grattis, förslagen avstängda
+i nattjobbet (ett torrt varv i kvittot i stället för ett fel). Nu kastar läsningen alltid. Alla sex anropare låg
+redan i en try/catch med ett ärligt besked: rutterna svarar med sitt felbesked, nattjobbet skriver felet i kvittot,
+hemmet gör det till `lasfel.inst` som förut. Provet "lasInst utan strikt ger förvalen" är omskrivet till att
+läsningen kastar för alla, med ett nytt prov för nattjobbet.
+
+Samtidigt: `src/components/shell/pling.ts` heter nu `pling-lage.ts`. Den krockade med `Pling.tsx` på macOS, där
+skiftläget inte skiljer filnamn, så `tsc` aldrig blev grönt lokalt. Nu är `npx tsc --noEmit` helt rent.
+
 ## 2026-11-17 · Hemvyn och chatten till main
 
 Beställaren: "nu kan du pusha till main", och före det "ska du inte rätta det här först" om listan Inte rättat.
