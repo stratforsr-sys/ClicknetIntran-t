@@ -25,7 +25,7 @@ export const maxDuration = 120;
  *     {h: "klart", anrop, ok, text, ms}          verktyget med det numret är klart: källraden, eller felet när ok är falskt
  *     {h: "text", text, tal}                     utkastet: hela svaret så långt det får visas, i samma form som svar.text och
  *                                                svar.tal (inte ett tillägg). `text: ""` drar tillbaka det. Högst var 120:e ms.
- *     {h: "svar", text, tal, obelagda, kalla, kallor, kort, nasta, ja, underlag?, val?, varv, tider}   ersätter utkastet helt;
+ *     {h: "svar", text, tal, obelagda, kalla, kallor, kort, nasta, ja, missSparad?, underlag?, val?, varv, tider}   ersätter utkastet helt;
  *                                                `val: {fraga, alternativ}` när Claude frågar tillbaka (B2): ett klick
  *                                                ställer alternativet som nästa fråga, med historik
  *     {h: "avbojt", text} | {h: "fel", text, kod} felraden säger vad rutan kan göra (`Felkod` i samtal.ts); ett synligt

@@ -120,7 +120,7 @@ export type Handelse =
   | { h: "hamtar"; text: string; anrop?: number; verktyg?: string }
   | { h: "klart"; anrop: number; ok: boolean; text: string; ms: number }
   | { h: "text"; text: string; tal: TalUt[] }
-  | { h: "svar"; text: string; tal: TalUt[]; obelagda: number; kalla: string; kallor: KallaUt[]; kort: KortUt[]; nasta: Nasta[]; ja: boolean; underlag?: Underlag & { rubrik: string }; val?: Val; varv: number; tider: Tider }
+  | { h: "svar"; text: string; tal: TalUt[]; obelagda: number; kalla: string; kallor: KallaUt[]; kort: KortUt[]; nasta: Nasta[]; ja: boolean; missSparad?: true; underlag?: Underlag & { rubrik: string }; val?: Val; varv: number; tider: Tider }
   | { h: "avbojt"; text: string }
   | { h: "fel"; text: string; kod: Felkod };
 
@@ -183,6 +183,8 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
   const kvar = () => slut - klocka();
   const verktygMs = i.verktygMs ?? VERKTYG_MS;
   const turer = [...i.turer];
+  // Sökte sok_kunskap något som saknades, och skrevs det i listan (Inställningar → Kunskapsbas)? Visas under svaret.
+  let missSparad = false;
   const ut: Samtalssvar = { stopp: "fel", usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, kostnadUsd: 0, reserv: 0, omskrivet: false, ofullstandig: false, anrop: [], svar: [], ra: null, text: null, ren: null, tal: [], obelagda: 0, kort: [], val: null, varv: 0, tider: { ai: [], verktyg: [], forstaText: null, totalt: 0 } };
   const talUt = (tal: InsattTal[]): TalUt[] => tal.map((t) => ({ ...t, om: kallrad(ut.svar[t.kalla.anrop - 1], t.kalla.falt), ...kallaTillagg(ut.svar[t.kalla.anrop - 1], t.kalla.falt) }));
 
@@ -259,7 +261,7 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
     ut.tider.totalt = Math.max(0, klocka() - borjan);
     sand({
       h: "svar", text: insatt.text, tal: talUt(insatt.tal), obelagda: insatt.obelagda, kalla: kallaFor(ut.svar), kallor, kort: ut.kort,
-      nasta: o.nasta, ja: o.ja, ...(underlag ? { underlag } : {}), ...(o.val ? { val: o.val } : {}), varv: ut.varv, tider: { ...ut.tider, ai: [...ut.tider.ai], verktyg: [...ut.tider.verktyg] },
+      nasta: o.nasta, ja: o.ja, ...(missSparad ? { missSparad: true as const } : {}), ...(underlag ? { underlag } : {}), ...(o.val ? { val: o.val } : {}), varv: ut.varv, tider: { ...ut.tider, ai: [...ut.tider.ai], verktyg: [...ut.tider.verktyg] },
     });
   };
 
@@ -398,6 +400,7 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
             } else svar = { _verktyg: j.namn, _anrop: j.nr, fel: "Svaret har redan så många kort som ryms, så det här kortet visas inte. Be personen godkänna de som visas och fråga sedan igen." };
           }
           ut.svar.push(svar);
+          if (r.missSparad) missSparad = true;
           resultat.push({ type: "tool_result", tool_use_id: j.id, content: JSON.stringify(svar) });
         });
         const tillbaka = jobb.find((j) => j.namn === FRAGA_TILLBAKA);

@@ -40,8 +40,8 @@ export type Kallor = {
   affarer(): Promise<Affar[]>;
   /** Det i kunskapsbasen och i de publicerade rutinerna som personen får läsa och som matchar sökorden. Kunskapsbasen först. `allaOrden`: träffarna har alla sökorden, inte bara något av dem. */
   kunskap(sokord: string): Promise<{ dokument: Dokument[]; allaOrden: boolean }>;
-  /** En sökning utan träff, till listan över det kunskapsbasen saknar. Utan person. */
-  kunskapMiss(sokord: string): Promise<void>;
+  /** En sökning utan träff, till listan över det kunskapsbasen saknar. Utan person. Sant när raden faktiskt skrevs. */
+  kunskapMiss(sokord: string): Promise<boolean>;
 };
 
 /** En öppen affär: ett bolag på väg mot en order. Ett kort på tavlan i Möten. */
@@ -67,7 +67,8 @@ export type Ctx = { mig: string; idag: string; kallor: Kallor };
 export type Steg = { vag: string; body: Record<string, unknown>; angra: Record<string, unknown> | null };
 /** Kortet personen godkänner: vad som ska göras, rad för rad, och stegen som gör det. `varning` står före Godkänn, `klart` är kvittot efteråt. */
 export type Handlingskort = { rubrik: string; rader: { text: string; dag: string | null; not: string }[]; steg: Steg[]; varning: string | null; klart: string };
-export type Verktygssvar = { svar: Record<string, unknown>; kort?: Handlingskort };
+/** `missSparad`: sok_kunskap skrev sökningen i listan över det kunskapsbasen saknar. Går bara till webbläsaren, inte till Claude. */
+export type Verktygssvar = { svar: Record<string, unknown>; kort?: Handlingskort; missSparad?: boolean };
 
 const PERIODER = ["denna-vecka", "forra-veckan", "denna-manad", "forra-manaden"] as const;
 type PeriodNyckel = (typeof PERIODER)[number];
@@ -509,21 +510,21 @@ async function lasAffarer(input: Record<string, unknown>, c: Ctx): Promise<Recor
   };
 }
 
-async function sokKunskap(input: Record<string, unknown>, c: Ctx): Promise<Record<string, unknown>> {
+async function sokKunskap(input: Record<string, unknown>, c: Ctx): Promise<{ svar: Record<string, unknown>; missSparad: boolean }> {
   const sokord = kort(input.sokord, 120);
-  if (sokord.length < 2) return { fel: "Skriv vad som ska sökas." };
+  if (sokord.length < 2) return { svar: { fel: "Skriv vad som ska sökas." }, missSparad: false };
   const serInte = "Söker bara i företagets kunskapsbas och i de publicerade rutiner som personen får läsa. Texten är skriven av företaget och kan vara gammal: dagen den ändrades står på varje dokument.";
   const { dokument: d, allaOrden } = await c.kallor.kunskap(sokord);
   // Listan över det som saknas är till för den som sköter kunskapsbasen. Dit går också en sökning där inget dokument
   // hade alla orden: hellre en rad för mycket än en lucka ingen ser. Går listan inte att skriva ska svaret komma ändå.
-  if (!d.length || !allaOrden) await c.kallor.kunskapMiss(sokord).catch(() => undefined);
-  if (!d.length) return { sokord, traffar: 0, besked: "Kunskapsbasen har inget om det här. Sökningen är sparad i listan över det som saknas, så att den som sköter kunskapsbasen ser den.", serInte };
-  return {
+  const missSparad = !d.length || !allaOrden ? await c.kallor.kunskapMiss(sokord).catch(() => false) : false;
+  if (!d.length) return { svar: { sokord, traffar: 0, besked: "Kunskapsbasen har inget om det här. Sökningen är sparad i listan över det som saknas, så att den som sköter kunskapsbasen ser den.", serInte }, missSparad };
+  return { missSparad, svar: {
     sokord, traffar: Math.min(d.length, DOKUMENT_MAX), dataPer: c.idag,
     ...(allaOrden ? {} : { obs: "Inget dokument har alla sökorden. De här har något av dem och kan handla om något annat. Använd dem bara om de svarar på frågan. Sökningen är sparad i listan över det som saknas." }),
     dokument: d.slice(0, DOKUMENT_MAX).map((x) => ({ rubrik: kort(x.rubrik, 160), omrade: kort(x.omrade, 80), kalla: x.kalla === "rutiner" ? "Rutiner" : "Kunskapsbasen", andrad: x.andrad.slice(0, 10), text: x.text.slice(0, DOKUMENT_TECKEN), avkortad: x.text.length > DOKUMENT_TECKEN })),
     serInte,
-  };
+  } };
 }
 
 const giltigDag = (dag: string) => DATUM.test(dag) && !Number.isNaN(utc(dag).getTime());
@@ -622,7 +623,7 @@ export async function korVerktyg(namn: string, input: unknown, c: Ctx, anrop: nu
       case "las_vecka": return { svar: { ...marke, ...(await lasVecka(i, c)) } };
       case "las_provision": return { svar: { ...marke, ...(await lasProvision(i, c)) } };
       case "las_affarer": return { svar: { ...marke, ...(await lasAffarer(i, c)) } };
-      case "sok_kunskap": return { svar: { ...marke, ...(await sokKunskap(i, c)) } };
+      case "sok_kunskap": { const k = await sokKunskap(i, c); return { svar: { ...marke, ...k.svar }, ...(k.missSparad ? { missSparad: true } : {}) }; }
       case "forbered_uppgifter":
       case "forbered_uppfoljning": {
         const f = await (namn === "forbered_uppgifter" ? forberedUppgifter(i, c) : forberedUppfoljning(i, c));

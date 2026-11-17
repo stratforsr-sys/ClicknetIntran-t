@@ -181,7 +181,7 @@ function kallor(roller, id, lasta) {
     // Som Möten: den som leder ser alla kort, en säljare ser dem hen är med i. Kretsen snävar sedan in i verktyget.
     affarer: async () => { lasta.push("affarer"); return krets === null || roller.includes("team_lead") ? AFFARER : AFFARER.filter((a) => a.deltagare.includes(id)); },
     kunskap: async (sokord) => { lasta.push(`kunskap:${sokord}`); return /transport/i.test(sokord) ? { dokument: [DOK], allaOrden: !/priser/i.test(sokord) } : { dokument: [], allaOrden: false }; },
-    kunskapMiss: async (sokord) => { lasta.push(`miss:${sokord}`); },
+    kunskapMiss: async (sokord) => { lasta.push(`miss:${sokord}`); return true; },
   };
 }
 
@@ -458,6 +458,14 @@ rubrik("Kunskapsbasen: svaret kommer ur företagets dokument");
   ok("en tom sökning nekas utan att läsa", (await korVerktyg("sok_kunskap", { sokord: " " }, ctx, 1)).svar.fel === "Skriv vad som ska sökas.");
   const trasig = { ...ctx, kallor: { ...ctx.kallor, kunskapMiss: async () => { throw new Error("nere"); } } };
   ok("går listan inte att skriva kommer svaret ändå", (await korVerktyg("sok_kunskap", { sokord: "tandläkare" }, trasig, 1)).svar.traffar === 0);
+  // "Saknas i kunskapsbasen · sparat" (A1-8): bara när raden faktiskt skrevs, och bara till webbläsaren. Claude får
+  // samma verktygssvar som förut.
+  const sparad = await korVerktyg("sok_kunskap", { sokord: "sökord tandläkare" }, ctx, 1);
+  const traff = await korVerktyg("sok_kunskap", { sokord: "sökord transport" }, ctx, 1);
+  const tak = await korVerktyg("sok_kunskap", { sokord: "tandläkare" }, { ...ctx, kallor: { ...ctx.kallor, kunskapMiss: async () => false } }, 1);
+  const nere = await korVerktyg("sok_kunskap", { sokord: "tandläkare" }, trasig, 1);
+  ok("missSparad: sant när sökningen skrevs i listan, inte vid träff, vid taket eller när listan inte gick att skriva", sparad.missSparad === true && !traff.missSparad && !tak.missSparad && !nere.missSparad);
+  ok("missSparad står aldrig i det Claude får", !("missSparad" in sparad.svar) && !("missSparad" in traff.svar));
   ok("källraden säger var svaret kommer ifrån", kallaFor([{ _verktyg: "sok_kunskap", ...t }]) === "Skrivet av AI ur företagets kunskapsbas (Sökord: transport)"
     && kallaFor([{ _verktyg: "las_affarer", oppna: 1 }, { _verktyg: "sok_kunskap", ...t }]) === "Skrivet av AI ur Navs tal och företagets kunskapsbas (Sökord: transport)"
     && kallaFor([{ _verktyg: "las_matt", antal: 2 }]) === "Skrivet av AI ur Navs tal"

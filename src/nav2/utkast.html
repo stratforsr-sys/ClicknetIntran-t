@@ -10532,6 +10532,20 @@ function renderDrift(){
   return `<div class="drift" role="alert">${I('fel').replace('<svg','<svg width="20" height="20"')}<div><p class="t">Nattjobbet har inte kört</p><p>Senaste kvittot är 31 timmar gammalt. Stämplingar har inte stängts och sena ankomster inte registrerats för den natten.</p></div><button class="btn btn-s btn-sm" data-go="/fel">Se driftläget</button></div>`;
 }
 
+// Hemmets inställningar gick inte att läsa två gånger (hem.ts, lasfel.inst): då vet servern inte om personen har det
+// nya hemmet, och det vanliga ritas. Det sägs, med Försök igen, i stället för att bytet sker utan besked.
+function renderHemInstFel(){
+  const f = ND && ND.hem && ND.hem.lasfel;
+  if (!f || typeof f !== 'object' || !f.inst) return '';
+  return `<div class="drift" role="status"><div><p class="t">Hemmets inställningar gick inte att läsa</p><p>Därför visas det vanliga hemmet den här gången.</p></div><button class="btn btn-s btn-sm" data-heminstigen>Försök igen</button></div>`;
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-heminstigen]');
+  if (!b) return;
+  b.disabled = true; b.textContent = 'Läser om …';
+  ndOmlas('hv');
+});
+
 function hello(){
   const me = ME[S.role];
   return `<header class="top">
@@ -10645,6 +10659,7 @@ function render(){
   // Ordningen är rollstyrd precis som i dag: säljaren ser stämplingen först, chefen sina beslut.
   wrap.innerHTML = `
     ${renderDrift()}
+    ${renderHemInstFel()}
     ${hello()}
     <div class="hemtop">${renderHub()}${renderBrief()}</div>
     ${S.mode === 'sondag' ? renderWeek() : chef && (S.mode === 'slut' || S.showTmr) ? renderTmr() : ''}
@@ -34577,7 +34592,10 @@ function ndHemRader(){
   }
   // Uppgifter: egna med frist i dag eller passerad, och det som väntar på ditt godkännande.
   if (ndKopplad('uppgifter') && ND.uppgifter){
-    ND.uppgifter.uppgifter.filter(u => u.vy === 'egen' && u.due && u.due <= idag && !['klar', 'avbruten'].includes(u.lage)).sort((a, b) => a.due.localeCompare(b.due)).forEach(u => {
+    // Läget läses också ur TASKS, som får en bock direkt (ndUpgGenast): annars står raden kvar på hemmet tills
+    // servern svarat och uppgifterna hämtats om. Går sparningen inte läggs TASKS tillbaka, och raden med den.
+    const genast = new Map(TASKS.map(x => [String(x.id), x.lage]));
+    ND.uppgifter.uppgifter.filter(u => u.vy === 'egen' && u.due && u.due <= idag && !['klar', 'avbruten'].includes(u.lage) && !['klar', 'avbruten'].includes(genast.get(String(u.id)))).sort((a, b) => a.due.localeCompare(b.due)).forEach(u => {
       const sen = u.due < idag, tid = u.tid ? tmin(u.tid.slice(0, 5)) : null;
       ut.push({id:'upg-' + u.id, nar:sen || (tid !== null && tid <= kl + 60) ? 'nu' : 'idag', i:'uppg', ton:sen ? 'warn' : 'ok', kind:'Uppgift', bkind:'uppgift', t:u.t, d:[sen ? (u.due === ndPlusDag(idag, -1) ? 'skulle vara klar i går' : `skulle vara klar ${frKort(u.due)}`) : u.tid ? `i dag ${u.tid.slice(0, 5)}` : 'i dag'], ...(sen ? {pill:['Försenad', 'danger']} : {}),
         act:{l:'Klar', done:true, check:true}, heat:sen ? 3.2 : 1.6, bt:sen ? `{${u.t}} är försenad.` : `{${u.t}}${u.tid ? ` klockan ${u.tid.slice(0, 5)}` : ' i dag'}.`, src:'/uppgifter/' + u.id, why:sen ? `Skulle varit klar ${u.due === ndPlusDag(idag, -1) ? 'i går' : frKort(u.due)}` : 'Frist i dag',
@@ -36310,10 +36328,13 @@ function hvTurVy(i, attr = ''){
   const ingen = klar && Array.isArray(s.kallor) && !s.kallor.length;
   const las = (t.steg || []).filter(x => x.nr !== null), ingetLast = klar && las.length > 0 && las.every(x => x.ok === false);
   const kallaUt = !klar ? '' : ingen ? `<p class="hv-kalla hv-ingen"><b>Ingen källa</b> · ${esc(s.kalla || 'Skrivet av AI')}</p>` : hvKalla(s.kalla || 'Skrivet av AI');
+  // Sökte Nav i kunskapsbasen utan att hitta allt, och skrevs sökningen i listan över det som saknas (Inställningar →
+  // Kunskapsbas)? Servern säger det bara när raden faktiskt skrevs (missSparad), aldrig ur Claudes text.
+  const missUt = klar && s.missSparad === true ? '<p class="hv-kalla">Saknas i kunskapsbasen · sparat</p>' : '';
   // Under frågan: det den gäller (O) och filerna, så att personen ser vad Nav fick med frågan.
   const under = [t.om ? `Om: ${t.om.titel}` : '', ...(t.filer || [])].filter(Boolean);
   return `<div class="hv-tur" data-tur="${i}"${attr}><p class="hv-q">${esc(t.fraga)}${under.length ? `<small>${under.map(esc).join(' · ')}</small>` : ''}</p>
-    ${hvNavSager(`${hvChattSteg(t, i)}${ingetLast ? '<p class="hv-tank hv-ingen">Navs data gick inte att läsa.</p>' : ''}${s ? `<div class="hv-svar" aria-busy="${!!t.laddar}">${hvChattText(t, i)}</div>${klar ? hvChattVal(t, i) : ''}` : utk}${kallaRad}${obel}${hvChattFel(t, i)}${klar && (s.kort || []).length ? hvChattKort(t, i) : ''}${klar ? kallaUt + hvChattUlag(t, i) + hvChattAtg(t, i) + hvChattNasta(t, i) : ''}`)}</div>`;
+    ${hvNavSager(`${hvChattSteg(t, i)}${ingetLast ? '<p class="hv-tank hv-ingen">Navs data gick inte att läsa.</p>' : ''}${s ? `<div class="hv-svar" aria-busy="${!!t.laddar}">${hvChattText(t, i)}</div>${klar ? hvChattVal(t, i) : ''}` : utk}${kallaRad}${obel}${hvChattFel(t, i)}${klar && (s.kort || []).length ? hvChattKort(t, i) : ''}${klar ? kallaUt + missUt + hvChattUlag(t, i) + hvChattAtg(t, i) + hvChattNasta(t, i) : ''}`)}</div>`;
 }
 // Stegen körs ett i taget. Faller ett står knappen kvar, och nästa tryck gör bara det som saknas.
 // "$fält" i ett stegs Ångra byts mot fältet i ruttens svar: uppgiftens id, uppföljningens nya version.

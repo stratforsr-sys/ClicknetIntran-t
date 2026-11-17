@@ -114,7 +114,9 @@ export function skapaKallor(user: CurrentUser): Kallor {
     // Listan över det kunskapsbasen saknar (`kunskap_miss`, visas i Inställningar → Kunskapsbas). Raden har ingen person.
     kunskapMiss: async (sokord) => {
       const db = supabaseAdmin();
-      if (await underTak(db, { tabell: "kunskap_miss", kolumn: "nar", fran: senasteMinuten() }, SOKMISSAR_PER_MINUT)) await db.from("kunskap_miss").insert({ sokord: sokord.slice(0, 200) });
+      if (!(await underTak(db, { tabell: "kunskap_miss", kolumn: "nar", fran: senasteMinuten() }, SOKMISSAR_PER_MINUT))) return false;
+      const { error } = await db.from("kunskap_miss").insert({ sokord: sokord.slice(0, 200) });
+      return !error;
     },
   };
 }

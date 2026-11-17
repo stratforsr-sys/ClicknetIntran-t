@@ -90,7 +90,7 @@ export function fixturKallor(f: Fixtur, som: string): Kallor {
       const nagot = alla.length ? alla : far.filter((d) => ord.some((o) => har(d, o)));
       return { dokument: nagot.map((d) => ({ rubrik: d.rubrik, omrade: d.omrade, text: d.text, andrad: d.andrad, kalla: d.kalla ?? "kunskapsbasen" })), allaOrden: alla.length > 0 };
     },
-    kunskapMiss: async () => undefined,
+    kunskapMiss: async () => false,
   };
 }
 
