@@ -5,6 +5,37 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-17 · Hemvyn som skiss A v2, funktionsvarvet och chattens B-sats (grenen hemvy-chatt, sju pushar)
+
+Beställaren godkände skiss A v2 ("gör inte en enda dugg annorlunda") och bad sedan om ett funktionsvarv ("bra
+funktioner som är innovativa … inte funktioner överallt"). Allt ligger på `hemvy-chatt`, inte på main.
+
+- **Pushar:** `6b8488c` (hemmet som skissen), `d90ea9d` (stort fönster förstoras som skissen, `hvSkala`), `fa2e538`
+  (hemmets läge står inte kvar i Möten), `c38bf5a` (funktionsvarvet: chatten skriver fram svaret, minns tråden per
+  flik, Stopp, Stämmer inte, motvikten vid talet, rätta kortet före Godkänn, hemmet säger när det inte vet, mötet
+  bakom märket, väg tillbaka för dolda rader, skrivrutan hittar i hela Nav, Navs facit, Klar med Ångra), `27864f0`
+  (en omladdning mitt i ett svar säger "Sidan laddades om", inte nätfel: mätt i Chrome att ordningen är
+  beforeunload, brottet, pagehide), `8044f3a` (B-satsen).
+- **B-satsen:** historiken bär `hamtat` och `kortUtfall`; `fraga_tillbaka` ger knappar bara ur källan (kandidater,
+  frågans hela ord, eller ett bolag ur `las_affarer` som delar ett helt ord med frågan: det sista lades till efter
+  provets c65, där Claude listade affärerna och frågade direkt); `svar.ja` ger "Ja, gör det"; `om` (Fråga Nav om den
+  här) från Väntar på dig, Din månad och Förbered; Ny tråd och Till tråden.
+- **Provet (beställarens ja: Sonnet, 20–30 kr, fem val):** 21,93 kr, 0,094 kr per körning, 92 % cachat. 73 av 78 i
+  alla tre varv; de 50 gamla 49 av 50 (s40 sa "går inte att säga än" i stället för "för tidigt"); nya 24 av 28 (c65
+  utan knappar, rättat i kod efteråt utan nytt avtryck; s53 och s56 ett obelagt tal i ett av tre varv; t55 "Vill du
+  att jag" i stället för "Ska jag"). Omskrivna svar för de 50: 10 av 150 (förra gången 19 av 150). Median 2 varv,
+  går inte att jämföra (den gamla raden saknar medianen). Inget allvarligt fel enligt kravet 2026-11-15.
+- **Godkännandet:** beställaren sa "jag godkänner och pusha". Att sätta `godkand` på raden nekades Claude av
+  behörighetskontrollen (en AI ska inte godkänna sitt eget prov), så beställaren kör det själv.
+- **Omskrivna prov (regeländringar som beställaren beslutat):** i `tests/chatt-rutt.mjs` B1–B4 (fem val), i
+  `tests/chattforma.mjs` "bara kandidater högst upp …" (nu också bolag ur affärslistan när frågan nämner det), i
+  `tests/nav2-hemvy.mjs` "ingen Ja-knapp ritas när servern inte säger ja (B4)".
+- **Kvar:** se slutrapporten i sessionen; de viktigaste: andra läsningen av inställningarna kan falla tyst, sex
+  anropare av `lasInst` får förval vid läsfel, A1-8 "Saknas i kunskapsbasen · sparat" saknar fält från servern, två
+  flikar är bara prövade med stubbar, Förbered skickar nu `om` vid varje klick.
+
+---
+
 ## 2026-11-16 · AI-assistenten, fas 2, del 1: kunskapsbasen i Inställningar (0312 KÖRD)
 
 Beställaren efter fas 1: "jag godkänner. Nu gå vidare med fas 2". Jag läste det som ja till de två saker som

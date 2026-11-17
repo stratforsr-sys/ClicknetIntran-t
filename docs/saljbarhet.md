@@ -51,3 +51,13 @@ Uppdaterad 2026-11-13 (kundens inbjudan). Raderna S1–S31 gäller Möten; andra
 Ja, om kunden är svensk, räknar i kronor, arbetar 08–17 och accepterar tre värden som ännu bär Clicknets bransch:
 nulägets tre val (S1) och ett av nej-skälen (S2). Belopp, mottagare, frågor, kolumnnamn, bekräftelsedagar och
 rubrikens prefix ställs in per företag i Möten → Inställningar. För en kund i ett annat land krävs S6–S9 och S28.
+
+## Hemvyn och chatten (2026-11-17)
+
+Skannat i allt som ändrades på `hemvy-chatt` 2026-11-17: inga företagsnamn, domäner, personer, belopp eller fasta
+id:n i koden. Exempeldagens namn finns bara i riggen (`.lyft/`, checkas inte in) och i proven.
+
+| Id | Vad som är låst | Var | Läge | Nästa steg |
+|---|---|---|---|---|
+| H1 | Jämförelser av namn och alternativ gör gemener med `sv-SE` | `src/lib/nav2/chatt/chattforma.ts` (`likt`, `valUr`) | en plats | Läs språket ur företagets inställning när en sådan finns |
+| H2 | Chattens texter och systemtext är svenska | `src/lib/nav2/chatt/systemtext.ts`, hv-blocket i `utkast.html` | öppen | Följer Navs språkstöd i stort, inget eget |
