@@ -10,7 +10,7 @@ kopierad från nav-prov till produktionens `nav_chatt_prov` på beställarens or
 (`a06f4169…`) och en anteckning om att provet kördes i nav-prov, inte mot produktionen. Prövat med en fråga
 2026-11-17 kväll: svaret kom med källraden "Skrivet av AI ur Navs tal". Det nya hemmet syns bara för den som står i `hem.nytt`. Rättat före mergen: beskedet när hemmets
 inställningar inte går att läsa, "Saknas i kunskapsbasen · sparat" (`missSparad`), och att en bockad uppgift
-försvinner direkt. Kvar: sex andra läsare av `lasInst` får förval vid läsfel (egen uppgift). npm test stannar vid
+försvinner direkt. Rättat efteråt: `lasInst` kastar nu vid läsfel för alla läsare (rutterna ger sitt felbesked, nattjobbet ett fel i kvittot), aldrig förvalen som om inget vore inställt. npm test stannar vid
 `handelselogg` i nav-prov (tre händelsetyper saknar rader), så resten måste köras skript för skript.
 
 **Före det:** 2026-11-17 (kväll): **HEMVYN SOM SKISS A V2, FUNKTIONSVARVET OCH CHATTENS B-SATS** på
