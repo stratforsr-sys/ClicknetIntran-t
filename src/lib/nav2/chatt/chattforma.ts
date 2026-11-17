@@ -15,6 +15,7 @@
  *
  * Filen är ren: inga läsningar, ingen klocka, inget nätverk.
  */
+import { MATTNAMN, UTKAST_MAX, periodFor } from "./verktyg.ts";
 
 export type TalRef = { verktyg: string; anrop: number; falt: string };
 export type InsattTal = { id: string; varde: number | string; kalla: TalRef };
@@ -222,6 +223,8 @@ export type Usage = {
 
 /** Modellens namn utan datum på slutet: "claude-sonnet-5-5-20261001" är "claude-sonnet-5-5". */
 const utanDatum = (modell: string): string => modell.replace(/-\d{8}$/, "");
+/** Samma modell, med eller utan datum i namnet: API:t svarar med det daterade namnet när frågan bad om aliaset. */
+export const sammaModell = (a: string, b: string): boolean => utanDatum(a) === utanDatum(b);
 const KAND_PRIS: Record<string, { inn: number; ut: number }> = { ...PRIS, ...RESERVPRIS };
 
 function prisFor(modell: string, prompt: number): { inn: number; ut: number } {
@@ -315,6 +318,27 @@ export function lasUtrymme(v: unknown): Utrymme | null {
 
 /** Beskedet när personens förra fråga inte är klar. */
 export const PAGAR_BESKED = "Din förra fråga pågår fortfarande. Försök igen när den är klar.";
+
+/**
+ * Chattens rutt får arbeta högst 120 s (`maxDuration` i src/app/nav2/chatt/route.ts, som måste stå som ett tal där).
+ * En pågående rad äldre än så, plus 10 s, har fastnat: funktionen dog, eller slutraden gick inte att skriva, och
+ * slutraden kommer aldrig. Samma gräns för spärren (forePagar) och för utfall och Stämmer inte (vantarSlutrad).
+ */
+export const PAGAR_MS = 130_000;
+
+/** Beskedet när raden ännu inte har sin slutrad (R1): utfall och Stämmer inte tas emot först när den är skriven. */
+export const EJ_KLAR_BESKED = "Svaret sparas fortfarande. Försök igen om en stund.";
+
+/**
+ * Väntar loggraden fortfarande på sin slutrad (R1)? `pagar`, eller `stoppas` i väntan på slutraden, och yngre än
+ * PAGAR_MS. En äldre sådan rad får aldrig sin slutrad, så "försök igen om en stund" vore ett löfte som inte håller.
+ * Går tiden inte att läsa räknas raden som väntande.
+ */
+export function vantarSlutrad(stopReason: unknown, nar: unknown, nu: number): boolean {
+  if (stopReason !== "pagar" && stopReason !== "stoppas") return false;
+  const t = typeof nar === "string" ? Date.parse(nar) : NaN;
+  return !Number.isFinite(t) || nu - t < PAGAR_MS;
+}
 
 /**
  * En fråga i taget per person. Varje fråga reserverar sin rad (`stop_reason` "pagar") i tur och ordning, och läser
@@ -443,3 +467,403 @@ export function bilagaUsd(modell: string, bilagor: readonly Bilaga[], maxVarv: n
 
 /** Det loggen får veta om bilagorna: antal och sort, aldrig namn eller innehåll. */
 export const bilagaLogg = (bilagor: readonly Bilaga[]): string => (bilagor.length ? ` [${bilagor.length} bifogade: ${bilagor.map((b) => SORTNAMN[b.sort]).join(", ")}]` : "");
+
+/* ------------------------------------------------------------------------ */
+/* Strömmen: svaret skrivs fram mening för mening (varv 2, A1-1)             */
+/* ------------------------------------------------------------------------ */
+
+/** Högst en `text`-händelse så här ofta. */
+export const UTKAST_MS = 120;
+
+/**
+ * Slutet på en mening: punkt, frågetecken eller utropstecken (med citattecken eller parentes efter) följt av ett
+ * blanktecken, eller en radbrytning. Hänvisningarnas klamrar och fetstilens stjärnor läses i samma svep.
+ */
+const GRANS = /\{\{|\}\}|\*\*|[.!?]["”»’')\]]*(?=\s)|\n/g;
+
+/**
+ * Var de hela meningarna slutar (index efter skiljetecknet), efter `fran`. En mening är hel när nästa tecken redan
+ * har kommit och är ett blanktecken, så att "10.30", "{{t:1.antal}}" och "t.ex" aldrig klipps vid punkten. Ett
+ * slut inne i en hänvisning (`{{` utan `}}`) eller inne i fetstil (udda antal `**`) räknas inte. Ett svep.
+ */
+export function meningsgranser(text: string, fran = 0): number[] {
+  const ut: number[] = [];
+  let inne = false;
+  let fet = false;
+  for (const m of text.matchAll(GRANS)) {
+    if (m[0] === "{{") inne = true;
+    else if (m[0] === "}}") inne = false;
+    else if (m[0] === "**") fet = !fet;
+    else if (!inne && !fet) {
+      const i = (m.index ?? 0) + m[0].length;
+      if (i > fran) ut.push(i);
+    }
+  }
+  return ut;
+}
+
+/** Texten fram till och med sista hela meningen. Resten kommer med svaret. */
+export const helaMeningar = (text: string): string => text.slice(0, meningsgranser(text).at(-1) ?? 0).trimEnd();
+
+/** Tecknen som kan öppna ett citat i CITAT. `»` och `’` öppnar inget där, så de kan inte ändra hur tecknen paras. */
+const OPPNAR_CITAT = /["“”«]/;
+
+/**
+ * Står ett tecken som kan öppna ett citat kvar utanför ett helt citat? Då kan citatet sluta först efter texten, och
+ * CITAT parar tecknen annorlunda i hela svaret: ett tal som är ett ordagrant citat i utkastet kan bli obelagt i svaret
+ * (`"Kunden sa ”12 licenser.” och …"`). Utan ett sådant tecken paras varje citat i texten likadant i hela svaret, för
+ * vart och ett slutar vid första slutande tecken efter det öppnande. Samma steg som i sattInTal före citaten.
+ */
+const oparatCitat = (text: string): boolean => OPPNAR_CITAT.test(tvatta(text).replace(REF, () => plats(0xe000, 0)).replace(TRASIG_REF, () => plats(0xe000, 0)).replace(CITAT, ""));
+
+/**
+ * Ett utkast som får visas: talen insatta som i slutsvaret, eller null. Ett obelagt tal, en halv hänvisning eller ett
+ * citat som inte är slut stoppar strömmen där den är: hellre ett kortare utkast än ett tal utan källa, och varje utkast
+ * är början av slutsvarets text.
+ */
+export function utkastAv(prefix: string, svar: Record<string, unknown>[]): { text: string; tal: InsattTal[] } | null {
+  if (!prefix || oparatCitat(prefix)) return null;
+  const insatt = sattInTal(prefix, svar);
+  if (insatt.obelagda > 0 || /\{\{|\}\}/.test(insatt.text)) return null;
+  return { text: insatt.text, tal: insatt.tal };
+}
+
+/**
+ * Det längsta utkastet som får visas av meningarna som slutar efter `fran`, och var provet slutade (`provat`).
+ * Varje meningsslut prövas högst en gång under ett varv: texten före det ändras inte medan resten skrivs.
+ */
+export function slappUtkast(text: string, svar: Record<string, unknown>[], fran = 0): { utkast: { text: string; tal: InsattTal[] } | null; provat: number } {
+  const granser = meningsgranser(text, fran);
+  for (let n = granser.length - 1; n >= 0; n--) {
+    const u = utkastAv(text.slice(0, granser[n]).trimEnd(), svar);
+    if (u) return { utkast: u, provat: granser.at(-1)! };
+  }
+  return { utkast: null, provat: granser.at(-1) ?? fran };
+}
+
+/* ------------------------------------------------------------------------ */
+/* Efter svaret: följdfrågor, Ja-knappen och underlaget (varv 2, A1-3, A1-4)  */
+/* ------------------------------------------------------------------------ */
+
+export type Anropsrad = { namn: string; input: unknown; ok?: boolean };
+export type Nasta = { text: string; knapp: string };
+/** Högst så många följdfrågor under ett svar (planen: "högst två följdfrågor som går att lita på"). */
+export const NASTA_MAX = 2;
+
+const PERIODPAR: Record<string, string> = { "denna-vecka": "forra-veckan", "forra-veckan": "denna-vecka", "denna-manad": "forra-manaden", "forra-manaden": "denna-manad" };
+const vemSort = (v: unknown): string => {
+  const s = String(v ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+  if (!s || ["jag", "mig", "mina", "min"].includes(s)) return "jag";
+  if (["laget", "teamet", "alla"].includes(s)) return "laget";
+  return s;
+};
+const versal = (s: string): string => s.charAt(0).toLocaleUpperCase("sv-SE") + s.slice(1);
+const jamforbar = (s: string): string => s.toLocaleLowerCase("sv-SE").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+/**
+ * Följdfrågorna under ett svar. Regler, inte AI: de byggs ur de verktygsanrop som svarade, aldrig ur Claudes text.
+ * Varje fråga står på egna ben (behöver ingen historik) och är samma sorts fråga som provet redan prövar.
+ *   - las_matt: samma mått för den andra perioden av samma slag (veckan och förra veckan, månaden och förra
+ *     månaden), och för laget när frågan gällde dig och du får se fler än dig själv (`laget`), eller för dig när
+ *     den gällde laget.
+ *   - las_provision: den andra månaden.
+ *   - las_affarer: laget när frågan gällde dig och du får se laget, eller dina när den gällde laget.
+ *   - las_dag: i morgon, när frågan gällde i dag.
+ * Det som redan lästs i frågan föreslås inte, inte heller frågan som just ställdes. `laget` ska vara samma prövning
+ * som verktyget gör (`vemKrets`): kretsen är alla, eller har någon annan än personen. En fråga om en namngiven person
+ * ger inga följdfrågor: namnet är Claudes indata till verktyget, och följdfrågan får inte bära något Claude har skrivit.
+ */
+export function nastaFragor(i: { anrop: readonly Anropsrad[]; fraga: string; idag: string; laget: boolean }): Nasta[] {
+  const lasta = new Set(i.anrop.map((a) => nyckelFor(a.namn, (a.input ?? {}) as Record<string, unknown>)));
+  const stalld = jamforbar(i.fraga);
+  const ut: Nasta[] = [];
+  const lagg = (namn: string, input: Record<string, unknown>, text: string, knapp: string) => {
+    if (ut.length >= NASTA_MAX) return;
+    const n = nyckelFor(namn, input);
+    if (lasta.has(n) || jamforbar(text) === stalld || ut.some((x) => x.text === text)) return;
+    ut.push({ text, knapp });
+  };
+  const imorgon = /^\d{4}-\d{2}-\d{2}$/.test(i.idag) ? new Date(Date.parse(`${i.idag}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10) : "";
+  for (const a of i.anrop) {
+    if (a.ok !== true) continue;
+    const input = (a.input ?? {}) as Record<string, unknown>;
+    const vem = vemSort(input.vem);
+    if (a.namn === "las_matt") {
+      const matt = String(input.matt ?? "");
+      const namn = (MATTNAMN as Record<string, string>)[matt];
+      const period = String(input.period ?? "");
+      const andra = PERIODPAR[period];
+      const text = (p: string) => periodFor(p, i.idag)?.text ?? "";
+      if (!namn || !andra || !text(period) || !text(andra) || (vem !== "jag" && vem !== "laget")) continue;
+      lagg("las_matt", { matt, vem, period: andra }, `Hur många ${namn} hade ${vem} ${text(andra)}?`, versal(text(andra)));
+      if (vem === "jag" && i.laget) lagg("las_matt", { matt, vem: "laget", period }, `Hur många ${namn} hade laget ${text(period)}?`, "Laget");
+      if (vem === "laget") lagg("las_matt", { matt, vem: "jag", period }, `Hur många ${namn} hade jag ${text(period)}?`, "Bara jag");
+    } else if (a.namn === "las_provision") {
+      const andra = PERIODPAR[String(input.manad ?? "")];
+      const text = andra ? periodFor(andra, i.idag)?.text : undefined;
+      if (text && (andra === "denna-manad" || andra === "forra-manaden")) lagg("las_provision", { manad: andra }, `Hur ser min provision ut för ${text}?`, versal(text));
+    } else if (a.namn === "las_affarer") {
+      if (vem === "jag" && i.laget) lagg("las_affarer", { vem: "laget" }, "Hur ser lagets öppna affärer ut?", "Laget");
+      if (vem === "laget") lagg("las_affarer", { vem: "jag" }, "Hur ser mina öppna affärer ut?", "Bara mina");
+    } else if (a.namn === "las_dag") {
+      if (imorgon && input.dag === i.idag) lagg("las_dag", { dag: imorgon }, "Vad har jag i morgon?", "I morgon");
+    }
+  }
+  return ut;
+}
+
+/** Vad ett anrop läser, så att samma läsning inte föreslås två gånger. */
+function nyckelFor(namn: string, input: Record<string, unknown>): string {
+  if (namn === "las_matt") return `${namn}|${String(input.matt ?? "")}|${vemSort(input.vem)}|${String(input.period ?? "")}`;
+  if (namn === "las_affarer") return `${namn}|${vemSort(input.vem)}`;
+  if (namn === "las_provision") return `${namn}|${String(input.manad ?? "")}`;
+  if (namn === "las_dag") return `${namn}|${String(input.dag ?? "")}`;
+  return namn;
+}
+
+/**
+ * Sista meningen är en fråga om att göra något ("Ska jag lägga en uppgift om det?"). Bara en markering: Ja-knappen
+ * visas inte förrän B4, eftersom svaret på "Ja, gör det." beror på historiken, som tappar tal och datum (A2-1).
+ */
+const SKA_JAG = /(?:^|[.?!]\s|\n)Ska jag [^?\n]{3,160}\?\s*$/;
+export const jaFraga = (text: string, kort: number): boolean => kort === 0 && SKA_JAG.test(utanMarken(text).trim());
+
+/** `rubrik` sätts av samtalet ur verktygets källrad (`kallrad`), som bor bredvid verktygen och inte här. */
+export type Underlag = { anrop: number; verktyg: string; rubrik?: string; kolumner: string[]; rader: (string | number | null)[][]; totalt: number | null };
+/** Högst så många rader och kolumner i underlaget. */
+export const UNDERLAG_RADER = 10;
+export const UNDERLAG_KOLUMNER = 4;
+
+const cell = (v: unknown): string | number | null =>
+  typeof v === "number" && Number.isFinite(v) ? v : typeof v === "string" && v.trim() ? v.replace(/\s+/g, " ").trim().slice(0, 120) : null;
+const antalEller = (v: unknown): number | null => (typeof v === "number" && Number.isInteger(v) && v >= 0 ? v : null);
+
+/**
+ * Raderna bakom svarets tal, ett klick bort: ur det verktygssvar som flest av svarets tal kommer ur, och bara när
+ * det svaret har en lista som är en tabell. Inget nytt läses och ingenting räknas: `totalt` är verktygets eget
+ * antal, och null när verktyget inte har något (Väntar på dig räknar inte sina rader, och ska inte räknas här).
+ * Underlaget går aldrig till Claude och står aldrig i svarets text.
+ */
+export function underlagUr(svar: readonly Record<string, unknown>[], tal: readonly InsattTal[]): Underlag | null {
+  const per = new Map<number, number>();
+  for (const t of tal) per.set(t.kalla.anrop, (per.get(t.kalla.anrop) ?? 0) + 1);
+  let anrop = 0;
+  for (const [a, n] of per) if (!anrop || n > (per.get(anrop) ?? 0)) anrop = a;
+  const s = svar[anrop - 1];
+  if (!anrop || !s || typeof s.fel === "string") return null;
+  const lista = (k: string): Record<string, unknown>[] => (Array.isArray(s[k]) ? (s[k] as unknown[]).filter((x): x is Record<string, unknown> => !!x && typeof x === "object") : []);
+  const verktyg = String(s._verktyg ?? "");
+  let kolumner: string[] = [];
+  let rader: (string | number | null)[][] = [];
+  let totalt: number | null = null;
+  if (verktyg === "las_affarer") {
+    kolumner = ["Bolag", "Steg", "Nästa", "Belopp"];
+    rader = lista("affarer").map((a) => [cell(a.bolag), cell(a.steg), cell(typeof a.nastaDag === "string" ? `${a.nastaDag}${typeof a.nastaTid === "string" && a.nastaTid ? ` ${a.nastaTid}` : ""}` : null), cell(a.belopp)]);
+    totalt = antalEller(s.oppna);
+  } else if (verktyg === "las_provision") {
+    kolumner = ["Order", "Belopp"];
+    rader = lista("rader").map((r) => [cell(r.text), cell(r.belopp)]);
+    totalt = antalEller(s.antalRader);
+  } else if (verktyg === "las_dag") {
+    const poster = lista("poster");
+    if (poster.length) {
+      kolumner = ["Tid", "Vad"];
+      rader = poster.map((p) => [cell(p.tid), cell(p.rubrik)]);
+      totalt = antalEller(s.kalenderposter);
+    } else if (Array.isArray(s.uppgifter)) {
+      kolumner = ["Uppgift"];
+      rader = (s.uppgifter as unknown[]).map((u) => [cell(u)]);
+      totalt = antalEller(s.uppgifterKvar);
+    }
+  } else if (verktyg === "las_vantar" && Array.isArray(s.rader)) {
+    kolumner = ["Väntar"];
+    rader = (s.rader as unknown[]).map((r) => [cell(r)]);
+  }
+  rader = rader.filter((r) => r.some((c) => c !== null)).slice(0, UNDERLAG_RADER).map((r) => r.slice(0, UNDERLAG_KOLUMNER));
+  if (!rader.length) return null;
+  return { anrop, verktyg, kolumner: kolumner.slice(0, UNDERLAG_KOLUMNER), rader, totalt };
+}
+
+/* ------------------------------------------------------------------------ */
+/* Kortens utfall och raden en begäran gäller (varv 2, A1-2, A1-5)           */
+/* ------------------------------------------------------------------------ */
+
+/** En loggrads id: en uuid, som databasen ger. Allt annat avvisas innan det når databasen. */
+export const arRadId = (v: unknown): v is string => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
+/**
+ * Det som kan hända med ett kort efter svaret (planen A1-5): godkänt, delvis (några steg gick igenom, andra inte),
+ * avbrutet eller ångrat. Avfärdat följs upp på samma sätt som godkänt. Allt annat avvisas.
+ */
+export const UTFALL = ["godkant", "delvis", "avbrutet", "angrat"] as const;
+/**
+ * Fälten på ett kort som personen kan rätta före Godkänn (funktion 6), i den ordning de skrivs: raden (`titel`, för en
+ * uppföljning bolaget), dagen och vem uppgiften är åt. Ett kort som ändrades räknas inte som att AI:n hade rätt.
+ */
+export const ANDRAT = ["titel", "dag", "till"] as const;
+export type AndratFalt = (typeof ANDRAT)[number];
+/**
+ * Fälten varje kort har. En uppföljning har bolaget (`titel`) och dagen, men ingen "åt": ett `till` på ett sådant kort
+ * är inget personen kan ha ändrat, och skrivs inte. Ett förbered-verktyg som saknas här får hela ANDRAT, så att en
+ * ändring aldrig tappas.
+ */
+export const ANDRAT_FOR: Readonly<Record<string, readonly AndratFalt[]>> = {
+  forbered_uppgifter: ANDRAT,
+  forbered_uppfoljning: ["titel", "dag"],
+};
+/** `andrat` finns bara när personen ändrade något, och då i ANDRAT:s ordning, utan dubbletter. */
+export type Utfall = { rad: string; anrop: number; lage: (typeof UTFALL)[number]; andrat?: AndratFalt[] };
+
+export function lasUtfall(x: unknown): { ok: true; utfall: Utfall } | { ok: false; fel: string } {
+  const u = (x ?? {}) as Record<string, unknown>;
+  if (!x || typeof x !== "object" || Array.isArray(x)) return { ok: false, fel: "Utfallet saknas." };
+  if (!arRadId(u.rad)) return { ok: false, fel: "Svaret saknas." };
+  if (typeof u.anrop !== "number" || !Number.isInteger(u.anrop) || u.anrop < 1 || u.anrop > 100) return { ok: false, fel: "Kortet saknas." };
+  if (!(UTFALL as readonly unknown[]).includes(u.lage)) return { ok: false, fel: "Okänt utfall." };
+  // Ändrat är klientens ord, som läget: bara en lista med kända fält tas emot. Tom lista, eller null, är inget ändrat.
+  if (u.andrat !== undefined && u.andrat !== null && (!Array.isArray(u.andrat) || u.andrat.length > 10 || !u.andrat.every((f) => (ANDRAT as readonly unknown[]).includes(f)))) {
+    return { ok: false, fel: "Okänt fält i ändrat." };
+  }
+  const andrat = ANDRAT.filter((f) => Array.isArray(u.andrat) && u.andrat.includes(f));
+  return { ok: true, utfall: { rad: u.rad.toLowerCase(), anrop: u.anrop, lage: u.lage as Utfall["lage"], ...(andrat.length ? { andrat } : {}) } };
+}
+
+/** Är loggens anrop ett kort som visades? Bara korSamtal sätter `kort: true`, där kortet läggs i svaret. */
+export const visatKort = (a: unknown): boolean => {
+  const x = a as Record<string, unknown> | null | undefined;
+  return !!x && typeof x === "object" && String(x.namn ?? "").startsWith("forbered_") && x.ok === true && x.kort === true;
+};
+
+/**
+ * Villkoren för att skriva ett utfall utan att skriva över ett annat: varje visat korts `utfall` som det lästes
+ * (null när inget fanns). Rutten skriver bara om raden fortfarande står så (`verktyg->i->>utfall`), så att två utfall
+ * samtidigt på samma rad (två kort, ett dubbelklick) inte tar ut varandra. Index från 0, som i jsonb.
+ */
+export function kortensUtfall(verktyg: unknown): [number, string | null][] {
+  if (!Array.isArray(verktyg)) return [];
+  return verktyg.flatMap((a, i): [number, string | null][] => {
+    if (!visatKort(a)) return [];
+    const v = (a as Record<string, unknown>).utfall;
+    return [[i, v === undefined || v === null ? null : typeof v === "string" ? v : JSON.stringify(v)]];
+  });
+}
+
+/**
+ * Loggradens verktyg med kortets utfall inskrivet, eller null när anropet inte är ett kort som visades (`visatKort`:
+ * ett förbered-anrop som svarade och vars kort lades i svaret, alltså inte en dubblett och inte ett kort över
+ * KORT_MAX). Ingen ny kolumn: `verktyg` är redan jsonb. Samma utfall en gång till (ett dubbelklick, ett omförsök)
+ * ändrar ingenting, så att `utfallNar` förblir första gången: `andrad` är då falsk.
+ */
+export function medUtfall(verktyg: unknown, u: Utfall, nar: string): { verktyg: unknown[]; andrad: boolean } | null {
+  if (!Array.isArray(verktyg)) return null;
+  const a = verktyg[u.anrop - 1] as Record<string, unknown> | undefined;
+  if (!a || !visatKort(a)) return null;
+  if (a.utfall === u.lage) return { verktyg, andrad: false };
+  // Ändrat (funktion 6) skrivs bara med kortets första utfall: ett fält kan bara ha ändrats före Godkänn. Ett senare
+  // utfall (godkänt, sedan ångrat) behåller det som står och kan varken lägga till eller ta bort något. Så räknas ett
+  // ändrat kort aldrig om till ett som AI:n hade rätt i, och en ändring efter beslutet skrivs inte som en före.
+  // Bara fält som kortet har (ANDRAT_FOR): `till` på en uppföljning skrivs inte. Blir inget kvar skrivs ingen `andrat`.
+  const forsta = a.utfall === undefined || a.utfall === null;
+  const har = ANDRAT_FOR[String(a.namn ?? "")] ?? ANDRAT;
+  const andrat = (u.andrat ?? []).filter((f) => har.includes(f));
+  const ny = [...verktyg];
+  ny[u.anrop - 1] = { ...a, utfall: u.lage, utfallNar: nar, ...(forsta && andrat.length ? { andrat } : {}) };
+  return { verktyg: ny, andrad: true };
+}
+
+/** Medianen av talen, eller null när det inte finns något tal. Mätningen före varje påstående om tid (A1-6). */
+export function median(tal: readonly number[]): number | null {
+  const s = tal.filter((x) => typeof x === "number" && Number.isFinite(x)).sort((a, b) => a - b);
+  if (!s.length) return null;
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+/**
+ * Raden provet (`scripts/chatt-prov.mjs`) skriver per modell: median-ms för hela samtalet och median-varv (anrop till
+ * Claude) per körning, med antalet körningar som bar mätningen. En sparad körning från före mätningen (utan `varv` och
+ * `tider`) räknas inte, och finns ingen alls står det att den saknas, aldrig noll.
+ */
+export function medianRad(korningar: readonly unknown[]): string {
+  const matta = korningar.flatMap((r) => {
+    const x = (r ?? {}) as { varv?: unknown; tider?: { totalt?: unknown } | null };
+    const ms = x.tider?.totalt;
+    return typeof x.varv === "number" && Number.isFinite(x.varv) && typeof ms === "number" && Number.isFinite(ms) ? [{ varv: x.varv, ms }] : [];
+  });
+  if (!matta.length) return "Median per körning: saknas (ingen körning bar mätningen).";
+  const ms = Math.round(median(matta.map((m) => m.ms)) ?? 0);
+  return `Median per körning: ${ms} ms och ${median(matta.map((m) => m.varv))} varv, av ${matta.length} ${matta.length === 1 ? "körning" : "körningar"}.`;
+}
+
+/**
+ * Anteckningen som `scripts/chatt-prov.mjs --kor` sparar per modell i `nav_chatt_prov.anteckning`: varv, omskrivna
+ * svar, reservmodellen, frågorna som föll och medianraden (A1-6) sist. Här, och inte i skriptet, så att texten går att
+ * pröva utan att provet körs (det kostar pengar).
+ */
+export function provAnteckning(r: { varv: number; omskrivna: number; korningar: number; reserv: number; fall: readonly { id: string }[]; median: string }): string {
+  return `${r.varv} varv per fråga. Omskrivna svar: ${r.omskrivna} av ${r.korningar}. Reservmodellen tog över ${r.reserv} ${r.reserv === 1 ? "gång" : "gånger"}. Föll: ${r.fall.map((f) => f.id).join(", ") || "inga"}. ${r.median}`;
+}
+
+/**
+ * Början av ärendet som Stämmer inte under ett svar i chatten skriver (`/nav2/hem`, `flagga` med `var: "chatt"`), med
+ * loggradens id i parentesen. Avläsningen för den som sköter chatten (`chattLage`) räknar ärendena på det.
+ */
+export const STAMMER_INTE_HUVUD = "Startsidan, chatten: svaret stämmer inte (loggrad ";
+/** Loggradens id ur ett Stämmer inte-ärende, eller null när texten inte är ett sådant ärende. */
+export function stammerInteId(body: unknown): string | null {
+  if (typeof body !== "string" || !body.startsWith(STAMMER_INTE_HUVUD)) return null;
+  const id = body.slice(STAMMER_INTE_HUVUD.length, STAMMER_INTE_HUVUD.length + 36).toLowerCase();
+  return arRadId(id) && body[STAMMER_INTE_HUVUD.length + 36] === ")" ? id : null;
+}
+
+/** Verktygen ett kort går att bygga om med, utan Claude (funktion 6). Läsningarna går bara genom en fråga. */
+export const KOMMANDO_VERKTYG = ["forbered_uppgifter", "forbered_uppfoljning"] as const;
+export type Kommando = { verktyg: (typeof KOMMANDO_VERKTYG)[number]; input: Record<string, unknown> };
+/** Så lång får en text i ett kommando vara. Kortet klipper själv det som visas och görs (`korVerktyg`). */
+const KOMMANDO_TECKEN = 1000;
+
+/**
+ * Ett kommando från webbläsaren: `{verktyg, input}`. Claudes input prövas mot verktygets schema hos Anthropic,
+ * webbläsarens gör det inte, så det prövas här lika strängt: bara de två förbered-verktygen, exakt schemats nycklar och
+ * texter som texter (inga tal, listor eller styrtecken som blir en titel; tab och radbrytning går, som i Claudes input).
+ * Svaret bär input i schemats form, inget annat.
+ */
+export function lasKommando(x: unknown): { ok: true; kommando: Kommando } | { ok: false; fel: string } {
+  if (!x || typeof x !== "object" || Array.isArray(x)) return { ok: false, fel: "Kortet saknas." };
+  const k = x as Record<string, unknown>;
+  if (!(KOMMANDO_VERKTYG as readonly unknown[]).includes(k.verktyg)) return { ok: false, fel: "Okänt verktyg." };
+  const verktyg = k.verktyg as Kommando["verktyg"];
+  const FEL = { ok: false as const, fel: "Kortet går inte att läsa." };
+  const arObjekt = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+  const exakt = (o: Record<string, unknown>, nycklar: readonly string[]) => Object.keys(o).length === nycklar.length && nycklar.every((n) => Object.hasOwn(o, n));
+  // Tab och radbrytning tas emot: Claudes input kan bära dem, och kortet slår ihop blanktecken själv (`kort`).
+  const text = (v: unknown): v is string => typeof v === "string" && v.length <= KOMMANDO_TECKEN && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(v);
+  const input = k.input;
+  if (!arObjekt(input)) return FEL;
+  if (verktyg === "forbered_uppgifter") {
+    const lista = input.uppgifter;
+    if (!exakt(input, ["uppgifter"]) || !Array.isArray(lista) || lista.length < 1 || lista.length > UTKAST_MAX) return FEL;
+    const uppgifter: { titel: string; dag: string; till: string }[] = [];
+    for (const u of lista) {
+      if (!arObjekt(u) || !exakt(u, ["titel", "dag", "till"]) || !text(u.titel) || !text(u.dag) || !text(u.till)) return FEL;
+      uppgifter.push({ titel: u.titel, dag: u.dag, till: u.till });
+    }
+    return { ok: true, kommando: { verktyg, input: { uppgifter } } };
+  }
+  if (!exakt(input, ["bolag", "dag"]) || !text(input.bolag) || !text(input.dag)) return FEL;
+  return { ok: true, kommando: { verktyg, input: { bolag: input.bolag, dag: input.dag } } };
+}
+
+/**
+ * Verktygens egna fel är skrivna till Claude, och några ber den fråga personen. När kortet byggs om står felet under
+ * fältet personen skrev i, så de säger i stället vad personen kan skriva. Claude får samma text som förut.
+ */
+const TILL_PERSONEN: Record<string, string> = {
+  "En uppgift läggs åt en person i taget. Fråga vem som ska göra den.": "En uppgift läggs åt en person i taget. Skriv vem som ska göra den.",
+  "Flera heter så. Fråga med hela namnet.": "Flera heter så. Skriv hela namnet.",
+  "Fråga vilket bolag det gäller.": "Skriv vilket bolag det gäller.",
+  "Flera öppna affärer matchar namnet. Fråga vilket bolag som menas.": "Flera öppna affärer matchar namnet. Skriv hela bolagsnamnet.",
+};
+export const kommandoFel = (fel: string): string => TILL_PERSONEN[fel] ?? fel;
+/** Texterna kommandoFel byter, för provet: varje sådan text ska finnas i verktyg.ts, annars byts den aldrig. */
+export const KOMMANDO_FEL_TEXTER = Object.keys(TILL_PERSONEN);

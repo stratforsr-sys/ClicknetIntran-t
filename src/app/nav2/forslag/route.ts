@@ -15,12 +15,15 @@ export const dynamic = "force-dynamic";
 /**
  * Nav 2.0: förslagsloggen, i en rutt (0303).
  *
- * GET ?las=forslag&id=…  Ett förslag, med Navs tre rader.
- * GET ?las=andrat        Det som ändrats: ändringar och dömda förslag läsaren får se.
- * GET ?las=facit         Navs facit per val, för den som leder ett lag.
- * GET ?las=team          Teamet i månaden, genomgången.
+ * GET, alla läsningar (en annan läsning ger 400, ett läsfel 500 med felkod, aldrig ett tomläge):
+ *   ?las=forslag&id=…  Ett förslag, med Navs rader och `dataPer`. Den som leder ett lag får också `facitKort`
+ *                      (lagets facit i en rad); alla andra får null.
+ *   ?las=andrat        Det som ändrats: ändringar och dömda förslag läsaren får se.
+ *   ?las=facit         Navs facit per val. Den som leder ett lag får lagets tal med domen (`vem: "laget"`), alla andra
+ *                      bara sina egna val i antal, utan dom (`vem: "dig"`).
+ *   ?las=team          Teamet i månaden, genomgången (hem-team.ts).
  *
- * POST, handlingar:
+ * POST, handlingar (fel ursprung ger 403 innan något läses):
  *   valj          Den som håller mötet väljer Jag ringer själv eller Låt stå. Ett val per förslag: databasen
  *                 låser raden (`nav_forslag_valj`), så två klick ger ett beslut. Jag ringer själv lämnar över
  *                 bekräftelseuppgiften (`mote_bekrafta_overta`) och skriver vad som gjordes. Flytta mötet sparas

@@ -35,11 +35,17 @@ registerHooks({
     }
     if (spec === "@anthropic-ai/sdk") {
       return stubb(
-        "export default class Anthropic { constructor(o) { globalThis.__ai.skapad.push(o); this.beta = { messages: { stream: (p, o) => { globalThis.__ai.anrop.push(JSON.parse(JSON.stringify(p)));" +
-          " return { finalMessage: async () => { const s = globalThis.__ai.svar.shift(); if (!s) throw new Error('attrapp: inget svar kvar'); if (s instanceof Error) throw s; return typeof s === 'function' ? await s() : s; } }; } } }; } }",
+        "export default class Anthropic { constructor(o) { globalThis.__ai.skapad.push(o); this.beta = { messages: { stream: (p, o) => { globalThis.__ai.anrop.push(JSON.parse(JSON.stringify(p))); const lyss = [];" +
+          " return { on(h, f) { if (h === 'streamEvent') lyss.push(f); return this; }, finalMessage: async () => { const s = globalThis.__ai.svar.shift(); if (!s) throw new Error('attrapp: inget svar kvar'); if (s instanceof Error) throw s;" +
+          " if (s && s.steg) { const snap = { content: [] }; for (const [c, ms] of s.steg) { snap.content = c; for (const f of lyss) f({ type: 'content_block_delta' }, snap); if (ms) await new Promise((r) => setTimeout(r, ms)); } return s.slut; }" +
+          " return typeof s === 'function' ? await s() : s; } }; } } }; } }",
       );
     }
     if (spec === "@/lib/nav2/chatt/kallor") return stubb("export const skapaKallor = (...a) => globalThis.__kallor(...a);");
+    // N1: kalendern och uppgifterna bakom den riktiga `kallor.dag` räknas av provet i stället för att läsas.
+    if ((spec === "../kalender" || spec === "../uppgifter") && ctx.parentURL?.endsWith("/nav2/chatt/kallor.ts")) {
+      return stubb(spec === "../kalender" ? "export const hamtaKalposter = (...a) => globalThis.__kalender.kal(...a);" : "export const byggUppgifter = (...a) => globalThis.__kalender.upp(...a);");
+    }
     if (spec === "@/lib/fel-server") return stubb("export const skrivFel = async (f) => { (globalThis.__fel ??= []).push(f); return true; };");
     if (spec === "@/lib/auth") {
       const aktaAuth = pathToFileURL(join(rot, "src", "lib", "auth.ts")).href;
@@ -70,7 +76,10 @@ const S = "b0000000-0000-4000-8000-000000000001"; // en säljare
 const X = "b0000000-0000-4000-8000-000000000003"; // en annan säljare, utanför S krets
 const TL = "b0000000-0000-4000-8000-000000000004"; // teamledaren för S
 
-/** En attrapp av supabase-js: läser ur `tabeller` med rutans filter, bokför varje skrivning och varje rpc. */
+/**
+ * En attrapp av supabase-js: läser ur `tabeller` med rutans filter, bokför varje skrivning och varje rpc.
+ * `tabeller["<tabell>!lasfel"]`: varje läsning av tabellen svarar som supabase-js vid ett fel, data null och `error`.
+ */
 function attrapp(tabeller, rpc = {}) {
   const skrivningar = [];
   const SKRIV = new Set(["insert", "update", "delete", "upsert"]);
@@ -80,6 +89,7 @@ function attrapp(tabeller, rpc = {}) {
     const filter = [];
     const svaret = () => {
       if (skriver) return { data: skriver.rad ? [{ id: "ny", ...skriver.rad }] : null, error: tabeller[`${tabell}!fel`] ?? null };
+      if (tabeller[`${tabell}!lasfel`]) return { data: null, error: { message: tabeller[`${tabell}!lasfel`] }, count: null };
       const rader = (tabeller[tabell] ?? []).filter((r) => filter.every((f) => f(r)));
       return en ? { data: rader[0] ?? null, error: null } : { data: rader.slice(0, 1000), error: null, count: rader.length };
     };
@@ -90,8 +100,13 @@ function attrapp(tabeller, rpc = {}) {
     };
     const kedja = new Proxy({}, {
       get(_, namn) {
-        if (namn === "then") return (a, b) => Promise.resolve(svaret()).then(a, b);
-        if (SKRIV.has(namn)) return (rad) => { skriver = { rad: Array.isArray(rad) ? rad[0] : rad }; skrivningar.push({ text: `${String(namn)} ${tabell}`, rad: skriver.rad }); return kedja; };
+        // `<tabell>!vant`: skrivningarna i tabellen tar så många ms, och posten får `klar` (klockslaget) när de är gjorda.
+        if (namn === "then") {
+          const vant = skriver ? tabeller[`${tabell}!vant`] : 0;
+          if (!vant) return (a, b) => Promise.resolve(svaret()).then(a, b);
+          return (a, b) => new Promise((r) => setTimeout(r, vant)).then(() => { skriver.post.klar = Date.now(); return svaret(); }).then(a, b);
+        }
+        if (SKRIV.has(namn)) return (rad) => { skriver = { rad: Array.isArray(rad) ? rad[0] : rad }; skrivningar.push({ text: `${String(namn)} ${tabell}`, rad: skriver.rad }); skriver.post = skrivningar.at(-1); return kedja; };
         if (namn === "eq") return jamfor((a, b) => a === b, "eq");
         if (namn === "in") return jamfor((a, b) => b.includes(a), "in");
         if (namn === "like") return jamfor((a, b) => String(a).startsWith(String(b).replace(/%$/, "")), "like");
@@ -115,7 +130,7 @@ function attrapp(tabeller, rpc = {}) {
 process.env.ANTHROPIC_API_KEY = "prov-nyckel-som-aldrig-lamnar-provet";
 process.env.ANTHROPIC_WORKSPACE_ID = "prov-workspace";
 
-const { POST } = await import("../src/app/nav2/chatt/route.ts");
+const { POST, maxDuration } = await import("../src/app/nav2/chatt/route.ts");
 const { avtryck, SYSTEMTEXT } = await import("../src/lib/nav2/chatt/systemtext.ts");
 const { VERKTYG, korVerktyg, periodFor, kallrad, dagUr, affarUr, kallaFor, AFFARER_MAX, DOKUMENT_TECKEN } = await import("../src/lib/nav2/chatt/verktyg.ts");
 const { kostnadUsd, maxFragaUsd, sattInTal } = await import("../src/lib/nav2/chatt/chattforma.ts");
@@ -177,7 +192,8 @@ async function anropa(roller, id, kropp, o = {}) {
   globalThis.__rutt = { db, user: id ? { employee: { id, first_name: "Prov", last_name: "Person", team_id: null }, roles: roller, permissions: [] } : null };
   globalThis.__ai.svar = [...(o.ai ?? [])];
   globalThis.__ai.anrop = [];
-  globalThis.__kallor = () => kallor(roller, id, lasta);
+  // `o.kallor` byter ut enstaka källor (till exempel en som inte går att läsa).
+  globalThis.__kallor = () => ({ ...kallor(roller, id, lasta), ...(o.kallor ?? {}) });
   const req = new Request("https://nav.test/nav2/chatt", { method: "POST", headers: { origin: o.ursprung ?? "https://nav.test", "content-type": "application/json" }, body: JSON.stringify(kropp) });
   let status = 0, text = "", data = null, rader = [];
   try {
@@ -201,7 +217,7 @@ async function anropa(roller, id, kropp, o = {}) {
   const logg = rattad.map((s) => s.rad);
   const loggId = rattad.map((s) => (s.filter ?? []).find((x) => x[0] === "eq" && x[1] === "id")?.[2] ?? null);
   const ovrigt = db.skrivningar.filter((s) => !s.text.startsWith("rpc ") && s.text !== "update nav_chatt_logg" && s.text !== "delete nav_chatt_logg").map((s) => s.text);
-  return { status, text: text.slice(0, 600), data, rader, res, logg, loggId, borttagna, ovrigt, lasta, ai: globalThis.__ai.anrop, svar: rader.find((r) => r.h === "svar") ?? null };
+  return { status, text: text.slice(0, 600), data, rader, res, logg, loggId, borttagna, ovrigt, lasta, ai: globalThis.__ai.anrop, svar: rader.find((r) => r.h === "svar") ?? null, skrivningar: db.skrivningar };
 }
 const visa = (r) => `${r.status} ai=${r.ai.length} res=${r.res.length} logg=${r.logg.length} ${r.text.slice(0, 300)}`;
 const FRAGA = { fraga: "Hur gick lagets möten förra veckan?" };
@@ -228,6 +244,18 @@ rubrik("Avstängd tills någon slår på den");
   const utanNyckel = await anropa(["salesperson"], S, FRAGA);
   process.env.ANTHROPIC_API_KEY = nyckel;
   ok("utan nyckel i miljön: 409", utanNyckel.status === 409 && /Nyckeln saknas/.test(utanNyckel.data?.fel ?? "") && utanNyckel.ai.length === 0, visa(utanNyckel));
+  // Ett läsfel är inte "avstängd" och inte "inget godkänt prov": det är tillfälligt (Försök igen och Sök i stället).
+  const forut = console.error;
+  console.error = () => {};
+  try {
+    const instNere = await anropa(["salesperson"], S, FRAGA, { extra: { "nav_setting!lasfel": "nere" } });
+    ok("inställningarna går inte att läsa: 503 tillfalligt, inte 'Chatten är inte påslagen.'", instNere.status === 503 && instNere.data?.kod === "tillfalligt" && instNere.data.fel !== "Chatten är inte påslagen." && /Försök igen/.test(instNere.data.fel), visa(instNere));
+    ok("och ingenting går till Claude, reserveras eller skrivs", instNere.ai.length === 0 && instNere.res.length === 0 && instNere.logg.length === 0 && instNere.ovrigt.length === 0, visa(instNere));
+    const provNere = await anropa(["salesperson"], S, FRAGA, { extra: { "nav_chatt_prov!lasfel": "nere" } });
+    ok("proven går inte att läsa: 503 tillfalligt, inte 'Modellen har inget godkänt prov.'", provNere.status === 503 && provNere.data?.kod === "tillfalligt" && !/prov/i.test(provNere.data.fel) && provNere.ai.length === 0 && provNere.res.length === 0, visa(provNere));
+  } finally {
+    console.error = forut;
+  }
 }
 
 rubrik("Vem som får fråga");
@@ -250,6 +278,9 @@ rubrik("Gränserna: dollar per person och för företaget, prövade innan Claude
   ok("går utrymmet inte att läsa svarar rutten hellre nej än ja", trasig.status === 503 && trasig.ai.length === 0, visa(trasig));
   const utanRad = await anropa(["salesperson"], S, FRAGA, { reservation: { ...UTRYMME, ok: true } });
   ok("ett ja utan en loggrad är inget ja", utanRad.status === 503 && utanRad.ai.length === 0, visa(utanRad));
+  // N4: felraden lovar bara det rutan gör, och koden låter klienten visa både Försök igen och Sök i stället.
+  const UTRYMME_TEXT = "Chattens utrymme gick inte att läsa. Försök igen om en stund, eller sök i stället.";
+  ok("503 bär koden tillfalligt och en text som säger vad som går att göra, aldrig att rutan svarar som sökrutan", [trasig, utanRad].every((x) => x.data?.kod === "tillfalligt" && x.data.fel === UTRYMME_TEXT), JSON.stringify([trasig.data, utanRad.data]));
   const r = await anropa(["salesperson"], S, FRAGA, { ai: [textsvar("Inget väntar.")] });
   const a = r.res[0] ?? {};
   ok("reservationen görs på personen, modellen och miljön, med frågan", r.res.length === 1 && a.p_employee === S && a.p_modell === "claude-sonnet-5-5" && a.p_miljo === "lokal" && a.p_fraga === FRAGA.fraga, JSON.stringify(a));
@@ -275,7 +306,8 @@ rubrik("Ett svar: verktyget hämtar, servern sätter in talen");
     ai: [verktygstur("las_matt", { matt: "moten.hallna-av-alla", vem: "laget", period: "forra-veckan" }), textsvar("Laget höll {{t:1.antal}} av {{t:1.av}} möten förra veckan.")],
   });
   ok("svaret strömmas", r.status === 200 && r.rader.length >= 2, visa(r));
-  ok("det står vad som hämtas medan verktyget kör", r.rader[0]?.h === "hamtar" && r.rader[0].text === "Hämtar hållna möten för laget, förra veckan.", JSON.stringify(r.rader[0]));
+  // Varv 2: först kommer loggradens id (`rad`), sedan vad som hämtas.
+  ok("loggradens id kommer först, och sedan står det vad som hämtas medan verktyget kör", r.rader[0]?.h === "rad" && r.rader[0].id === "rad-1" && r.rader[1]?.h === "hamtar" && r.rader[1].text === "Hämtar hållna möten för laget, förra veckan.", JSON.stringify(r.rader.slice(0, 2)));
   ok("talen är insatta av servern, med källa", r.svar?.text === "Laget höll ⟦t1:2⟧ av ⟦t2:3⟧ möten förra veckan." && r.svar.tal?.[0]?.kalla?.verktyg === "las_matt" && r.svar.tal[0].kalla.falt === "antal", JSON.stringify(r.svar));
   const mv = await anropa(["team_lead"], TL, FRAGA, {
     ai: [verktygstur("las_matt", { matt: "moten.hallna-av-alla", vem: "laget", period: "forra-veckan" }), textsvar("Laget höll {{t:1.antal}} möten, och {{t:1.motvikt.antal}} uteblev. Det bokades {{t:1.bokadePerVecka}} i veckan.")],
@@ -345,6 +377,13 @@ rubrik("Claude förbereder, en människa godkänner");
   const fyra = await anropa(["salesperson"], S, FRAGA, { ai: [upg("A", "tu_1"), upg("B", "tu_2"), upg("B", "tu_3"), upg("C", "tu_4"), upg("D", "tu_5"), textsvar("De väntar på Godkänn.")] });
   const sista = JSON.parse(fyra.ai[5]?.messages?.at(-1)?.content?.[0]?.content ?? "{}");
   ok("samma kort två gånger visas en gång, och ett kort som inte ryms sägs till Claude i stället för att tappas tyst", fyra.svar?.kort?.length === 3 && fyra.svar.kort.map((k) => k.rader[0].text).join("") === "ABC" && /visas inte/.test(sista.fel ?? "") && !("utkast" in sista), JSON.stringify([fyra.svar?.kort?.length, sista]));
+  // Bara ett kort som visades tar emot ett utfall: dubbletten och kortet som inte rymdes fick Claude höra "visas inte".
+  const loggad = fyra.logg.at(-1)?.verktyg ?? [];
+  ok("loggen märker bara korten som visades: inte dubbletten och inte kortet som inte rymdes, och märket går aldrig till Claude", JSON.stringify(loggad.map((a) => a.kort === true)) === JSON.stringify([true, true, false, true, false]) && JSON.stringify(fyra.svar?.kort?.map((k) => k.anrop)) === "[1,2,4]" && !JSON.stringify(fyra.ai).includes('"kort":true'), JSON.stringify(loggad));
+  const KRAD = "c0000000-0000-4000-8000-0000000000c1";
+  const utf = (anrop) => anropa(["salesperson"], S, { utfall: { rad: KRAD, anrop, lage: "godkant" } }, { extra: { nav_chatt_logg: [{ id: KRAD, employee_id: S, miljo: "lokal", stop_reason: "end_turn", verktyg: loggad }] } });
+  const [u1, u3, u4, u5] = [await utf(1), await utf(3), await utf(4), await utf(5)];
+  ok("ett utfall tas bara emot på ett kort som visades: dubbletten och kortet som inte rymdes ger 404, inget skrivs", u1.status === 200 && u4.status === 200 && u3.status === 404 && u5.status === 404 && u3.logg.length + u5.logg.length === 0 && u3.data?.fel === "Det finns inget kort med det numret.", [u1.status, u3.status, u4.status, u5.status].join(" "));
   ok("två förberedda saker blir två kort, inget tappas", tva.svar?.kort?.length === 2 && tva.svar.kort[1].rubrik === "Ändra dagen för uppföljningen", JSON.stringify(tva.svar?.kort?.map((k) => k.rubrik)));
 }
 
@@ -450,6 +489,7 @@ rubrik("Avböjande, avbrott och fel");
 {
   const r = await anropa(["salesperson"], S, FRAGA, { ai: [{ stop_reason: "refusal", usage: USAGE, content: [] }] });
   ok("avböjer modellen säger rutan det rakt", r.rader.at(-1)?.h === "avbojt" && /avböjde/.test(r.rader.at(-1).text) && !r.svar, JSON.stringify(r.rader));
+  ok("och lovar inte att svara som sökrutan, bara att Sök i stället finns (N4)", r.rader.at(-1)?.text === "Modellen avböjde att svara på det här. Sök i stället ger svar ur Navs sökruta." && !/svarar som sökrutan/.test(JSON.stringify(r.rader)), r.rader.at(-1)?.text);
   ok("avböjandet loggas med kostnad", r.logg.length === 1 && r.logg[0].stop_reason === "refusal" && r.logg[0].kostnad_usd > 0);
   const m = await anropa(["team_lead"], TL, FRAGA, { ai: [{ stop_reason: "max_tokens", usage: USAGE, content: [{ type: "tool_use", id: "tu_9", name: "las_matt", input: { matt: "moten.hallna-av-alla", vem: "laget", period: "forra-veckan" } }] }] });
   ok("ett avbrutet svar kör aldrig sina verktyg", m.lasta.length === 0 && m.ai.length === 1 && m.rader.at(-1)?.h === "fel" && m.logg[0]?.stop_reason === "max_tokens", JSON.stringify(m.rader));
@@ -463,7 +503,7 @@ rubrik("Avböjande, avbrott och fel");
   const natet = await anropa(["salesperson"], S, FRAGA, { ai: [Object.assign(new Error("Request timed out."), { name: "APIConnectionTimeoutError" })] });
   ok("ett anrop som föll utan svar loggas med det reserverade beloppet, inte med noll", natet.rader.at(-1)?.kod === "tillfalligt" && natet.logg[0]?.stop_reason === "fel" && Math.abs(natet.logg[0].kostnad_usd - maxFragaUsd("okand", 2000, 6)) < 1e-12, JSON.stringify(natet.logg));
   const bugg = await anropa(["salesperson"], S, FRAGA, { ai: [new Error("något annat")] });
-  ok("ett okänt fel ger det allmänna beskedet, och räknas också som okänd kostnad", bugg.rader.at(-1)?.kod === "ai" && bugg.rader.at(-1).text === "Chatten svarar inte just nu. Jag svarar som sökrutan i stället." && Math.abs(bugg.logg[0]?.kostnad_usd - maxFragaUsd("okand", 2000, 6)) < 1e-12, JSON.stringify([bugg.rader, bugg.logg]));
+  ok("ett okänt fel ger det allmänna beskedet, och räknas också som okänd kostnad", bugg.rader.at(-1)?.kod === "ai" && bugg.rader.at(-1).text === "Chatten svarar inte just nu. Sök i stället ger svar ur Navs sökruta." && Math.abs(bugg.logg[0]?.kostnad_usd - maxFragaUsd("okand", 2000, 6)) < 1e-12, JSON.stringify([bugg.rader, bugg.logg]));
   const pdf = { sort: "application/pdf", namn: "offert.pdf", data: Buffer.from("%PDF-1.4 x").toString("base64") };
   const trasig = await anropa(["salesperson"], S, { ...FRAGA, bilagor: [pdf] }, { ai: [Object.assign(new Error("Could not process PDF"), { status: 400 })] });
   ok("ett 400 på en fråga med fil säger att filen inte gick att läsa", trasig.rader.at(-1)?.kod === "fil" && trasig.rader.at(-1).text === "Filen gick inte att läsa. Försök med en annan fil, eller fråga utan den." && trasig.logg[0]?.stop_reason === "fel:400" && trasig.logg[0].kostnad_usd === 0, JSON.stringify([trasig.status, trasig.rader, trasig.text]));
@@ -725,7 +765,7 @@ rubrik("Rutten: stopp, en fråga i taget och en ström som alltid stängs");
 
   const vanlig = await anropa(["team_lead"], TL, FRAGA, { ai: [verktygstur("las_matt", { matt: "moten.hallna-av-alla", vem: "laget", period: "forra-veckan" }), textsvar("Laget höll {{t:1.antal}} möten.")] });
   const slutIdx = vanlig.rader.findIndex((h) => ["svar", "fel", "avbojt"].includes(h.h));
-  ok("strömmen: hämtar, klart, och svaret sist", vanlig.rader.map((h) => h.h).join(",") === "hamtar,klart,svar" && slutIdx === vanlig.rader.length - 1 && vanlig.rader[0].anrop === 1 && vanlig.rader[0].verktyg === "las_matt" && vanlig.rader[1].anrop === 1, JSON.stringify(vanlig.rader.map((h) => [h.h, h.anrop])));
+  ok("strömmen: raden, hämtar, klart, och svaret sist", vanlig.rader.map((h) => h.h).join(",") === "rad,hamtar,klart,svar" && slutIdx === vanlig.rader.length - 1 && vanlig.rader[0].id === "rad-1" && vanlig.rader[1].anrop === 1 && vanlig.rader[1].verktyg === "las_matt" && vanlig.rader[2].anrop === 1, JSON.stringify(vanlig.rader.map((h) => [h.h, h.anrop])));
 
   // Kastar loggen ändå stängs strömmen, och personen har redan fått sitt svar.
   const db = attrapp({ nav_setting: PA, nav_chatt_prov: PROV }, { nav_chatt_reservera: () => ({ ...UTRYMME, ok: true, id: "rad-1" }) });
@@ -752,6 +792,759 @@ rubrik("Källorna: order läses en gång per fråga");
   await k.order(null, "2026-10");
   await k.order([S, TL], "2026-11");
   ok("samma krets och månad läses en gång, i vilken ordning personerna än står", lasningar.filter((t) => t === "sales_order").length === 3, JSON.stringify(lasningar));
+}
+
+rubrik("Källorna: las_forslag säger när förslagen inte går att läsa (hem-server-api.md 1.2)");
+{
+  // Hela vägen genom den riktiga källan (kallor.ts) och byggForslag, med databasen som attrapp. Förut blev ett läsfel
+  // "inga förslag" och trendregeln "Jag har 0." för Claude. Nu får Claude verktygets vanliga felbesked.
+  const { skapaKallor } = await import("../src/lib/nav2/chatt/kallor.ts");
+  const { VERKTYGSFEL } = await import("../src/lib/nav2/chatt/verktyg.ts");
+  const jag = { employee: { id: S, first_name: "Sara", last_name: "Prov", team_id: null }, roles: ["salesperson"], permissions: [] };
+  const MF = "c0000000-0000-4000-8000-00000000f001";
+  const imorgon = new Date(Date.now() + 20 * 3600e3).toISOString();
+  const lokal = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Stockholm", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(imorgon));
+  const OPPET = {
+    id: "e0000000-0000-4000-8000-00000000f001", sort: "forslag", regel: "moten.obekraftat", nyckel: `${MF}@${lokal}@${S}`, kalla: "regel", om: S, lag: null, skapad: new Date().toISOString(),
+    belagg: { mote: MF, forsok: 1 }, trodde: null, val: ["ringer-sjalv", "flytta", "lat-sta"], doms_dag: lokal, utgar: imorgon, text: null, prov: false,
+    beslut_id: null, beslut: null, beslut_av: null, atgard: null, kommentar: null, matning: null, dom: null,
+  };
+  const MOTET = { id: MF, kedja_id: "kf", bokat_av: S, halls_av: S, bokat_nar: "2026-11-10T09:00:00Z", flyttad_nar: null, mote_tid: imorgon, art: "ny", bekraftat_nar: null, utfall: null, utfall_nar: null, forsok: 1 };
+  const las = async (tabeller) => {
+    globalThis.__rutt = { db: attrapp(tabeller), user: null };
+    const forut = console.error;
+    console.error = () => {};
+    try { return (await korVerktyg("las_forslag", {}, { mig: S, idag: forraOnsdag, kallor: skapaKallor(jag) }, 1)).svar; } finally { console.error = forut; }
+  };
+  const tomt = await las({});
+  ok("utan fel: inga förslag, och trendregeln säger 0 (kontroll)", !("fel" in tomt) && tomt.oppna === 0 && /Jag har 0\./.test(tomt.trendregeln ?? ""), JSON.stringify(tomt));
+  const ett = await las({ nav_forslag_lage: [OPPET], mote: [MOTET], mote_kort: [{ kedja_id: "kf", namn: "PROV Hagby Glas" }], employee: [{ id: S, first_name: "Sara" }] });
+  ok("utan fel med ett öppet förslag: det står i svaret (kontroll)", !("fel" in ett) && ett.oppna === 1, JSON.stringify(ett).slice(0, 300));
+  for (const [namn, t] of [
+    ["förslagen (nav_forslag_lage)", { "nav_forslag_lage!lasfel": "nere" }],
+    ["antalet avgjorda möten (mote)", { "mote!lasfel": "nere" }],
+    ["kunden bakom ett öppet förslag (mote_kort)", { nav_forslag_lage: [OPPET], mote: [MOTET], "mote_kort!lasfel": "nere" }],
+  ]) {
+    const r = await las(t);
+    ok(`${namn} svarar med ett fel: verktygets felbesked, inte 'inga förslag' och inte 'Jag har 0'`, r.fel === VERKTYGSFEL && !("oppna" in r) && !("trendregeln" in r) && r._verktyg === "las_forslag", JSON.stringify(r));
+  }
+}
+
+rubrik("Källorna: kalendern en gång per vecka och uppgifterna en gång per fråga (N1)");
+{
+  // Veckan måndag 2026-11-16 till söndag 2026-11-22. Kalendern för vyn "dag" ger hela veckan, som den riktiga.
+  const kal = [], upp = [];
+  const POSTER = [
+    { dag: "2026-11-17", slag: "mote", rubrik: "Hagby Glas", start: 540, svar: null },
+    { dag: "2026-11-19", slag: "mote", rubrik: "Mälarö Rör", start: 600, svar: null },
+    { dag: "2026-11-19", slag: "frist", rubrik: "Rapporten", start: null, svar: null },
+  ];
+  const UPPG = [{ due: "2026-11-17", vy: "egen", t: "Ring Hagby", lage: "oppen" }, { due: "2026-11-19", vy: "egen", t: "Skicka offerten", lage: "klar" }];
+  // Attrappen svarar som den riktiga hamtaKalposter: bara posterna i intervallForVy(vy, ankaret). Hade veckans måndag
+  // som ankare gett ett annat intervall än dagen själv (till exempel bara måndagen) hade torsdagen nedan fått noll poster.
+  const { intervallForVy } = await import("../src/lib/leveranskalender.ts");
+  globalThis.__kalender = {
+    kal: async (_user, vy, dag, visa) => { kal.push({ vy, dag, visa }); const { fran, till } = intervallForVy(vy, dag); return { fran, till, poster: POSTER.filter((p) => p.dag >= fran && p.dag <= till) }; },
+    upp: async () => { upp.push(1); return { uppgifter: UPPG }; },
+  };
+  globalThis.__rutt = { db: attrapp({}), user: null };
+  const { skapaKallor } = await import("../src/lib/nav2/chatt/kallor.ts");
+  const veckan = ["2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20", "2026-11-21", "2026-11-22"];
+  ok("vyn dag ger samma vecka vilken dag i veckan som är ankaret: måndagen som nyckel läser samma rader som dagen själv", veckan.every((d) => JSON.stringify(intervallForVy("dag", d)) === JSON.stringify(intervallForVy("dag", "2026-11-16"))) && JSON.stringify(intervallForVy("dag", "2026-11-19")) === JSON.stringify({ fran: "2026-11-16", till: "2026-11-22" }), JSON.stringify(veckan.map((d) => intervallForVy("dag", d))));
+  const k = skapaKallor({ employee: { id: S }, roles: ["salesperson"], permissions: [] });
+  const [tis, tor, tisIgen] = await Promise.all([k.dag("2026-11-17"), k.dag("2026-11-19"), k.dag("2026-11-17")]);
+  ok("två las_dag i samma vecka ger en kalenderläsning och en uppgiftsläsning", kal.length === 1 && upp.length === 1 && kal[0].vy === "dag" && kal[0].dag === "2026-11-16" && JSON.stringify(kal[0].visa) === "[]", JSON.stringify({ kal, upp: upp.length }));
+  ok("varje dag får sina egna poster och uppgifter ur samma läsning, som dagUr ger dem", JSON.stringify(tis) === JSON.stringify(dagUr(POSTER, UPPG, "2026-11-17")) && JSON.stringify(tor) === JSON.stringify(dagUr(POSTER, UPPG, "2026-11-19")) && tis.poster[0]?.rubrik === "Hagby Glas" && tor.poster.length === 1 && tor.uppgifter[0]?.klar === true && JSON.stringify(tisIgen) === JSON.stringify(tis), JSON.stringify([tis, tor]));
+  await k.dag("2026-11-22");
+  await k.dag("2026-11-24");
+  ok("söndagen hör till samma vecka; en dag i nästa vecka läser kalendern en gång till, och uppgifterna aldrig igen", kal.length === 2 && kal[1].dag === "2026-11-23" && upp.length === 1, JSON.stringify({ kal, upp: upp.length }));
+  const k2 = skapaKallor({ employee: { id: S }, roles: ["salesperson"], permissions: [] });
+  globalThis.__kalender.kal = async () => { kal.push({ fel: true }); return null; };
+  const fel = await Promise.allSettled([k2.dag("2026-11-17"), k2.dag("2026-11-18")]);
+  ok("går kalendern inte att läsa faller veckans dagar, och den läses ändå bara en gång", fel.every((x) => x.status === "rejected") && kal.filter((x) => x.fel).length === 1, JSON.stringify(fel.map((x) => x.status)));
+}
+
+rubrik("Varv 2: svaret skrivs fram mening för mening");
+{
+  const { korSamtal } = await import("../src/lib/nav2/chatt/samtal.ts");
+  const vila = (ms) => new Promise((r) => setTimeout(r, ms));
+  const ctx = { mig: "p1", idag: "2026-11-18", kallor: { krets: async () => ["p1"], personer: async () => [], moten: async () => [], order: async () => [], forslag: async () => ({ pa: false, oppna: [], andrat: [], trendrad: null }), vantar: async () => ({ sammanfattning: "", rader: [] }), dag: async () => ({ poster: [], uppgifter: [] }), provision: async () => null } };
+  // En attrapp som strömmar: varje steg är meddelandet så långt det kommit, som SDK:ns streamEvent ger det.
+  const stromKlient = (svar, fragor) => ({ beta: { messages: { stream: (p) => {
+    fragor.push(JSON.parse(JSON.stringify(p)));
+    const lyss = [];
+    return {
+      on(h, f) { if (h === "streamEvent") lyss.push(f); return this; },
+      finalMessage: async () => {
+        const s = svar.shift();
+        if (!s?.steg) return s;
+        const snap = { content: [], ...(s.model ? { model: s.model } : {}) };
+        for (const [c, ms] of s.steg) { snap.content = c; for (const f of lyss) f({ type: "content_block_delta" }, snap); if (ms) await vila(ms); }
+        if (s.slut instanceof Error) throw s.slut;
+        return s.slut;
+      },
+    };
+  } } } });
+  const txt = (t) => ({ type: "text", text: t });
+  const bitar = (delar, ms = 0) => delar.map((_, n) => [[txt(delar.slice(0, n + 1).join(""))], ms]);
+  const strommat = (delar, ms = 0) => ({ steg: bitar(delar, ms), slut: textsvar(delar.join("")) });
+  const kor = async (svar, o = {}) => {
+    const sant = [];
+    const fragor = [];
+    const r = await korSamtal({ klient: stromKlient([...svar], fragor), modell: "claude-sonnet-5-5", sand: (h) => { sant.push({ ...h, _t: Date.now() }); o.vid?.(h); }, ctx, turer: [{ role: "user", content: "Hur många möten?" }], avbruten: o.avbruten });
+    return { r, sant, fragor, texter: sant.filter((h) => h.h === "text"), typer: sant.map((h) => h.h).join(","), svar: sant.find((h) => h.h === "svar") };
+  };
+  // Inget i ett utkast får vara ett tal utan källa eller en halv hänvisning.
+  const rent = (t) => !/\{\{|\}\}|⟦obelagt/.test(t) && !/\d/.test(t.replace(/⟦t\d+:[^⟧]*⟧/g, ""));
+  // Det avslutande kommer sist, och inget utkast kommer efter det.
+  const sist = (sant) => { const i = sant.findIndex((h) => ["svar", "avbojt", "fel"].includes(h.h)); return i === sant.length - 1; };
+  const las = verktygstur("las_matt", { matt: "moten.hallna-av-alla", vem: "jag", period: "denna-vecka" });
+
+  const a = await kor([las, strommat(["Du höll {{t:1.antal}} möten", " den här veckan. ", "Det är ", "en bra början. ", "Fortsätt så."], 130)]);
+  ok("hela meningar visas medan svaret skrivs, och svaret kommer sist", a.typer === "hamtar,klart,text,text,svar" && sist(a.sant), a.typer);
+  ok("utkastet är hela texten så långt, färdigformat, och talet har sin källa som i svaret", a.texter[0]?.text === "Du höll ⟦t1:0⟧ möten den här veckan." && a.texter[1]?.text === "Du höll ⟦t1:0⟧ möten den här veckan. Det är en bra början." && JSON.stringify(a.texter[0].tal) === JSON.stringify(a.svar?.tal) && a.texter[0].tal[0]?.om && a.texter[0].tal[0].kalla.verktyg === "las_matt", JSON.stringify(a.texter));
+  ok("svaret ersätter utkastet och har resten", a.svar?.text === "Du höll ⟦t1:0⟧ möten den här veckan. Det är en bra början. Fortsätt så." && a.texter.every((t) => a.svar.text.startsWith(t.text)), a.svar?.text);
+  ok("varv och tider följer med svaret, utan nya anrop", a.svar?.varv === 2 && a.svar.tider.ai.length === 2 && a.svar.tider.verktyg.length === 1 && typeof a.svar.tider.forstaText === "number" && a.svar.tider.totalt >= a.svar.tider.forstaText && a.r.varv === 2 && a.fragor.length === 2, JSON.stringify(a.svar?.tider));
+  ok("högst ett utkast var 120:e ms", a.texter.every((t, n) => n === 0 || t._t - a.texter[n - 1]._t >= 115), JSON.stringify(a.texter.map((t) => t._t)));
+
+  const forsta = await kor([strommat(["Hej. ", "Jag svarar på frågor om ditt arbete i Nav. ", "Fråga gärna."], 130)]);
+  ok("varvet före första verktyget visas inte medan det skrivs: det är nästan alltid inledningen till ett verktyg", forsta.texter.length === 0 && forsta.svar?.text === "Hej. Jag svarar på frågor om ditt arbete i Nav. Fråga gärna.", forsta.typer);
+
+  const sju = await kor([las, strommat(["Du höll {{t:1.antal}} möten. ", "Förra veckan var det 7. ", "Bra jobbat. "], 130), strommat(["Du höll {{t:1.antal}} möten."])]);
+  // Planen A1-1: skrivs svaret om tonas utkastet ned och står kvar tills svaret ersätter det (personen kan ha läst det).
+  ok("ett tal utan källa stoppar utkastet där, och under omskrivningen står det kvar tills svaret ersätter det", sju.typer === "hamtar,klart,text,hamtar,svar" && sju.texter.length === 1 && sju.texter[0].text === "Du höll ⟦t1:0⟧ möten." && sju.sant[3].anrop === undefined && /tal/.test(sju.sant[3].text) && sju.svar?.text === "Du höll ⟦t1:0⟧ möten.", sju.typer + " " + JSON.stringify(sju.texter.map((t) => t.text)));
+  const sjuTal = strommat(["Du höll {{t:1.antal}} möten. ", "Förra veckan var det 7. ", "Bra jobbat. "], 130);
+  const omStrom = await kor([las, sjuTal, strommat(["Du höll {{t:1.antal}} möten. ", "Bra jobbat. ", "Fortsätt så."], 130)]);
+  const efterKoll = omStrom.sant.slice(omStrom.sant.findIndex((h) => h.h === "hamtar" && h.anrop === undefined) + 1).filter((h) => h.h === "text");
+  ok("omskrivningen strömmar som vanligt: nästa utkast ersätter det nedtonade, och inget dras tillbaka däremellan", omStrom.typer.startsWith("hamtar,klart,text,hamtar,text") && omStrom.texter.every((t) => t.text !== "") && efterKoll.length >= 1 && efterKoll.every((t) => omStrom.svar?.text.startsWith(t.text)) && omStrom.svar?.text === "Du höll ⟦t1:0⟧ möten. Bra jobbat. Fortsätt så." && sist(omStrom.sant), omStrom.typer + " " + JSON.stringify(omStrom.texter.map((t) => t.text)));
+  const omLangt = await kor([las, sjuTal, { stop_reason: "max_tokens", usage: USAGE, content: [txt("Du höll")] }]);
+  const omNej = await kor([las, sjuTal, { stop_reason: "refusal", usage: USAGE, content: [txt("Nej.")] }]);
+  const omReserv = await kor([las, sjuTal, { ...textsvar("Du höll {{t:1.antal}} möten."), model: "claude-opus-5-5" }]);
+  ok("faller omskrivningen, avböjer modellen eller tar en reservmodell över: det nedtonade utkastet dras tillbaka först", omLangt.typer === "hamtar,klart,text,hamtar,text,fel" && omNej.typer === "hamtar,klart,text,hamtar,text,avbojt" && omReserv.typer === "hamtar,klart,text,hamtar,text,svar" && [omLangt, omNej, omReserv].every((x) => x.texter.at(-1).text === "" && x.texter.at(-1).tal.length === 0), [omLangt.typer, omNej.typer, omReserv.typer].join(" | "));
+  ok("inget utkast bär ett tal utan källa", [a, sju].every((x) => x.texter.every((t) => rent(t.text))), JSON.stringify(sju.texter));
+
+  const halv = await kor([las, strommat(["Du höll {{t:1.", "antal}} möten. ", "Klart. "], 130)]);
+  ok("en halv hänvisning syns aldrig: meningen släpps först när hänvisningen är hel", halv.texter.length >= 1 && halv.texter.every((t) => rent(t.text)) && halv.texter[0].text === "Du höll ⟦t1:0⟧ möten.", JSON.stringify(halv.texter));
+  const trasig = await kor([las, strommat(["Du höll {{t:1. ", "antal}} möten. ", "Klart. "], 130), textsvar("Du höll {{t:1.antal}} möten.")]);
+  ok("en punkt inne i en hänvisning är inget meningsslut, och en trasig hänvisning visas aldrig", trasig.texter.length === 0 && trasig.svar?.text === "Du höll ⟦t1:0⟧ möten.", JSON.stringify(trasig.texter));
+
+  const verktyg2 = { stop_reason: "tool_use", usage: USAGE, content: [txt("Du höll {{t:1.antal}} möten. "), { type: "tool_use", id: "tu_2", name: "las_dag", input: { dag: "2026-11-18" } }] };
+  const vidare = await kor([las, { steg: [[[txt("Du höll {{t:1.antal}} möten. ")], 130], [verktyg2.content, 0]], slut: verktyg2 }, textsvar("Klart.")]);
+  ok("slutar varvet i ett verktyg dras utkastet tillbaka innan nästa hämtning", vidare.typer === "hamtar,klart,text,text,hamtar,klart,svar" && vidare.texter[0].text !== "" && vidare.texter[1].text === "", vidare.typer);
+
+  const fb = { type: "fallback", to: { model: "claude-opus-5-5" } };
+  const byte = { stop_reason: "end_turn", model: "claude-opus-5-5", usage: USAGE, content: [txt("Du höll {{t:1.antal}} möten. "), fb, txt("Du höll {{t:1.antal}} möten den här veckan.")] };
+  const reserv = await kor([las, { steg: [[[txt("Du höll {{t:1.antal}} möten. ")], 130], [byte.content.slice(0, 2), 130], [byte.content, 130]], slut: byte }]);
+  ok("tar reservmodellen över mitt i strömmen dras utkastet tillbaka, och inget nytt visas förrän svaret", reserv.typer === "hamtar,klart,text,text,svar" && reserv.texter[1].text === "" && sist(reserv.sant), reserv.typer);
+
+  const avboj = await kor([las, { steg: [[[txt("Du höll {{t:1.antal}} möten. ")], 130]], slut: { stop_reason: "refusal", usage: USAGE, content: [txt("Du höll {{t:1.antal}} möten. ")] } }]);
+  ok("avböjer modellen dras utkastet tillbaka före beskedet", avboj.typer === "hamtar,klart,text,text,avbojt" && avboj.texter[1].text === "", avboj.typer);
+
+  const manga = Array.from({ length: 40 }, () => "Det här är en mening om möten. ");
+  const tat = await kor([las, strommat(manga, 0)]);
+  ok("tätt efter varandra blir det ett utkast, inte fyrtio", tat.texter.length === 1 && tat.texter[0].text === "Det här är en mening om möten." && tat.svar?.text === manga.join("").trim(), tat.texter.length);
+  const lang = await kor([las, strommat(Array.from({ length: 30 }, () => "Ytterligare en mening om läget. "), 10)]);
+  ok("ett långt svar: utkasten glesas ut till var 120:e ms, och varje utkast är början av svaret", lang.texter.length >= 2 && lang.texter.length <= 5 && lang.texter.every((t, n) => lang.svar.text.startsWith(t.text) && (n === 0 || t._t - lang.texter[n - 1]._t >= 115)), JSON.stringify(lang.texter.map((t) => [t._t, t.text.length])));
+
+  const tecken = await kor([las, strommat(["Åkes Åkeri säger ”vi återkommer” om offerten. ", 'Kunden skrev "hör av er." ', "Öppna Möten för mer. "], 130)]);
+  ok("å, ä, ö och citattecken kommer fram som de skrevs, och ett citat som slutar en mening klipps efter citattecknet", tecken.texter[0]?.text === "Åkes Åkeri säger ”vi återkommer” om offerten." && tecken.texter[1]?.text === 'Åkes Åkeri säger ”vi återkommer” om offerten. Kunden skrev "hör av er."', JSON.stringify(tecken.texter.map((t) => t.text)));
+
+  const tomt = await kor([las, { steg: [[[txt("")], 0]], slut: textsvar("") }]);
+  ok("ett tomt svar ger inget utkast, bara beskedet", tomt.texter.length === 0 && tomt.sant.at(-1)?.kod === "tomt", tomt.typer);
+
+  const ac = new AbortController();
+  const borta = await kor([las, strommat(["Du höll {{t:1.antal}} möten. ", "Det är bra. ", "Mer kommer. "], 130)], { avbruten: ac.signal, vid: (h) => { if (h.h === "text") ac.abort(); } });
+  ok("är personen borta skickas inga fler utkast, och kostnaden räknas som förut", borta.texter.length === 1 && Math.abs(borta.r.kostnadUsd - 2 * kostnadUsd("claude-sonnet-5-5", USAGE)) < 1e-12, JSON.stringify(borta.texter));
+
+  const fallit = await kor([verktygstur("las_matt", { matt: "finns.inte", vem: "jag", period: "denna-vecka" }), strommat(["Det måttet gick inte att läsa. ", "Fråga om ett annat."], 130)]);
+  ok("ett verktyg som faller: utkastet går som vanligt, men ger inga följdfrågor", fallit.texter[0]?.text === "Det måttet gick inte att läsa." && fallit.svar?.nasta.length === 0, JSON.stringify(fallit.svar?.nasta));
+
+  const kast = await korSamtal({ klient: { beta: { messages: { stream: () => ({ on() { throw new Error("ingen ström"); }, finalMessage: async () => textsvar("Klart.") }) } } }, modell: "claude-sonnet-5-5", sand: () => {}, ctx, turer: [{ role: "user", content: "x" }] });
+  ok("en ström som inte går att lyssna på fäller inte svaret", kast.ren === "Klart.", kast.stopp);
+
+  // Ett utkast står aldrig kvar ovanför ett fel: det dras tillbaka först, och felet kommer sist.
+  const langt = await kor([las, { steg: [[[txt("Du höll {{t:1.antal}} möten. ")], 130], [[txt("Du höll {{t:1.antal}} möten. Och sedan")], 0]], slut: { stop_reason: "max_tokens", usage: USAGE, content: [txt("Du höll {{t:1.antal}} möten. Och sedan")] } }]);
+  ok("svaret blir för långt efter ett utkast: utkastet dras tillbaka, sedan felet", langt.typer === "hamtar,klart,text,text,fel" && langt.texter[1].text === "" && langt.sant.at(-1).kod === "langt" && sist(langt.sant), langt.typer);
+  const foll = await kor([las, { steg: [[[txt("Du höll {{t:1.antal}} möten. ")], 130]], slut: Object.assign(new Error("Connection error."), { name: "APIConnectionError" }) }]);
+  ok("anropet faller efter ett utkast: utkastet dras tillbaka, sedan felet", foll.typer === "hamtar,klart,text,text,fel" && foll.texter[1].text === "" && foll.sant.at(-1).kod === "tillfalligt", foll.typer);
+  const fran = await kor([las, { model: "claude-opus-5-5", steg: bitar(["Du höll {{t:1.antal}} möten. ", "Bra. "], 130), slut: { ...textsvar("Du höll {{t:1.antal}} möten. Bra."), model: "claude-opus-5-5" } }]);
+  ok("svarar en reservmodell från början visas inget utkast, bara svaret", fran.texter.length === 0 && fran.svar?.text === "Du höll ⟦t1:0⟧ möten. Bra.", fran.typer);
+  const daterad = await kor([las, { model: "claude-sonnet-5-5-20261001", steg: bitar(["Du höll {{t:1.antal}} möten. ", "Bra. "], 130), slut: { ...textsvar("Du höll {{t:1.antal}} möten. Bra."), model: "claude-sonnet-5-5-20261001" } }]);
+  ok("samma modell med datum i namnet är ingen reserv: utkastet visas och står kvar till svaret", daterad.typer === "hamtar,klart,text,text,svar" && daterad.texter.every((t) => t.text !== ""), daterad.typer);
+  const fore = await kor([las], { avbruten: AbortSignal.abort() });
+  ok("ett stopp före första anropet: inget går till Claude, inget utkast, bara beskedet att frågan stoppades", fore.fragor.length === 0 && fore.typer === "fel" && fore.sant[0].kod === "avbruten" && fore.r.kostnadUsd === 0, fore.typer);
+}
+
+rubrik("Varv 2: rutten strömmar utan att ändra vad Claude får");
+{
+  const txt = (t) => ({ type: "text", text: t });
+  const steg = (delar, ms) => delar.map((_, n) => [[txt(delar.slice(0, n + 1).join(""))], ms]);
+  const las = verktygstur("las_matt", { matt: "moten.hallna-av-alla", vem: "laget", period: "forra-veckan" });
+  const strom = await anropa(["team_lead"], TL, FRAGA, { ai: [las, { steg: steg(["Laget höll {{t:1.antal}} möten. ", "Bra. "], 130), slut: textsvar("Laget höll {{t:1.antal}} möten. Bra.") }] });
+  const stycke = await anropa(["team_lead"], TL, FRAGA, { ai: [las, textsvar("Laget höll {{t:1.antal}} möten. Bra.")] });
+  ok("strömmen: raden, hämtar, klart, utkasten och svaret sist", strom.rader.map((h) => h.h).join(",") === "rad,hamtar,klart,text,text,svar" && strom.rader[3].text === "Laget höll ⟦t1:2⟧ möten.", JSON.stringify(strom.rader.map((h) => [h.h, h.text])));
+  ok("Claude får exakt samma anrop med och utan ström: modell, system, verktyg, meddelanden, max_tokens och effort", strom.ai.length === 2 && JSON.stringify(strom.ai) === JSON.stringify(stycke.ai), "");
+  // Klocktiderna (radens och varje verktygs `ms`) är väggklocka och skiljer sig mellan två körningar; allt annat ska vara lika.
+  const utanMs = (l) => ({ ...l, ms: 0, verktyg: Array.isArray(l.verktyg) ? l.verktyg.map((v) => ({ ...v, ms: 0 })) : l.verktyg });
+  ok("kostnaden, loggen och svaret är desamma med och utan ström", JSON.stringify(strom.logg.map(utanMs)) === JSON.stringify(stycke.logg.map(utanMs)) && strom.svar?.text === stycke.svar?.text, JSON.stringify([strom.logg, stycke.logg]));
+
+  ok("slutraden skrivs på raden oavsett läge, så att en rad som stoppades under tiden ändå får sin slutrad", JSON.stringify(stycke.skrivningar.filter((x) => x.text === "update nav_chatt_logg").at(-1)?.filter) === JSON.stringify([["eq", "id", "rad-1"]]), JSON.stringify(stycke.skrivningar.filter((x) => x.text === "update nav_chatt_logg").map((x) => x.filter)));
+  for (const kropp of ["", "null", "[]", "\"Hur gick det?\"", "{}"]) {
+    globalThis.__rutt = { db: attrapp({ nav_setting: PA, nav_chatt_prov: PROV }), user: { employee: { id: S, first_name: "Prov", last_name: "Person", team_id: null }, roles: ["salesperson"], permissions: [] } };
+    globalThis.__ai.anrop = [];
+    const res = await POST(new Request("https://nav.test/nav2/chatt", { method: "POST", headers: { origin: "https://nav.test", "content-type": "application/json" }, body: kropp }));
+    ok(`chattens rutt: en tom eller felformad kropp (${JSON.stringify(kropp)}) ger 400, inget reserveras och inget går till Claude`, res.status === 400 && globalThis.__rutt.db.skrivningar.length === 0 && globalThis.__ai.anrop.length === 0, `${res.status}`);
+  }
+
+  const RAD = "c0000000-0000-4000-8000-0000000000a1";
+  const ANNAN = "c0000000-0000-4000-8000-0000000000a2";
+  const nar = (sek) => new Date(Date.now() - sek * 1000).toISOString();
+  const pagar = (id) => ({ id, employee_id: S, miljo: "lokal", stop_reason: "pagar", nar: nar(5) });
+  const filter = (r) => r.skrivningar.find((x) => x.text === "update nav_chatt_logg")?.filter ?? [];
+  const har = (f, kol, v) => f.some((x) => x[0] === "eq" && x[1] === kol && x[2] === v);
+  const riktat = await anropa(["salesperson"], S, { stoppa: true, rad: RAD }, { extra: { nav_chatt_logg: [pagar(RAD), pagar(ANNAN)] } });
+  ok("Stopp med rad stoppar bara den raden, personens egen och pågående", riktat.status === 200 && riktat.data?.ok === true && riktat.ai.length === 0 && riktat.logg.length === 1 && riktat.logg[0].stop_reason === "stoppas" && har(filter(riktat), "id", RAD) && har(filter(riktat), "employee_id", S) && har(filter(riktat), "miljo", "lokal") && har(filter(riktat), "stop_reason", "pagar"), JSON.stringify(filter(riktat)));
+  const alla = await anropa(["salesperson"], S, { stoppa: true }, { extra: { nav_chatt_logg: [pagar(RAD)] } });
+  ok("Stopp utan rad gäller som förut alla personens pågående", alla.status === 200 && !filter(alla).some((x) => x[1] === "id") && har(filter(alla), "employee_id", S), JSON.stringify(filter(alla)));
+  for (const rad of ["rad-1", 5, "", { id: RAD }]) {
+    const fel = await anropa(["salesperson"], S, { stoppa: true, rad }, {});
+    ok(`Stopp med ogiltig rad (${JSON.stringify(rad)}) ger 400 och ändrar ingenting`, fel.status === 400 && fel.skrivningar.length === 0, `${fel.status} ${fel.skrivningar.length}`);
+  }
+
+  // `kort: true` är korSamtals märke på ett kort som visades (se provet med fem förbered-anrop ovan).
+  const KORT = { id: RAD, employee_id: S, miljo: "lokal", stop_reason: "end_turn", verktyg: [{ namn: "las_matt", input: {}, ok: true }, { namn: "forbered_uppgifter", input: { uppgifter: [] }, ok: true, kort: true }] };
+  const utfall = (u, rader = [KORT], roller = ["salesperson"], vem = S) => anropa(roller, vem, { utfall: u }, { extra: { nav_chatt_logg: rader } });
+  const godk = await utfall({ rad: RAD, anrop: 2, lage: "godkant" });
+  const skriven = godk.logg[0]?.verktyg;
+  ok("kortets utfall skrivs i loggradens verktyg[anrop-1], på personens egen rad", godk.status === 200 && godk.data?.ok === true && skriven?.[1]?.utfall === "godkant" && !Number.isNaN(Date.parse(skriven[1].utfallNar)) && JSON.stringify(skriven[0]) === JSON.stringify(KORT.verktyg[0]) && har(filter(godk), "id", RAD) && har(filter(godk), "employee_id", S) && har(filter(godk), "miljo", "lokal"), JSON.stringify([godk.status, godk.data, skriven]));
+  ok("ett utfall går inte till Claude och räknas inte mot gränserna", godk.ai.length === 0 && godk.res.length === 0);
+  const avbr = await utfall({ rad: RAD, anrop: 2, lage: "avbrutet" });
+  ok("ett avbrutet kort sparas precis som ett godkänt: avfärdade förslag följs upp lika", avbr.status === 200 && avbr.logg[0]?.verktyg?.[1]?.utfall === "avbrutet");
+  const annans = await utfall({ rad: RAD, anrop: 2, lage: "godkant" }, [{ ...KORT, employee_id: X }]);
+  ok("en annan persons rad ändras inte: 404", annans.status === 404 && annans.logg.length === 0, `${annans.status}`);
+  // R1 (tillägget): slutraden skriver hela `verktyg`, så ett utfall före den hade skrivits över. Koden är `ej-klar`,
+  // inte `pagar`: `pagar` är 429-koden för en andra fråga, och klienten ska kunna skilja dem åt.
+  const pag = await utfall({ rad: RAD, anrop: 2, lage: "godkant" }, [{ ...KORT, stop_reason: "pagar" }]);
+  ok("medan raden ännu inte är rättad: 409 ej-klar, försök igen, inget skrivs", pag.status === 409 && pag.data?.kod === "ej-klar" && pag.logg.length === 0, `${pag.status} ${JSON.stringify(pag.data)}`);
+  const stp = await utfall({ rad: RAD, anrop: 2, lage: "avbrutet" }, [{ ...KORT, stop_reason: "stoppas" }]);
+  ok("en stoppad rad som väntar på sin slutrad tar inte emot utfall: 409 ej-klar, inget skrivs", stp.status === 409 && stp.data?.kod === "ej-klar" && stp.logg.length === 0, `${stp.status} ${JSON.stringify(stp.data)}`);
+  const efter = await utfall({ rad: RAD, anrop: 2, lage: "avbrutet" }, [{ ...KORT, stop_reason: "avbruten" }]);
+  ok("efter slutraden står utfallet kvar, också på en fråga som stoppades", efter.status === 200 && efter.logg[0]?.verktyg?.[1]?.utfall === "avbrutet", `${efter.status}`);
+  const delvis = await utfall({ rad: RAD, anrop: 2, lage: "delvis" });
+  ok("delvis är ett utfall (några steg gick igenom, andra inte)", delvis.status === 200 && delvis.logg[0]?.verktyg?.[1]?.utfall === "delvis", `${delvis.status}`);
+  const redan = { ...KORT, verktyg: [KORT.verktyg[0], { ...KORT.verktyg[1], utfall: "godkant", utfallNar: "2026-11-17T10:00:00.000Z" }] };
+  const igen = await utfall({ rad: RAD, anrop: 2, lage: "godkant" }, [redan]);
+  ok("samma utfall två gånger (dubbelklick, omförsök): 200, inget skrivs, första tiden står kvar", igen.status === 200 && igen.data?.ok === true && igen.logg.length === 0, `${igen.status} ${igen.logg.length}`);
+  const angrat = await utfall({ rad: RAD, anrop: 2, lage: "angrat" }, [redan]);
+  ok("ett nytt utfall på samma kort skriver över det förra (godkänt, sedan ångrat)", angrat.status === 200 && angrat.logg[0]?.verktyg?.[1]?.utfall === "angrat" && angrat.logg[0].verktyg[1].utfallNar !== "2026-11-17T10:00:00.000Z", JSON.stringify(angrat.logg[0]?.verktyg?.[1]));
+  const foll = { ...KORT, verktyg: [KORT.verktyg[0], { ...KORT.verktyg[1], ok: false }] };
+  const ingetKort = await utfall({ rad: RAD, anrop: 2, lage: "godkant" }, [foll]);
+  ok("ett förbered-anrop som föll visade inget kort: 404, inget skrivs", ingetKort.status === 404 && ingetKort.logg.length === 0, `${ingetKort.status}`);
+  const nere = await anropa(["salesperson"], S, { utfall: { rad: RAD, anrop: 2, lage: "godkant" } }, { extra: { nav_chatt_logg: [KORT], "nav_chatt_logg!fel": { message: "nere" } } });
+  ok("går utfallet inte att skriva: 503, och klienten kan försöka igen", nere.status === 503 && typeof nere.data?.fel === "string", `${nere.status}`);
+  const annansStopp = await anropa(["salesperson"], S, { stoppa: true, rad: RAD }, { extra: { nav_chatt_logg: [{ ...pagar(RAD), employee_id: X }] } });
+  ok("Stopp med en annan persons rad: 200 utan verkan, och uppdateringen gäller bara personens egna rader", annansStopp.status === 200 && har(filter(annansStopp), "employee_id", S) && har(filter(annansStopp), "id", RAD), JSON.stringify(filter(annansStopp)));
+  const intekort = await utfall({ rad: RAD, anrop: 1, lage: "godkant" });
+  const forbi = await utfall({ rad: RAD, anrop: 3, lage: "godkant" });
+  ok("ett anrop som inte är ett kort, eller inte finns: 404, inget skrivs", intekort.status === 404 && forbi.status === 404 && intekort.logg.length + forbi.logg.length === 0, `${intekort.status} ${forbi.status}`);
+  for (const u of [{ rad: RAD, anrop: 2, lage: "kanske" }, { rad: RAD, anrop: 2, lage: "fel" }, { rad: RAD, anrop: 0, lage: "godkant" }, { rad: RAD, anrop: "2", lage: "godkant" }, { rad: "rad-1", anrop: 2, lage: "godkant" }, null, [RAD]]) {
+    const fel = await utfall(u);
+    ok(`ogiltigt utfall (${JSON.stringify(u)}) ger 400 och ändrar ingenting`, fel.status === 400 && fel.skrivningar.length === 0, `${fel.status}`);
+  }
+  ok("utfallet skrivs bara om kortet står som det lästes: villkoret följer med skrivningen", har(filter(godk), "id", RAD) && filter(godk).some((x) => x[0] === "is" && x[1] === "verktyg->1->>utfall" && x[2] === null) && filter(angrat).some((x) => x[0] === "eq" && x[1] === "verktyg->1->>utfall" && x[2] === "godkant"), JSON.stringify([filter(godk), filter(angrat)]));
+
+  // En rad som aldrig fick sin slutrad (funktionen dog, eller slutraden gick inte att skriva) lovar inte "försök igen".
+  const { PAGAR_MS } = await import("../src/lib/nav2/chatt/chattforma.ts");
+  ok("gränsen för en rad som fastnat är ruttens arbetstid plus 10 s", PAGAR_MS === (maxDuration + 10) * 1000, `${PAGAR_MS} ${maxDuration}`);
+  const ung = await utfall({ rad: RAD, anrop: 2, lage: "godkant" }, [{ ...KORT, stop_reason: "pagar", nar: nar(5) }]);
+  const fast = await utfall({ rad: RAD, anrop: 2, lage: "godkant" }, [{ id: RAD, employee_id: S, miljo: "lokal", stop_reason: "pagar", nar: nar(PAGAR_MS / 1000 + 60), verktyg: [] }]);
+  const fastStopp = await utfall({ rad: RAD, anrop: 2, lage: "godkant" }, [{ id: RAD, employee_id: S, miljo: "lokal", stop_reason: "stoppas", nar: nar(PAGAR_MS / 1000 + 60), verktyg: [] }]);
+  ok("en rad som fastnat som pågående säger inte försök igen: den har inga kort, alltså 404, och inget skrivs", ung.status === 409 && fast.status === 404 && fastStopp.status === 404 && fast.logg.length + fastStopp.logg.length === 0, `${ung.status} ${fast.status} ${fastStopp.status}`);
+
+  // Två utfall samtidigt på samma rad. Attrappen läser och skriver på riktigt, och båda läser innan någon skriver.
+  const levande = (rad, o = {}) => {
+    const varde = (r, kol) => {
+      const m = /^(\w+)->(\d+)->>(\w+)$/.exec(kol);
+      if (!m) return r[kol];
+      const x = r[m[1]]?.[Number(m[2])]?.[m[3]];
+      return x === undefined || x === null ? null : typeof x === "string" ? x : JSON.stringify(x);
+    };
+    const db = { rad, lasningar: 0, skrivna: [] };
+    db.from = () => {
+      const villkor = [];
+      let ny = null;
+      const k = {
+        select: () => k,
+        update: (x) => { ny = x; return k; },
+        eq: (kol, v) => { villkor.push((r) => varde(r, kol) === v); return k; },
+        is: (kol, v) => { villkor.push((r) => varde(r, kol) === v); return k; },
+        // Raden läses när frågan ställs och svaret kommer 10 ms senare: två läsningar som startar samtidigt ser samma rad.
+        maybeSingle: () => { db.lasningar++; const data = villkor.every((f) => f(db.rad)) ? JSON.parse(JSON.stringify(db.rad)) : null; return new Promise((res) => setTimeout(() => res({ data, error: null }), 10)); },
+        then: (a, b) => {
+          const traff = !o.krockAlltid && villkor.every((f) => f(db.rad));
+          if (traff) { Object.assign(db.rad, JSON.parse(JSON.stringify(ny))); db.skrivna.push(ny); }
+          return Promise.resolve({ data: traff ? [{ id: db.rad.id }] : [], error: null }).then(a, b);
+        },
+      };
+      return k;
+    };
+    return db;
+  };
+  const TVA = { id: RAD, employee_id: S, miljo: "lokal", stop_reason: "end_turn", nar: nar(600), verktyg: [{ namn: "las_matt", input: {}, ok: true }, { namn: "forbered_uppgifter", input: {}, ok: true, kort: true }, { namn: "forbered_uppfoljning", input: {}, ok: true, kort: true }] };
+  const samtidigt = async (db, ...u) => {
+    globalThis.__rutt = { db, user: { employee: { id: S, first_name: "Prov", last_name: "Person", team_id: null }, roles: ["salesperson"], permissions: [] } };
+    return Promise.all(u.map((x) => POST(new Request("https://nav.test/nav2/chatt", { method: "POST", headers: { origin: "https://nav.test", "content-type": "application/json" }, body: JSON.stringify({ utfall: x }) })).then(async (r) => ({ status: r.status, data: await r.json() }))));
+  };
+  const L1 = levande(structuredClone(TVA));
+  const tvaKort = await samtidigt(L1, { rad: RAD, anrop: 2, lage: "godkant" }, { rad: RAD, anrop: 3, lage: "avbrutet" });
+  ok("två utfall samtidigt på två kort i samma rad: båda får 200 och båda står kvar", tvaKort.every((r) => r.status === 200) && L1.rad.verktyg[1].utfall === "godkant" && L1.rad.verktyg[2].utfall === "avbrutet" && L1.skrivna.length === 2 && L1.lasningar === 3, JSON.stringify([tvaKort, L1.rad.verktyg, L1.lasningar]));
+  const L2 = levande(structuredClone(TVA));
+  const dubbel = await samtidigt(L2, { rad: RAD, anrop: 2, lage: "godkant" }, { rad: RAD, anrop: 2, lage: "godkant" });
+  ok("ett dubbelklick som kommer samtidigt: båda får 200, utfallet skrivs en gång och första tiden står kvar", dubbel.every((r) => r.status === 200) && L2.skrivna.length === 1 && L2.rad.verktyg[1].utfall === "godkant" && L2.rad.verktyg[1].utfallNar === L2.skrivna[0].verktyg[1].utfallNar, JSON.stringify([dubbel, L2.skrivna.length]));
+  // Alla tre korten som ryms (KORT_MAX) får sitt utfall samtidigt: den sista skrivningen behöver tre försök.
+  const TRE = { ...structuredClone(TVA), verktyg: [...structuredClone(TVA.verktyg), { namn: "forbered_uppgifter", input: { n: 3 }, ok: true, kort: true }] };
+  const L4 = levande(TRE);
+  const treKort = await samtidigt(L4, { rad: RAD, anrop: 2, lage: "godkant" }, { rad: RAD, anrop: 3, lage: "avbrutet" }, { rad: RAD, anrop: 4, lage: "delvis" });
+  ok("alla tre kort i ett svar får sitt utfall samtidigt: alla 200, och alla tre står kvar", treKort.every((r) => r.status === 200) && L4.rad.verktyg[1].utfall === "godkant" && L4.rad.verktyg[2].utfall === "avbrutet" && L4.rad.verktyg[3].utfall === "delvis" && L4.skrivna.length === 3, JSON.stringify([treKort, L4.lasningar]));
+  const L3 = levande(structuredClone(TVA), { krockAlltid: true });
+  const [krock] = await samtidigt(L3, { rad: RAD, anrop: 2, lage: "godkant" });
+  ok("krockar det varje gång: 409 ej-klar efter KORT_MAX + 1 läsningar, inget skrivet", krock.status === 409 && krock.data?.kod === "ej-klar" && L3.lasningar === 4 && L3.skrivna.length === 0, JSON.stringify([krock, L3.lasningar]));
+}
+
+rubrik("Varv 2: följdfrågor, Ja-knappen, källorna och underlaget");
+{
+  const matt = (vem, period, m = "moten.hallna-av-alla") => verktygstur("las_matt", { matt: m, vem, period });
+  const s = await anropa(["salesperson"], S, { fraga: "Hur gick mina möten förra veckan?" }, { ai: [matt("jag", "forra-veckan"), textsvar("Du höll {{t:1.antal}} möten.")] });
+  ok("följdfrågan växlar period, och står på egna ben", JSON.stringify(s.svar?.nasta) === JSON.stringify([{ text: "Hur många hållna möten hade jag den här veckan?", knapp: "Den här veckan" }]), JSON.stringify(s.svar?.nasta));
+  const tl = await anropa(["team_lead"], TL, { fraga: "Hur gick mina möten förra veckan?" }, { ai: [matt("jag", "forra-veckan"), textsvar("Du höll {{t:1.antal}} möten.")] });
+  ok("Laget föreslås bara den som får se fler än sig själv", tl.svar?.nasta.some((n) => n.text === "Hur många hållna möten hade laget förra veckan?" && n.knapp === "Laget") && !s.svar?.nasta.some((n) => n.knapp === "Laget"), JSON.stringify(tl.svar?.nasta));
+  const bada = await anropa(["salesperson"], S, FRAGA, { ai: [{ ...matt("jag", "forra-veckan"), content: [matt("jag", "forra-veckan").content[0], { ...matt("jag", "denna-vecka", "moten.hallna-av-alla").content[0], id: "tu_2" }] }, textsvar("Du höll {{t:1.antal}} och {{t:2.antal}} möten.")] });
+  ok("det som redan lästs i frågan föreslås inte", bada.svar?.nasta.length === 0, JSON.stringify(bada.svar?.nasta));
+  const samma = await anropa(["salesperson"], S, { fraga: "Hur många hållna möten hade jag den här veckan?" }, { ai: [matt("jag", "forra-veckan"), textsvar("Du höll {{t:1.antal}} möten.")] });
+  ok("frågan som just ställdes föreslås inte igen", samma.svar?.nasta.length === 0, JSON.stringify(samma.svar?.nasta));
+  const nej = await anropa(["salesperson"], S, FRAGA, { ai: [matt("laget", "forra-veckan"), textsvar("Det får du inte se.")] });
+  ok("ett verktyg som svarade med ett fel ger inga följdfrågor", nej.svar?.nasta.length === 0, JSON.stringify(nej.svar?.nasta));
+  ok("följdfrågorna kommer aldrig ur Claudes text, och går aldrig till Claude", !JSON.stringify(s.ai).includes("Den här veckan") && !JSON.stringify(s.ai).includes('"nasta"'));
+
+  const ja = await anropa(["salesperson"], S, FRAGA, { ai: [matt("jag", "forra-veckan"), textsvar("Du höll {{t:1.antal}} möten. Ska jag lägga en uppgift om att ringa dem som uteblev?")] });
+  const vill = await anropa(["salesperson"], S, FRAGA, { ai: [matt("jag", "forra-veckan"), textsvar("Du höll {{t:1.antal}} möten. Vill du att jag lägger en uppgift?")] });
+  const medKort = await anropa(["salesperson"], S, FRAGA, { ai: [verktygstur("forbered_uppgifter", { uppgifter: [{ titel: "Ring Hagby Glas", dag: "", till: "jag" }] }), textsvar("Uppgiften väntar på Godkänn. Ska jag lägga en till?")] });
+  ok("Ja-knappen: bara när svaret slutar med Ska jag …? och saknar kort", ja.svar?.ja === true && vill.svar?.ja === false && medKort.svar?.ja === false, JSON.stringify([ja.svar?.ja, vill.svar?.ja, medKort.svar?.ja]));
+  ok("kortet bär numret på anropet som förberedde det, för utfallet", medKort.svar?.kort?.[0]?.anrop === 1, JSON.stringify(medKort.svar?.kort?.[0]?.anrop));
+
+  ok("varje källa går att öppna: verktyget står på talet och i listan över källor", s.svar?.tal?.[0]?.kalla?.verktyg === "las_matt" && JSON.stringify(s.svar?.kallor?.map((k) => [k.verktyg, k.anrop])) === JSON.stringify([["las_matt", 1]]) && typeof s.svar.kallor[0].text === "string" && s.svar.kallor[0].text.length > 0 && typeof s.svar.kalla === "string", JSON.stringify(s.svar?.kallor));
+  ok("ett kort är ingen källa", medKort.svar?.kallor?.length === 0, JSON.stringify(medKort.svar?.kallor));
+
+  const aff = await anropa(["salesperson"], S, FRAGA, { ai: [verktygstur("las_affarer", { vem: "jag", mal_kr: 0 }), textsvar("Hagby Glas är värd {{t:1.affarer.1.belopp}} kronor.")] });
+  const u = aff.svar?.underlag;
+  ok("underlaget: raderna bakom talet ur verktygets egen lista, högst 10 rader och 4 kolumner", u?.verktyg === "las_affarer" && u.anrop === 1 && JSON.stringify(u.kolumner) === JSON.stringify(["Bolag", "Steg", "Nästa", "Belopp"]) && u.rader.length >= 1 && u.rader.length <= 10 && u.rader.every((r) => r.length <= 4) && u.rader.some((r) => r[0] === "Hagby Glas") && typeof u.totalt === "number", JSON.stringify(u));
+  ok("underlaget har rubriken ur verktygets egen källrad, samma text som källan under svaret", typeof u?.rubrik === "string" && u.rubrik.length > 0 && u.rubrik === aff.svar?.kallor?.[0]?.text, JSON.stringify([u?.rubrik, aff.svar?.kallor]));
+  ok("underlaget står aldrig i svarets text och går aldrig till Claude", !/Bolag/.test(aff.svar?.text ?? "") && !JSON.stringify(aff.ai).includes('"underlag"') && !JSON.stringify(aff.ai).includes('"kolumner"'), "");
+  ok("utan en naturlig tabell finns inget underlag", s.svar && !("underlag" in s.svar), JSON.stringify(s.svar?.underlag));
+}
+
+rubrik("Varv 2: Stämmer inte under ett svar i chatten");
+{
+  const { POST: HEM } = await import("../src/app/nav2/hem/route.ts");
+  const RAD = "c0000000-0000-4000-8000-0000000000b1";
+  const LOGG = { id: RAD, employee_id: S, miljo: "lokal", stop_reason: "end_turn", fraga: "Hur gick lagets möten förra veckan?", svar: "Laget höll 3 möten." };
+  const flagga = async (kropp, rader = [LOGG], vem = S, rapporter = []) => {
+    const db = attrapp({ nav_chatt_logg: rader, error_report: rapporter });
+    globalThis.__rutt = { db, user: { employee: { id: vem, first_name: "Prov", last_name: "Person", team_id: null }, roles: ["salesperson"], permissions: [] } };
+    globalThis.__fel = [];
+    const res = await HEM(new Request("https://nav.test/nav2/hem", { method: "POST", headers: { origin: "https://nav.test", "content-type": "application/json" }, body: JSON.stringify({ handling: "flagga", var: "chatt", ...kropp }) }));
+    return { status: res.status, data: await res.json(), fel: globalThis.__fel, skrivningar: db.skrivningar };
+  };
+  const f = await flagga({ rad: RAD });
+  ok("Stämmer inte skickar frågan och svaret ur personens egen loggrad till kön för fel", f.status === 200 && typeof f.data.ok === "string" && f.fel.length === 1 && f.fel[0].body.includes("Hur gick lagets möten förra veckan?") && f.fel[0].body.includes("Laget höll 3 möten.") && f.fel[0].body.includes(RAD) && /chatten/.test(f.fel[0].body), JSON.stringify([f.status, f.data, f.fel[0]?.body]));
+  ok("raden göms inte och inget annat skrivs", f.skrivningar.length === 0, JSON.stringify(f.skrivningar));
+  const annan = await flagga({ rad: RAD }, [{ ...LOGG, employee_id: X }]);
+  ok("en annan persons svar går inte att skicka: 404", annan.status === 404 && annan.fel.length === 0, `${annan.status}`);
+  const fel = await flagga({ rad: "rad-1" });
+  ok("en rad som inte är ett id: 400", fel.status === 400 && fel.fel.length === 0, `${fel.status}`);
+  // R1 (tillägget): koden är `ej-klar` (inte 429-koden `pagar`), och en stoppad rad som väntar på sin slutrad räknas som ej klar.
+  const pag = await flagga({ rad: RAD }, [{ ...LOGG, stop_reason: "pagar", svar: null }]);
+  ok("medan svaret sparas: 409 ej-klar, inget skickas", pag.status === 409 && pag.data.kod === "ej-klar" && pag.fel.length === 0, `${pag.status} ${JSON.stringify(pag.data)}`);
+  const stp = await flagga({ rad: RAD }, [{ ...LOGG, stop_reason: "stoppas", svar: null }]);
+  ok("en stoppad rad som väntar på sin slutrad: 409 ej-klar, inget skickas", stp.status === 409 && stp.data.kod === "ej-klar" && stp.fel.length === 0, `${stp.status} ${JSON.stringify(stp.data)}`);
+  ok("loggradens id står först i ärendet, så att det överlever när en lång text klipps", f.fel[0]?.body.startsWith(`Startsidan, chatten: svaret stämmer inte (loggrad ${RAD}).`), f.fel[0]?.body.slice(0, 120));
+  const igen = await flagga({ rad: RAD }, [LOGG], S, [{ id: "e1", reporter_id: S, kind: "manual", body: f.fel[0]?.body ?? "" }]);
+  ok("Stämmer inte två gånger på samma svar: 200 med redan, och inget nytt ärende", igen.status === 200 && igen.data.redan === true && igen.fel.length === 0, JSON.stringify([igen.status, igen.data]));
+  const annansArende = await flagga({ rad: RAD }, [LOGG], S, [{ id: "e1", reporter_id: X, kind: "manual", body: f.fel[0]?.body ?? "" }]);
+  ok("en annan persons ärende om samma rad hindrar inte mitt", annansArende.status === 200 && annansArende.fel.length === 1 && !annansArende.data.redan, JSON.stringify(annansArende.data));
+  const iAnnanMiljo = await flagga({ rad: RAD }, [{ ...LOGG, miljo: "production" }]);
+  ok("en rad i en annan miljö går inte att skicka: 404, och läsningen filtreras på miljön", iAnnanMiljo.status === 404 && iAnnanMiljo.fel.length === 0 && iAnnanMiljo.data.fel === "Svaret finns inte längre.", JSON.stringify([iAnnanMiljo.status, iAnnanMiljo.data]));
+  const sekSedan = (sek) => new Date(Date.now() - sek * 1000).toISOString();
+  const ungPag = await flagga({ rad: RAD }, [{ ...LOGG, stop_reason: "pagar", svar: null, nar: sekSedan(5) }]);
+  const fastnat = await flagga({ rad: RAD }, [{ ...LOGG, stop_reason: "stoppas", svar: null, nar: sekSedan(200) }]);
+  ok("en rad som fastnat som pågående (äldre än ruttens arbetstid) skickas ändå, med frågan och utan svar", ungPag.status === 409 && fastnat.status === 200 && fastnat.fel.length === 1 && fastnat.fel[0].body.includes("Hur gick lagets möten förra veckan?") && fastnat.fel[0].body.includes("(inget svar sparat)"), JSON.stringify([ungPag.status, fastnat.status, fastnat.fel[0]?.body]));
+  const versal = await flagga({ rad: RAD.toUpperCase() });
+  ok("ett id med versaler läses som samma rad", versal.status === 200 && versal.fel.length === 1 && versal.fel[0].body.includes(RAD), `${versal.status}`);
+  for (const kropp of ["", "null", "[]", "\"text\""]) {
+    globalThis.__rutt = { db: attrapp({}), user: { employee: { id: S, first_name: "Prov", last_name: "Person", team_id: null }, roles: ["salesperson"], permissions: [] } };
+    const res = await HEM(new Request("https://nav.test/nav2/hem", { method: "POST", headers: { origin: "https://nav.test", "content-type": "application/json" }, body: kropp }));
+    ok(`hemmets rutt: en kropp som inte är ett objekt (${JSON.stringify(kropp)}) ger 400, aldrig 500`, res.status === 400, `${res.status}`);
+  }
+}
+
+rubrik("Varv 2: ordningen i strömmen, stoppet per rad och exakt det Claude får");
+{
+  const { MAX_UT } = await import("../src/lib/nav2/chatt/samtal.ts");
+  const { EFFORT } = await import("../src/lib/nav2/chatt/systemtext.ts");
+  const las = verktygstur("las_matt", { matt: "moten.hallna-av-alla", vem: "laget", period: "forra-veckan" });
+  const SEK = { employee: { id: S, first_name: "Prov", last_name: "Person", team_id: null }, roles: ["salesperson"], permissions: [] };
+  const TLU = { employee: { id: TL, first_name: "Prov", last_name: "Person", team_id: null }, roles: ["team_lead"], permissions: [] };
+  const posta = (kropp) => POST(new Request("https://nav.test/nav2/chatt", { method: "POST", headers: { origin: "https://nav.test", "content-type": "application/json" }, body: JSON.stringify(kropp) }));
+  /** Läser strömmen händelse för händelse, med klockslaget när varje händelse och `done` kom. */
+  const lasStrom = async (res, vid) => {
+    const r = res.body.getReader();
+    const dec = new TextDecoder();
+    const ut = [];
+    let buf = "";
+    for (;;) {
+      const { value, done } = await r.read();
+      if (done) return { handelser: ut, done: Date.now() };
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n\n")) >= 0) {
+        const h = JSON.parse(buf.slice(0, i).replace(/^data: /, ""));
+        buf = buf.slice(i + 2);
+        ut.push({ ...h, _t: Date.now() });
+        await vid?.(h);
+      }
+    }
+  };
+
+  // Stopp med `rad: null` är som Stopp utan rad (API-filen §3): alla personens pågående.
+  const pag = { id: "c0000000-0000-4000-8000-0000000000e1", employee_id: S, miljo: "lokal", stop_reason: "pagar" };
+  const nollrad = await anropa(["salesperson"], S, { stoppa: true, rad: null }, { extra: { nav_chatt_logg: [pag] } });
+  const nf = nollrad.skrivningar.find((x) => x.text === "update nav_chatt_logg")?.filter ?? [];
+  ok("Stopp med rad: null gäller alla personens pågående, som Stopp utan rad", nollrad.status === 200 && nollrad.data?.ok === true && nollrad.logg.length === 1 && nollrad.logg[0].stop_reason === "stoppas" && !nf.some((x) => x[1] === "id") && nf.some((x) => x[0] === "eq" && x[1] === "employee_id" && x[2] === S) && nf.some((x) => x[0] === "eq" && x[1] === "stop_reason" && x[2] === "pagar"), JSON.stringify(nf));
+
+  // R1 på servern: svaret väntar inte på slutraden, men strömmen stängs först när slutraden är skriven.
+  {
+    const db = attrapp({ nav_setting: PA, nav_chatt_prov: PROV, "nav_chatt_logg!vant": 80 }, { nav_chatt_reservera: () => ({ ...UTRYMME, ok: true, id: "rad-1" }) });
+    globalThis.__rutt = { db, user: TLU };
+    globalThis.__ai.svar = [las, textsvar("Laget höll {{t:1.antal}} möten.")];
+    globalThis.__kallor = () => kallor(["team_lead"], TL, []);
+    const s = await lasStrom(await posta(FRAGA));
+    const svarT = s.handelser.find((h) => h.h === "svar")?._t;
+    const slutrad = db.skrivningar.find((x) => x.text === "update nav_chatt_logg" && x.rad?.stop_reason === "end_turn");
+    ok("svaret går ut innan slutraden är skriven, och strömmen stängs först efter den: done betyder att utfall och Stämmer inte tas emot", typeof svarT === "number" && typeof slutrad?.klar === "number" && svarT < slutrad.klar && slutrad.klar <= s.done, JSON.stringify({ svarT, klar: slutrad?.klar, done: s.done }));
+  }
+
+  // Stopp med rad medan frågan pågår, utan att hämtningen avbryts: raden blir "stoppas" direkt och spärrar inte nästa
+  // fråga, arbetet går klart, och slutraden skrivs över "stoppas" med svaret (API-filen §8).
+  {
+    const RADS = "c0000000-0000-4000-8000-0000000000d1";
+    const db = attrapp({ nav_setting: PA, nav_chatt_prov: PROV, nav_chatt_logg: [{ id: RADS, employee_id: TL, miljo: "lokal", stop_reason: "pagar" }] }, { nav_chatt_reservera: () => ({ ...UTRYMME, ok: true, id: RADS }) });
+    globalThis.__rutt = { db, user: TLU };
+    let slapp;
+    const vanta = new Promise((r) => { slapp = r; });
+    globalThis.__ai.svar = [las, async () => { await vanta; return textsvar("Laget höll {{t:1.antal}} möten."); }];
+    globalThis.__kallor = () => kallor(["team_lead"], TL, []);
+    let stopp = null;
+    const s = await lasStrom(await posta(FRAGA), async (h) => {
+      if (h.h !== "klart") return;
+      stopp = await posta({ stoppa: true, rad: h.anrop === 1 ? RADS : null });
+      slapp();
+    });
+    const loggskrivningar = db.skrivningar.filter((x) => x.text === "update nav_chatt_logg");
+    const [forst, sist] = loggskrivningar;
+    const har = (f, kol, v) => (f ?? []).some((x) => x[0] === "eq" && x[1] === kol && x[2] === v);
+    ok("Stopp med rad mitt i frågan: raden blir stoppas direkt, bara den raden och bara om den pågår", stopp?.status === 200 && forst?.rad?.stop_reason === "stoppas" && har(forst.filter, "id", RADS) && har(forst.filter, "employee_id", TL) && har(forst.filter, "miljo", "lokal") && har(forst.filter, "stop_reason", "pagar"), JSON.stringify(forst));
+    ok("arbetet som pågick går klart och slutraden skrivs över stoppas, med svaret, utan villkor på läget", loggskrivningar.length === 2 && sist?.rad?.stop_reason === "end_turn" && sist.rad.svar === "Laget höll 2 möten." && JSON.stringify(sist.filter) === JSON.stringify([["eq", "id", RADS]]) && s.handelser.at(-1)?.h === "svar", JSON.stringify(loggskrivningar.map((x) => [x.rad?.stop_reason, x.filter])));
+  }
+
+  // A1-6: tidsraden skrivs bara på Vercel, och den bär aldrig frågans text.
+  {
+    const forra = process.env.VERCEL_ENV;
+    const info = console.info;
+    const rader = [];
+    try {
+      console.info = (...a) => rader.push(a.join(" "));
+      const lokal = await anropa(["team_lead"], TL, FRAGA, { ai: [las, textsvar("Laget höll {{t:1.antal}} möten.")] });
+      const lokalaRader = rader.length;
+      process.env.VERCEL_ENV = "preview";
+      const pa = await anropa(["team_lead"], TL, FRAGA, { ai: [las, textsvar("Laget höll {{t:1.antal}} möten.")] });
+      const rad = rader.find((x) => x.startsWith("chatt: tider ")) ?? "";
+      ok("tidsraden (A1-6): rad, stopp, varv, ms per anrop och verktygsvarv, första utkastet och totalt, bara på Vercel", lokal.status === 200 && lokalaRader === 0 && pa.status === 200 && /^chatt: tider rad=rad-1 stopp=end_turn varv=2 ai=\d+,\d+ verktyg=\d+ forstaText=(\d+|-) totalt=\d+$/.test(rad) && pa.res[0]?.p_miljo === "preview", JSON.stringify([lokalaRader, rader]));
+      ok("tidsraden bär inget ur frågan eller svaret", rad !== "" && !/möten|Laget|Hur gick/i.test(rad), rad);
+    } finally {
+      console.info = info;
+      if (forra === undefined) delete process.env.VERCEL_ENV;
+      else process.env.VERCEL_ENV = forra;
+    }
+  }
+
+  // Planen A1: modellen får exakt samma indata. Anropets nycklar och värden låses här, så att varken strömmen eller ett
+  // cachemärke kan smyga in något nytt (ett märke på tool_result ändrar inte avtrycket, men det ändrar anropet).
+  {
+    const r = await anropa(["team_lead"], TL, FRAGA, { ai: [las, textsvar("Laget höll {{t:1.antal}} möten.")] });
+    const [a1, a2] = r.ai;
+    const nycklar = (o) => Object.keys(o ?? {}).sort().join(",");
+    ok("anropet till Claude har exakt de här fälten och värdena, i båda varven", r.ai.length === 2 && [a1, a2].every((a) => nycklar(a) === "betas,fallbacks,max_tokens,messages,model,output_config,system,tool_choice,tools" && a.model === "claude-sonnet-5-5" && a.max_tokens === MAX_UT && JSON.stringify(a.system) === JSON.stringify([{ type: "text", text: SYSTEMTEXT, cache_control: { type: "ephemeral" } }]) && JSON.stringify(a.tools) === JSON.stringify(VERKTYG) && JSON.stringify(a.tool_choice) === JSON.stringify({ type: "auto" }) && JSON.stringify(a.output_config) === JSON.stringify({ effort: EFFORT }) && a.fallbacks === "default" && JSON.stringify(a.betas) === JSON.stringify(["server-side-fallback-2026-07-01"])), JSON.stringify([nycklar(a1), nycklar(a2)]));
+    const tr = a2?.messages?.at(-1)?.content?.[0];
+    ok("verktygssvaret till Claude är bara typ, id och innehållet som text: inget cachemärke, inget underlag, inga kort", a2?.messages?.length === 3 && nycklar(a2.messages.at(-1)) === "content,role" && nycklar(tr) === "content,tool_use_id,type" && tr.type === "tool_result" && typeof tr.content === "string" && !/"(underlag|kolumner|kort|nasta|tider)"/.test(tr.content), JSON.stringify(tr)?.slice(0, 300));
+  }
+
+  // A1-4: underlaget byggs först när svaret är klart och går aldrig till Claude, inte heller tillbaka via historiken.
+  {
+    const affSvar = verktygstur("las_affarer", { vem: "jag", mal_kr: 0 });
+    const r = await anropa(["salesperson"], S, { fraga: "Vilka affärer har jag?", historia: [{ fraga: "Och förra veckan?", svar: "Hagby Glas.", underlag: { kolumner: ["Bolag"], rader: [["Hagby Glas"]] }, kort: [{ rubrik: "x" }] }] }, { ai: [affSvar, verktygstur("las_dag", { dag: "2026-11-18" }, "tu_2"), textsvar("Hagby Glas är värd 4 kronor."), textsvar("Hagby Glas är värd {{t:1.affarer.1.belopp}} kronor.")] });
+    ok("underlaget finns i svaret men aldrig i något av anropen till Claude, inte heller efter en omskrivning eller via historiken", r.ai.length === 4 && r.svar?.underlag?.verktyg === "las_affarer" && r.ai.every((a) => !/"(underlag|kolumner)"|Bolag|"kort"/.test(JSON.stringify(a.messages))) && r.ai[0].messages.length === 3 && JSON.stringify(r.ai[0].messages[1]) === JSON.stringify({ role: "assistant", content: "Hagby Glas." }), JSON.stringify(r.ai.map((a) => a.messages.length)));
+  }
+
+  // Strömmen mot den riktiga SDK:n (1.8.0): streamEvent ger (händelse, ögonblicksbild), och ett fallback-block byter
+  // ögonblicksbildens modell. Bara fetch är utbytt: den svarar med Anthropics händelser som text/event-stream.
+  {
+    const sdkUrl = pathToFileURL(join(rot, "node_modules", "@anthropic-ai", "sdk", "index.mjs")).href;
+    const { default: RiktigAnthropic } = await import(sdkUrl);
+    const { korSamtal } = await import("../src/lib/nav2/chatt/samtal.ts");
+    const ctx = { mig: "p1", idag: "2026-11-18", kallor: { krets: async () => ["p1"], personer: async () => [], moten: async () => [], order: async () => [], forslag: async () => ({ pa: false, oppna: [], andrat: [], trendrad: null }), vantar: async () => ({ sammanfattning: "", rader: [] }), dag: async () => ({ poster: [], uppgifter: [] }), provision: async () => null } };
+    const start = (model) => ({ type: "message_start", message: { id: "msg_1", type: "message", role: "assistant", model, content: [], stop_reason: null, stop_sequence: null, usage: { input_tokens: 9000, output_tokens: 1 } } });
+    const slut = (stop) => [{ type: "message_delta", delta: { stop_reason: stop, stop_sequence: null }, usage: { output_tokens: 700 } }, { type: "message_stop" }];
+    const text = (index, delar) => [{ type: "content_block_start", index, content_block: { type: "text", text: "" } }, ...delar.map((t) => ({ type: "content_block_delta", index, delta: { type: "text_delta", text: t } })), { type: "content_block_stop", index }];
+    const verktygsvarv = [start("claude-sonnet-5-5"), { type: "content_block_start", index: 0, content_block: { type: "tool_use", id: "tu_1", name: "las_matt", input: {} } }, { type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: JSON.stringify({ matt: "moten.hallna-av-alla", vem: "jag", period: "denna-vecka" }) } }, { type: "content_block_stop", index: 0 }, ...slut("tool_use")];
+    const sse = (handelser) => new ReadableStream({
+      async start(c) {
+        const enc = new TextEncoder();
+        for (const h of handelser) { c.enqueue(enc.encode(`event: ${h.type}\ndata: ${JSON.stringify(h)}\n\n`)); await new Promise((r) => setTimeout(r, 2)); }
+        c.close();
+      },
+    });
+    const kor = async (varv) => {
+      const kvar = [...varv];
+      const fragor = [];
+      const klient = new RiktigAnthropic({ apiKey: "prov", maxRetries: 0, fetch: async (url, init) => { fragor.push(String(url)); return new Response(sse(kvar.shift()), { status: 200, headers: { "content-type": "text/event-stream" } }); } });
+      const sant = [];
+      const r = await korSamtal({ klient, modell: "claude-sonnet-5-5", sand: (h) => sant.push(h), ctx, turer: [{ role: "user", content: "Hur många möten?" }] });
+      return { r, sant, fragor, typer: sant.map((h) => h.h).join(","), texter: sant.filter((h) => h.h === "text"), svar: sant.find((h) => h.h === "svar") };
+    };
+    const vanlig = await kor([verktygsvarv, [start("claude-sonnet-5-5"), ...text(0, ["Du höll {{t:1.", "antal}} möten. ", "Bra jobbat."]), ...slut("end_turn")]]);
+    ok("riktiga SDK:n: strömmen ger utkastet ur ögonblicksbilden, och slutmeddelandet blir svaret", vanlig.fragor.length === 2 && vanlig.typer === "hamtar,klart,text,svar" && vanlig.texter[0]?.text === "Du höll ⟦t1:0⟧ möten." && vanlig.svar?.text === "Du höll ⟦t1:0⟧ möten. Bra jobbat." && vanlig.r.stopp === "end_turn", vanlig.typer + " " + JSON.stringify(vanlig.sant.map((h) => h.text)));
+    const fb = { type: "content_block_start", index: 1, content_block: { type: "fallback", to: { model: "claude-opus-5-5" } } };
+    const reserv = await kor([verktygsvarv, [start("claude-sonnet-5-5"), ...text(0, ["Du höll {{t:1.antal}} möten. ", "Och"]), fb, { type: "content_block_stop", index: 1 }, ...text(2, ["Du höll {{t:1.antal}} möten den här veckan."]), ...slut("end_turn")]]);
+    ok("riktiga SDK:n: ett fallback-block byter ögonblicksbildens modell, och utkastet dras tillbaka innan svaret", reserv.typer === "hamtar,klart,text,text,svar" && reserv.texter[0]?.text === "Du höll ⟦t1:0⟧ möten." && reserv.texter[1]?.text === "" && reserv.r.reserv >= 1, reserv.typer + " " + JSON.stringify(reserv.sant.map((h) => h.text)) + " reserv=" + reserv.r.reserv);
+  }
+}
+
+rubrik("Funktion 3: motvikten vid talet, bara till webbläsaren");
+{
+  const { MATT } = await import("../src/lib/nav2/matt.ts");
+  const { kallaTillagg } = await import("../src/lib/nav2/chatt/verktyg.ts");
+  const txt = (t) => ({ type: "text", text: t });
+  const las = verktygstur("las_matt", { matt: "moten.hallna-av-alla", vem: "laget", period: "forra-veckan" });
+  const svarText = "Laget höll {{t:1.antal}} av {{t:1.av}} möten, och {{t:1.motvikt.antal}} uteblev. Det bokades {{t:1.bokadePerVecka}} i veckan.";
+  const r = await anropa(["team_lead"], TL, FRAGA, { ai: [las, { steg: [[[txt("Laget höll {{t:1.antal}} av {{t:1.av}} möten, och {{t:1.motvikt.antal}} uteblev. ")], 130]], slut: textsvar(svarText) }] });
+  const [huvud, av, motTal, bokade] = r.svar?.tal ?? [];
+  // Teamledarens krets är hen själv och S: två hållna och ett uteblivet av tre (MOTEN). Tre är under JAMFOR_MINST.
+  ok("svar.tal[0] från las_matt bär det verktyget inte ser, motvikten och att underlaget är för litet",
+    huvud?.ser === MATT["moten.hallna-av-alla"].serInte && JSON.stringify(huvud.motvikt) === JSON.stringify({ text: "uteblivna möten", antal: 1, av: 3 }) && huvud.forFa === true,
+    JSON.stringify(huvud));
+  ok("nämnarens tal bär samma motvikt, och ett mötesmått ger antal av antal, aldrig en procent",
+    JSON.stringify(av?.motvikt) === JSON.stringify(huvud?.motvikt) && !("procent" in (av?.motvikt ?? {})), JSON.stringify(av));
+  // rackerForJamforelse är verktygets dom om huvudmåttets underlag, inte om motviktens tal.
+  ok("motviktens eget tal har huvudmåttet som motvikt, motviktens egen mening om vad den inte ser, och inget För få",
+    JSON.stringify(motTal?.motvikt) === JSON.stringify({ text: "hållna möten", antal: 2, av: 3 }) && motTal.ser === MATT["moten.uteblivna"].serInte && motTal.forFa === false, JSON.stringify(motTal));
+  ok("ett annat tal ur samma läsning (bokade per vecka) har ingen motvikt och inget För få, men samma Ser inte",
+    bokade?.motvikt === null && bokade.forFa === false && bokade.ser === MATT["moten.hallna-av-alla"].serInte, JSON.stringify(bokade));
+  const utkast = r.rader.find((h) => h.h === "text" && h.text);
+  ok("utkastets tal bär samma fält som svarets", !!utkast && JSON.stringify(utkast.tal.slice(0, 3)) === JSON.stringify(r.svar.tal.slice(0, 3)), JSON.stringify(utkast));
+  ok("texten bär inga av fälten", r.svar?.text === "Laget höll ⟦t1:2⟧ av ⟦t2:3⟧ möten, och ⟦t3:1⟧ uteblev. Det bokades ⟦t4:3⟧ i veckan." && !/Motvikt|Ser inte|För få/.test(r.svar.text), r.svar?.text);
+  // Verktygssvaret har redan nyckeln `motvikt` (gemener): det Claude alltid har fått. Det nya är etiketterna och fälten.
+  const tillAi = JSON.stringify(r.ai.map((a) => a.messages));
+  const resultat = r.ai[1]?.messages?.at(-1)?.content?.[0]?.content ?? "";
+  ok("ingen tur till modellen innehåller Motvikt, och verktygssvaret saknar ser och forFa",
+    !tillAi.includes("Motvikt") && r.ai.length === 2 && typeof resultat === "string" && resultat.includes('"motvikt"') && !/"ser"|"forFa"/.test(resultat), resultat.slice(0, 300));
+
+  const order = await anropa(["salesperson"], S, FRAGA, { ai: [verktygstur("las_matt", { matt: "order.netto", vem: "jag", period: "denna-manad" }), textsvar("Du har {{t:1.antal}} order och {{t:1.motvikt.antal}} makulerade.")] });
+  const [netto, mak] = order.svar?.tal ?? [];
+  ok("ett ordermått: motvikten utan nämnare (av är null), och orderns Ser inte",
+    JSON.stringify(netto?.motvikt) === JSON.stringify({ text: "makulerade order", antal: 0, av: null }) && netto.ser === MATT["order.netto"].serInte && netto.forFa === true && JSON.stringify(mak?.motvikt) === JSON.stringify({ text: "order", antal: 0, av: null }) && mak.ser === MATT["order.makulerade"].serInte && mak.forFa === false,
+    JSON.stringify(order.svar?.tal));
+
+  const kb = await anropa(["salesperson"], S, { fraga: "Hur säljer vi till åkerier?" }, { ai: [verktygstur("sok_kunskap", { sokord: "transport" }), textsvar("Det finns {{t:1.traffar}} dokument.")] });
+  const kt = kb.svar?.tal?.[0];
+  ok("ett tal ur sok_kunskap har motvikt: null, inget För få, och verktygets eget Ser inte", kt?.motvikt === null && kt.forFa === false && typeof kt.ser === "string" && /^Söker bara i företagets kunskapsbas/.test(kt.ser), JSON.stringify(kt));
+
+  ok("ett svar som är ett fel, eller saknas, ger nullor", JSON.stringify(kallaTillagg({ _verktyg: "las_matt", fel: "Nej.", serInte: "x" }, "antal")) === JSON.stringify({ ser: null, motvikt: null, forFa: false }) && JSON.stringify(kallaTillagg(undefined, "antal")) === JSON.stringify({ ser: null, motvikt: null, forFa: false }));
+  ok("en motvikt som inte finns i registret, eller saknar antal, ritas inte", kallaTillagg({ _verktyg: "las_matt", matt: "moten.uteblivna", antal: 1, motvikt: { matt: "okant", antal: 2 } }, "antal").motvikt === null && kallaTillagg({ _verktyg: "las_matt", matt: "moten.uteblivna", antal: 1, motvikt: { matt: "moten.hallna-av-alla", antal: null } }, "antal").motvikt === null && kallaTillagg({ _verktyg: "las_matt", matt: "moten.uteblivna", antal: 1, motvikt: null }, "antal").motvikt === null);
+  ok("avtrycket är oförändrat: 485de06db391 (chatt-plan-tillagg.md)", avtryck() === "485de06db391", avtryck());
+}
+
+rubrik("Funktion 6: rätta kortet före Godkänn, utan Claude och utan att något skrivs");
+{
+  const om = (n) => new Date(idag.getTime() + n * 864e5).toISOString().slice(0, 10);
+  const UPP = (uppgifter) => ({ kommando: { verktyg: "forbered_uppgifter", input: { uppgifter } } });
+  const UPPF = (bolag, dag) => ({ kommando: { verktyg: "forbered_uppfoljning", input: { bolag, dag } } });
+  // Grenen kör ingen Claude, reserverar inget, skriver ingen loggrad och ingenting annat.
+  const inget = (r) => r.ai.length === 0 && r.res.length === 0 && r.logg.length === 0 && r.skrivningar.length === 0;
+  const visaK = (r) => `${r.status} ${JSON.stringify(r.data)} skrivningar=${r.skrivningar.length} ai=${r.ai.length}`;
+
+  const tl = await anropa(["team_lead"], TL, UPP([{ titel: "Ring Hagby Glas", dag: om(3), till: "Sara" }]));
+  const k = tl.data?.kort;
+  ok("en teamledare rättar dagen: kortet byggs om av verktyget, åt någon i laget, med verktyg och input men utan anrop",
+    tl.status === 200 && k?.rubrik === "Lägg upp en uppgift" && k.rader[0].dag === om(3) && k.rader[0].not === "åt Sara Prov" && k.steg[0].vag === "/nav2/uppgifter" && k.steg[0].body.till === S && k.verktyg === "forbered_uppgifter" && JSON.stringify(k.input) === JSON.stringify({ uppgifter: [{ titel: "Ring Hagby Glas", dag: om(3), till: "Sara" }] }) && !("anrop" in k) && !("svar" in (tl.data ?? {})),
+    visaK(tl));
+  ok("ingen loggrad skrivs, ingen Claude körs och inget räknas mot gränserna", inget(tl), visaK(tl));
+  // En andra rättning utgår från input i det första svaret, och bygger om kortet en gång till.
+  const andra = await anropa(["team_lead"], TL, { kommando: { verktyg: k?.verktyg, input: { uppgifter: [{ ...k?.input?.uppgifter?.[0], titel: "Ring Hagby Glas om offerten" }] } } });
+  ok("en andra rättning bygger om kortet ur det första svarets input", andra.status === 200 && andra.data?.kort?.rader?.[0]?.text === "Ring Hagby Glas om offerten" && andra.data.kort.rader[0].dag === om(3) && andra.data.kort.steg[0].body.till === S && inget(andra), visaK(andra));
+  ok("en kommando utan fråga når grenen och får aldrig Frågan är för kort", tl.data?.fel !== "Frågan är för kort." && (await anropa(["salesperson"], S, { kommando: {} })).data?.fel !== "Frågan är för kort.");
+
+  const sj = await anropa(["salesperson"], S, UPP([{ titel: "Ring kunden", dag: "", till: "Xerxes Prov" }]));
+  ok("en kollega utanför laget: 422 med serverns text, och kortet byggs inte", sj.status === 422 && sj.data?.fel === "Här går det bara att lägga uppgifter åt sig själv och åt sitt eget lag." && !sj.data.kort && inget(sj), visaK(sj));
+  const okand = await anropa(["salesperson"], S, UPP([{ titel: "Ring kunden", dag: "", till: "Ingen Alls" }]));
+  ok("ett namn som inte finns: 422 med serverns text", okand.status === 422 && okand.data?.fel === "Jag hittar ingen med det namnet." && inget(okand), visaK(okand));
+  const tom = await anropa(["salesperson"], S, UPPF("", om(5)));
+  ok("en text skriven till Claude säger i stället vad personen kan skriva", tom.status === 422 && tom.data?.fel === "Skriv vilket bolag det gäller." && inget(tom), visaK(tom));
+
+  for (const verktyg of ["las_matt", "sok_kunskap", "forbered_uppgifter2", "FORBERED_UPPGIFTER", "", null, 5]) {
+    const r = await anropa(["sales_manager"], TL, { kommando: { verktyg, input: { uppgifter: [{ titel: "x", dag: "", till: "jag" }] } } });
+    ok(`ett okänt verktyg (${JSON.stringify(verktyg)}) ger 400, och inget läses eller skrivs`, r.status === 400 && r.data?.fel === "Okänt verktyg." && inget(r) && r.lasta.length === 0, visaK(r));
+  }
+  const av = await anropa(["team_lead"], TL, UPP([{ titel: "Ring", dag: "", till: "jag" }]), { inst: [{ key: "chatt.pa", value: false }, { key: "hem.nytt", value: "alla" }] });
+  ok("med chatten av ger grenen 409, och inget kort byggs", av.status === 409 && av.data?.fel === "Chatten är inte påslagen." && inget(av), visaK(av));
+  const baraS = [{ key: "chatt.pa", value: true }, { key: "chatt.avtal", value: true }, { key: "hem.nytt", value: [S] }];
+  const utanHem = await anropa(["team_lead"], TL, UPP([{ titel: "Ring", dag: "", till: "jag" }]), { inst: baraS });
+  const medHem = await anropa(["salesperson"], S, UPP([{ titel: "Ring", dag: "", till: "jag" }]), { inst: baraS });
+  ok("den som inte har det nya hemmet får 409, den som har det får kortet", utanHem.status === 409 && utanHem.data?.fel === "Chatten är inte påslagen." && inget(utanHem) && medHem.status === 200 && !!medHem.data?.kort, `${visaK(utanHem)} | ${visaK(medHem)}`);
+
+  const felformade = [
+    null, [], "forbered_uppgifter", { verktyg: "forbered_uppgifter" }, { verktyg: "forbered_uppgifter", input: [] },
+    { verktyg: "forbered_uppgifter", input: { uppgifter: [] } },
+    { verktyg: "forbered_uppgifter", input: { uppgifter: Array.from({ length: 6 }, () => ({ titel: "x", dag: "", till: "jag" })) } },
+    { verktyg: "forbered_uppgifter", input: { uppgifter: [{ titel: 5, dag: "", till: "jag" }] } },
+    { verktyg: "forbered_uppgifter", input: { uppgifter: [{ titel: "x", dag: "", till: "jag", steg: [] }] } },
+    { verktyg: "forbered_uppgifter", input: { uppgifter: [{ titel: "x", dag: "" }] } },
+    { verktyg: "forbered_uppgifter", input: { uppgifter: [{ titel: "x\u0000y", dag: "", till: "jag" }] } },
+    { verktyg: "forbered_uppgifter", input: { uppgifter: [{ titel: "x".repeat(1001), dag: "", till: "jag" }] } },
+    { verktyg: "forbered_uppgifter", input: { uppgifter: [{ titel: "x", dag: "", till: "jag" }], till: "Xerxes Prov" } },
+    { verktyg: "forbered_uppfoljning", input: { bolag: "Hagby Glas" } },
+    { verktyg: "forbered_uppfoljning", input: { bolag: "Hagby Glas", dag: 20261125 } },
+  ];
+  for (const kommando of felformade) {
+    const r = await anropa(["team_lead"], TL, { kommando });
+    ok(`ett felformat kommando (${JSON.stringify(kommando)?.slice(0, 90)}) ger 400, och inget läses eller skrivs`, r.status === 400 && typeof r.data?.fel === "string" && inget(r) && r.lasta.length === 0, visaK(r));
+  }
+
+  const uppf = await anropa(["salesperson"], S, UPPF("Hagby Glas", om(8)));
+  ok("en uppföljning: bara affären personen ser i Möten, med den nya dagen och den förra", uppf.status === 200 && uppf.data?.kort?.rubrik === "Ändra dagen för uppföljningen" && uppf.data.kort.rader[0].dag === om(8) && uppf.data.kort.rader[0].not === "förut 2026-11-19" && uppf.data.kort.steg[0].vag === "/nav2/moten" && uppf.data.kort.verktyg === "forbered_uppfoljning" && inget(uppf), visaK(uppf));
+  const annansAffar = await anropa(["salesperson"], S, UPPF("Xerxes Kund", om(8)));
+  ok("en affär personen inte ser i Möten: 422, inget kort", annansAffar.status === 422 && annansAffar.data?.fel === "Jag hittar ingen öppen affär med det bolaget." && inget(annansAffar), visaK(annansAffar));
+  const nere = await anropa(["salesperson"], S, UPPF("Hagby Glas", om(8)), { kallor: { affarer: async () => { throw new Error("nere"); } } });
+  ok("källan går inte att läsa: 503 tillfalligt, inget kort", nere.status === 503 && nere.data?.kod === "tillfalligt" && nere.data.fel === "Det gick inte att läsa just nu." && !nere.data.kort && inget(nere), visaK(nere));
+  const utanKrets = await anropa(["team_lead"], TL, UPP([{ titel: "Ring", dag: "", till: "Sara" }]), { kallor: { krets: async () => undefined } });
+  ok("kretsen går inte att läsa: också 503 tillfalligt, inte en regel som sa nej", utanKrets.status === 503 && utanKrets.data?.kod === "tillfalligt" && utanKrets.data.fel === "Det gick inte att läsa vilka du får se." && inget(utanKrets), visaK(utanKrets));
+  const tab = await anropa(["team_lead"], TL, UPP([{ titel: "Ring\tHagby\nGlas", dag: om(3), till: "jag" }]));
+  ok("en titel med tab eller radbrytning (som Claudes input kan ha) går att bygga om, och kortet slår ihop blanktecknen", tab.status === 200 && tab.data?.kort?.rader?.[0]?.text === "Ring Hagby Glas" && tab.data.kort.input.uppgifter[0].titel === "Ring\tHagby\nGlas", visaK(tab));
+
+  // Samma verktygskod: kortet Claude förberedde och kortet som byggs om ur samma input är samma kort.
+  const input = { uppgifter: [{ titel: "Ring Hagby Glas", dag: om(2), till: "Sara" }, { titel: "Skicka offerten", dag: "", till: "jag" }] };
+  const fraga = await anropa(["team_lead"], TL, { fraga: "Lägg upp två uppgifter" }, { ai: [verktygstur("forbered_uppgifter", input), textsvar("Uppgifterna väntar på Godkänn.")] });
+  const igen = await anropa(["team_lead"], TL, { kommando: { verktyg: "forbered_uppgifter", input } });
+  const { anrop: _a, ...fransvar } = fraga.svar?.kort?.[0] ?? {};
+  ok("kortet i svaret bär verktyget och dess input, för att kunna rättas", fraga.svar?.kort?.[0]?.verktyg === "forbered_uppgifter" && JSON.stringify(fraga.svar.kort[0].input) === JSON.stringify(input) && fraga.svar.kort[0].anrop === 1, JSON.stringify(fraga.svar?.kort));
+  ok("ett ombyggt kort ur samma input är exakt kortet Claude förberedde, utom numret", igen.status === 200 && JSON.stringify(igen.data?.kort) === JSON.stringify(fransvar), JSON.stringify([igen.data?.kort, fransvar]));
+  const anvandare = JSON.stringify(fraga.ai.flatMap((a) => (a.messages ?? []).filter((m) => m.role === "user")));
+  ok("input och verktyg på kortet finns aldrig i turerna till modellen (bara i Claudes eget verktygsanrop)", fraga.ai.length === 2 && !anvandare.includes('"input"') && !anvandare.includes('"verktyg":') && anvandare.includes("tool_result"), anvandare.slice(0, 300));
+
+  // `andrat` följer med kortets utfall, och hamnar i rätt verktyg. Samma regler för raden som utan det.
+  const RAD = "c0000000-0000-4000-8000-0000000000b1";
+  const nar = (sek) => new Date(Date.now() - sek * 1000).toISOString();
+  const KORT = { id: RAD, employee_id: S, miljo: "lokal", stop_reason: "end_turn", verktyg: [{ namn: "las_matt", input: {}, ok: true }, { namn: "forbered_uppgifter", input: { uppgifter: [] }, ok: true, kort: true }] };
+  const utfall = (u, rader = [KORT]) => anropa(["salesperson"], S, { utfall: u }, { extra: { nav_chatt_logg: rader } });
+  const andr = await utfall({ rad: RAD, anrop: 2, lage: "godkant", andrat: ["till", "dag", "dag"] });
+  ok("fälten personen rättade hamnar i rätt verktyg, i fast ordning och utan dubbletter", andr.status === 200 && JSON.stringify(andr.logg[0]?.verktyg?.[1]?.andrat) === '["dag","till"]' && andr.logg[0].verktyg[1].utfall === "godkant" && !("andrat" in andr.logg[0].verktyg[0]), JSON.stringify(andr.logg[0]?.verktyg));
+  const utan = await utfall({ rad: RAD, anrop: 2, lage: "godkant" });
+  ok("ett kort som inte rättades får inget andrat", utan.status === 200 && !("andrat" in (utan.logg[0]?.verktyg?.[1] ?? { andrat: 1 })), JSON.stringify(utan.logg[0]?.verktyg?.[1]));
+  for (const andrat of [["bolag"], ["dag", 5], "dag", { dag: true }, ["Dag"]]) {
+    const r = await utfall({ rad: RAD, anrop: 2, lage: "godkant", andrat });
+    ok(`andrat med ett okänt fält (${JSON.stringify(andrat)}) ger 400, och ingenting skrivs`, r.status === 400 && r.data?.fel === "Okänt fält i ändrat." && r.skrivningar.length === 0, `${r.status} ${JSON.stringify(r.data)}`);
+  }
+  const annans = await utfall({ rad: RAD, anrop: 2, lage: "godkant", andrat: ["dag"] }, [{ ...KORT, employee_id: X }]);
+  ok("andrat på en annan persons rad: 404, ingenting skrivs", annans.status === 404 && annans.logg.length === 0, `${annans.status}`);
+  const aldrig = await utfall({ rad: RAD, anrop: 2, lage: "godkant", andrat: ["dag"] }, [{ ...KORT, verktyg: [KORT.verktyg[0], { ...KORT.verktyg[1], kort: undefined }] }]);
+  const lasning = await utfall({ rad: RAD, anrop: 1, lage: "godkant", andrat: ["dag"] });
+  ok("andrat på ett kort som aldrig visades, eller på en läsning: 404, ingenting skrivs", aldrig.status === 404 && lasning.status === 404 && aldrig.logg.length + lasning.logg.length === 0, `${aldrig.status} ${lasning.status}`);
+  const pag = await utfall({ rad: RAD, anrop: 2, lage: "godkant", andrat: ["dag"] }, [{ ...KORT, stop_reason: "pagar", nar: nar(5) }]);
+  ok("andrat på en rad som fortfarande pågår: 409 ej-klar, ingenting skrivs", pag.status === 409 && pag.data?.kod === "ej-klar" && pag.logg.length === 0, `${pag.status}`);
+  const beslutat = { ...KORT, verktyg: [KORT.verktyg[0], { ...KORT.verktyg[1], utfall: "godkant", utfallNar: "2026-11-17T10:00:00.000Z", andrat: ["dag"] }] };
+  const angrat = await utfall({ rad: RAD, anrop: 2, lage: "angrat", andrat: ["titel", "dag"] }, [beslutat]);
+  ok("efter Godkänn: ångrat skrivs, men andrat står som det stod (en ändring efter beslutet räknas inte som en före)", angrat.status === 200 && angrat.logg[0]?.verktyg?.[1]?.utfall === "angrat" && JSON.stringify(angrat.logg[0].verktyg[1].andrat) === '["dag"]', JSON.stringify(angrat.logg[0]?.verktyg?.[1]));
+  const orattat = { ...KORT, verktyg: [KORT.verktyg[0], { ...KORT.verktyg[1], utfall: "godkant", utfallNar: "2026-11-17T10:00:00.000Z" }] };
+  const sent = await utfall({ rad: RAD, anrop: 2, lage: "angrat", andrat: ["dag"] }, [orattat]);
+  ok("ett kort som godkändes utan ändring får inget andrat efteråt", sent.status === 200 && sent.logg[0]?.verktyg?.[1]?.utfall === "angrat" && !("andrat" in sent.logg[0].verktyg[1]), JSON.stringify(sent.logg[0]?.verktyg?.[1]));
+  const sammaIgen = await utfall({ rad: RAD, anrop: 2, lage: "godkant", andrat: ["titel"] }, [beslutat]);
+  ok("samma utfall igen med andra fält: ingenting skrivs", sammaIgen.status === 200 && sammaIgen.logg.length === 0, `${sammaIgen.status} ${sammaIgen.logg.length}`);
+  // Ett uppföljningskort har bolaget (titel) och dagen, men ingen "åt". Ett `till` därifrån är inget personen kan ha
+  // rättat: utfallet skrivs, men utan andrat, så att avläsningen inte räknar kortet som "godkänt efter ändring".
+  const UPPF_KORT = { ...KORT, verktyg: [{ namn: "forbered_uppfoljning", input: { bolag: "Hagby Glas", dag: "2026-11-20" }, ok: true, kort: true }] };
+  const uppfTill = await utfall({ rad: RAD, anrop: 1, lage: "godkant", andrat: ["till"] }, [UPPF_KORT]);
+  ok("till på ett uppföljningskort: utfallet skrivs, utan andrat", uppfTill.status === 200 && uppfTill.logg[0]?.verktyg?.[0]?.utfall === "godkant" && !("andrat" in uppfTill.logg[0].verktyg[0]), JSON.stringify(uppfTill.logg[0]?.verktyg));
+  const uppfDag = await utfall({ rad: RAD, anrop: 1, lage: "godkant", andrat: ["till", "dag"] }, [UPPF_KORT]);
+  ok("dag på ett uppföljningskort står kvar, till tas bort", uppfDag.status === 200 && JSON.stringify(uppfDag.logg[0]?.verktyg?.[0]?.andrat) === '["dag"]', JSON.stringify(uppfDag.logg[0]?.verktyg));
+
+  // Inställningarna går inte att läsa: ett läsfel som kan försökas igen (503), inte "Chatten är inte påslagen." (409).
+  const forut = console.error;
+  console.error = () => {};
+  try {
+    const instNere = await anropa(["team_lead"], TL, UPP([{ titel: "x", dag: "", till: "jag" }]), { extra: { "nav_setting!lasfel": "nere" } });
+    ok("kommandot när inställningarna inte går att läsa: 503 tillfalligt, inget kort", instNere.status === 503 && instNere.data?.kod === "tillfalligt" && instNere.data.fel === "Det gick inte att läsa just nu." && !instNere.data.kort && inget(instNere), visaK(instNere));
+  } finally {
+    console.error = forut;
+  }
+  ok("avtrycket är oförändrat efter kortens nya fält och grenen", avtryck() === "485de06db391", avtryck());
+}
+
+rubrik("A1-5: avläsningen för den som sköter chatten, ur utfallen som nu skrivs");
+{
+  const { chattLage } = await import("../src/lib/nav2/chatt/logg.ts");
+  const { STAMMER_INTE_HUVUD, stammerInteId } = await import("../src/lib/nav2/chatt/chattforma.ts");
+  const { POST: HEM } = await import("../src/app/nav2/hem/route.ts");
+  // Ärendet som hem-rutten själv skriver vid Stämmer inte bär loggradens id på det sätt avläsningen läser det.
+  const RAD1 = "c0000000-0000-4000-8000-0000000000c1";
+  const hemDb = attrapp({ nav_chatt_logg: [{ id: RAD1, employee_id: S, miljo: "lokal", stop_reason: "end_turn", fraga: "Hur gick det?", svar: "Bra." }], error_report: [] });
+  globalThis.__rutt = { db: hemDb, user: { employee: { id: S, first_name: "Prov", last_name: "Person", team_id: null }, roles: ["salesperson"], permissions: [] } };
+  globalThis.__fel = [];
+  await HEM(new Request("https://nav.test/nav2/hem", { method: "POST", headers: { origin: "https://nav.test", "content-type": "application/json" }, body: JSON.stringify({ handling: "flagga", var: "chatt", rad: RAD1 }) }));
+  const body = globalThis.__fel[0]?.body ?? "";
+  ok("Stämmer inte-ärendet från hem-rutten börjar med STAMMER_INTE_HUVUD och bär loggradens id", body.startsWith(STAMMER_INTE_HUVUD) && stammerInteId(body) === RAD1 && stammerInteId("Startsidan, Din dag i korthet: raden stämmer inte.") === null && stammerInteId(`${STAMMER_INTE_HUVUD}rad-1).`) === null, body.slice(0, 120));
+
+  const NU = new Date("2026-11-17T10:00:00Z");
+  const id = (n) => `c0000000-0000-4000-8000-0000000000d${n}`;
+  const kort = (namn, o = {}) => ({ namn, input: {}, ok: true, kort: true, ...o });
+  const LOGG = [
+    { id: id(1), miljo: "lokal", nar: "2026-11-10T09:00:00Z", verktyg: [{ namn: "las_matt", input: {}, ok: true }, kort("forbered_uppgifter", { utfall: "godkant", andrat: ["dag"] }), kort("forbered_uppgifter"), { namn: "forbered_uppgifter", input: {}, ok: true, utfall: "godkant" }] },
+    { id: id(2), miljo: "lokal", nar: "2026-11-12T09:00:00Z", verktyg: [kort("forbered_uppfoljning", { utfall: "avbrutet" }), kort("forbered_uppgifter", { utfall: "angrat" }), kort("forbered_uppgifter", { ok: false, utfall: "godkant" })] },
+    // 23.30 svensk tid den 31 oktober: oktober. 00.30 svensk tid den 1 november: november (gränsernas månad).
+    { id: id(3), miljo: "lokal", nar: "2026-10-31T22:30:00Z", verktyg: [kort("forbered_uppgifter", { utfall: "godkant" })] },
+    { id: id(4), miljo: "lokal", nar: "2026-10-31T23:30:00Z", verktyg: [kort("forbered_uppgifter", { utfall: "delvis" })] },
+    { id: id(5), miljo: "production", nar: "2026-11-10T09:00:00Z", verktyg: [kort("forbered_uppgifter", { utfall: "godkant" })] },
+    { id: id(6), miljo: "lokal", nar: "2026-11-11T09:00:00Z", verktyg: [{ namn: "las_dag", input: {}, ok: true }] },
+  ];
+  const arende = (rad, kind = "manual") => ({ id: `e-${rad}-${kind}-${Math.random()}`, kind, body: `${STAMMER_INTE_HUVUD}${rad}).\n\nFråga: ”x”`, first_seen_at: "2026-11-15T10:00:00Z" });
+  const RAPPORTER = [arende(id(1)), arende(id(1)), arende(id(6)), arende(id(5)), arende(id(3)), arende(id(2), "automatic"), { id: "e-annan", kind: "manual", body: "Startsidan, Din dag i korthet: raden stämmer inte. ”x”", first_seen_at: "2026-11-15T10:00:00Z" }];
+  const db = attrapp({ nav_setting: [], nav_chatt_prov: [], nav_chatt_logg: LOGG, error_report: RAPPORTER });
+  const lage = await chattLage(db, S, true, NU);
+  const a = lage.avlasning;
+  ok("bara kort som visades räknas, i månaden och miljön, med det utfall som står på dem nu",
+    JSON.stringify(a?.kort) === JSON.stringify({ visade: 5, godkanda: 1, godkandaAndrade: 1, delvis: 1, avbrutna: 1, angrade: 1, utanUtfall: 1, andrade: 1 }), JSON.stringify(a));
+  ok("Stämmer inte räknas en gång per svar, bara för svar i den här miljön och månaden", a?.stammerInte === 2, JSON.stringify(a));
+  ok("raden är antal och data per, aldrig en procent eller en dom",
+    a?.rad === "Kort i månaden: 1 godkänt (1 efter ändring), 1 delvis, 1 avbrutet, 1 ångrat, 1 utan utfall · Ändrade före beslutet: 1 · Stämmer inte: 2 · data per 2026-11-17" && !/%/.test(a.rad) && a.manad === "2026-11" && a.dataPer === "2026-11-17" && typeof a.serInte === "string" && a.serInte.length > 0, a?.rad);
+  // Attrappen bokför också rpc-anropen (läget läser utrymmet med två rpc); inget av dem är avläsningens.
+  ok("avläsningen skriver ingenting", db.skrivningar.every((x) => ["rpc nav_chatt_utrymme", "rpc nav_chatt_forbrukning_alla"].includes(x.text)), JSON.stringify(db.skrivningar));
+
+  const egen = await chattLage(attrapp({ nav_setting: [], nav_chatt_prov: [], nav_chatt_logg: LOGG, error_report: RAPPORTER }), S, false, NU);
+  ok("den som inte sätter gränserna får ingen avläsning", egen.avlasning === null && egen.allas === null);
+  const lasta = [];
+  const bas = attrapp({ nav_setting: [], nav_chatt_prov: [], nav_chatt_logg: LOGG, error_report: RAPPORTER });
+  const nere = await chattLage({ ...bas, from: (t) => { lasta.push(t); if (t === "error_report") throw new Error("nere"); return bas.from(t); } }, S, true, NU);
+  ok("går ärendena inte att läsa blir avläsningen null, och resten av läget står kvar", nere.avlasning === null && nere.modell === lage.modell && lasta.includes("error_report"), JSON.stringify(nere));
+  const tom = await chattLage(attrapp({ nav_setting: [], nav_chatt_prov: [], nav_chatt_logg: [], error_report: [] }), S, true, NU);
+  ok("ett tomt konto: inga kort och inga Stämmer inte, med data per", tom.avlasning?.rad === "Kort i månaden: inga visade · Stämmer inte: 0 · data per 2026-11-17", tom.avlasning?.rad);
 }
 
 rubrik("Provet av modellerna: frågorna, rättningen och skriptet som väntar");
@@ -858,6 +1651,13 @@ rubrik("Provet av modellerna: frågorna, rättningen och skriptet som väntar");
   ].map((x) => JSON.stringify(x)).join("\n") + "\n");
   const om = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", join(rot, "scripts", "chatt-prov.mjs"), "--omratta", fil], { encoding: "utf8", env: { ...process.env, ANTHROPIC_API_KEY: "", DATABASE_URL: "" } });
   ok("en sparad körning rättas om utan Claude och utan databas, och talen märks om ur Claudes egen text", om.status === 0 && /claude-sonnet-5-5[\s\S]*0 av 1[\s\S]*claude-haiku-5-5[\s\S]*1 av 1/.test(om.stdout) && /obelag/.test(om.stdout), (om.stdout + om.stderr).slice(0, 600));
+  // A1-6: median-ms och median-varv per modell, med antalet körningar. En sparad rad från före mätningen räknas inte.
+  ok("omrättningen skriver median-ms och median-varv per modell, med antalet körningar", /claude-sonnet-5-5[\s\S]*Median per körning: \d+ ms och 2\.5 varv, av 2 körningar\.[\s\S]*claude-haiku-5-5[\s\S]*Median per körning: \d+ ms och 2 varv, av 1 körning\./.test(om.stdout), om.stdout.slice(0, 800));
+  const gammalFil = join(mkdtempSync(join(tmpdir(), "chattprov-")), "gammal.jsonl");
+  const { varv: _v, tider: _t, ...fore } = ratt;
+  writeFileSync(gammalFil, JSON.stringify({ modell: "claude-sonnet-5-5", id: q1.id, varv: 1, r: fore }) + "\n");
+  const gammal = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", join(rot, "scripts", "chatt-prov.mjs"), "--omratta", gammalFil], { encoding: "utf8", env: { ...process.env, ANTHROPIC_API_KEY: "", DATABASE_URL: "" } });
+  ok("en sparad körning från före mätningen ger \"saknas\", aldrig noll", gammal.status === 0 && /Median per körning: saknas/.test(gammal.stdout) && !/0 ms/.test(gammal.stdout), gammal.stdout.slice(0, 600));
 
   const s = spawnSync(process.execPath, ["--experimental-strip-types", "--no-warnings", join(rot, "scripts", "chatt-prov.mjs")], { encoding: "utf8", env: { ...process.env, ANTHROPIC_API_KEY: "", DATABASE_URL: "" } });
   ok("utan --kor kör skriptet ingenting och säger det", s.status === 0 && /Inget kördes/.test(s.stdout) && /--kor/.test(s.stdout), (s.stdout + s.stderr).slice(0, 400));

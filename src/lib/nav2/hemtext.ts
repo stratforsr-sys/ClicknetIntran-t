@@ -203,17 +203,42 @@ export function textFacit(f: Facit): string {
   return delar.join(" ");
 }
 
-/** Samma facit på en rad, i förslaget hos den som ska välja. */
+/**
+ * Samma facit på en rad, i förslaget hos den som ska välja. Ingen valde räknas i samma mening som Ringt själv och Låt
+ * stå (regel 4). Varje dom har sin egen mening, med samma förbehåll som `textFacit`: utslaget säger vid hur många möten
+ * det räknades (antalen är de senaste, domen gavs vid ett tiotal), och "en person" säger att domen hålls tillbaka för
+ * att den vore ett facit om personen, inte för att underlaget är för litet.
+ */
 export function textFacitKort(f: Facit): string {
-  const r = f.per["ringer-sjalv"], l = f.per["lat-sta"];
+  const r = f.per["ringer-sjalv"], l = f.per["lat-sta"], i = f.per.ingen;
   if (r.av === 0 && l.av === 0) return "Inget facit i laget än.";
   const delar: string[] = [];
   if (r.av > 0) delar.push(`ringt själv ${r.n} av ${r.av} hölls`);
   if (l.av > 0) delar.push(`låt stå ${l.n} av ${l.av}`);
+  if (i.av > 0) delar.push(`ingen valde ${i.n} av ${i.av}`);
   const tal = `I laget hittills: ${delar.join(", ")}.`;
-  if (f.dom.sort === "utslag") return `${tal} Skillnaden är för stor för att vara slump, men den visar inte att samtalet gjorde den.`;
-  if (f.dom.sort === "for-fa" && f.dom.tidigast !== null) return `${tal} För få för att säga något, tidigast vid runt ${f.dom.tidigast} möten.`;
-  return `${tal} För få för att säga något.`;
+  switch (f.dom.sort) {
+    case "utslag": return `${tal} Vid ${f.dom.vid} möten var skillnaden för stor för att vara slump, men den visar inte att samtalet gjorde den.`;
+    case "en-person": return `${tal} En person står för mer än hälften av mötena i ett val, så jag dömer inte.`;
+    case "tomt": return `${tal} Det finns inget att jämföra med än.`;
+    case "for-fa": return f.dom.tidigast !== null ? `${tal} För få för att säga något, tidigast vid runt ${f.dom.tidigast} möten.` : `${tal} För få för att säga något.`;
+  }
+}
+
+/**
+ * Navs facit för den som inte leder ett lag: bara personens egna val, i antal. Aldrig en dom, inte heller "för få",
+ * för det här är en persons möten, och ett utslag vore ett facit om personen. Två fasta meningar säger det, och att
+ * siffrorna inte visar att samtalet gjorde skillnaden. Låt stå och Ingen valde räknas i samma mening som Ringt själv.
+ */
+export function textFacitEgen(f: Pick<Facit, "per" | "flyttade">): string {
+  const r = f.per["ringer-sjalv"], l = f.per["lat-sta"], i = f.per.ingen;
+  if (r.av === 0 && l.av === 0 && i.av === 0 && f.flyttade === 0) return "Inget facit än. Det kommer när de första mötena har fått ett utfall.";
+  const delar: string[] = [];
+  if (r.av > 0) delar.push(`ringt själv ${r.n} av ${r.av} hölls`);
+  if (l.av > 0) delar.push(`låt stå ${l.n} av ${l.av}`);
+  if (i.av > 0) delar.push(`ingen valde ${i.n} av ${i.av}`);
+  if (f.flyttade > 0) delar.push(`flyttade ${f.flyttade}`);
+  return `Dina val: ${delar.join(", ")}. Det här är bara dina möten, så jag säger inte vilket val som fungerar bäst. Siffrorna visar inte att samtalet gjorde skillnaden.`;
 }
 
 export function textTrodde(t: { raknade: number; av: number; blev: number }): string {

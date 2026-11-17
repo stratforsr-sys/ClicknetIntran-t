@@ -80,5 +80,44 @@ rubrik("Vyns tur");
 ok("visad läses ur sessionStorage", /visad:ndGuVisad\(\)/.test(html) && /sessionStorage\.getItem\('nd-gu-visad'/.test(html));
 ok("visad sparas när turen startar", /NDGU\.visad\.add\(slug\); try \{ sessionStorage\.setItem\('nd-gu-visad'/.test(html));
 
+rubrik("En tyst omläsning laddar inte om sidan (hemmets hvater, funktion 1)");
+{
+  // ndOmlas, ndOmlasKor, ndOmlasTyst och ndOmlasReserv körs som de står i utkastet, med nätet och sidan som attrapper.
+  const kod = html.slice(html.indexOf("const NDOMLAS = {}, NDOMLASKO"), html.indexOf("/* ---------- Skrivvägen slut"));
+  const kor = (svar) => {
+    const g = { laddas: 0, sparat: [], startat: [], in: [], ritat: 0, ND: { hem: { x: 1 } }, S: {} };
+    const f = new Function("g", `const ND = g.ND, S = g.S; const render = () => { g.ritat++; };
+      const ndLas = async () => (${JSON.stringify(svar)});
+      const sessionStorage = { setItem: (k, v) => g.sparat.push([k, v]) };
+      const location = { reload: () => { g.laddas++; } };
+      const setTimeout = (fn, ms) => { if (ms) fn(); else Promise.resolve().then(fn); };
+      ${kod}
+      return { ndOmlas, ndOmlasAnmal, NDOMLASKO };`);
+    return Object.assign(g, f(g));
+  };
+  const anmal = (g) => {
+    g.ndOmlasAnmal("hv", { delar: ["hem", "uppgifter", "moten", "kalender"] });
+    g.ndOmlasAnmal("hvater", { delar: ["hem", "uppgifter", "moten", "kalender", "order", "tid", "franvaro", "arenden", "rutiner", "utbildning", "notiser"], laser: ["hem"] });
+    g.ndOmlasAnmal("upg", { delar: ["uppgifter"], nyckel: "nd-upg", lage: () => ({ flik: "mina" }), start: () => g.startat.push("upg"), in: (m) => g.in.push(["upg", m]) });
+    g.ndOmlasAnmal("tid", { delar: ["tid"], lage: () => ({ vecka: 47 }), start: () => g.startat.push("tid"), in: (m) => g.in.push(["tid", m]) });
+    g.ndOmlasAnmal("fr", { delar: ["foretag"], start: () => g.startat.push("fr"), in: (m) => g.in.push(["fr", m]) });
+  };
+  let g = kor({ ok: false, fel: "nere" }); anmal(g);
+  let r = await g.ndOmlas("hvater", { tyst: true });
+  ok("tyst: en läsning som faller laddar inte om sidan och sparar inget läge", r === false && g.laddas === 0 && g.sparat.length === 0);
+  ok("och kön är tom efteråt", g.NDOMLASKO.size === 0);
+  g = kor({ ok: false, fel: "nere" }); anmal(g);
+  r = await g.ndOmlas("upg");
+  ok("en vy utan tyst faller fortfarande tillbaka på omladdningen", r === false && g.laddas === 1 && g.sparat.some(([k]) => k === "nd-upg"));
+  g = kor({ ok: false, fel: "nere" }); anmal(g);
+  const p1 = g.ndOmlas("hvater", { tyst: true }); g.ndOmlas("upg"); r = await p1;
+  ok("en sparning i samma kö som en tyst läsning går den gamla vägen", g.laddas === 1);
+  g = kor({ ok: true, data: { data: { hem: { lasfel: {} }, uppgifter: { u: 1 }, tid: { t: 1 } } } }); anmal(g);
+  r = await g.ndOmlas("hvater", { tyst: true });
+  ok("efter hvater har varje anmäld vy vars laser träffades fått tillbaka sitt läge (in)", r === true && g.in.some(([v, m]) => v === "upg" && m.flik === "mina") && g.in.some(([v, m]) => v === "tid" && m.vecka === 47));
+  ok("en vy vars laser inte träffades startar inte om", !g.startat.includes("fr") && g.startat.includes("upg") && g.startat.includes("tid"));
+  ok("datan är inläst och sidan ritad, utan omladdning", g.ND.hem.lasfel && g.ritat === 1 && g.laddas === 0);
+}
+
 console.log(fel ? `\n\x1b[31m${fel} fel.\x1b[0m` : "\n\x1b[32mAlla prov gick igenom.\x1b[0m");
 process.exit(fel ? 1 : 0);

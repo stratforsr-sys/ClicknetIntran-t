@@ -11,6 +11,8 @@ import { byggKvall } from "@/lib/nav2/hem-kvall";
 import { pushaTill, vapidPublik } from "@/lib/nav2/push";
 import { arPushtjanst } from "@/lib/nav2/pushvard";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
+import { chattMiljo } from "@/lib/nav2/chatt/logg";
+import { EJ_KLAR_BESKED, STAMMER_INTE_HUVUD, vantarSlutrad } from "@/lib/nav2/chatt/chattforma";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +31,15 @@ export const dynamic = "force-dynamic";
  *            Med `var: "manad"` är det "Fråga om raden" i Din månad: en
  *            provisionsrad som ser fel ut. Den går till samma kö, men raden
  *            göms aldrig, för den är pengar och inte en sammanfattning.
+ *            Med `var: "chatt"` är det "Stämmer inte" under ett svar i chatten:
+ *            klienten skickar bara `rad` (loggradens id), och frågan och svaret
+ *            läses ur personens egen loggrad, till samma kö (hela ärendet högst
+ *            MAX_BODY tecken, id:t först). 409 med `kod: "ej-klar"` medan raden
+ *            pågår eller stoppas och är yngre än PAGAR_MS. Samma rad en gång
+ *            till, efter att det första ärendet är skrivet, ger `redan: true`
+ *            och inget nytt ärende. Två klick samtidigt kan bli två ärenden:
+ *            spärren läser och skriver sedan, och det finns inget unikt index
+ *            för manuella ärenden (det kräver en migration).
  *   dolj     "Visa inte X här": sorten döljs i din sammanfattning (`hem.dolda`).
  *            `visa` tar tillbaka den.
  *   sett     När du senast tittade på startsidan (`hem.sett`), för "Sedan du tittade".
@@ -89,6 +100,8 @@ export async function POST(request: Request) {
   } catch {
     return svar({ fel: "Ogiltig begäran." }, 400);
   }
+  // En kropp som inte är ett objekt (`null`, en lista, en text) är lika ogiltig som en som inte går att läsa.
+  if (!b || typeof b !== "object" || Array.isArray(b)) return svar({ fel: "Ogiltig begäran." }, 400);
   const handling = String(b.handling ?? "");
 
   if (!SKRIVLAGE.hem) return svar({ fel: LASLAGE_TEXT, laslage: true }, 423);
@@ -153,6 +166,41 @@ export async function POST(request: Request) {
       }
 
       case "flagga": {
+        if (b.var === "chatt") {
+          // Chattens svar: frågan och svaret ur personens egen loggrad i samma miljö, inte ur klienten.
+          const id = String(b.rad ?? "").trim().toLowerCase();
+          if (!UUID.test(id)) return svar({ fel: "Svaret saknas." }, 400);
+          const { data: logg, error } = await db.from("nav_chatt_logg").select("fraga, svar, stop_reason, nar").eq("id", id).eq("employee_id", mig).eq("miljo", chattMiljo()).maybeSingle();
+          if (error) throw new Error(error.message);
+          const l = logg as { fraga?: unknown; svar?: unknown; stop_reason?: unknown; nar?: unknown } | null;
+          if (!l) return svar({ fel: "Svaret finns inte längre." }, 404);
+          // R1: svaret kommer före loggens slutrad. Pågår raden, eller väntar en stoppad rad på sin slutrad, står
+          // svaret inte i den än: 409, och klienten försöker igen när strömmen har stängts. En sådan rad äldre än
+          // PAGAR_MS får aldrig sin slutrad, och ärendet skickas då med "(inget svar sparat)".
+          if (vantarSlutrad(l.stop_reason, l.nar, Date.now())) return svar({ fel: EJ_KLAR_BESKED, kod: "ej-klar" }, 409);
+          // Loggradens id står först, så att det överlever när en lång text klipps (MAX_BODY), och så att samma svar
+          // inte skickas två gånger: ett andra Stämmer inte på samma rad från samma person blir inget nytt ärende.
+          // Spärren läser och skriver sedan, så den fångar ett klick som kommer efter att det första är skrivet, inte
+          // två samtidiga (det kräver ett unikt index, alltså en migration). Går läsningen inte att göra skickas ärendet
+          // ändå: hellre ett ärende för mycket än ett Stämmer inte som försvinner.
+          const huvud = `${STAMMER_INTE_HUVUD}${id}).`;
+          const { data: redan, error: redanFel } = await db.from("error_report").select("id").eq("reporter_id", mig).eq("kind", "manual").like("body", `${huvud}%`).limit(1);
+          if (!redanFel && Array.isArray(redan) && redan.length > 0) return svar({ ok: "Redan skickat till den som förvaltar Nav.", redan: true });
+          const fraga = typeof l.fraga === "string" && l.fraga.trim() ? l.fraga.trim() : "(sparas inte längre)";
+          const svaret = typeof l.svar === "string" && l.svar.trim() ? l.svar.trim() : "(inget svar sparat)";
+          const ok = await skrivFel({
+            kind: "manual",
+            path: "/nav2",
+            digest: null,
+            body: `${huvud}\n\nFråga: ”${fraga}”\n\nSvar: ”${svaret}”`,
+            blocking: false,
+            reporterId: mig,
+            userAgent: request.headers.get("user-agent"),
+            pointedAt: `Startsidan · Chatten · ${fraga}`.slice(0, 300),
+          });
+          if (!ok) return svar({ fel: "Det gick inte att spara." }, 500);
+          return svar({ ok: "Skickat till den som förvaltar Nav, med frågan och svaret." });
+        }
         const rad = String(b.rad ?? "").trim().slice(0, 80);
         const text = String(b.text ?? "").trim().slice(0, 300);
         if (!rad || !text) return svar({ fel: "Raden saknas." }, 400);

@@ -181,7 +181,7 @@ export function periodFor(period: string, idag: string): { fran: string; till: s
   return { fran: `${sista.slice(0, 7)}-01`, till: sista, manad: sista.slice(0, 7), text };
 }
 
-const MATTNAMN: Record<MattNyckel, string> = {
+export const MATTNAMN: Record<MattNyckel, string> = {
   "moten.uteblivna": "uteblivna möten",
   "moten.hallna-av-alla": "hållna möten",
   "moten.bekraftade": "bekräftade möten",
@@ -217,11 +217,13 @@ export function hamtarText(namn: string, input: Record<string, unknown>): string
 }
 
 const NEJ = "Det får du inte se.";
+/** Kretsen gick inte att läsa: en källa som föll, inte en regel som sa nej. */
+export const KRETSFEL = "Det gick inte att läsa vilka du får se.";
 
 /** Vems tal frågan gäller, och om den som frågar får se dem. */
 async function vemKrets(vem: unknown, c: Ctx): Promise<{ krets: readonly string[] | null; namn: string } | { fel: string }> {
   const k = await c.kallor.krets();
-  if (k === undefined) return { fel: "Det gick inte att läsa vilka du får se." };
+  if (k === undefined) return { fel: KRETSFEL };
   const v = kort(vem, 80).toLowerCase();
   if (!v || arJag(v)) return { krets: [c.mig], namn: "Du" };
   if (arLaget(v)) {
@@ -598,4 +600,44 @@ export function kallrad(svar: Record<string, unknown> | undefined, falt = ""): s
   const period = s("period") ? (s("fran") && s("till") ? `${s("period")} (${s("fran")} till ${s("till")})` : s("period")) : s("dag");
   const vad = egen || faltnamn || s("vad") || ({ las_forslag: "Navs förslag", las_vantar: "Väntar på dig", las_dag: "Kalender och uppgifter", las_provision: "Din provision", sok_kunskap: "Företagets kunskapsbas", forbered_uppgifter: "Uppgifter att godkänna", forbered_uppfoljning: "Uppföljning att godkänna" } as Record<string, string>)[s("_verktyg")] || "";
   return [vad, s("vem"), period, s("dataPer") ? `data per ${s("dataPer")}` : ""].filter(Boolean).join(" · ");
+}
+
+/**
+ * Det som står under källraden när någon klickar på ett tal (funktion 3, Motvikten vid talet): motvikten, vad verktyget
+ * inte ser och om underlaget är för litet för en jämförelse. Allt är verktygets egna fält, inget räknas här. Det går
+ * bara till webbläsaren, med talet: Claude får verktygssvaret som förut, och texten bär det aldrig.
+ *
+ *   ser       verktygets `serInte`, en hel mening. För motviktens eget tal: motviktens (ur registret), som i `kallrad`.
+ *   motvikt   bara för måttets egna tal i las_matt (`antal`, `av`, `procent`): motviktens namn, antal och, för ett
+ *             mötesmått, nämnaren (`av`, aldrig en procent). Klickar man på motviktens tal (`motvikt.*`) står
+ *             huvudmåttet här i stället. Null för alla andra tal.
+ *   forFa     verktygets eget `rackerForJamforelse === false`, för måttets egna tal (`antal`, `av`, `procent`): domen
+ *             gäller huvudmåttets underlag. Falskt för motviktens tal och för alla andra.
+ *
+ * Ett svar som är ett fel, eller saknas, ger nullor och falskt.
+ */
+export type KallaTillagg = { ser: string | null; motvikt: { text: string; antal: number; av: number | null } | null; forFa: boolean };
+
+export function kallaTillagg(svar: Record<string, unknown> | undefined, falt = ""): KallaTillagg {
+  if (!svar || typeof svar !== "object" || typeof svar.fel === "string") return { ser: null, motvikt: null, forFa: false };
+  const ser = typeof svar.serInte === "string" && svar.serInte ? svar.serInte : null;
+  if (svar._verktyg !== "las_matt") return { ser, motvikt: null, forFa: false };
+  const tal = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const iRegistret = (k: unknown): k is MattNyckel => typeof k === "string" && Object.hasOwn(MATT, k);
+  const mv = (svar.motvikt ?? {}) as { matt?: unknown; antal?: unknown; av?: unknown };
+  const huvud = svar.matt;
+  const mot = mv.matt;
+  const forFa = svar.rackerForJamforelse === false;
+  if (falt.startsWith("motvikt.")) {
+    const antal = tal(svar.antal);
+    // `rackerForJamforelse` är verktygets dom om huvudmåttets underlag. Om motviktens tal har verktyget ingen dom.
+    return {
+      ser: iRegistret(mot) ? MATT[mot].serInte : ser,
+      motvikt: iRegistret(huvud) && antal !== null ? { text: MATTNAMN[huvud], antal, av: tal(svar.av) } : null,
+      forFa: false,
+    };
+  }
+  if (!["antal", "av", "procent"].includes(falt)) return { ser, motvikt: null, forFa: false };
+  const antal = tal(mv.antal);
+  return { ser, motvikt: iRegistret(mot) && antal !== null ? { text: MATTNAMN[mot], antal, av: tal(mv.av) } : null, forFa };
 }

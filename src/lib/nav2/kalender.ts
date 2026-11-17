@@ -25,7 +25,7 @@ import { SKRIVLAGE } from "./skrivlage";
  * En post med 0090:s flagga (privat möte), "Visa som" när den inte är upptagen, och mötets länk till den som
  * är med (organiserar, deltar eller äger kalendern), så att Anslut syns på posten, i Min dag och i påminnelsen.
  */
-export type NdPost = Omit<Post, "paminnelse"> & { /** Minuter före, eller null = Ingen påminnelse (granskningen E4, 0212). */ paminnelse: number | null; privat?: boolean; visaSom?: string; online?: string; /** Heldag över flera dagar (0204): första och sista dagen. */ heldag?: { fran: string; till: string }; /** Kundmöte från Möten (mote.event_id), byggsteg 4: bolaget när rubriken syns, annars null. */ kund?: { bolag: string | null } };
+export type NdPost = Omit<Post, "paminnelse"> & { /** Minuter före, eller null = Ingen påminnelse (granskningen E4, 0212). */ paminnelse: number | null; privat?: boolean; visaSom?: string; online?: string; /** Heldag över flera dagar (0204): första och sista dagen. */ heldag?: { fran: string; till: string }; /** Kundmöte från Möten (mote.event_id), byggsteg 4: bolaget när rubriken syns, annars null. `mote` är mötets id i Möten (`mote.id`, samma som `ND.moten.kort[].mote.id`), så att hemmet kan öppna mötets utfallsruta. Bara för den som är med på posten och ser rubriken, annars null. Pekar flera möten på samma händelse gäller det enda utan utfall, annars null: hellre ingen koppling än fel möte. */ kund?: { bolag: string | null; mote?: string | null } };
 export type NdKalposter = { fran: string; till: string; poster: NdPost[] };
 
 export type NdKalender = NdKalposter & {
@@ -78,13 +78,14 @@ export function lasKategorier(v: unknown): Kategorier {
 /**
  * 0090: privata möten. Den som organiserar, är med eller äger kalendern ser
  * allt; alla andra ser "Privat". Bara flaggan läses, för de möten som redan
- * står i vyn.
+ * står i vyn. Exporterad för provet (tests/kalender.mjs: kundmötets `mote`).
  */
-async function privata(mig: string, poster: NdPost[]): Promise<NdPost[]> {
+export async function privata(mig: string, poster: NdPost[]): Promise<NdPost[]> {
   return markeraPrivata(mig, poster, await privataIds(poster));
 }
 
-type Extra = Map<string, { privat: boolean; visa: string; online: string | null; ingen: boolean; engang: boolean; kund?: string | null }>;
+type Kundmote = { bolag: string | null; mote: string | null };
+type Extra = Map<string, { privat: boolean; visa: string; online: string | null; ingen: boolean; engang: boolean; kund?: Kundmote }>;
 
 /**
  * Posternas möten: privat (0090), "Visa som", länken och om serien bara har en gång. Bara de möten som redan står i
@@ -101,26 +102,48 @@ async function privataIds(poster: NdPost[]): Promise<Extra> {
     kundmoten(ids),
   ]);
   const engang = new Set(((serierader ?? []) as { id: string; starts_on: string; ends_on: string }[]).filter((s) => s.ends_on === s.starts_on).map((s) => s.id));
-  return new Map((data ?? []).map((r) => [r.id as string, { privat: Boolean(r.is_private), visa: String(r.show_as ?? "upptagen"), online: (r.online_url as string | null) ?? null, ingen: Boolean(r.reminder_off), engang: engang.has(r.series_id as string), kund: kund.has(r.id as string) ? (kund.get(r.id as string) ?? null) : undefined }]));
+  return new Map((data ?? []).map((r) => [r.id as string, { privat: Boolean(r.is_private), visa: String(r.show_as ?? "upptagen"), online: (r.online_url as string | null) ?? null, ingen: Boolean(r.reminder_off), engang: engang.has(r.series_id as string), kund: kund.get(r.id as string) }]));
 }
 
 /**
- * Kundmötena (byggsteg 4): händelser som är ett möte i Möten (`mote.event_id`), med bolagets namn. Kalendern ritar
- * dem diskret med bolaget först. Ett fel här gör bara att markeringen uteblir; Kalendern läses ändå.
+ * Kundmötena (byggsteg 4): händelser som är ett möte i Möten (`mote.event_id`), med bolagets namn och mötets id.
+ * Kalendern ritar dem diskret med bolaget först, och hemmet kopplar urtavlans märke till mötets utfall (funktion 2).
+ * `mote.event_id` är inte unik i databasen. Pekar flera möten på samma händelse gäller det enda som saknar utfall; finns
+ * inget sådant, eller flera, blir `mote` null (hellre ingen koppling än fel möte). Bolaget tas ur samma möte som `mote`;
+ * är `mote` null står bolaget kvar bara när alla möten på händelsen hör till samma bolag, så att namnet och mötet aldrig
+ * kommer från två olika möten. Ett läsfel (mötena, kedjorna eller bolagen) gör att markeringen uteblir helt för alla
+ * poster, i stället för ett namn som saknas bredvid ett möte; Kalendern läses ändå.
  */
-async function kundmoten(ids: string[]): Promise<Map<string, string | null>> {
-  const ut = new Map<string, string | null>();
+async function kundmoten(ids: string[]): Promise<Map<string, Kundmote>> {
+  const ut = new Map<string, Kundmote>();
   try {
-    const { data: moten } = await supabaseAdmin().from("mote").select("event_id, kedja_id").in("event_id", ids);
-    const rader = (moten ?? []) as { event_id: string; kedja_id: string }[];
+    const { data: moten, error: motesfel } = await supabaseAdmin().from("mote").select("id, event_id, kedja_id, utfall").in("event_id", ids);
+    if (motesfel) throw new Error(`mötena: ${motesfel.message}`);
+    const rader = (moten ?? []) as { id: string; event_id: string; kedja_id: string; utfall: string | null }[];
     if (!rader.length) return ut;
-    const { data: kedjor } = await supabaseAdmin().from("mote_kedja").select("id, bolag_id").in("id", [...new Set(rader.map((m) => m.kedja_id))]);
+    const { data: kedjor, error: kedjefel } = await supabaseAdmin().from("mote_kedja").select("id, bolag_id").in("id", [...new Set(rader.map((m) => m.kedja_id))]);
+    if (kedjefel) throw new Error(`kedjorna: ${kedjefel.message}`);
     const bolagFor = new Map(((kedjor ?? []) as { id: string; bolag_id: string }[]).map((k) => [k.id, k.bolag_id]));
-    const { data: bolag } = await supabaseAdmin().from("mote_bolag").select("id, namn").in("id", [...new Set(bolagFor.values())]);
+    const { data: bolag, error: bolagsfel } = await supabaseAdmin().from("mote_bolag").select("id, namn").in("id", [...new Set(bolagFor.values())]);
+    if (bolagsfel) throw new Error(`bolagen: ${bolagsfel.message}`);
     const namn = new Map(((bolag ?? []) as { id: string; namn: string }[]).map((b) => [b.id, b.namn]));
-    for (const m of rader) ut.set(m.event_id, namn.get(bolagFor.get(m.kedja_id) ?? "") ?? null);
-  } catch {
-    // markeringen är en bekvämlighet; Kalendern ska aldrig falla på den
+    const namnFor = (m: (typeof rader)[number]): string | null => namn.get(bolagFor.get(m.kedja_id) ?? "") ?? null;
+    const perHandelse = new Map<string, typeof rader>();
+    for (const m of rader) perHandelse.set(m.event_id, [...(perHandelse.get(m.event_id) ?? []), m]);
+    const motetFor = (alla: typeof rader): (typeof rader)[number] | null => {
+      if (alla.length === 1) return alla[0];
+      const oppna = alla.filter((m) => (m.utfall ?? null) === null);
+      return oppna.length === 1 ? oppna[0] : null;
+    };
+    for (const [handelse, alla] of perHandelse) {
+      const valt = motetFor(alla);
+      const bolagen = [...new Set(alla.map(namnFor))];
+      ut.set(handelse, { bolag: valt ? namnFor(valt) : bolagen.length === 1 ? bolagen[0] : null, mote: valt?.id ?? null });
+    }
+  } catch (e) {
+    // Markeringen är en bekvämlighet; Kalendern ska aldrig falla på den. Hellre ingen koppling än en halv.
+    console.error(`kalender: kundmötena gick inte att läsa: ${e instanceof Error ? e.message : String(e)}`);
+    return new Map();
   }
   return ut;
 }
@@ -137,7 +160,11 @@ function markeraPrivata(mig: string, poster: NdPost[], extra: Extra): NdPost[] {
     if (x.engang) ut.serie = false;
     if (x.online && insyn) ut.online = x.online;
     // Bolaget bara när rubriken syns: inte på en privat post man inte är med på, och inte när bara tiden visas.
-    if (x.kund !== undefined) ut.kund = { bolag: p.rubrik !== null && !(x.privat && !insyn) ? x.kund : null };
+    // Mötets id på samma villkor, och dessutom bara för den som är med: annars säger det att det finns ett möte där.
+    if (x.kund !== undefined) {
+      const syns = p.rubrik !== null && !(x.privat && !insyn);
+      ut.kund = { bolag: syns ? x.kund.bolag : null, mote: syns && insyn ? x.kund.mote : null };
+    }
     if (!x.privat) return ut;
     return insyn ? { ...ut, privat: true } : { ...ut, privat: true, rubrik: p.rubrik === null ? null : "Privat", href: null };
   });

@@ -13,9 +13,9 @@
  *   - Varje anrop räknas i kostnaden, också när frågan slutar i ett fel.
  *   - Verktygen i ett varv körs samtidigt, men svaren läggs tillbaka i Claudes ordning.
  */
-import { efterReserv, forsok, hanvisningsfel, kostnadUsd, sattInTal, talfalt, utanMarken, type InsattTal, type Usage } from "./chattforma.ts";
+import { UTKAST_MS, efterReserv, sammaModell, forsok, hanvisningsfel, jaFraga, kostnadUsd, nastaFragor, sattInTal, slappUtkast, talfalt, underlagUr, utanMarken, type InsattTal, type Nasta, type Underlag, type Usage } from "./chattforma.ts";
 import { EFFORT, OMSKRIV, SYSTEMTEXT } from "./systemtext.ts";
-import { VERKTYG, VERKTYGSFEL, hamtarText, kallaFor, kallrad, korVerktyg, type Ctx, type Handlingskort, type Verktygssvar } from "./verktyg.ts";
+import { VERKTYG, VERKTYGSFEL, hamtarText, kallaFor, kallaTillagg, kallrad, korVerktyg, type Ctx, type Handlingskort, type KallaTillagg, type Verktygssvar } from "./verktyg.ts";
 
 /** Högst så här många anrop till Claude per fråga. */
 export const MAX_VARV = 6;
@@ -29,8 +29,12 @@ export const harReserv = (modell: string) => !modell.startsWith("claude-haiku");
 export type Tur = { role: "user" | "assistant"; content: unknown };
 type Block = { type: string; text?: string; id?: string; name?: string; input?: unknown };
 type Meddelande = { stop_reason: string | null; usage: Usage; content: Block[]; model?: string };
-/** Det slingan behöver av Anthropics klient. */
-export type Klient = { beta: { messages: { stream(p: Record<string, unknown>, o?: { signal?: AbortSignal }): { finalMessage(): Promise<unknown> } } } };
+/**
+ * Det slingan behöver av Anthropics klient. `on("streamEvent")` ger meddelandet så långt det kommit, för utkastet;
+ * en klient utan `on` (provets attrapper) får svaret i ett stycke, som förut. Anropet är detsamma i båda fallen.
+ */
+export type Strom = { finalMessage(): Promise<unknown>; on?(handelse: "streamEvent", lyssnare: (h: unknown, sahittills: unknown) => void): unknown };
+export type Klient = { beta: { messages: { stream(p: Record<string, unknown>, o?: { signal?: AbortSignal }): Strom } } };
 
 /**
  * Hela frågan får så här lång tid, varv, anrop och verktyg tillsammans. Rutten får arbeta i 120 sekunder
@@ -47,7 +51,9 @@ class Tidsslut extends Error {}
 
 /** Varför frågan inte fick ett svar, för klienten. Texten är det personen läser; koden är det klienten kan välja på. */
 export type Felkod = "tillfalligt" | "fil" | "for-stor" | "ai" | "tid" | "steg" | "langt" | "ofullstandigt" | "tomt" | "avbruten";
-const BESKED_AI = "Chatten svarar inte just nu. Jag svarar som sökrutan i stället.";
+/** Felraden lovar bara det rutan gör (N4): Sök i stället kräver ett klick, så det står som ett val, inte som ett löfte. */
+export const BESKED_AI = "Chatten svarar inte just nu. Sök i stället ger svar ur Navs sökruta.";
+const BESKED_AVBOJT = "Modellen avböjde att svara på det här. Sök i stället ger svar ur Navs sökruta.";
 
 /**
  * Ett fel från Anthropic, sorterat till ett besked personen kan göra något med. `status` är svarets HTTP-status, och
@@ -88,13 +94,32 @@ export const loggKostnadUsd = (r: { kostnadUsd: number; ofullstandig: boolean },
 const obelagdaI = (text: string): string[] => [...new Set([...text.matchAll(/⟦obelagt:([^⟧]*)⟧/g)].map((m) => m[1]).filter((t) => t !== "?"))].slice(0, 20);
 
 /**
- * Strömmens händelser. `hamtar` och `klart` kommer medan frågan arbetar; `svar`, `avbojt` och `fel` avslutar den, och
+ * Ett tal som klienten får det: med källraden (`om`) och det som står under den efter klicket (`ser`, `motvikt`,
+ * `forFa`, ur `kallaTillagg`). Samma form i utkastet och i svaret. Inget av det går till Claude eller in i texten.
+ */
+export type TalUt = InsattTal & { om: string } & KallaTillagg;
+/**
+ * Ett kort som klienten får det, med numret på anropet som förberedde det: utfallet skrivs mot det numret. `verktyg` och
+ * `input` är verktyget och dess input, så att personen kan rätta kortet före Godkänn (funktion 6: `{kommando}` i rutten
+ * bygger om det). De står bara i händelsen till webbläsaren, aldrig i det Claude får.
+ */
+export type KortUt = Handlingskort & { anrop: number; verktyg: string; input: Record<string, unknown> };
+/** En källa under svaret som går att öppna: verktyget säger vilken vy. */
+export type KallaUt = { verktyg: string; anrop: number; text: string };
+/** Millisekunder: varje anrop till Claude och varje verktygsvarv, tiden till första utkastet och hela samtalet. */
+export type Tider = { ai: number[]; verktyg: number[]; forstaText: number | null; totalt: number };
+
+/**
+ * Strömmens händelser. `hamtar`, `klart` och `text` kommer medan frågan arbetar; `svar`, `avbojt` och `fel` avslutar den, och
  * efter en av dem kommer inget mer. `anrop` är verktygsanropets nummer i frågan: `klart` hör till `hamtar` med samma nummer.
+ * `rad` skickas av rutten, före allt annat. Hela kontraktet för klienten: .lyft/chatt-server-api.md.
  */
 export type Handelse =
+  | { h: "rad"; id: string }
   | { h: "hamtar"; text: string; anrop?: number; verktyg?: string }
   | { h: "klart"; anrop: number; ok: boolean; text: string; ms: number }
-  | { h: "svar"; text: string; tal: (InsattTal & { om: string })[]; obelagda: number; kalla: string; kort: Handlingskort[] }
+  | { h: "text"; text: string; tal: TalUt[] }
+  | { h: "svar"; text: string; tal: TalUt[]; obelagda: number; kalla: string; kallor: KallaUt[]; kort: KortUt[]; nasta: Nasta[]; ja: boolean; underlag?: Underlag & { rubrik: string }; varv: number; tider: Tider }
   | { h: "avbojt"; text: string }
   | { h: "fel"; text: string; kod: Felkod };
 
@@ -109,8 +134,12 @@ export type Samtalssvar = {
   omskrivet: boolean;
   /** Ett anrop avbröts vid fristen eller föll utan svar, så kostnaden ovan är inte hela kostnaden. */
   ofullstandig: boolean;
-  /** Verktygsanropen i ordning. `ok` är falskt när verktyget svarade med ett fel; `ms` är hur länge det tog. */
-  anrop: { namn: string; input: unknown; ok?: boolean; ms?: number }[];
+  /**
+   * Verktygsanropen i ordning. `ok` är falskt när verktyget svarade med ett fel; `ms` är hur länge det tog. `kort` är
+   * sant bara på det förbered-anrop vars kort visades i svaret (inte en dubblett, inte ett kort över KORT_MAX): bara
+   * där tar loggen emot ett utfall (`medUtfall`). Det står i loggens `verktyg`, aldrig i det Claude får.
+   */
+  anrop: { namn: string; input: unknown; ok?: boolean; ms?: number; kort?: true }[];
   /** Verktygssvaren, i anropens ordning. */
   svar: Record<string, unknown>[];
   /** Claudes egen text, med hänvisningarna (`{{t:1.antal}}`). Provet sparar den, så att rättningen kan göras om. */
@@ -122,28 +151,84 @@ export type Samtalssvar = {
   tal: InsattTal[];
   obelagda: number;
   /** Korten Claude har förberett, i den ordning de kom. Inget av dem är utfört: personen godkänner vart och ett. */
-  kort: Handlingskort[];
+  kort: KortUt[];
+  /** Antal anrop till Claude. */
+  varv: number;
+  tider: Tider;
 };
 
 /**
  * `avbruten`: personen har slutat lyssna (stängt fliken eller tryckt Stopp). Anropet som pågår får bli klart, så att
  * kostnaden blir känd, men inget nytt anrop och inga fler verktyg körs. `verktygMs` finns för provet.
  */
-export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[]; ctx: Ctx; sand: (h: Handelse) => void; fristMs?: number; verktygMs?: number; klocka?: () => number; avbruten?: AbortSignal }): Promise<Samtalssvar> {
+export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[]; ctx: Ctx; sand: (h: Handelse) => void; fristMs?: number; verktygMs?: number; klocka?: () => number; avbruten?: AbortSignal; fraga?: string }): Promise<Samtalssvar> {
   const { klient, modell, ctx } = i;
   // Efter svaret, avböjandet eller felet kommer inget mer, inte heller från ett verktyg som blev klart för sent.
   let avslutad = false;
   const sand = (h: Handelse) => {
     if (avslutad) return;
+    // Ett utkast står aldrig kvar ovanför ett fel eller ett avböjande: det dras tillbaka först (`svar` ersätter det själv).
+    if (h.h === "avbojt" || h.h === "fel") dragTillbaka();
     if (h.h === "svar" || h.h === "avbojt" || h.h === "fel") avslutad = true;
     i.sand(h);
   };
   const klocka = i.klocka ?? Date.now;
+  const borjan = klocka();
   const slut = klocka() + (i.fristMs ?? FRIST_MS);
   const kvar = () => slut - klocka();
   const verktygMs = i.verktygMs ?? VERKTYG_MS;
   const turer = [...i.turer];
-  const ut: Samtalssvar = { stopp: "fel", usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, kostnadUsd: 0, reserv: 0, omskrivet: false, ofullstandig: false, anrop: [], svar: [], ra: null, text: null, ren: null, tal: [], obelagda: 0, kort: [] };
+  const ut: Samtalssvar = { stopp: "fel", usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, kostnadUsd: 0, reserv: 0, omskrivet: false, ofullstandig: false, anrop: [], svar: [], ra: null, text: null, ren: null, tal: [], obelagda: 0, kort: [], varv: 0, tider: { ai: [], verktyg: [], forstaText: null, totalt: 0 } };
+  const talUt = (tal: InsattTal[]): TalUt[] => tal.map((t) => ({ ...t, om: kallrad(ut.svar[t.kalla.anrop - 1], t.kalla.falt), ...kallaTillagg(ut.svar[t.kalla.anrop - 1], t.kalla.falt) }));
+
+  // UTKASTET: svaret visas mening för mening medan det skrivs, med talen insatta som i slutsvaret. En mening släpps
+  // först när den är hel och inte har ett tal utan källa eller en halv hänvisning (`slappUtkast`). `visat` är sant när
+  // något syns och inte har dragits tillbaka. Personen som slutat lyssna får ingenting.
+  let visat = false;
+  let sistText = -Infinity;
+  function dragTillbaka() {
+    if (!visat || avslutad) return;
+    visat = false;
+    if (!i.avbruten?.aborted) i.sand({ h: "text", text: "", tal: [] });
+  }
+  /** En lyssnare för ett varv. Den räknar aldrig kostnad och kan aldrig fälla svaret: allt den gör är att visa. */
+  const utkastLyssnare = () => {
+    let tyst = false;
+    let provat = 0;
+    const pa = (_h: unknown, sahittills: unknown) => {
+      if (tyst || avslutad) return;
+      try {
+        const snap = sahittills as { content?: unknown; model?: unknown } | null;
+        const innehall = snap?.content;
+        if (!Array.isArray(innehall)) return;
+        // En reservmodell tar över (ett byte i strömmen, eller en annan modell från början), eller varvet slutar i ett
+        // verktyg: det som visats var inte svaret.
+        const annanModell = typeof snap?.model === "string" && !!snap.model && !sammaModell(snap.model, modell);
+        if (annanModell || innehall.some((b) => (b as Block | null)?.type === "fallback" || (b as Block | null)?.type === "tool_use")) {
+          tyst = true;
+          dragTillbaka();
+          return;
+        }
+        if (i.avbruten?.aborted) return;
+        if (klocka() - sistText < UTKAST_MS) return;
+        // Samma text som slutsvaret byggs av: textblocken i ordning, med radbrytning emellan.
+        const text = (innehall as Block[]).flatMap((x) => (x?.type === "text" && x.text ? [x.text] : [])).join("\n").trimStart();
+        const s = slappUtkast(text, ut.svar, provat);
+        provat = s.provat;
+        const u = s.utkast;
+        if (!u) return;
+        sistText = klocka();
+        visat = true;
+        if (ut.tider.forstaText === null) ut.tider.forstaText = Math.max(0, sistText - borjan);
+        sand({ h: "text", text: u.text, tal: talUt(u.tal) });
+      } catch (e) {
+        tyst = true;
+        console.error(`chatt: utkastet visades inte: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    };
+    return { pa, stang: () => { tyst = true; } };
+  };
+
   const stoppad = (): boolean => {
     if (!i.avbruten?.aborted) return false;
     ut.stopp = "avbruten";
@@ -183,9 +268,12 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
       // Anropet avbryts när fristen är slut, också mellan SDK:ns egna omförsök.
       const avbryt = new AbortController();
       const timer = setTimeout(() => avbryt.abort(), Math.max(0, kvar()));
+      // Varvet före första verktygssvaret visas inte medan det skrivs: dess text är nästan alltid inledningen till ett verktyg.
+      const lyssnare = ut.anrop.length > 0 ? utkastLyssnare() : null;
+      const aiStart = klocka();
       let m: Meddelande;
       try {
-        m = (await klient.beta.messages
+        const strom = klient.beta.messages
           .stream({
             model: modell,
             max_tokens: MAX_UT,
@@ -195,8 +283,15 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
             output_config: { effort: EFFORT },
             messages: turer,
             ...(harReserv(modell) ? { fallbacks: "default", betas: [FALLBACK_BETA] } : {}),
-          }, { signal: avbryt.signal })
-          .finalMessage()) as Meddelande;
+          }, { signal: avbryt.signal });
+        if (lyssnare && typeof strom.on === "function") {
+          try {
+            strom.on("streamEvent", lyssnare.pa);
+          } catch {
+            // Utan lyssnare kommer svaret i ett stycke, som förut.
+          }
+        }
+        m = (await strom.finalMessage()) as Meddelande;
       } catch (e) {
         if (avbryt.signal.aborted) {
           ut.ofullstandig = true;
@@ -205,6 +300,8 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
         throw e;
       } finally {
         clearTimeout(timer);
+        lyssnare?.stang();
+        ut.tider.ai.push(Math.max(0, klocka() - aiStart));
       }
 
       // Tog en reservmodell över står varje försök för sig, med sin modell och sina token. Alla räknas.
@@ -220,18 +317,22 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
       ut.stopp = m.stop_reason ?? "okant";
       // Efter ett byte skickas bara det tillbaka som Anthropic tar emot, och bara verktygen efter bytet körs.
       const innehall = efterReserv(m.content);
+      if (innehall !== m.content || !sammaModell(svarade, modell)) dragTillbaka();
 
       if (ut.stopp === "refusal") {
-        sand({ h: "avbojt", text: "Modellen avböjde att svara på det här. Jag svarar som sökrutan i stället." });
+        dragTillbaka();
+        sand({ h: "avbojt", text: BESKED_AVBOJT });
         return ut;
       }
       if (ut.stopp === "tool_use" || ut.stopp === "pause_turn") {
+        dragTillbaka();
         turer.push({ role: "assistant", content: innehall });
         if (ut.stopp === "pause_turn") continue;
         if (stoppad()) return ut;
         // Numren delas ut i Claudes ordning innan något körs, så att `{{t:N.fält}}` pekar dit den gjorde. Verktygen körs
         // samtidigt (källorna läses en gång per fråga, så två verktyg på samma källa läser den en gång), och svaren läggs
         // tillbaka i Claudes ordning: Claude ser exakt det den hade sett om de körts ett i taget.
+        const verktygStart = klocka();
         const jobb = innehall.flatMap((block) => {
           if (block.type !== "tool_use") return [];
           const namn = String(block.name ?? "");
@@ -239,9 +340,10 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
           ut.anrop.push({ namn, input });
           const nr = ut.anrop.length;
           sand({ h: "hamtar", text: hamtarText(namn, input), anrop: nr, verktyg: namn });
-          return [{ id: block.id, namn, nr, r: ettVerktyg(namn, input, nr) }];
+          return [{ id: block.id, namn, input, nr, r: ettVerktyg(namn, input, nr) }];
         });
         const klara = await Promise.all(jobb.map((j) => j.r));
+        ut.tider.verktyg.push(Math.max(0, klocka() - verktygStart));
         const resultat: unknown[] = [];
         jobb.forEach((j, n) => {
           const r = klara[n];
@@ -250,8 +352,10 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
           // något väntar på Godkänn som personen inte ser.
           const steg = r.kort ? JSON.stringify(r.kort.steg) : "";
           if (r.kort && !ut.kort.some((k) => JSON.stringify(k.steg) === steg)) {
-            if (ut.kort.length < KORT_MAX) ut.kort.push(r.kort);
-            else svar = { _verktyg: j.namn, _anrop: j.nr, fel: "Svaret har redan så många kort som ryms, så det här kortet visas inte. Be personen godkänna de som visas och fråga sedan igen." };
+            if (ut.kort.length < KORT_MAX) {
+              ut.kort.push({ ...r.kort, anrop: j.nr, verktyg: j.namn, input: j.input });
+              ut.anrop[j.nr - 1].kort = true;
+            } else svar = { _verktyg: j.namn, _anrop: j.nr, fel: "Svaret har redan så många kort som ryms, så det här kortet visas inte. Be personen godkänna de som visas och fråga sedan igen." };
           }
           ut.svar.push(svar);
           resultat.push({ type: "tool_result", tool_use_id: j.id, content: JSON.stringify(svar) });
@@ -271,6 +375,9 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
       }
       const insatt = sattInTal(text, ut.svar);
       // Ett tal utan källa: Claude får skriva om svaret en gång, om det finns ett varv kvar. Personen ser bara det sista.
+      // Utkastet dras inte tillbaka här (planen A1-1): det står kvar, nedtonat av klienten under "Kontrollerar talen i
+      // svaret.", tills nästa utkast eller `svar` ersätter det. Varje mening i det hade redan sina källor, och personen
+      // kan ha läst den. Tar en reservmodell över, slutar omskrivningen i ett verktyg eller faller den, dras det tillbaka då.
       if (insatt.obelagda > 0 && !ut.omskrivet && varv + 1 < MAX_VARV) {
         ut.omskrivet = true;
         turer.push({ role: "assistant", content: innehall });
@@ -283,7 +390,30 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
       ut.ren = utanMarken(insatt.text);
       ut.tal = insatt.tal;
       ut.obelagda = insatt.obelagda;
-      sand({ h: "svar", text: insatt.text, tal: insatt.tal.map((t) => ({ ...t, om: kallrad(ut.svar[t.kalla.anrop - 1], t.kalla.falt) })), obelagda: insatt.obelagda, kalla: kallaFor(ut.svar), kort: ut.kort });
+      // Följdfrågorna byggs av regler ur verktygen som svarade. Kretsen är redan läst av samma verktyg (en gång per fråga).
+      let nasta: Nasta[] = [];
+      try {
+        const k = ut.anrop.some((a) => a.ok === true && (a.namn === "las_matt" || a.namn === "las_affarer")) ? await ctx.kallor.krets() : undefined;
+        nasta = nastaFragor({ anrop: ut.anrop, fraga: i.fraga ?? "", idag: ctx.idag, laget: k === null || (Array.isArray(k) && k.some((id) => id !== ctx.mig)) });
+      } catch {
+        nasta = [];
+      }
+      // Varje läsning som svarade blir en källa som går att öppna. Korten är inga källor.
+      const kallor: KallaUt[] = [];
+      ut.anrop.forEach((a, n) => {
+        const s = ut.svar[n];
+        if (a.ok !== true || !s || typeof s.fel === "string" || s._egnaOrd === true || a.namn.startsWith("forbered_") || kallor.some((k) => k.verktyg === a.namn)) return;
+        kallor.push({ verktyg: a.namn, anrop: n + 1, text: kallrad(s) });
+      });
+      // Underlaget får rubriken ur verktygets egen källrad, samma text som under talet.
+      const rader = underlagUr(ut.svar, insatt.tal);
+      const underlag = rader ? { ...rader, rubrik: kallrad(ut.svar[rader.anrop - 1]) } : null;
+      ut.varv = ut.tider.ai.length;
+      ut.tider.totalt = Math.max(0, klocka() - borjan);
+      sand({
+        h: "svar", text: insatt.text, tal: talUt(insatt.tal), obelagda: insatt.obelagda, kalla: kallaFor(ut.svar), kallor, kort: ut.kort,
+        nasta, ja: jaFraga(insatt.text, ut.kort.length), ...(underlag ? { underlag } : {}), varv: ut.varv, tider: { ...ut.tider, ai: [...ut.tider.ai], verktyg: [...ut.tider.verktyg] },
+      });
       return ut;
     }
   } catch (e) {
@@ -299,6 +429,9 @@ export async function korSamtal(i: { klient: Klient; modell: string; turer: Tur[
     console.error(`chatt: ${e instanceof Error ? e.message : String(e)}`);
     sand({ h: "fel", text: f.text, kod: f.kod });
     return ut;
+  } finally {
+    ut.varv = ut.tider.ai.length;
+    ut.tider.totalt = Math.max(0, klocka() - borjan);
   }
 }
 

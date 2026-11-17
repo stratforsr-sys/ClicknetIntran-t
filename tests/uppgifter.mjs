@@ -571,5 +571,207 @@ rubrik("Nytt sedan sist (0301) — det andra gjort efter min markering");
   ok("tecken i namnet ar inget monster", t("krets", "la till A.B (x)", null, "A.B (x)").text === "la till dig");
 }
 
+// =============================================================================
+// Rutten /nav2/uppgifter: Min dag (task_day) och tidsuppskattningen
+// =============================================================================
+//
+// Rutten körs på riktigt. Inloggningen, databasen och repots actions är attrapper (samma mönster som
+// tests/forslag-rutt.mjs). Attrappen för task_day håller 0092:s regler: nyckeln (person, dag) och checken att en
+// rad har planned_at eller closed_at. Det är den checken som gjorde att en oplanerad avslutad dag inte gick att öppna.
+{
+  const { registerHooks } = await import("node:module");
+  const { existsSync } = await import("node:fs");
+  const { fileURLToPath, pathToFileURL } = await import("node:url");
+  const { join } = await import("node:path");
+  const rot = join(fileURLToPath(import.meta.url), "..", "..");
+  const stubb = (kod) => ({ url: "data:text/javascript," + encodeURIComponent(kod), shortCircuit: true });
+  const ACTIONS = ["andraProjekt", "andraUppgift", "arkiveraProjekt", "ateroppna", "avbryt", "avslutaSerie", "bjudIn", "bjudInProjekt", "koppla", "lamnaUppgift", "markeraProjektchattLast", "skapaProjekt", "skrivProjektmeddelande", "taBortKoppling", "taBortProjektmedlem", "bocka", "godkann", "kommentera", "paborja", "planera", "returnera", "sattForstaSteg", "skapaUppgift", "taBortMedlem", "tilldela"];
+  // Varje action bokför sitt formulär och svarar som repots actions gör (UppgiftState).
+  const actionStubb = (namn) => namn.map((n) => `export const ${n} = async (_p, f) => { (globalThis.__upg.anrop ??= []).push({ namn: ${JSON.stringify(n)}, falt: Object.fromEntries(f.entries()) }); return { ok: "Planerad." }; };`).join("\n");
+  registerHooks({
+    resolve(spec, ctx, nasta) {
+      if (spec === "server-only") return stubb("");
+      if (spec === "next/server") return stubb("export const NextResponse = { json: (d, i) => new Response(JSON.stringify(d), { status: i?.status ?? 200, headers: { 'content-type': 'application/json' } }) };");
+      if (spec === "next/cache") return stubb("export const revalidatePath = () => {}; export const revalidateTag = () => {};");
+      if (spec === "@/lib/auth") return stubb("export const getCurrentUser = async () => globalThis.__upg.user; export const fullName = (p) => `${p.first_name} ${p.last_name}`;");
+      if (spec === "@/lib/supabase/server") return stubb("export const supabaseServer = async () => globalThis.__upg.db; export const supabaseAdmin = () => globalThis.__upg.db;");
+      if (spec === "@/lib/notishandelse-server") return stubb("export const notifiera = async () => {};");
+      if (spec === "@/app/(app)/uppgifter/actions") return stubb(actionStubb(ACTIONS));
+      if (spec === "@/app/(app)/uppgifter/mallar/actions") return stubb(actionStubb(["andraUppgiftsmall", "anvandUppgiftsmall", "arkiveraUppgiftsmall", "skapaUppgiftsmall"]));
+      if (spec === "@/app/(app)/uppgifter/genomgang/actions") return stubb(actionStubb(["slutforGenomgang"]));
+      if (spec.startsWith("@/")) {
+        const bas = join(rot, "src", spec.slice(2));
+        const fil = [".ts", ".tsx", "/index.ts"].map((x) => bas + x).find((x) => existsSync(x)) ?? bas + ".ts";
+        return { url: pathToFileURL(fil).href, shortCircuit: true };
+      }
+      if ((spec.startsWith("./") || spec.startsWith("../")) && !/\.[cm]?[jt]sx?$/.test(spec) && ctx.parentURL?.startsWith("file:")) {
+        const fil = [".ts", ".tsx", "/index.ts"].map((x) => fileURLToPath(new URL(spec, ctx.parentURL)) + x).find((x) => existsSync(x));
+        if (fil) return { url: pathToFileURL(fil).href, shortCircuit: true };
+      }
+      return nasta(spec, ctx);
+    },
+  });
+
+  /**
+   * supabase-js i liten skala: select, eq, is, maybeSingle, update, delete, insert och upsert, svaret som { data, error }.
+   * `.select()` efter en skrivning ger de rader som träffades, som supabase-js (Prefer: return=representation).
+   * `tabeller["<tabell>!efterLas"]`: körs en gång när första läsningen av tabellen är klar, som en annan flik som hinner
+   * skriva mellan rutans läsning och dess skrivning.
+   */
+  function attrapp(tabeller) {
+    const skrivningar = [];
+    const from = (t) => {
+      let op = "select", varde = null, enda = false, konflikt = null, valj = false;
+      const filter = [];
+      const rader = () => (tabeller[t] ??= []);
+      const traffar = () => rader().filter((r) => filter.every((f) => f(r)));
+      const giltig = (r) => t !== "task_day" || r.planned_at != null || r.closed_at != null;
+      const kor = () => {
+        if (op === "select") {
+          if (tabeller[`${t}!lasfel`]) return { data: null, error: { message: tabeller[`${t}!lasfel`] } };
+          const d = traffar().map((r) => ({ ...r }));
+          const efter = tabeller[`${t}!efterLas`];
+          if (efter) { delete tabeller[`${t}!efterLas`]; efter(tabeller); }
+          return enda ? { data: d[0] ?? null, error: null } : { data: d, error: null };
+        }
+        skrivningar.push({ op, t, varde });
+        if (tabeller[`${t}!fel`]) return { data: null, error: { message: tabeller[`${t}!fel`] } };
+        if (op === "update") {
+          const efter = traffar().map((r) => ({ r, ny: { ...r, ...varde } }));
+          if (!efter.every((x) => giltig(x.ny))) return { data: null, error: { code: "23514", message: "task_day_check" } };
+          for (const x of efter) Object.assign(x.r, varde);
+          return { data: valj ? efter.map((x) => ({ ...x.r })) : null, error: null };
+        }
+        if (op === "delete") {
+          const bort = new Set(traffar());
+          tabeller[t] = rader().filter((r) => !bort.has(r));
+          return { data: valj ? [...bort] : null, error: null };
+        }
+        const nyckel = (r) => (konflikt ?? "employee_id,dag").split(",").map((k) => r[k]).join("|");
+        const fanns = rader().find((r) => nyckel(r) === nyckel(varde));
+        if (fanns && op === "insert") return { data: null, error: { code: "23505", message: "duplicate key" } };
+        const ny = fanns ? { ...fanns, ...varde } : { planned_at: null, closed_at: null, ...varde };
+        if (!giltig(ny)) return { data: null, error: { code: "23514", message: "task_day_check" } };
+        if (fanns) Object.assign(fanns, varde);
+        else rader().push(ny);
+        return { data: null, error: null };
+      };
+      const q = {
+        select: () => { if (op !== "select") valj = true; return q; },
+        eq: (k, v) => { filter.push((r) => r[k] === v); return q; },
+        is: (k, v) => { filter.push((r) => (r[k] ?? null) === v); return q; },
+        not: (k, _o, v) => { filter.push((r) => (r[k] ?? null) !== v); return q; },
+        update: (v) => { op = "update"; varde = v; return q; },
+        delete: () => { op = "delete"; return q; },
+        insert: (v) => { op = "insert"; varde = v; return q; },
+        upsert: (v, o) => { op = "upsert"; varde = v; konflikt = o?.onConflict ?? null; return q; },
+        maybeSingle: () => { enda = true; return Promise.resolve(kor()); },
+        then: (a, b) => Promise.resolve(kor()).then(a, b),
+      };
+      return q;
+    };
+    return { skrivningar, from };
+  }
+
+  const { svensktDatum } = await import("../src/lib/klocka.ts");
+  const { POST } = await import("../src/app/nav2/uppgifter/route.ts");
+  const JAG = "a0000000-0000-4000-8000-000000000001", ANNAN = "a0000000-0000-4000-8000-000000000002";
+  const UPPG = "b0000000-0000-4000-8000-000000000001", UTAN = "b0000000-0000-4000-8000-000000000002";
+  const idag = svensktDatum();
+  const anropa = async (kropp, tabeller) => {
+    const db = attrapp(tabeller);
+    globalThis.__upg = { db, user: { employee: { id: JAG, first_name: "Prov", last_name: "Person" }, roles: ["salesperson"], permissions: [] }, anrop: [] };
+    const res = await POST(new Request("https://nav.test/nav2/uppgifter", { method: "POST", headers: { origin: "https://nav.test", "content-type": "application/json" }, body: JSON.stringify(kropp) }));
+    return { status: res.status, data: await res.json(), db, tabeller, anrop: globalThis.__upg.anrop };
+  };
+  const minDag = (t) => (t.task_day ?? []).find((r) => r.employee_id === JAG && r.dag === idag) ?? null;
+  const annansDag = { employee_id: ANNAN, dag: idag, planned_at: null, closed_at: "2026-11-17T16:00:00Z" };
+
+  rubrik("Min dag: Öppna dagen igen gör det den säger (urtavlan-3)");
+  {
+    const r = await anropa({ handling: "dag", vad: "oppna" }, { task_day: [{ employee_id: JAG, dag: idag, planned_at: null, closed_at: "2026-11-17T16:00:00Z" }, { ...annansDag }] });
+    ok("en dag som avslutades utan plan går att öppna: raden tas bort, dagen är som innan", r.status === 200 && r.data.ok === "Dagen är öppen igen." && minDag(r.tabeller) === null, JSON.stringify(r.data));
+    ok("en annans dag rörs inte", r.tabeller.task_day.some((x) => x.employee_id === ANNAN && x.closed_at), JSON.stringify(r.tabeller.task_day));
+    const p = await anropa({ handling: "dag", vad: "oppna" }, { task_day: [{ employee_id: JAG, dag: idag, planned_at: "2026-11-17T07:30:00Z", closed_at: "2026-11-17T16:00:00Z" }] });
+    ok("en planerad och avslutad dag öppnas, och planen står kvar", p.data.ok === "Dagen är öppen igen." && minDag(p.tabeller)?.closed_at === null && minDag(p.tabeller)?.planned_at === "2026-11-17T07:30:00Z", JSON.stringify(minDag(p.tabeller)));
+    const o = await anropa({ handling: "dag", vad: "oppna" }, { task_day: [{ employee_id: JAG, dag: idag, planned_at: "2026-11-17T07:30:00Z", closed_at: null }] });
+    ok("en dag som inte är avslutad: svaret säger det, och ingenting skrivs", o.status === 200 && o.data.ok === "Dagen var inte avslutad." && o.db.skrivningar.length === 0, JSON.stringify(o.data));
+    const ingen = await anropa({ handling: "dag", vad: "oppna" }, { task_day: [] });
+    ok("ingen rad alls: samma ärliga svar", ingen.data.ok === "Dagen var inte avslutad." && ingen.db.skrivningar.length === 0, JSON.stringify(ingen.data));
+    const fel = await anropa({ handling: "dag", vad: "oppna" }, { task_day: [{ employee_id: JAG, dag: idag, planned_at: null, closed_at: "2026-11-17T16:00:00Z" }], "task_day!fel": "nere" });
+    ok("skrivningen faller: 500 och fel, inte 'öppen igen'", fel.status === 500 && fel.data.fel === "Dagen gick inte att öppna. Försök igen." && !fel.data.ok, JSON.stringify(fel.data));
+    const lasfel = await anropa({ handling: "dag", vad: "oppna" }, { task_day: [], "task_day!lasfel": "nere" });
+    ok("läsningen faller: 500 och fel", lasfel.status === 500 && lasfel.data.fel === "Dagen gick inte att läsa. Försök igen.", JSON.stringify(lasfel.data));
+    // Två flikar: rutan läser en oplanerad avslutad dag, och en annan flik planerar dagen innan borttagningen. Då tar
+    // borttagningen (planned_at is null) ingen rad. Förut svarade rutan ändå "Dagen är öppen igen." och closed_at stod kvar.
+    const P = "2026-11-17T08:00:00Z";
+    const kapp = await anropa({ handling: "dag", vad: "oppna" }, {
+      task_day: [{ employee_id: JAG, dag: idag, planned_at: null, closed_at: "2026-11-17T16:00:00Z" }],
+      "task_day!efterLas": (t) => { t.task_day.find((r) => r.employee_id === JAG).planned_at = P; },
+    });
+    ok("en annan flik planerar mellan läsningen och borttagningen: dagen öppnas ändå, och planen står kvar", kapp.status === 200 && kapp.data.ok === "Dagen är öppen igen." && minDag(kapp.tabeller)?.closed_at === null && minDag(kapp.tabeller)?.planned_at === P, JSON.stringify({ svar: kapp.data, rad: minDag(kapp.tabeller) }));
+    // En annan flik hann öppna den oplanerade dagen först (raden är borta): dagen är öppen, och inget fel.
+    const redan = await anropa({ handling: "dag", vad: "oppna" }, {
+      task_day: [{ employee_id: JAG, dag: idag, planned_at: null, closed_at: "2026-11-17T16:00:00Z" }],
+      "task_day!efterLas": (t) => { t.task_day = t.task_day.filter((r) => r.employee_id !== JAG); },
+    });
+    ok("en annan flik öppnade dagen först: 200, ingen rad, och dagen är öppen", redan.status === 200 && redan.data.ok === "Dagen är öppen igen." && minDag(redan.tabeller) === null, JSON.stringify(redan.data));
+  }
+
+  rubrik("Rutten: en kropp som inte är ett objekt");
+  {
+    for (const kropp of [null, [], "dag", 5]) {
+      const r = await anropa(kropp, { task_day: [] });
+      ok(`${JSON.stringify(kropp)}: 400 Ogiltig begäran., inget skrivs`, r.status === 400 && r.data.fel === "Ogiltig begäran." && r.db.skrivningar.length === 0, JSON.stringify({ status: r.status, data: r.data }));
+    }
+  }
+
+  rubrik("Min dag: planera och avsluta skriver bara sin kolumn");
+  {
+    const a = await anropa({ handling: "dag", vad: "avsluta" }, { task_day: [] });
+    ok("avsluta en oplanerad dag: en rad med bara closed_at", a.data.ok === "Dagen är avslutad. Ha en bra kväll." && minDag(a.tabeller)?.closed_at && minDag(a.tabeller)?.planned_at === null, JSON.stringify(minDag(a.tabeller)));
+    const ap = await anropa({ handling: "dag", vad: "avsluta" }, { task_day: [{ employee_id: JAG, dag: idag, planned_at: "2026-11-17T07:30:00Z", closed_at: null }] });
+    ok("avsluta en planerad dag: planen står kvar", minDag(ap.tabeller)?.planned_at === "2026-11-17T07:30:00Z" && !!minDag(ap.tabeller)?.closed_at, JSON.stringify(minDag(ap.tabeller)));
+    const pl = await anropa({ handling: "dag", vad: "planera" }, { task_day: [] });
+    ok("planera: en rad med planned_at", pl.data.ok === "Dagen är planerad." && !!minDag(pl.tabeller)?.planned_at && minDag(pl.tabeller)?.closed_at === null, JSON.stringify(minDag(pl.tabeller)));
+    const tva = await anropa({ handling: "dag", vad: "avsluta" }, { task_day: [{ employee_id: JAG, dag: idag, planned_at: null, closed_at: "2026-11-17T16:00:00Z" }] });
+    ok("avsluta två gånger (dubbelklick) krockar inte på nyckeln", tva.status === 200 && tva.tabeller.task_day.length === 1, JSON.stringify(tva.data));
+    const fel = await anropa({ handling: "dag", vad: "avsluta" }, { task_day: [], "task_day!fel": "nere" });
+    ok("skrivningen faller: 500 och fel, inte 'avslutad'", fel.status === 500 && fel.data.fel === "Dagen gick inte att avsluta. Försök igen.", JSON.stringify(fel.data));
+    const okand = await anropa({ handling: "dag", vad: "radera" }, { task_day: [] });
+    ok("en okänd handling: 400, inget skrivs", okand.status === 400 && okand.db.skrivningar.length === 0);
+  }
+
+  rubrik("Tidsuppskattningen: planera med est, utan att röra dag och tid");
+  {
+    const task = (id, o = {}) => ({ id, title: "Ring tillbaka", priority: 2, description_md: null, due_date: "2026-11-20", due_time: "09:00", starts_on: null, estimate_minutes: null, project_id: null, assignee_id: JAG, created_by: JAG, ...o });
+    const r = await anropa({ handling: "planera", id: UPPG, est: 30 }, { task: [task(UPPG)] });
+    const f = r.anrop.find((x) => x.namn === "planera")?.falt;
+    ok("est: 30 går till repots planera som estimate_minutes, och dag och tid är de som redan gäller", r.status === 200 && f?.estimate_minutes === "30" && f?.due_date === "2026-11-20" && f?.due_time === "09:00" && f?.id === UPPG, JSON.stringify({ svar: r.data, falt: f }));
+    const n = await anropa({ handling: "planera", id: UPPG, est: null }, { task: [task(UPPG, { estimate_minutes: 45 })] });
+    // Repots planera läser `minuter ? Number(minuter) : null`: ett tomt fält är ingen uppskattning.
+    ok("est: null tar bort uppskattningen (tomt fält till planera)", n.anrop.find((x) => x.namn === "planera")?.falt?.estimate_minutes === "", JSON.stringify(n.anrop));
+    const u = await anropa({ handling: "planera", id: UTAN, est: 15 }, { task: [task(UTAN, { due_date: null, due_time: null })] });
+    const fu = u.anrop.find((x) => x.namn === "planera")?.falt;
+    ok("en uppgift utan dag får uppskattningen och förblir utan dag", fu?.estimate_minutes === "15" && !("due_date" in fu && fu.due_date), JSON.stringify(fu));
+    const borta = await anropa({ handling: "planera", id: UPPG, est: 30 }, { task: [] });
+    ok("en uppgift den inloggade inte ser (RLS): 404, planera anropas inte", borta.status === 404 && borta.anrop.length === 0, JSON.stringify(borta.data));
+
+    // Kvittot säger det som ändrades. Repots "Datumet togs bort." gäller datumet, och ingen dag togs bort här.
+    ok("bara uppskattningen, uppgiften har en dag: 'Uppskattningen är sparad.'", r.data.ok === "Uppskattningen är sparad." && r.data.id === null, JSON.stringify(r.data));
+    ok("bara uppskattningen, uppgiften saknar dag: 'Uppskattningen är sparad.', aldrig 'Datumet togs bort.'", u.status === 200 && u.data.ok === "Uppskattningen är sparad.", JSON.stringify(u.data));
+    ok("est: null: 'Uppskattningen är borttagen.'", n.status === 200 && n.data.ok === "Uppskattningen är borttagen.", JSON.stringify(n.data));
+    const medDag = await anropa({ handling: "planera", id: UPPG, dag: "2026-11-21", est: 30 }, { task: [task(UPPG)] });
+    ok("med dag: repots kvitto som förut ('Planerad.')", medDag.status === 200 && medDag.data.ok === "Planerad." && medDag.anrop.find((x) => x.namn === "planera")?.falt?.due_date === "2026-11-21", JSON.stringify(medDag.data));
+    const somText = await anropa({ handling: "planera", id: UPPG, est: "45" }, { task: [task(UPPG)] });
+    ok("ett tal som text ('45') godtas, som förut", somText.status === 200 && somText.anrop.find((x) => x.namn === "planera")?.falt?.estimate_minutes === "45", JSON.stringify(somText.data));
+    // En uppskattning som inte är hela minuter 1–1440 (0054) nekas. Förut blev "abc" NaN, och uppskattningen togs bort i tysthet.
+    for (const est of ["abc", 0, -15, 1441, 30.5, true, {}]) {
+      const x = await anropa({ handling: "planera", id: UPPG, est }, { task: [task(UPPG, { estimate_minutes: 45 })] });
+      ok(`est ${JSON.stringify(est)}: 400 Okänd uppskattning., planera anropas inte`, x.status === 400 && x.data.fel === "Okänd uppskattning." && x.anrop.length === 0, JSON.stringify(x.data));
+    }
+  }
+}
+
 console.log(fel === 0 ? "\n\x1b[32mAlla prov gick igenom.\x1b[0m" : `\n\x1b[31m${fel} prov föll.\x1b[0m`);
 process.exit(fel === 0 ? 0 : 1);

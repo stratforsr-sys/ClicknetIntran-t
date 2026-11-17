@@ -73,6 +73,9 @@ const LAG = "a1000000-0000-4000-8000-000000000001";
 /**
  * En attrapp av supabase-js. Läsningar svarar ur `tabeller` med de filter rutten sätter (eq, in, is, gte, lte, gt,
  * lt). Som REST-lagret kapar den ett svar vid 1000 rader utan att säga det: bara `range` ger resten.
+ * `tabeller["<tabell>!lasfel"]` gör att varje läsning av tabellen svarar som supabase-js vid ett fel: data null och
+ * `error`, utan att kasta. `tabeller["<tabell>!lasfelSidvis"]` gör samma sak bara för läsningar sida för sida (`range`),
+ * så att lagets dömda rader (dommaRader) kan falla medan förslaget självt läses.
  * Skrivningar bokförs med raden, och rpc-anrop svaras av `rpc` (ett okänt anrop ger fel, så att inget går
  * igenom av en slump).
  */
@@ -86,6 +89,8 @@ function attrapp(tabeller, rpc = {}) {
     const filter = [];
     const svaret = () => {
       if (skriver) return { data: skriver.rad ? [{ id: "ny", ...skriver.rad }] : null, error: skriver.fel ?? null };
+      if (tabeller[`${tabell}!lasfel`]) return { data: null, error: { message: tabeller[`${tabell}!lasfel`] }, count: null };
+      if (omfang && tabeller[`${tabell}!lasfelSidvis`]) return { data: null, error: { message: tabeller[`${tabell}!lasfelSidvis`] }, count: null };
       const rader = (tabeller[tabell] ?? []).filter((r) => filter.every((f) => f(r)));
       const sida = omfang ? rader.slice(omfang[0], Math.min(omfang[1] + 1, omfang[0] + 1000)) : rader.slice(0, 1000);
       return en ? { data: rader[0] ?? null, error: null } : { data: sida, error: null, count: rader.length };
@@ -161,14 +166,17 @@ const tabeller = (o = {}) => ({
 const { GET, POST } = await import("../src/app/nav2/forslag/route.ts");
 
 async function anropa(roller, id, kropp, o = {}) {
-  const db = attrapp(tabeller(o), {
+  const rpcer = {
     nav_forslag_valj: () => "f1000000-0000-4000-8000-000000000001",
     nav_forslag_angra: () => "f1000000-0000-4000-8000-000000000001",
     mote_bekrafta_overta: () => ({ task: UPPG, fran: B, ny: false }),
     mote_bekrafta_aterlamna: () => true,
     mote_statkrets: () => (roller.some((r) => ["sales_manager", "ceo", "admin"].includes(r)) ? null : roller.includes("team_lead") ? [id, H, B] : [id]),
     ...(o.rpc ?? {}),
-  });
+  };
+  // `rpcFel`: de anropen svarar med ett fel, som supabase-js gör när databasen säger nej (attrappens okända anrop).
+  for (const k of o.rpcFel ?? []) delete rpcer[k];
+  const db = attrapp(tabeller(o), rpcer);
   globalThis.__rutt = { db, user: { employee: { id, first_name: "Prov", last_name: "Person", team_id: null }, roles: roller, permissions: [] } };
   const req = kropp === null
     ? new Request(`https://nav.test/nav2/forslag?${o.fraga ?? ""}`, { headers: { origin: "https://nav.test" } })
@@ -339,8 +347,6 @@ rubrik("Inställningarna");
 
 rubrik("Läsningarna");
 {
-  const facit = await anropa(["salesperson"], X, null, { fraga: "las=facit" });
-  ok("lagets facit är inte säljarens", facit.status === 403, visa(facit));
   const okand = await anropa(["admin"], ADM, null, { fraga: "las=allt" });
   ok("en okänd läsning: 400", okand.status === 400, visa(okand));
   const ett = await anropa(["salesperson"], H, null, { fraga: `las=forslag&id=${F}` });
@@ -349,6 +355,156 @@ rubrik("Läsningarna");
   ok("andra raden är det Nav trodde när raden skapades", ett.data?.forslag?.rader?.[1]?.startsWith("Hittills har 1 av 4 obekräftade möten hållits."), ett.data?.forslag?.rader?.[1]);
   ok("källraden säger hur texten kom till", ett.data?.forslag?.kalla === "Räknat av regler", ett.data?.forslag?.kalla);
   ok("läsningen skriver ingenting", ett.skrivningar.length === 0, ett.lista);
+}
+
+rubrik("Navs facit: laget för den som leder, de egna valen för alla andra");
+{
+  // Dömda förslag om obekräftade möten. Attrappen har ingen RLS: den svarar med alla rader som klarar rutternas
+  // egna filter. Det är just det som prövas: den som inte leder ska få sina rader genom ett uttryckligt filter.
+  const domd = (n, om, val, utfall) => forslag({
+    id: `e1000000-0000-4000-8000-0000000000${n}`, nyckel: `c1000000-0000-4000-8000-0000000000${n}@2026-11-${n}@${om}`, om, utgar: "2026-11-20T08:00:00Z",
+    beslut_id: `f2000000-0000-4000-8000-0000000000${n}`, beslut: { val }, beslut_av: om, beslut_nar: "2026-11-12T09:00:00Z",
+    dom: { utfall, bekraftat: false, matt: "moten.hallna-av-alla", version: 1 }, dom_nar: "2026-11-14T02:00:00Z",
+  });
+  const rader = [
+    domd("10", H, "ringer-sjalv", "hallet"), domd("11", H, "lat-sta", "uteblev"), domd("12", H, "ingen", "hallet"),
+    domd("13", B, "ringer-sjalv", "hallet"), domd("14", B, "ringer-sjalv", "hallet"),
+    domd("15", TL, "lat-sta", "hallet"),
+    domd("16", ADM, "ringer-sjalv", "uteblev"),
+  ];
+  const extra = { nav_forslag_lage: rader };
+  const { facitPerVal, lasForslagInst } = await import("../src/lib/nav2/forslagforma.ts");
+  const { facitRader } = await import("../src/lib/nav2/forslag.ts");
+  const { textFacit } = await import("../src/lib/nav2/hemtext.ts");
+  const { lasInstallningar, lokalDag } = await import("../src/lib/nav2/motesflode.ts");
+  const grans = lasForslagInst([]).gransFacit;
+  // "Data per": dagen i företagets tidszon (förvalet, eftersom attrappen inte har några inställningar).
+  const idagForetag = lokalDag(new Date(), lasInstallningar([]).tidszon);
+  const utanDom = (d) => !("dom" in (d ?? {})) && !/slump|utslag|skillnaden var/i.test(JSON.stringify(d ?? {}));
+
+  const salj = await anropa(["salesperson"], H, null, { fraga: "las=facit", extra });
+  const sf = salj.data?.facit;
+  ok("en säljare får 200 med vem: dig (förut 403: funktion 5 ger säljaren de egna valen)", salj.status === 200 && sf?.vem === "dig", visa(salj));
+  ok("säljaren får bara sina egna rader, fast attrappen släpper igenom alla (uttryckligt filter, inte RLS ensam)",
+    JSON.stringify(sf?.per) === JSON.stringify({ "ringer-sjalv": { n: 1, av: 1 }, flytta: { n: 0, av: 0 }, "lat-sta": { n: 0, av: 1 }, ingen: { n: 1, av: 1 } }), JSON.stringify(sf?.per));
+  ok("säljarens svar bär ingen dom: inget dom-fält, ingen gissning, inget om slump", utanDom(sf) && sf?.trodde === null, JSON.stringify(sf));
+  ok("säljarens text räknar alla tre valen och har förbehållet",
+    sf?.text === "Dina val: ringt själv 1 av 1 hölls, låt stå 0 av 1, ingen valde 1 av 1. Det här är bara dina möten, så jag säger inte vilket val som fungerar bäst. Siffrorna visar inte att samtalet gjorde skillnaden.", sf?.text);
+  ok("källraden står med", sf?.kalla === "Räknat av regler");
+  ok("läsningen skriver ingenting", salj.skrivningar.length === 0, salj.lista);
+
+  const tom = await anropa(["salesperson"], X, null, { fraga: "las=facit", extra });
+  ok("en säljare utan dömda förslag: Inget facit än, ändå 200 och vem: dig", tom.status === 200 && tom.data?.facit?.vem === "dig" && tom.data.facit.text === "Inget facit än. Det kommer när de första mötena har fått ett utfall.", visa(tom));
+
+  const ensam = await anropa(["sales_manager"], ADM, null, { fraga: "las=facit", extra, rpc: { mote_statkrets: () => [ADM] } });
+  ok("en läsare som RLS släpper igenom överallt men som inte leder (kretsen är bara hen) får bara rader där hen är om",
+    ensam.status === 200 && ensam.data?.facit?.vem === "dig" && JSON.stringify(ensam.data.facit.per["ringer-sjalv"]) === JSON.stringify({ n: 0, av: 1 }) && ensam.data.facit.per["lat-sta"].av === 0 && ensam.data.facit.per.ingen.av === 0, visa(ensam));
+  const tlEnsam = await anropa(["team_lead"], TL, null, { fraga: "las=facit", extra, rpc: { mote_statkrets: () => [TL] } });
+  ok("en teamledare utan folk i kretsen får sina egna val, inte lagets", tlEnsam.status === 200 && tlEnsam.data?.facit?.vem === "dig" && tlEnsam.data.facit.per["lat-sta"].av === 1 && tlEnsam.data.facit.per["ringer-sjalv"].av === 0, visa(tlEnsam));
+
+  const chef = await anropa(["team_lead"], TL, null, { fraga: "las=facit", extra });
+  const f = facitPerVal(facitRader(rader), grans);
+  const vantat = { ...f, text: textFacit(f), trodde: null, kalla: "Räknat av regler", dataPer: idagForetag, vem: "laget" };
+  ok("ledarens svar är som förut, med data per och vem: laget", chef.status === 200 && JSON.stringify(chef.data?.facit) === JSON.stringify(vantat), `${visa(chef)} | väntat ${JSON.stringify(vantat).slice(0, 160)}`);
+  ok("ledaren får lagets dom", chef.data?.facit?.dom?.sort !== undefined && /^När någon har ringt själv har 3 av 4 möten hållits\./.test(chef.data?.facit?.text ?? ""), chef.data?.facit?.text);
+
+  const fallerSalj = await anropa(["salesperson"], H, null, { fraga: "las=facit", extra, rpcFel: ["mote_statkrets"] });
+  ok("säljaren behöver ingen krets: den egna läsningen går ändå", fallerSalj.status === 200 && fallerSalj.data?.facit?.vem === "dig", visa(fallerSalj));
+  const fallerChef = await anropa(["sales_manager"], ADM, null, { fraga: "las=facit", extra, rpcFel: ["mote_statkrets"] });
+  ok("kretsen går inte att läsa för den som kan leda: 500 med felkod, inte de egna valen i tysthet", fallerChef.status === 500 && /^[0-9a-f]{5}$/.test(fallerChef.data?.felkod ?? "") && !fallerChef.data?.facit, visa(fallerChef));
+  const fallerRader = await anropa(["salesperson"], H, null, { fraga: "las=facit", extra: { ...extra, "nav_forslag_lage!lasfel": "nere" } });
+  ok("raderna går inte att läsa: 500 med felkod, inte ett tomt facit", fallerRader.status === 500 && !!fallerRader.data?.felkod && !fallerRader.data?.facit, visa(fallerRader));
+
+  // "Data per" (regel 3): en delläsning sätter inte ND.nu, så svaret säger själv vilken dag talen gäller.
+  ok("säljarens facit bär data per (dagen i företagets tidszon)", salj.data?.facit?.dataPer === idagForetag, visa(salj));
+  ok("ledarens facit bär data per", chef.data?.facit?.dataPer === idagForetag && /^\d{4}-\d{2}-\d{2}$/.test(chef.data?.facit?.dataPer ?? ""), visa(chef));
+
+  // Förslagets egen läsning: lagets facit på en rad, bara för den som leder. Ingen valde står i samma mening (regel 4).
+  const ettChef = await anropa(["team_lead"], TL, null, { fraga: `las=forslag&id=${F}`, extra: { nav_forslag_lage: [forslag(), ...rader] } });
+  ok("en ledare får lagets facit på en rad i förslaget", /^I laget hittills: ringt själv 3 av 4 hölls, låt stå 1 av 2, ingen valde 1 av 1\./.test(ettChef.data?.forslag?.facitKort ?? ""), ettChef.data?.forslag?.facitKort ?? visa(ettChef));
+  ok("förslaget bär data per bredvid ledarens rad", ettChef.data?.forslag?.dataPer === idagForetag, visa(ettChef));
+  const ettSalj = await anropa(["salesperson"], H, null, { fraga: `las=forslag&id=${F}`, extra: { nav_forslag_lage: [forslag(), ...rader] } });
+  ok("en säljare får ingen lagrad i förslaget (null)", ettSalj.status === 200 && ettSalj.data?.forslag?.facitKort === null, visa(ettSalj));
+
+  // Ledarens rad är ett tillägg: faller den läses förslaget ändå, raden blir null och felet loggas (hem-server-api.md
+  // 3.1). Förut gick ett fel i kretsen förbi loggen, och såg ut precis som "leder inte".
+  const medLogg = async (f) => {
+    const loggat = [], forut = console.error;
+    console.error = (...a) => loggat.push(a.map(String).join(" "));
+    try { return { r: await f(), loggat }; } finally { console.error = forut; }
+  };
+  const kretsFaller = await medLogg(() => anropa(["team_lead"], TL, null, { fraga: `las=forslag&id=${F}`, extra: { nav_forslag_lage: [forslag(), ...rader] }, rpcFel: ["mote_statkrets"] }));
+  ok("kretsen går inte att läsa för en ledare: förslaget läses ändå (200), raden är null", kretsFaller.r.status === 200 && kretsFaller.r.data?.forslag?.id === F && kretsFaller.r.data.forslag.facitKort === null, visa(kretsFaller.r));
+  ok("och felet loggas, så att det skiljs från 'leder inte'", kretsFaller.loggat.some((l) => /lagets facit till förslaget gick inte att läsa: kretsen/.test(l)), JSON.stringify(kretsFaller.loggat));
+  const raderFaller = await medLogg(() => anropa(["team_lead"], TL, null, { fraga: `las=forslag&id=${F}`, extra: { nav_forslag_lage: [forslag(), ...rader], "nav_forslag_lage!lasfelSidvis": "nere" } }));
+  ok("lagets dömda rader går inte att läsa: förslaget läses ändå (200), raden är null", raderFaller.r.status === 200 && raderFaller.r.data?.forslag?.id === F && raderFaller.r.data.forslag.facitKort === null, visa(raderFaller.r));
+  ok("och felet loggas", raderFaller.loggat.some((l) => /lagets facit till förslaget gick inte att läsa/.test(l)), JSON.stringify(raderFaller.loggat));
+  const saljUtanKrets = await medLogg(() => anropa(["salesperson"], H, null, { fraga: `las=forslag&id=${F}`, extra: { nav_forslag_lage: [forslag(), ...rader] }, rpcFel: ["mote_statkrets"] }));
+  ok("en säljare utan krets: raden är null och inget loggas (säljaren leder aldrig)", saljUtanKrets.r.status === 200 && saljUtanKrets.r.data?.forslag?.facitKort === null && saljUtanKrets.loggat.length === 0, JSON.stringify(saljUtanKrets.loggat));
+  // Kontroll: utan fel får samma ledare raden, så att proven ovan inte går igenom av en slump.
+  ok("utan fel får samma ledare raden (kontroll)", typeof ettChef.data?.forslag?.facitKort === "string" && ettChef.data.forslag.facitKort.length > 0);
+}
+
+rubrik("Hemmet säger när det inte vet: ett läsfel är inte ett tomläge");
+{
+  const fel = { "nav_forslag_lage!lasfel": "nere" };
+  const andrat = await anropa(["salesperson"], H, null, { fraga: "las=andrat", extra: fel });
+  ok("Det som ändrats: 500 med felkod, inte en tom lista", andrat.status === 500 && /^[0-9a-f]{5}$/.test(andrat.data?.felkod ?? "") && andrat.data?.andrat === undefined, visa(andrat));
+  const ett = await anropa(["salesperson"], H, null, { fraga: `las=forslag&id=${F}`, extra: fel });
+  ok("ett förslag: 500 med felkod, inte 404 Förslaget finns inte", ett.status === 500 && !!ett.data?.felkod, visa(ett));
+  const { byggForslag } = await import("../src/lib/nav2/forslag.ts");
+  const jag = { employee: { id: H, first_name: "Hanna", last_name: "Prov" }, roles: ["salesperson"], permissions: [] };
+  const kastar = async (t) => {
+    const db = attrapp(tabeller({ extra: t }), { mote_statkrets: () => [H] });
+    globalThis.__rutt = { db, user: null };
+    try { await byggForslag(db, jag); return null; } catch (e) { return e instanceof Error ? e.message : String(e); }
+  };
+  const lage = await kastar(fel);
+  ok("hemmets lilla läsning kastar när förslagen inte går att läsa, så att byggHem sätter lasfel.forslag", typeof lage === "string" && lage.includes("förslagen gick inte att läsa"), String(lage));
+  ok("också när bara antalet avgjorda möten faller", typeof (await kastar({ "mote!lasfel": "nere" })) === "string");
+  // Det öppna förslaget finns, men kunden bakom mötet går inte att läsa. Förut föll förslaget tyst bort ur kortet.
+  const kund = await kastar({ "mote_kort!lasfel": "nere" });
+  ok("också när kunden bakom ett öppet förslag inte går att läsa (motesInfo, strikt)", typeof kund === "string" && kund.includes("kunderna gick inte att läsa"), String(kund));
+  const namn = await kastar({ "employee!lasfel": "nere" });
+  ok("också när namnet på den som bokade inte går att läsa (fornamn, strikt)", typeof namn === "string" && namn.includes("namnen gick inte att läsa"), String(namn));
+  ok("utan fel kastar den inte", (await kastar({})) === null);
+
+  // Hela vägen till hemmet: byggHem (src/lib/nav2/hem.ts, orörd) gör kastet till `lasfel.forslag: true` och
+  // `forslag: null`, och resten av hemmet ritas. Kontrollen utan fel visar att märket inte sätts av något annat.
+  const { byggHem } = await import("../src/lib/nav2/hem.ts");
+  const hemmet = async (t) => {
+    const db = attrapp(tabeller({ extra: { nav_setting: [{ key: "hem.nytt", value: "alla" }], ...t } }), { mote_statkrets: () => [H] });
+    globalThis.__rutt = { db, user: jag };
+    const forut = console.error;
+    console.error = () => {};
+    try { return await byggHem(db, jag); } finally { console.error = forut; }
+  };
+  const hemOk = await hemmet({});
+  ok("byggHem utan fel: nya hemmet, förslagen fyllda och inget lasfel.forslag (kontroll)", hemOk?.nytt === true && hemOk.forslag !== null && hemOk.lasfel?.forslag === undefined, JSON.stringify({ nytt: hemOk?.nytt, lasfel: hemOk?.lasfel, forslag: !!hemOk?.forslag }));
+  const hemFel = await hemmet(fel);
+  ok("byggHem när förslagen inte går att läsa: lasfel.forslag är true och forslag null", hemFel?.lasfel?.forslag === true && hemFel.forslag === null, JSON.stringify({ lasfel: hemFel?.lasfel, forslag: hemFel?.forslag }));
+  ok("resten av hemmet ritas ändå (svaret finns, nytt är kvar)", hemFel?.nytt === true && Array.isArray(hemFel.dolda));
+  // Inställningarna (lasInst, strikt i byggHem): ett läsfel är lasfel.inst, aldrig förvalen som om inget vore inställt.
+  const instFel = await hemmet({ "nav_setting!lasfel": "nere" });
+  ok("byggHem när inställningarna inte går att läsa: lasfel.inst är true, nytt falskt, och varken förslag eller inställningsrutan byggs på förval", instFel?.lasfel?.inst === true && instFel.nytt === false && instFel.forslag === null && instFel.inst === null, JSON.stringify({ lasfel: instFel?.lasfel, nytt: instFel?.nytt }));
+  ok("utan fel sätts inget lasfel.inst (kontroll)", hemOk?.lasfel?.inst === undefined);
+  // Ett tillfälligt läsfel: första läsningen av inställningarna faller, den andra går. Hemmet är det nya, utan lasfel.inst.
+  {
+    const ok1 = attrapp(tabeller({ extra: { nav_setting: [{ key: "hem.nytt", value: "alla" }] } }), { mote_statkrets: () => [H] });
+    const fel1 = attrapp(tabeller({ extra: { "nav_setting!lasfel": "nere" } }), {});
+    let n = 0;
+    const db = new Proxy(ok1, { get: (t, k) => (k === "from" ? (tab) => (tab === "nav_setting" && n++ === 0 ? fel1 : t).from(tab) : t[k]) });
+    globalThis.__rutt = { db, user: jag };
+    const forut = console.error; console.error = () => {};
+    let r; try { r = await byggHem(db, jag); } finally { console.error = forut; }
+    ok("byggHem när första läsningen av inställningarna faller och den andra går: nya hemmet, inget lasfel.inst", r?.nytt === true && r?.lasfel?.inst === undefined && n >= 2, JSON.stringify({ nytt: r?.nytt, lasfel: r?.lasfel, n }));
+  }
+  const { lasInst } = await import("../src/lib/nav2/forslag.ts");
+  const instDb = attrapp(tabeller({ extra: { "nav_setting!lasfel": "nere" } }), {});
+  let kast = null; try { await lasInst(instDb, true); } catch (e) { kast = e instanceof Error ? e.message : String(e); }
+  ok("lasInst strikt kastar vid läsfel", typeof kast === "string" && kast.includes("inställningarna gick inte att läsa"), String(kast));
+  const forval = await lasInst(instDb);
+  ok("lasInst utan strikt ger förvalen som förut (övriga anropare)", Array.isArray(forval.f.hemNytt) && forval.f.hemNytt.length === 0 && typeof forval.m.tidszon === "string");
 }
 
 rubrik("Teamet i månaden");

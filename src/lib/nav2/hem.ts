@@ -120,7 +120,8 @@ export type NdHem = {
 };
 
 /** Golvet, Teamet, Nav föreslår och Min dag: true när kortets läsning föll, i stället för att kortet försvinner tyst. */
-export type NdHemFel = { golvet?: true; team?: true; forslag?: true; dag?: true };
+/** `inst`: inställningarna föll. Då går det inte att veta om läsaren har det nya hemmet, så `nytt` är false och inget räknas med förval. */
+export type NdHemFel = { golvet?: true; team?: true; forslag?: true; dag?: true; inst?: true };
 
 /** Veckodag 1–7 med måndag först för ett kalenderdatum ("YYYY-MM-DD"). Datumet är redan räknat i rätt tidszon. */
 const veckodagFor = (dag: string): number => {
@@ -315,7 +316,11 @@ export async function byggHem(supabase: SupabaseClient, user: CurrentUser): Prom
   const leder = () => (lederP ??= lagenJagLeder(db, mig));
 
   // Nya hemmet (0303): en läsning av inställningarna. Den ger också tidszonen, så Golvet väntar på den men inte tvärtom.
-  const instP = lasInst(db).then((i) => i, loggaFel("inst"));
+  // Strikt: ett läsfel blir `lasfel.inst` nedan, i stället för förval som ser ut som att inget är inställt.
+  let instFel = false;
+  // Ett tillfälligt fel prövas en gång till, så att personen inte tyst får det gamla hemmet för den laddningen (nytt
+  // avgörs av samma läsning). Faller båda blir det lasfel.inst.
+  const instP = lasInst(db, true).catch(() => lasInst(db, true)).then((i) => i, (e: unknown) => { instFel = true; return loggaFel("inst")(e); });
   const tzP = instP.then((i) => i?.m.tidszon ?? INST_FORVAL.tidszon);
   // Golvet startar direkt och väntas in sist. Ett fel här fäller aldrig resten av hemmet.
   const golvetP = byggGolvet(user, nu, { tz: tzP, leder }).then((g) => ({ g, fel: false }), (e: unknown) => ({ g: loggaFel("golvet")(e), fel: true }));
@@ -330,6 +335,7 @@ export async function byggHem(supabase: SupabaseClient, user: CurrentUser): Prom
   // Chatten (0304): läses bara för den som har det nya hemmet, och för superadmin som ser läget i Inställningar.
   const chattP = nytt || niva === "superadmin" ? chattLage(db, mig, niva === "superadmin").catch(loggaFel("chatt")) : Promise.resolve(null);
   const lasfel: NdHemFel = {};
+  if (instFel) lasfel.inst = true;
   let forslag: NdForslag | null = null;
   let team: NdTeam | null = null;
   let dag: NdDag | null = null;

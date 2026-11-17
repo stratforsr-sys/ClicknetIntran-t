@@ -17,7 +17,8 @@
  * Provet kör frågorna i tests/chatt-fragor.json mot fixturen i samma fil, aldrig mot
  * produktionens data, med samma slinga som rutten (src/lib/nav2/chatt/samtal.ts). En fråga är rätt bara
  * när varje körning av den är rätt. Resultatet skrivs ut, och med DATABASE_URL satt sparas en rad per
- * modell i nav_chatt_prov med avtrycket av systemtexten och verktygslistan.
+ * modell i nav_chatt_prov med avtrycket av systemtexten och verktygslistan. Per modell skrivs också
+ * median-ms och median-varv per körning, med antalet körningar (A1-6), också vid --omratta.
  *
  * SKRIPTET GODKÄNNER ALDRIG ETT PROV. Raden sparas som ej godkänd. Godkännandet är en människas beslut
  * och görs för hand, med vem och när. Först då, och med tak och bekräftat avtal, går chatten att slå på.
@@ -26,7 +27,7 @@ import { appendFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { KANDA_MODELLER, kostnadKr, sattInTal, utanMarken } from "../src/lib/nav2/chatt/chattforma.ts";
+import { KANDA_MODELLER, kostnadKr, medianRad, provAnteckning, sattInTal, utanMarken } from "../src/lib/nav2/chatt/chattforma.ts";
 import { bedom, fixturKallor, kontrolleraFragor } from "../src/lib/nav2/chatt/prov.ts";
 import { fragetur, korSamtal } from "../src/lib/nav2/chatt/samtal.ts";
 import { avtryck } from "../src/lib/nav2/chatt/systemtext.ts";
@@ -66,12 +67,14 @@ if (OMRATTA) {
   for (const [modell, fragor] of perModell) {
     console.log(`\n${modell}`);
     let ratt = 0, obelagda = 0, omskrivna = 0;
+    const matningar = [];
     for (const [id, korningar] of fragor) {
       const q = P.fragor.find((x) => x.id === id);
       if (!q) { console.log(`  ? ${id} finns inte i frågefilen`); continue; }
       const skal = [];
       for (const { varv: v, r: sparad } of korningar) {
         const r = { ...sparad };
+        matningar.push(sparad);
         if (typeof r.ra === "string") {
           const ins = sattInTal(r.ra, r.svar ?? []);
           Object.assign(r, { text: ins.text, ren: utanMarken(ins.text), tal: ins.tal, obelagda: ins.obelagda });
@@ -85,6 +88,8 @@ if (OMRATTA) {
       else { ratt++; console.log(`  ✓ ${id} (${q.fall})`); }
     }
     console.log(`  ${ratt} av ${fragor.size} frågor rätt i alla sparade varv. Obelagda tal: ${obelagda}. Omskrivna svar: ${omskrivna}.`);
+    // A1-6: tiden och antalet anrop, som de mättes när svaren sparades. En rad från före mätningen räknas inte.
+    console.log(`  ${medianRad(matningar)}`);
   }
   process.exit(0);
 }
@@ -134,6 +139,7 @@ for (const modell of modeller) {
   console.log(`\n${modell}`);
   let ratt = 0, obelagda = 0, kostnad = 0, cacheLas = 0, intoken = 0, reserv = 0, omskrivna = 0;
   const fall = [];
+  const matningar = [];
   for (const q of fragor) {
     const roll = P.fixtur.roller[q.som];
     const skal = [];
@@ -149,6 +155,7 @@ for (const modell of modeller) {
       if (r.omskrivet) omskrivna++;
       cacheLas += r.usage.cache_read_input_tokens;
       intoken += r.usage.input_tokens + r.usage.cache_read_input_tokens + r.usage.cache_creation_input_tokens;
+      matningar.push(r);
       appendFileSync(sparfil, JSON.stringify({ modell, id: q.id, varv: v + 1, r }) + "\n");
       const b = await bedom(q, r, P.fixtur);
       if (!b.ratt) skal.push(`varv ${v + 1}: ${b.skal.join("; ")}${r.ren ? ` | svaret: ${r.ren.slice(0, 200)}` : ""}`);
@@ -159,7 +166,10 @@ for (const modell of modeller) {
   }
   const perFraga = kostnad / korningar;
   console.log(`  ${ratt} av ${fragor.length} frågor rätt i alla ${varv} varv. Obelagda tal: ${obelagda}. Omskrivna svar: ${omskrivna} av ${korningar}. Reservmodellen tog över: ${reserv} ${reserv === 1 ? "gång" : "gånger"}. Kostnad: ${kostnad.toFixed(2)} kr, ${perFraga.toFixed(3)} kr per körning. Cachade intoken: ${intoken ? Math.round((cacheLas / intoken) * 100) : 0} %.`);
-  resultat.push({ modell, ratt, obelagda, reserv, omskrivna, perFraga, fall });
+  // A1-6: median-ms för hela samtalet och median-varv per körning, före varje påstående om tid.
+  const median = medianRad(matningar);
+  console.log(`  ${median}`);
+  resultat.push({ modell, ratt, obelagda, reserv, omskrivna, perFraga, fall, median });
 }
 
 if (BARA) {
@@ -173,7 +183,7 @@ if (BARA) {
       // Raden sparas alltid som ej godkänd (kolumnens förval). Godkännandet görs för hand av en människa.
       await db.query(
         `insert into nav_chatt_prov (modell, avtryck, fragor, ratt, obelagda, kostnad_per_fraga_kr, anteckning) values ($1, $2, $3, $4, $5, $6, $7)`,
-        [r.modell, avtryck(), P.fragor.length, r.ratt, r.obelagda, r.perFraga, `${varv} varv per fråga. Omskrivna svar: ${r.omskrivna} av ${korningar}. Reservmodellen tog över ${r.reserv} ${r.reserv === 1 ? "gång" : "gånger"}. Föll: ${r.fall.map((f) => f.id).join(", ") || "inga"}.`],
+        [r.modell, avtryck(), P.fragor.length, r.ratt, r.obelagda, r.perFraga, provAnteckning({ varv, omskrivna: r.omskrivna, korningar, reserv: r.reserv, fall: r.fall, median: r.median })],
       );
     }
     console.log(`\n${resultat.length} ${resultat.length === 1 ? "rad sparad" : "rader sparade"} i nav_chatt_prov, ej godkända.`);

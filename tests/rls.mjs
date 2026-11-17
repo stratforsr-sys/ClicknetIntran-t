@@ -3174,6 +3174,94 @@ console.log("\n\x1b[1mLeveranskalendern: möten, 1:1-innehåll och utkorgen (006
   await db.query(`delete from calendar_series where organizer_id in (select id from employee where email like $1)`, [PREFIX + "%"]);
 }
 
+console.log("\n\x1b[1mNavs facit: säljarens läsning ger bara egna rader (0303, funktion 5)\x1b[0m");
+// `GET /nav2/forslag?las=facit` läser de dömda förslagen med läsarens egen klient. Den som inte leder ett lag får
+// sina rader med ett uttryckligt `om = sig själv` (lasGenomgang, dommaRader), för RLS ensam räcker inte: säljchef,
+// vd och admin ser alla rader. Här prövas båda halvorna med riktiga inloggningar: RLS ger säljaren bara sitt eget,
+// och filtret ger säljchefen bara sitt eget fast RLS släpper igenom allt.
+// Raderna är provdata (`prov`), för loggen tar bara emot nya rader och bara provdata får raderas efteråt. Rutten
+// läser `prov = false`, så frågan här säger `prov = true` och frågar på provradernas id, enligt regeln överst.
+{
+  const fRad = async (om, n) => {
+    const { rows: [f] } = await db.query(
+      `insert into nav_forslag (sort, regel, nyckel, kalla, om, prov, val, trodde, belagg)
+       values ('forslag', 'moten.obekraftat', $1, 'regel', $2::uuid, true, '{ringer-sjalv,flytta,lat-sta}', '{"n":1,"av":4}', '{}') returning id`,
+      [`${crypto.randomUUID()}@2026-11-1${n}@${om}`, om],
+    );
+    await db.query(`insert into nav_forslag_handelse (forslag, sort, av, data) values ($1, 'beslut', $2::uuid, '{"val":"ringer-sjalv"}')`, [f.id, om]);
+    await db.query(`insert into nav_forslag_handelse (forslag, sort, data) values ($1, 'dom', '{"utfall":"hallet","bekraftat":false}')`, [f.id]);
+    return f.id;
+  };
+  const ids = [];
+  try {
+    for (const [om, n] of [[saljareA.id, 1], [saljareB.id, 2], [chef.id, 3]]) ids.push(await fRad(om, n));
+    const [fA, fB, fD] = ids;
+    // Samma filter som dommaRader, utom prov (se ovan), och bara på provradernas id.
+    const facitFraga = (om) => `id=in.(${ids.join(",")})&regel=eq.moten.obekraftat&prov=eq.true&dom=not.is.null${om ? `&om=eq.${om}` : ""}&select=id,om,dom,beslut`;
+    const ser = async (tok, om) => (await las(tok, "nav_forslag_lage", facitFraga(om))).map((r) => r.id).sort();
+    const bara = (lista, ...vantade) => JSON.stringify(lista) === JSON.stringify([...vantade].sort());
+
+    const aUtan = await ser(tA);
+    ok("säljaren ser bara sitt eget dömda förslag, också utan filtret (RLS)", bara(aUtan, fA), `${aUtan.length} rader`);
+    ok("säljarens läsning, som rutten gör den (om = sig själv), ger bara egna rader", bara(await ser(tA, saljareA.id), fA));
+    ok("säljaren får 0 rader om hen frågar efter en annan säljares", (await ser(tA, saljareB.id)).length === 0);
+    const aRad = (await las(tA, "nav_forslag_lage", facitFraga(saljareA.id)))[0];
+    ok("raden bär domen och valet, så att antalen går att räkna", aRad?.dom?.utfall === "hallet" && aRad?.beslut?.val === "ringer-sjalv", JSON.stringify(aRad));
+    ok("säljchefen ser alla tre utan filtret: RLS ensam räcker inte för Dina val", bara(await ser(tD), fA, fB, fD));
+    ok("med filtret får säljchefen bara sitt eget", bara(await ser(tD, chef.id), fD));
+    // Ruttens egen fråga, ordagrant (dommaRader: prov = false, inga id): den kan inte räkna rader, för driften har
+    // dömda förslag. Den kan pröva att varje rad som kommer tillbaka är personens egen. Policyn (0303, nav_forslag_las)
+    // läser inte `prov`, så provraderna ovan och driftens rader styrs av samma regel.
+    const ruttensFraga = (om) => `regel=eq.moten.obekraftat&prov=eq.false&dom=not.is.null${om ? `&om=eq.${om}` : ""}&select=id,om&order=skapad.asc,id.asc&limit=1000`;
+    // `las` gör ett fel till en tom lista, så här läses svaret direkt: frågan ska tas emot (200), inte bara ge noll rader.
+    const rutt = async (tok, om) => { const r = await fetch(`${URL}/rest/v1/nav_forslag_lage?${ruttensFraga(om)}`, { headers: som(tok) }); const j = await r.json(); return { status: r.status, rader: Array.isArray(j) ? j : null }; };
+    const aRutt = await rutt(tA, saljareA.id), aRuttUtan = await rutt(tA);
+    ok("ruttens fråga som säljaren (prov = false, med och utan filtret) tas emot och ger bara egna rader", aRutt.status === 200 && aRuttUtan.status === 200 && !!aRutt.rader && !!aRuttUtan.rader && [...aRutt.rader, ...aRuttUtan.rader].every((r) => r.om === saljareA.id), JSON.stringify({ a: [aRutt.status, aRutt.rader?.length], utan: [aRuttUtan.status, aRuttUtan.rader?.length] }));
+    const dRutt = await rutt(tD, chef.id);
+    ok("ruttens fråga som säljchefen med filtret tas emot och ger bara egna rader, fast RLS släpper igenom allt", dRutt.status === 200 && !!dRutt.rader && dRutt.rader.every((r) => r.om === chef.id), JSON.stringify([dRutt.status, dRutt.rader?.length]));
+    ok("ingen inloggad skriver i loggen", !(await fetch(`${URL}/rest/v1/nav_forslag_handelse`, { method: "POST", headers: som(tA), body: JSON.stringify({ forslag: fA, sort: "dom", data: { utfall: "uteblev" } }) })).ok);
+  } finally {
+    if (ids.length) await db.query(`delete from nav_forslag where id = any($1::uuid[]) and prov`, [ids]);
+  }
+}
+
+console.log("\n\x1b[1mMin dag: upsert skriver bara sin kolumn, och borttagningen säger vad den tog (task_day, 0092)\x1b[0m");
+// `POST /nav2/uppgifter {handling: "dag"}` skriver task_day med service role, med exakt de här anropen. Attrappen i
+// tests/uppgifter.mjs slår ihop en upsert med den gamla raden per konstruktion, så där bevisas ingenting om PostgREST.
+// Här prövas det på riktigt: `resolution=merge-duplicates` uppdaterar bara kolumnerna i det som skickas, och
+// `.delete().select()` ger raderna som togs (rutten öppnar en planerad dag i stället när den ger 0 rader).
+// Bara provanvändarens egna rader, och de tas bort efteråt.
+{
+  const { createClient } = await import("@supabase/supabase-js");
+  const admin = createClient(URL, SECRET, { auth: { persistSession: false, autoRefreshToken: false } });
+  const mig = saljareA.id, dag = "2026-01-05";
+  const P = "2026-01-05T07:30:00.000Z", C = "2026-01-05T16:00:00.000Z";
+  const rad = async () => (await db.query(`select planned_at, closed_at from task_day where employee_id = $1 and dag = $2`, [mig, dag])).rows[0] ?? null;
+  const iso = (t) => (t ? new Date(t).toISOString() : null);
+  const upsert = (andring) => admin.from("task_day").upsert({ employee_id: mig, dag, ...andring }, { onConflict: "employee_id,dag" });
+  const taBortOplanerad = () => admin.from("task_day").delete().eq("employee_id", mig).eq("dag", dag).is("planned_at", null).select("dag");
+  try {
+    const p1 = await upsert({ planned_at: P });
+    const c1 = await upsert({ closed_at: C });
+    const r1 = await rad();
+    ok("planera och sedan avsluta: planen står kvar (upserten skriver bara closed_at)", !p1.error && !c1.error && iso(r1?.planned_at) === P && iso(r1?.closed_at) === C, JSON.stringify({ p1: p1.error, c1: c1.error, r1 }));
+    const c2 = await upsert({ closed_at: C });
+    const antal = Number((await db.query(`select count(*)::int as n from task_day where employee_id = $1 and dag = $2`, [mig, dag])).rows[0].n);
+    ok("avsluta två gånger krockar inte på nyckeln, och det blir en rad", !c2.error && antal === 1, JSON.stringify({ c2: c2.error, antal }));
+    const planerad = await taBortOplanerad();
+    ok("en planerad dag tas inte bort av 'öppna': 0 rader, inget fel, och raden står kvar", !planerad.error && Array.isArray(planerad.data) && planerad.data.length === 0 && (await rad()) !== null, JSON.stringify(planerad));
+
+    await db.query(`delete from task_day where employee_id = $1 and dag = $2`, [mig, dag]);
+    const c3 = await upsert({ closed_at: C });
+    const r3 = await rad();
+    ok("avsluta en oplanerad dag: en rad med bara closed_at", !c3.error && r3?.planned_at === null && iso(r3?.closed_at) === C, JSON.stringify({ c3: c3.error, r3 }));
+    const bort = await taBortOplanerad();
+    ok("'öppna' tar bort den oplanerade dagen, och svaret har raden den tog", !bort.error && bort.data?.length === 1 && (await rad()) === null, JSON.stringify(bort));
+  } finally {
+    await db.query(`delete from task_day where employee_id = $1`, [mig]);
+  }
+}
+
 console.log("\n\x1b[1mAnonym anslutning\x1b[0m");
 for (const t of ["employee", "employee_role", "employee_permission", "audit_log", "offboarding_task", "company", "team", "schema_migrations", "document", "document_version", "document_ack", "document_view", "course", "course_module", "quiz_question", "quiz_option", "module_progress", "course_attempt", "certification", "time_event", "work_schedule", "work_time_journal", "scheduled_break", "break_deviation", "payroll_period", "payroll_row", "payroll_adjustment", "payroll_export_column", "hr_case", "case_message", "case_category", "late_arrival", "late_arrival_month", "compliance_gate", "news_post", "notification_seen", "notification_dismissed", "absence_type", "absence_policy", "absence_blackout", "staffing_cap", "absence_balance", "absence_request", "absence_call_order", "sick_report", "sick_deadline", "absence_reminder", "calendar_feed", "file_object", "file_access_log", "roleplay_criterion", "roleplay_submission", "roleplay_score", "cost_rate", "salary_basis", "revenue_entry", "cost_calculation", "error_report", "contract", "contract_template", "activity_day", "search_miss", "candidate", "candidate_stage_event", "interview_scorecard", "recruitment_source", "recruitment_policy", "task", "task_member", "task_link", "task_event", "project", "project_member", "project_message", "project_message_read", "calendar_share", "calendar_event", "calendar_attendee", "calendar_series", "one_on_one_item", "calendar_reminder", "outbox", "calendar_undo", "integration_log", "delivery", "delivery_handoff"]) {
   const r = await fetch(`${URL}/rest/v1/${t}?select=*`, { headers: { apikey: ANON, Authorization: `Bearer ${ANON}` } });

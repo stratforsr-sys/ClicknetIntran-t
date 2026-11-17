@@ -160,7 +160,9 @@ function hem({ chef, forslag = 1, andrat = ANDRAT, andratKort = AKORT, rader = n
     toastActs: (msg, acts) => { anrop.push(["navtoast", msg, acts.length]); },
   };
   kor(block, g, ["hvHem", "hvVantar", "hvForeslar", "hvTeam", "hvDinManad", "hvAndrat", "hvArk", "hvSkriv", "hvInstRuta", "hvPa", "hvFlagga", "hvDolj", "hvVisa", "hvGrattis", "hvHamta", "hvOppna", "hvValj", "hvTangent", "hvFraga", "hvChattGodkann", "hvChattAngra", "hvKlick", "hvStang", "hvPlaneraDag", "hvSseDela", "hvVidBotten", "hvChattStopp", "hvChattIgen", "hvBokaDag", "hvAngraDag", "hvKopiera",
-    "hvUrtavla", "hvUrMitt", "hvUrRam", "hvUrVink", "hvUrBage", "hvDagPlan", "hvVisadDag", "hvDagSlut", "hvHalsning", "hvTraffar", "hvTraffVy", "hvEfterRita", "hvFlip", "hvMinut", "hvD", "hvForeMat", "hvFokusNyckel", "hvHeroRad", "hvDockRad", "hvLys", "hvStegKlocka", "hvValjTraff", "hvBokaKnapp", "hvDagNyckel", "hvSkala", "hvLageSynk"]);
+    "hvUrtavla", "hvUrMitt", "hvUrRam", "hvUrVink", "hvUrBage", "hvDagPlan", "hvVisadDag", "hvDagSlut", "hvHalsning", "hvTraffar", "hvTraffVy", "hvEfterRita", "hvFlip", "hvMinut", "hvD", "hvForeMat", "hvFokusNyckel", "hvHeroRad", "hvDockRad", "hvLys", "hvStegKlocka", "hvValjTraff", "hvBokaKnapp", "hvDagNyckel", "hvSkala", "hvLageSynk",
+    "hvTradSpara", "hvTradLas", "hvSidanGar", "hvSrSag", "hvAnnanFlik", "hvChattAvbryt", "hvChattLage", "hvKortBygg", "hvKortRattaOppna", "hvKortRattaStang",
+    "hvKortFor", "hvKortUtfall", "hvArkGolvet", "hvArkVantar", "hvArkDag", "hvGenv", "hvTopp", "hvGor", "hvKlar", "hvAteroppna", "hvLasOm", "hvTillbaka", "hvSkaLasaOm", "hvBildTa", "hvSedan", "hvSedanText", "hvRattaRad", "hvUrKort", "hvMittUtfall", "hvForberedChip", "hvNavTraffar", "hvTraffOmrita", "hvArkFacit", "hvArkForslag"]);
   g.anrop = anrop;
   return g;
 }
@@ -270,19 +272,22 @@ rubrik("Väntar på dig: samma lista som i dag, det som brinner först");
 
 rubrik("Nav föreslår: ett tal, en mening, en knapp, och källan i huvudet (skiss A)");
 {
-  const ett = kort(hem({ chef: false }).hvHem(), "Nav föreslår");
+  // Källan är en knapp till facit (funktion 5) med skissens text och utseende i vila: markupen jämförs som skissens span.
+  const somSkiss = (h) => h.replace(/<button class="hv-mono hv-end" data-hvark="facit" aria-label="[^"]*">([^<]*)<\/button>/g, '<span class="hv-mono hv-end">$1</span>');
+  const ett = somSkiss(kort(hem({ chef: false }).hvHem(), "Nav föreslår"));
   okM("ett förslag: avsnittet är skissens, tecken för tecken", utanIkon(ett) === SK.I_fors1, utanIkon(ett));
   okM("förslagets tal och vad det räknar", ett.includes('<div class="hv-fst"><b class="num">1</b><span>möte i morgon är obekräftat</span></div>'), ett);
   okM("en mening och förslagets egen knapp", ett.includes("<p>Hagby Glas 0 09.00. Mick har ringt två gånger utan svar.</p>") && ett.includes('<div class="hv-rader"><button class="hv-btn fx" data-hvforslag="f0">Välj vad som händer</button></div>'), ett);
   okM("Navs märke och källan i huvudet", /<div class="hv-sekh"><span class="hv-mark"><svg[^>]*>[\s\S]*?<\/svg><\/span><h2>Nav föreslår<\/h2><span class="hv-mono hv-end">Räknat av regler<\/span><\/div>/.test(ett), ett);
   ok("ingen bläddring när det bara finns ett", !ett.includes("data-hvnasta") && !ett.includes("1 av 1"));
-  const tva = kort(hem({ chef: false, forslag: 2 }).hvHem(), "Nav föreslår");
+  const tva = somSkiss(kort(hem({ chef: false, forslag: 2 }).hvHem(), "Nav föreslår"));
   ok("två förslag: 1 av 2 och ett steg som heter Nästa förslag", tva.includes(">1 av 2<") && /data-hvnasta>Nästa förslag</.test(tva) && !/förslag till/.test(tva), tva);
   okM("bläddringen som skissen: talet i huvudet, steget som länk bredvid knappen", tva.includes('<h2>Nav föreslår</h2><span class="hv-n">1 av 2</span><span class="hv-mono hv-end">Räknat av regler</span>') && /<button class="hv-btn fx" data-hvforslag="f0">Välj vad som händer<\/button><button class="hv-lank" data-hvnasta>Nästa förslag(?:<svg[^>]*>[\s\S]*?<\/svg>)?<\/button><\/div>/.test(tva), tva);
   const sist = hem({ chef: false, forslag: 3 }); sist.S.hv.fi = 2;
   const sk = kort(sist.hvHem(), "Nav föreslår");
   ok("på det sista förslaget säger knappen att den går till det första", sk.includes(">3 av 3<") && /data-hvnasta>Till det första</.test(sk), sk);
-  const tom = kort(hem({ chef: true, forslag: 0, pa: false, inst: { pa: false, farBrytare: true } }).hvHem(), "Nav föreslår");
+  // Dag ett (skissens tomläge): inga dömda förslag, så tomraden är ingen dörr till facit (funktion 5).
+  const tom = kort(hem({ chef: true, forslag: 0, andrat: [], pa: false, inst: { pa: false, farBrytare: true } }).hvHem(), "Nav föreslår");
   ok("tomt: Inga förslag just nu., inget om avstängt", tom.includes("Inga förslag just nu.") && !/avstängda|trendregeln|avgjorda möten/.test(tom), tom);
   okM("tomt som skissen: en rad med märket, ingen rubrik och ingen knapp", utanIkon(tom) === SK.I_fors0, utanIkon(tom));
 }
@@ -724,7 +729,7 @@ rubrik("Chatten i skrivrutan");
   ok("Sök i stället öppnar paletten", t.anrop.some((a) => a[0] === "pal"));
   const a = hem({ chef: false });
   a.ND.hem.chatt = true;
-  a.fetch = async () => strom([{ h: "avbojt", text: "Modellen avböjde att svara på det här. Jag svarar som sökrutan i stället." }]);
+  a.fetch = async () => strom([{ h: "avbojt", text: "Modellen avböjde att svara på det här. Sök i stället ger svar ur Navs sökruta." }]);
   a.S.hv.q = "något konstigt";
   await a.hvFraga();
   ok("avböjer modellen säger rutan det rakt", a.hvHem().includes("Modellen avböjde att svara") && a.hvHem().includes("data-hvchattsok") && !a.hvHem().includes("Skrivet av AI"));
@@ -1370,7 +1375,7 @@ rubrik("Skiss A: genvägarna och Mer");
 {
   const pa = hem({ chef: true }); pa.ND.hem.chatt = true;
   const gv = pa.hvHem().match(/<div class="hv-genv"[^>]*>[\s\S]*?<\/span><\/div>/)?.[0] ?? "";
-  okM("chatten på och ett möte kvar i dag: Förbered först, med märket, sedan Min dag och Veckan", /^<div class="hv-genv" role="toolbar" aria-label="Genvägar"><button class="hv-chip ai" data-hvforbered="Förbered mitt möte 11\.00 med PEGU Byggservice"><svg[^>]*>[\s\S]*?<\/svg>Förbered 11\.00 med PEGU<\/button><button class="hv-chip" data-hvark="dag">Min dag<\/button><button class="hv-chip" data-hvark="vecka">Veckan som kommer<\/button>/.test(gv), gv.slice(0, 400));
+  okM("chatten på och ett möte kvar i dag: Förbered först, med märket, sedan Min dag och Veckan", /^<div class="hv-genv" role="toolbar" aria-label="Genvägar"><button class="hv-chip ai" data-hvforbered="Förbered mitt möte 11\.00 med PEGU Byggservice" title="PEGU Byggservice"><svg[^>]*>[\s\S]*?<\/svg>Förbered 11\.00 · PEGU…<\/button><button class="hv-chip" data-hvark="dag">Min dag<\/button><button class="hv-chip" data-hvark="vecka">Veckan som kommer<\/button>/.test(gv), gv.slice(0, 400));
   const inget = hem({ chef: true }); inget.ND.hem.chatt = true; inget.ndHemKal = () => [];
   okM("inget möte kvar: Vem ska jag ringa nu?", /<button class="hv-chip ai" data-hvforbered="Vem ska jag ringa nu\?"><svg[^>]*>[\s\S]*?<\/svg>Vem ska jag ringa nu\?<\/button>/.test(inget.hvHem()), inget.hvHem().match(/<div class="hv-genv"[^>]*>[\s\S]{0,300}/)?.[0]);
   ok("chatten av: ingen av dem", !hem({ chef: true }).hvHem().includes("data-hvforbered"));
@@ -1866,7 +1871,7 @@ rubrik("Lyftet: chattens klient (stopp, försök igen, stegen, rullningen och st
   f.S.hv.q = "Vad står här?";
   await f.hvFraga();
   const ff = f.hvHem();
-  ok("ett tillfälligt fel erbjuder Försök igen, och säger vad som hände", ff.includes("Chatten är tillfälligt upptagen.") && ff.includes('data-hvchattigen="0"') && !ff.includes("data-hvchattsok"), ff.slice(ff.indexOf("hv-tur"), ff.indexOf("hv-tur") + 700));
+  ok("ett tillfälligt fel (503) erbjuder både Försök igen och Sök i stället (N4), och säger vad som hände", ff.includes("Chatten är tillfälligt upptagen.") && ff.includes('data-hvchattigen="0"') && ff.includes('data-hvchattsok="0"'), ff.slice(ff.indexOf("hv-tur"), ff.indexOf("hv-tur") + 700));
   await f.hvChattIgen(0);
   ok("Försök igen skickar samma filer igen", fskick.length === 2 && fskick[1].bilagor?.length === 1 && fskick[1].bilagor[0].namn === "kvitto.png" && f.S.hv.chatt.length === 1 && f.S.hv.chatt[0].svar);
   ok("Försök igen går inte när ett svar pågår eller på en äldre tur", (() => { f.S.hv.chatt.push({ ...f.S.hv.chatt[0], lage: [] }); const n = fskick.length; f.hvChattIgen(0); return fskick.length === n; })());
@@ -1878,7 +1883,7 @@ rubrik("Lyftet: chattens klient (stopp, försök igen, stegen, rullningen och st
   ok("för långt: Ändra frågan, inte samma fråga igen", langt.includes('data-hvchattandra="0"') && !langt.includes('data-hvchattigen="0"') && langt.includes('<p role="alert">Svaret blev för långt'));
   const tomt = await kod("tomt", "Jag fick inget svar. Försök igen.");
   ok("inget svar: Försök igen", tomt.includes('data-hvchattigen="0"') && !tomt.includes("data-hvchattsok"));
-  const ai = await kod("ai", "Chatten svarar inte just nu. Jag svarar som sökrutan i stället.");
+  const ai = await kod("ai", "Chatten svarar inte just nu. Sök i stället ger svar ur Navs sökruta.");
   ok("AI svarar inte: Sök i stället", ai.includes('data-hvchattsok="0"') && !ai.includes('data-hvchattigen'));
   const json = async (status, data) => { const g = chatt(); g.fetch = async () => ({ ok: false, status, headers: { get: () => "application/json" }, json: async () => data }); g.S.hv.q = "fråga"; await g.hvFraga(); return g.hvHem(); };
   const tak = await json(429, { fel: "Du har använt månadens AI-utrymme. Det fylls på den 1:a.", tak: true, kod: "tak" });
@@ -2576,6 +2581,939 @@ rubrik("Kontrollen, fynd 7b: märken och rader lyser upp tillsammans, och stegkl
   Object.defineProperty(x.style, "transform", { get: () => satt2 ?? "", set: (v) => { if (satt2 === null) satt2 = v; }, configurable: true });
   h.hvFlip();
   ok("glidningen vid zoom 2 flyttar hälften så många av hemmets bildpunkter som skärmens", satt2 === "translate(20px,20px) scale(1)", satt2);
+}
+
+/* ---------- Funktionsvarvet K1: chattens ström och minne (A1-1, A1-2, A1-7, A1-8) ---------- */
+// En ström som provet styr: ge(h) skickar en händelse, slut() stänger. Läsningen väntar tills något har getts.
+const k1Enc = new TextEncoder();
+const k1Strom = () => {
+  const ko = []; let vantar = null, stangd = false;
+  const puffa = () => { if (vantar && (ko.length || stangd)){ const v = vantar; vantar = null; v(ko.length ? { done: false, value: k1Enc.encode(ko.shift()) } : { done: true }); } };
+  return {
+    res: { ok: true, status: 200, headers: { get: () => "text/event-stream; charset=utf-8" }, body: { getReader: () => ({ read: () => new Promise((k) => { vantar = k; puffa(); }) }) } },
+    ge(h) { ko.push(`data: ${JSON.stringify(h)}\n\n`); puffa(); },
+    slut() { stangd = true; puffa(); },
+  };
+};
+const k1Vanta = (ms = 5) => new Promise((k) => setTimeout(k, ms));
+const K1RAD = "0b3c1e9a-6f1d-4c55-9a51-2d3f6c7b8e90";
+const K1SV = { h: "svar", text: "Du har ⟦t1:3⟧ saker som väntar.", tal: [{ id: "t1", varde: 3, om: "Väntar på dig · data per 2026-11-17" }], obelagda: 0, kalla: "Skrivet av AI ur Navs tal", kallor: [{ verktyg: "las_vantar", anrop: 1, text: "Väntar på dig · data per 2026-11-17" }], kort: [], nasta: [], ja: false };
+const k1Lager = () => { const m = new Map(); return { m, getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; };
+// En chatt med en egen ström per fråga, lagring i fliken och en skärmläsarnod som minns vad den sagt.
+const k1Chatt = ({ lager = k1Lager(), jag = null } = {}) => {
+  const g = hem({ chef: false }); g.ND.hem.chatt = true; if (jag) g.ND.jag = { ...g.ND.jag, id: jag };
+  const strommar = [], stopp = [], sagt = [], fokus = [];
+  g.fetch = async (url, init) => { const b = JSON.parse(init.body); if (b.stoppa){ stopp.push({ b, keepalive: init.keepalive }); return { ok: true, status: 200, headers: { get: () => "application/json" }, json: async () => ({ ok: true }) }; } const st = k1Strom(); strommar.push({ b, st }); init.signal.addEventListener("abort", () => st.slut()); return st.res; };
+  const sr = { id: "hvSr", _t: "", get textContent() { return this._t; }, set textContent(v) { this._t = v; sagt.push(v); }, setAttribute() {} };
+  let srFinns = false;
+  const statusrad = { focus: () => fokus.push("kortst") };
+  g.document = { ...g.document, getElementById: (id) => (id === "hvSr" && srFinns ? sr : null), createElement: () => { srFinns = true; return sr; }, body: { appendChild() {} }, querySelector: (q) => (/data-hvkortst="0:0"/.test(q) ? statusrad : null), querySelectorAll: () => [] };
+  g.requestAnimationFrame = (f) => f();
+  g.sessionStorage = lager;
+  g.toast = (t) => g.anrop.push(["toast", t]);
+  return { g, strommar, stopp, sagt, fokus, lager };
+};
+
+rubrik("Funktionsvarvet K1, A1-1: svaret skrivs fram mening för mening, och slutsvaret ersätter alltid utkastet");
+{
+  const { g, strommar } = k1Chatt();
+  g.S.hv.q = "Vad väntar på mig?";
+  const p = g.hvFraga(); await k1Vanta();
+  const st = strommar[0].st;
+  st.ge({ h: "rad", id: K1RAD });
+  st.ge({ h: "hamtar", text: "Hämtar det som väntar på dig.", anrop: 1, verktyg: "las_vantar" }); await k1Vanta();
+  const steget = g.hvHem();
+  ok("steget som pågår visar sekunderna som går (data-hvt0), och stegklockan startas en gång", steget.includes("data-hvt0=") && g.anrop.filter((a) => a[0] === "setInterval" && a[1] === 100).length <= 1);
+  st.ge({ h: "klart", anrop: 1, ok: true, text: "Väntar på dig · data per 2026-11-17", ms: 300 });
+  st.ge({ h: "text", text: "Du har ⟦t1:3⟧ saker som väntar.", tal: [{ id: "t1", varde: 3 }] }); await k1Vanta();
+  const utk = g.hvHem(), tur = g.S.hv.chatt[0];
+  ok("utkastet ritas medan svaret skrivs, utan att läsas upp (aria-hidden), med markören sist", /<div class="hv-svar" aria-hidden="true"><p>Du har <span class="num">3<\/span> saker som väntar\.<i class="hv-markor"/.test(utk), utk.slice(utk.indexOf("hv-svar") - 20, utk.indexOf("hv-svar") + 300));
+  ok("i utkastet är talen inga knappar, och Kopiera, Försök igen och korten finns inte än", !utk.includes('data-hvtal="0:t1"') && !utk.includes("data-hvchattkop") && !utk.includes("data-hvchattigen") && !utk.includes("hv-utk\""));
+  st.ge({ h: "hamtar", text: "Kontrollerar talen i svaret." }); await k1Vanta();
+  const ton = g.hvHem();
+  ok("skrivs svaret om tonas utkastet ned med Talen kontrolleras", ton.includes('<div class="hv-svar hv-tonad" aria-hidden="true">') && ton.includes('<p class="hv-tank">Talen kontrolleras.</p>'));
+  st.ge(K1SV); await k1Vanta();
+  const klar = g.hvHem();
+  ok("slutsvaret ersätter utkastet: inget tonat, talet är en knapp, Kopiera och Försök igen står under", !klar.includes("hv-tonad") && !klar.includes("Talen kontrolleras") && klar.includes('data-hvtal="0:t1"') && klar.includes('data-hvchattkop="0"') && klar.includes('data-hvchattigen="0"') && !klar.includes('aria-hidden="true"><p>Du har'));
+  ok("efter svaret släpps låset direkt (Skicka är tillbaka), men strömmen läses till slutet", g.S.hv.strom === null && tur.oppen === true && !tur.laddar && klar.includes('aria-label="Skicka"'));
+  // En ny fråga medan den förra läses klart väntar: annars svarar rutten 429 pagar.
+  g.S.hv.q = "Och i morgon?";
+  const p2 = g.hvFraga(); await k1Vanta();
+  ok("en ny fråga medan den förra läses klart skickas först när strömmen är stängd", strommar.length === 1);
+  st.slut(); await p; await k1Vanta();
+  ok("när strömmen stängts är turen stängd och nästa fråga skickas", tur.oppen === false && strommar.length === 2);
+  const st2 = strommar[1].st; st2.ge({ h: "rad", id: K1RAD }); st2.ge(K1SV); st2.slut(); await p2;
+
+  // Tom text tar tillbaka utkastet; en ström som stängs före svaret säger var det bröts.
+  const b = k1Chatt();
+  b.g.S.hv.q = "Hur gick veckan?";
+  const pb = b.g.hvFraga(); await k1Vanta();
+  const sb = b.strommar[0].st;
+  sb.ge({ h: "rad", id: K1RAD }); sb.ge({ h: "text", text: "Ett utkast.", tal: [] }); await k1Vanta();
+  ok("utkastet står när text kommit", b.g.hvHem().includes("Ett utkast."));
+  sb.ge({ h: "text", text: "", tal: [] }); await k1Vanta();
+  ok("tom text tar tillbaka utkastet", !b.g.hvHem().includes("Ett utkast.") && b.g.S.hv.chatt[0].utkast === null);
+  sb.ge({ h: "text", text: "Första meningen står.", tal: [] }); await k1Vanta();
+  sb.slut(); await pb;
+  const brott = b.g.hvHem(), bt = b.g.S.hv.chatt[0];
+  ok("bryts strömmen före svaret står utkastet kvar (nu läsbart, nedtonat) och felet säger Svaret bröts här, med Försök igen", brott.includes('<div class="hv-svar hv-tonad"><p>Första meningen står.</p></div>') && brott.includes("Svaret bröts här.") && brott.includes('data-hvchattigen="0"') && bt.kod === "ofullstandigt" && !brott.includes("data-hvchattkop"), brott.slice(brott.indexOf("hv-svar") - 20, brott.indexOf("hv-svar") + 400));
+  ok("utan svar visas inga kort och ingen källrad", !brott.includes("hv-kalla"));
+
+  // Det som kommer efter slutsvaret ritas inte.
+  const c = k1Chatt();
+  c.g.S.hv.q = "Vad väntar på mig?";
+  const pc = c.g.hvFraga(); await k1Vanta();
+  const sc = c.strommar[0].st; sc.ge({ h: "rad", id: K1RAD }); sc.ge(K1SV); sc.ge({ h: "text", text: "Sent utkast.", tal: [] }); sc.ge({ h: "fel", text: "Sent fel.", kod: "ai" }); sc.slut(); await pc;
+  const ct = c.g.S.hv.chatt[0], ch = c.g.hvHem();
+  ok("en händelse efter slutsvaret ändrar ingenting", !ct.fel && !ct.utkast && !ch.includes("Sent utkast.") && !ch.includes("Sent fel."));
+}
+
+rubrik("Funktionsvarvet K1, A1-2: tråden överlever en omladdning, och en omladdning mitt i ett svar spärrar inte nästa fråga");
+{
+  const lager = k1Lager();
+  const a = k1Chatt({ lager });
+  a.g.S.hv.q = "Vad väntar på mig?";
+  const pa = a.g.hvFraga(); await k1Vanta();
+  const sa = a.strommar[0].st;
+  sa.ge({ h: "rad", id: K1RAD }); await k1Vanta();
+  ok("rad-händelsen sparas på turen", a.g.S.hv.chatt[0].rad === K1RAD);
+  const nyckel = `nav2-hvutkast-trad:${a.g.ND.jag.id}`;
+  ok("tråden sparas i fliken under nav2-hvutkast-trad:<person>, också medan svaret pågår", lager.m.has(nyckel) && JSON.parse(lager.m.get(nyckel)).turer[0].laddar === true);
+  a.g.hvChattStopp(); await pa;
+  ok("Stopp skickar radens id: bara den här frågan stoppas", a.stopp.length === 1 && a.stopp[0].b.stoppa === true && a.stopp[0].b.rad === K1RAD && a.stopp[0].keepalive === true, JSON.stringify(a.stopp));
+
+  // Sidan stängs mitt i ett svar: stoppet går med keepalive och radens id, och tråden sparas som den står.
+  const b = k1Chatt({ lager: k1Lager() });
+  b.g.S.hv.q = "Hur går månaden?";
+  const pb = b.g.hvFraga(); await k1Vanta();
+  const sb = b.strommar[0].st; sb.ge({ h: "rad", id: K1RAD }); sb.ge({ h: "hamtar", text: "Läser din månad.", anrop: 1, verktyg: "las_provision" }); await k1Vanta();
+  b.g.hvSidanGar();
+  ok("pagehide stoppar frågan som pågår med keepalive och radens id", b.stopp.length === 1 && b.stopp[0].keepalive === true && b.stopp[0].b.rad === K1RAD);
+  ok("och lyssnaren är satt på pagehide", /window\.addEventListener\('pagehide', hvSidanGar\);/.test(block));
+  // Omladdningen: en ny flik med samma lagring.
+  const sparat = b.lager;
+  const c = k1Chatt({ lager: sparat });
+  const ch = c.g.hvHem();
+  const ct = c.g.S.hv.chatt[0];
+  ok("efter omladdningen står turen kvar, och den som pågick säger det med koden omladdad och Försök igen", ct && ct.kod === "omladdad" && !ct.laddar && /Sidan laddades om innan svaret var klart/.test(ct.fel) && c.g.S.hv.trad.length === 1, JSON.stringify(ct && { kod: ct.kod, fel: ct.fel }));
+  c.g.S.hv.ark = "chatt"; c.g.S.hv.id = "0";
+  const chT = c.g.hvHem();
+  ok("felraden för en omladdad tur erbjuder Försök igen", chT.includes("Sidan laddades om innan svaret var klart") && chT.includes('data-hvchattigen="0"'));
+  ok("Skicka är fri efter omladdningen (inget lås följer med)", c.g.S.hv.strom === null || c.g.S.hv.strom === undefined);
+  sb.slut(); await pb;
+
+  // Ett kort som gjordes när sidan laddades om får ingen Godkänn, och säger att det ska kontrolleras.
+  const KORT = { rubrik: "Lägg upp 1 uppgift", rader: [{ text: "Ring A" }], steg: [{ vag: "/nav2/uppgifter", body: { handling: "ny" } }], klart: "Klart." };
+  const l2 = k1Lager();
+  const d = k1Chatt({ lager: l2 });
+  d.g.S.hv.chatt = [{ fraga: "Lägg upp", filer: ["offert.pdf"], bilagor: [{ namn: "offert.pdf", data: "QUJD" }], steg: [], svar: { ...K1SV, kort: [KORT] }, fel: "", kod: "", laddar: false, lage: [{ gjorda: [], gor: true, slut: "" }], narMin: d.g.now() }];
+  d.g.hvTradSpara();
+  const rad2 = l2.m.get(`nav2-hvutkast-trad:${d.g.ND.jag.id}`);
+  ok("filerna sparas aldrig, bara deras namn", !rad2.includes("QUJD") && !rad2.includes("bilagor") && rad2.includes("offert.pdf"));
+  const e = k1Chatt({ lager: l2 });
+  e.g.hvHem(); e.g.S.hv.ark = "chatt"; e.g.S.hv.id = "0";
+  const eh = e.g.hvHem();
+  ok("ett kort som höll på att göras: Sidan laddades om medan kortet gjordes, utan Godkänn", eh.includes("Sidan laddades om medan kortet gjordes. Se efter i Uppgifter först.") && !eh.includes("data-hvchattgodkann"));
+  let skrivet = 0; e.g.ndSkriv = async () => { skrivet++; return { ok: true }; };
+  await e.g.hvChattGodkann(0, 0);
+  ok("och det går inte att godkänna det igen", skrivet === 0);
+  ok("Försök igen erbjuds inte på en tur vars kort kan ha gjorts", !eh.includes('data-hvchattigen="0"'));
+
+  // Personen: nästa person på samma dator får inte den förras tråd.
+  const f = k1Chatt({ lager: l2, jag: "annan-person" });
+  f.g.hvHem();
+  ok("tråden är per person: en annan inloggad får ingen tråd", f.g.S.hv.chatt.length === 0);
+  // Utloggningen rensar allt som börjar med nav2-hvutkast, och trådens nyckel gör det.
+  ok("utloggningen rensar tråden (nyckeln börjar med nav2-hvutkast)", html.includes("Object.keys(sessionStorage).filter(k => k.indexOf('nav2-hvutkast') === 0)") && /const HVTRAD = 'nav2-hvutkast-trad'/.test(block));
+  // Högst 20 turer sparas.
+  const m = k1Chatt({ lager: k1Lager() });
+  m.g.S.hv.chatt = Array.from({ length: 25 }, (_, i) => ({ fraga: `Fråga ${i}`, filer: [], steg: [], svar: K1SV, fel: "", kod: "", laddar: false, lage: [], narMin: m.g.now() }));
+  m.g.hvTradSpara();
+  const mt = JSON.parse(m.lager.m.get(`nav2-hvutkast-trad:${m.g.ND.jag.id}`)).turer;
+  ok("högst 20 turer sparas, de senaste", mt.length === 20 && mt[0].fraga === "Fråga 5" && mt[19].fraga === "Fråga 24");
+  // En tur från i går tas inte tillbaka: dagens minut går inte att räkna för den.
+  const y = k1Lager(); const yg = k1Chatt({ lager: y });
+  y.setItem(`nav2-hvutkast-trad:${yg.g.ND.jag.id}`, JSON.stringify({ oppen: true, turer: [{ fraga: "I går", filer: [], steg: [], svar: K1SV, nar: Date.now() - 26 * 3600e3, lage: [] }] }));
+  yg.g.hvHem();
+  ok("en tur från en tidigare dag tas inte tillbaka", yg.g.S.hv.chatt.length === 0);
+  // Var tråden öppen står den öppen igen.
+  const o = k1Lager(); const og = k1Chatt({ lager: o });
+  o.setItem(`nav2-hvutkast-trad:${og.g.ND.jag.id}`, JSON.stringify({ oppen: true, turer: [{ fraga: "Vad väntar?", filer: [], steg: [], svar: K1SV, nar: Date.now(), lage: [] }] }));
+  og.g.hvHem();
+  ok("var tråden öppen när sidan laddades om står den öppen igen, på den sista turen", og.g.S.hv.ark === "chatt" && og.g.S.hv.id === "0");
+  // Utan lagring (privat fönster) fungerar chatten ändå.
+  const u = k1Chatt({ lager: { getItem() { throw new Error("nej"); }, setItem() { throw new Error("nej"); }, removeItem() { throw new Error("nej"); } } });
+  let kastat = false; try { u.g.hvHem(); u.g.S.hv.chatt = [{ fraga: "x", filer: [], steg: [], svar: K1SV, lage: [] }]; u.g.hvTradSpara(); } catch (_) { kastat = true; }
+  ok("utan lagring kastar ingenting", !kastat);
+  // Försök igen efter omladdning med filer: filerna finns inte kvar, så frågan läggs i rutan i stället.
+  const fl = k1Lager(); const fg = k1Chatt({ lager: fl });
+  fl.setItem(`nav2-hvutkast-trad:${fg.g.ND.jag.id}`, JSON.stringify({ oppen: true, turer: [{ fraga: "Läs filen", filer: ["kvitto.png"], steg: [], svar: null, laddar: true, nar: Date.now(), lage: [] }] }));
+  fg.g.hvHem(); fg.g.hvChattIgen(0);
+  ok("Försök igen efter omladdning med filer skickar inte utan filerna: frågan står i rutan och toasten säger varför", fg.strommar.length === 0 && fg.g.S.hv.q === "Läs filen" && fg.g.anrop.some((x) => x[0] === "toast" && /Filerna finns inte kvar/.test(x[1])));
+}
+
+rubrik("Funktionsvarvet K1, A1-7: skärmläsare, tangentbord och två flikar");
+{
+  const { g, strommar, sagt } = k1Chatt();
+  const h0 = g.hvHem();
+  g.S.hv.q = "Vad väntar på mig?";
+  const p = g.hvFraga(); await k1Vanta();
+  const tr = g.hvHem();
+  ok("trådkolumnen har ingen aria-live (den ritas om under strömmen), men är upptagen medan svaret pågår", tr.includes('<div class="hv-tcol" aria-busy="true">') && !/hv-tcol"[^>]*aria-live/.test(tr));
+  const st = strommar[0].st;
+  st.ge({ h: "rad", id: K1RAD });
+  st.ge({ h: "hamtar", text: "Hämtar det som väntar på dig.", anrop: 1, verktyg: "las_vantar" });
+  st.ge({ h: "klart", anrop: 1, ok: true, text: "Väntar på dig", ms: 200 });
+  st.ge({ h: "hamtar", text: "Hämtar dagen.", anrop: 2, verktyg: "las_dag" });
+  st.ge({ h: "text", text: "Ett utkast som inte ska läsas upp.", tal: [] });
+  st.ge(K1SV); st.slut(); await p;
+  ok("skärmläsaren får det första steget och Svar klart, en gång var, och aldrig utkastet", JSON.stringify(sagt) === JSON.stringify(["Hämtar det som väntar på dig.", "Svar klart."]), JSON.stringify(sagt));
+  // Felet sägs också.
+  const f = k1Chatt();
+  f.g.S.hv.q = "Vad väntar?";
+  const pf = f.g.hvFraga(); await k1Vanta();
+  const sf = f.strommar[0].st; sf.ge({ h: "rad", id: K1RAD }); sf.ge({ h: "fel", text: "Jag fick inget svar. Försök igen.", kod: "tomt" }); sf.slut(); await pf;
+  ok("ett fel sägs av skärmläsaren", f.sagt[f.sagt.length - 1] === "Jag fick inget svar. Försök igen.", JSON.stringify(f.sagt));
+
+  // Efter Godkänn och Avbryt står fokus på kortets statusrad.
+  const KORT = { rubrik: "Lägg upp 1 uppgift", rader: [{ text: "Ring A" }], steg: [{ vag: "/nav2/uppgifter", body: { handling: "ny" } }], klart: "Klart." };
+  const k = k1Chatt();
+  k.g.S.hv.chatt = [{ fraga: "Lägg upp", filer: [], bilagor: [], steg: [], svar: { ...K1SV, kort: [KORT] }, fel: "", kod: "", laddar: false, lage: [], narMin: k.g.now() }];
+  k.g.S.hv.trad = [{ sort: "chatt", id: "0", nr: 1 }]; k.g.S.hv.ark = "chatt"; k.g.S.hv.id = "0";
+  const kh = k.g.hvHem();
+  ok("kortets statusrad kan ta fokus (tabindex=-1)", kh.includes('<span class="hv-tank" role="status" tabindex="-1" data-hvkortst="0:0">Inget är gjort än.</span>'));
+  k.g.ndSkriv = async () => ({ ok: true }); k.g.ndSvar = (r) => r;
+  await k.g.hvChattGodkann(0, 0);
+  ok("efter Godkänn flyttas fokus till statusraden, där kvittot står", k.fokus.length === 1 && k.g.hvHem().includes('<span class="hv-kvi" tabindex="-1" data-hvkortst="0:0">'));
+  const k2 = k1Chatt();
+  k2.g.S.hv.chatt = [{ fraga: "Lägg upp", filer: [], bilagor: [], steg: [], svar: { ...K1SV, kort: [KORT] }, fel: "", kod: "", laddar: false, lage: [], narMin: k2.g.now() }];
+  k2.g.hvChattAvbryt(0, 0);
+  ok("efter Avbryt flyttas fokus till statusraden", k2.fokus.length === 1);
+
+  // "/" lägger fokus i skrivrutan när fokus inte står i ett fält.
+  const sl = k1Chatt(); let fq = 0, hindrat = false;
+  sl.g.document = { ...sl.g.document, getElementById: (id) => (id === "hvQ" ? { focus: () => fq++ } : null) };
+  sl.g.hvTangent({ key: "/", target: { matches: () => false }, preventDefault() { hindrat = true; }, stopImmediatePropagation() {} });
+  ok("/ lägger fokus i skrivrutan", fq === 1 && hindrat);
+
+  // Två flikar: kanalen säger när en fråga startar och slutar, och den andra fliken skickar inte.
+  const kanaler = [];
+  class Kanal { constructor(n) { this.namn = n; this.skickat = []; kanaler.push(this); } postMessage(d) { this.skickat.push(d.sort); } }
+  const a = k1Chatt(); a.g.BroadcastChannel = Kanal;
+  a.g.S.hv.q = "Vad väntar?";
+  const pa = a.g.hvFraga(); await k1Vanta();
+  const sa = a.strommar[0].st; sa.ge({ h: "rad", id: K1RAD }); sa.ge(K1SV); sa.slut(); await pa;
+  ok("kanalen heter nav2-chatt:<person> och säger start och slut", kanaler[0].namn === `nav2-chatt:${a.g.ND.jag.id}` && JSON.stringify(kanaler[0].skickat) === '["start","slut"]', JSON.stringify(kanaler[0] && kanaler[0].skickat));
+  const b = k1Chatt(); b.g.BroadcastChannel = Kanal;
+  b.g.hvAnnanFlik(); kanaler[1].onmessage({ data: { sort: "start" } });
+  b.g.S.hv.q = "En fråga till";
+  b.g.hvFraga();
+  ok("svarar Nav i en annan flik skickas ingenting: toasten säger det och frågan står kvar i rutan", b.strommar.length === 0 && b.g.S.hv.q === "En fråga till" && b.g.anrop.some((x) => x[0] === "toast" && x[1].startsWith("Nav svarar i en annan flik")));
+  kanaler[1].onmessage({ data: { sort: "slut" } });
+  ok("när den andra fliken är klar går frågan att skicka", b.g.hvAnnanFlik() === false);
+  b.g.S.hv.annanFlik = Date.now() - 131000;
+  ok("ett start som aldrig fick sitt slut gäller inte längre än en fråga kan pågå", b.g.hvAnnanFlik() === false);
+  ok("utan BroadcastChannel fungerar chatten ändå", (() => { const c = k1Chatt(); c.g.BroadcastChannel = undefined; return c.g.hvAnnanFlik() === false; })());
+}
+
+rubrik("Funktionsvarvet K1, A1-8: det chatten säger när den inte vet syns som det det är");
+{
+  const vy = (svar, steg = []) => { const c = k1Chatt(); c.g.S.hv.chatt = [{ fraga: "Fråga", filer: [], bilagor: [], steg, svar, fel: "", kod: "", laddar: false, lage: [] }]; c.g.S.hv.trad = [{ sort: "chatt", id: "0", nr: 1 }]; c.g.S.hv.ark = "chatt"; c.g.S.hv.id = "0"; return c.g.hvHem(); };
+  const utan = vy({ ...K1SV, text: "Det vet jag inte.", tal: [], kalla: "Skrivet av AI, inte ur Navs tal eller kunskapsbasen", kallor: [] });
+  ok("utan källor står Ingen källa först, i signalfärgen", utan.includes('<p class="hv-kalla hv-ingen"><b>Ingen källa</b> · Skrivet av AI, inte ur Navs tal eller kunskapsbasen</p>'));
+  const med = vy(K1SV, [{ nr: 1, verktyg: "las_vantar", text: "Hämtar.", ok: true, ms: 100, kalla: "Väntar på dig" }]);
+  ok("med källor står källraden som förut", med.includes('<p class="hv-kalla">Skrivet av AI ur Navs tal</p>') && !med.includes("Ingen källa") && !med.includes("Navs data gick inte att läsa"));
+  const { kallor: _k, ...utanFalt } = K1SV;
+  ok("saknas fältet ritas inget nytt (ingen gissning)", !vy(utanFalt).includes("Ingen källa"));
+  const foll = vy({ ...K1SV, kallor: [] }, [{ nr: 1, verktyg: "las_vantar", text: "Hämtar.", ok: false, ms: 100, kalla: "Det gick inte att läsa just nu." }, { nr: 2, verktyg: "las_dag", text: "Hämtar dagen.", ok: false, ms: 80, kalla: "Det gick inte att läsa just nu." }, { nr: null, verktyg: "", text: "Kontrollerar talen i svaret.", ok: null, ms: 0, kalla: "" }]);
+  ok("föll alla verktyg står Navs data gick inte att läsa ovanför svaret", foll.includes('<p class="hv-tank hv-ingen">Navs data gick inte att läsa.</p><div class="hv-svar"'));
+  const ettOk = vy(K1SV, [{ nr: 1, verktyg: "las_vantar", text: "Hämtar.", ok: false, ms: 100, kalla: "x" }, { nr: 2, verktyg: "las_dag", text: "Hämtar.", ok: true, ms: 100, kalla: "y" }]);
+  ok("svarade ett verktyg står den raden inte", !ettOk.includes("Navs data gick inte att läsa"));
+  ok("signalfärgen är skissens token, i ljust och mörkt", /\.hv-ingen\{color:var\(--hv-signal-ink\)\}/.test(html));
+  ok("utkastets toning är 120–250 ms opacity och av vid prefers-reduced-motion", /\.hv-svar\.hv-tonad\{opacity:\.55;transition:opacity var\(--hv-t,200ms\)/.test(html) && /@media \(prefers-reduced-motion:reduce\)\{\.hv-svar\.hv-tonad\{transition:none\}\}/.test(html));
+}
+
+/* ---------- Funktionsvarvet K2: chattens svar leder vidare (A1-3, A1-4, A1-5, funktion 3 och 6) ---------- */
+const k2Klick = (g, attr) => g.hvKlick({ target: { closest: () => ({ dataset: attr }) }, preventDefault() {}, stopPropagation() {} });
+// En chatt där provet styr strömmen, och där varje skrivning (ndSkriv) bokförs och får det svar provet ger.
+const k2Chatt = async (svar, { svara = null, slut = true } = {}) => {
+  const c = k1Chatt(); const { g, strommar } = c;
+  const skrivet = [];
+  g.ndSkriv = async (url, data) => { skrivet.push([url, JSON.parse(JSON.stringify(data))]); const s = svara ? svara(url, data, skrivet.length) : null; return s ?? (data.utfall || data.handling === "flagga" ? { ok: true, status: 200, data: { ok: "Skickat till den som förvaltar Nav, med frågan och svaret." } } : { ok: "Sparat.", id: `ny${skrivet.length}` }); };
+  g.ndSvar = (x) => x; g.ndOmlas = () => Promise.resolve(true); g.NDOMLAS = {};
+  g.upgTolkaDag = (q) => ({ fre: "2026-11-20", "25/11": "2026-11-25", ingen: "", "": null })[String(q).trim()];
+  g.S.hv.q = "Fråga"; g.hvFraga(); await k1Vanta();
+  const st = strommar[0].st; st.ge({ h: "rad", id: K1RAD }); st.ge({ h: "svar", ...svar }); await k1Vanta();
+  if (slut) { st.slut(); await k1Vanta(); }
+  return { ...c, st, skrivet };
+};
+let ek2Sett = 0;
+const K2SV = (x = {}) => ({ text: "Klart.", tal: [], obelagda: 0, kalla: "Skrivet av AI ur Navs tal", kallor: [{ verktyg: "las_matt", anrop: 1, text: "x" }], kort: [], nasta: [], ja: false, ...x });
+
+rubrik("Funktionsvarvet K2, A1-3: följdfrågorna ur serverns nasta, högst två, och ett klick ställer frågan");
+{
+  const N = [{ text: "Hur gick lagets hållna möten förra veckan?", knapp: "Förra veckan" }, { text: "Hur gick <b>mina</b> möten?", knapp: "Bara jag" }, { text: "En tredje?", knapp: "Tredje" }];
+  const { g, strommar } = await k2Chatt(K2SV({ nasta: N }));
+  const ut = g.hvHem();
+  ok("högst två följdfrågor står under svaret, med knappens ord och hela frågan som namn", (ut.match(/data-hvchattnasta=/g) || []).length === 2 && ut.includes('aria-label="Fråga: Hur gick lagets hållna möten förra veckan?"') && ut.includes(">Förra veckan</button>") && !ut.includes("Tredje"));
+  ok("följdfrågans text kan inte bli kod", ut.includes("Hur gick &lt;b&gt;mina&lt;/b&gt; möten?") && !ut.includes("<b>mina</b>"));
+  ok("följdfrågorna står efter svarets åtgärder och källrad", ut.indexOf("data-hvchattnasta") > ut.indexOf('data-hvchattkop="0"') && ut.indexOf("data-hvchattnasta") > ut.indexOf("hv-kalla"));
+  k2Klick(g, { hvchattnasta: "0:0" }); await k1Vanta();
+  ok("ett klick ställer frågan som en vanlig fråga, med texten servern skrev", strommar.length === 2 && strommar[1].b.fraga === "Hur gick lagets hållna möten förra veckan?" && g.S.hv.chatt.length === 2);
+  strommar[1].st.ge({ h: "rad", id: K1RAD }); strommar[1].st.ge({ h: "svar", ...K2SV({ nasta: [] }) }); strommar[1].st.slut(); await k1Vanta();
+  const tva = g.hvHem();
+  ok("bara det sista svaret har följdfrågor, och en tom lista ger ingen rad", !tva.includes("data-hvchattnasta") && !tva.includes("hv-nasta"));
+  const av = await k2Chatt(K2SV({ nasta: N })); av.g.ND.hem.chatt = false;
+  ok("med chatten av står inga följdfrågor", !av.g.hvHem().includes("data-hvchattnasta"));
+  const utan = await k2Chatt(K2SV({ nasta: undefined }));
+  ok("utan fältet nasta ritas inget", !utan.g.hvHem().includes("hv-nasta"));
+  ok("ingen Ja-knapp ritas (B4), också när servern säger ja", !(await k2Chatt(K2SV({ ja: true }))).g.hvHem().includes("Ja, gör det"));
+}
+
+rubrik("Funktionsvarvet K2, A1-4: talet leder till sin vy, listor är listor och underlaget ligger ett klick bort");
+{
+  const { g } = await k2Chatt(K2SV({ text: "Tre saker väntar:\n- Ring ⟦t1:3⟧ kunder\n- Skicka offerten\n\nSedan är det klart.", tal: [{ id: "t1", varde: 3, kalla: { verktyg: "las_vantar", anrop: 1, falt: "antal" }, om: "Väntar på dig · data per 2026-11-17", ser: null, motvikt: null, forFa: false }] }));
+  const ut = g.hvHem();
+  ok("rader som börjar med - blir en lista, efter stycket de står i, och talet i listan är en knapp", /<p>Tre saker väntar:<\/p><ul><li>Ring <button class="hv-siffra num" data-hvtal="0:t1"[^>]*>3<\/button> kunder<\/li><li>Skicka offerten<\/li><\/ul><p>Sedan är det klart\.<\/p>/.test(ut), ut.slice(ut.indexOf("hv-svar"), ut.indexOf("hv-svar") + 400));
+  k2Klick(g, { hvtal: "0:t1" });
+  const kl = g.hvHem();
+  ok("källraden får talets väg vidare sist: Öppna Väntar på dig", /<p class="hv-talk hv-mono" id="hvTalk0">Väntar på dig · data per 2026-11-17<button class="hv-lank" data-hvtalvidare="0:t1">Öppna Väntar på dig<\/button><\/p>/.test(kl), kl.slice(kl.indexOf("hv-talk") - 20, kl.indexOf("hv-talk") + 300));
+  k2Klick(g, { hvtalvidare: "0:t1" });
+  ok("ett klick öppnar vyn verktyget läste", g.S.hv.ark === "vantar");
+  const vy = (verktyg, x = {}) => { const h = hem({ chef: x.chef ?? false }); Object.assign(h, x.g || {}); h.S.hv.chatt = [{ fraga: "F", filer: [], steg: [], svar: K2SV({ text: "⟦t1:1⟧", tal: [{ id: "t1", varde: 1, kalla: { verktyg, anrop: 1, falt: "antal" }, om: "Källa" }] }), lage: [], visa: "t1", laddar: false }]; h.S.hv.trad = [{ sort: "chatt", id: "0", nr: 1 }]; h.S.hv.ark = "chatt"; h.S.hv.id = "0"; return h.hvHem(); };
+  ok("las_dag öppnar Min dag, las_affarer Möten", vy("las_dag").includes(">Öppna Min dag<") && vy("las_affarer").includes(">Öppna Möten<"));
+  ok("las_matt: chefen får Min statistik, säljaren Möten", vy("las_matt", { chef: true, g: { ndMsChef: () => "" } }).includes(">Öppna Min statistik<") && vy("las_matt").includes(">Öppna Möten<"));
+  ok("utan Möten kopplat står ingen väg för las_matt och las_affarer", !vy("las_matt", { g: { ndKopplad: () => false } }).includes("data-hvtalvidare") && !vy("las_affarer", { g: { ndKopplad: () => false } }).includes("data-hvtalvidare"));
+  ok("Kunskapsbasen bara för den som förvaltar den", vy("sok_kunskap", { g: { kunFar: () => true, prfGa: () => {} } }).includes(">Öppna Kunskapsbasen<") && !vy("sok_kunskap", { g: { kunFar: () => false, prfGa: () => {} } }).includes("data-hvtalvidare"));
+  ok("ett verktyg utan vy har ingen väg vidare", !vy("forbered_uppgifter").includes("data-hvtalvidare"));
+
+  const U = { anrop: 1, verktyg: "las_affarer", rubrik: "Öppna affärer · Ditt lag · data per 2026-11-17", kolumner: ["Bolag", "Steg", "Nästa", "Belopp"], rader: [["Hagby <b>Glas</b>", "Offert", null, 36000], ["Åkes Bygg", "Möte", "2026-11-20", null]], totalt: 23 };
+  const u = await k2Chatt(K2SV({ underlag: U }));
+  let uu = u.g.hvHem();
+  ok("underlaget ligger bakom en knapp, stängt", uu.includes('data-hvchattulag="0" aria-expanded="false" aria-controls="hvUlag0">Visa underlaget</button>') && !uu.includes("<table"));
+  k2Klick(u.g, { hvchattulag: "0" }); uu = u.g.hvHem();
+  ok("ett klick fäller ut raderna med serverns rubrik och kolumner", uu.includes('aria-expanded="true"') && uu.includes(">Dölj underlaget<") && uu.includes('<div class="hv-ulag" id="hvUlag0"><p class="hv-mono">Öppna affärer · Ditt lag · data per 2026-11-17</p>') && uu.includes('<th scope="col">Bolag</th><th scope="col">Steg</th><th scope="col">Nästa</th><th scope="col">Belopp</th>'));
+  ok("ett tomt fält är tomt, aldrig 0, och ett tal står med svenska siffror", uu.includes("<td>Offert</td><td></td>") && uu.includes(`<td class="num">${(36000).toLocaleString("sv-SE")}</td>`) && uu.includes("<td>2026-11-20</td><td></td></tr>"));
+  ok("raderna kan inte bli kod", uu.includes("Hagby &lt;b&gt;Glas&lt;/b&gt;") && !uu.includes("<b>Glas</b>"));
+  ok("verktygets eget antal säger hur många som inte visas", uu.includes('<p class="hv-tank">Visar 2 av 23.</p>'));
+  const mycket = await k2Chatt(K2SV({ underlag: { ...U, kolumner: ["a", "b", "c", "d", "e", "f"], rader: Array.from({ length: 15 }, (_x, i) => [i, 1, 2, 3, 4, 5]), totalt: null } }));
+  k2Klick(mycket.g, { hvchattulag: "0" }); const mm = mycket.g.hvHem();
+  ok("mycket data: högst 10 rader och 4 kolumner, och utan totalt ingen Visar-rad", (mm.match(/<tr>/g) || []).length === 11 && !mm.includes('scope="col">e<') && !mm.includes("Visar "));
+  ok("utan underlag eller med tomma rader står ingen knapp", !(await k2Chatt(K2SV())).g.hvHem().includes("data-hvchattulag") && !(await k2Chatt(K2SV({ underlag: { ...U, rader: [] } }))).g.hvHem().includes("data-hvchattulag"));
+}
+
+rubrik("Funktionsvarvet K2, funktion 3: motvikten vid talet, först efter klicket");
+{
+  const T1 = { id: "t1", varde: 2, kalla: { verktyg: "las_matt", anrop: 1, falt: "antal" }, om: "Hållna möten · Ditt lag · förra veckan · data per 2026-11-17", ser: "Ser inte möten som saknar utfall, och inte om mötet ledde till något.", motvikt: { text: "uteblivna möten", antal: 1, av: 3 }, forFa: true };
+  const T2 = { id: "t2", varde: 6, kalla: { verktyg: "las_matt", anrop: 2, falt: "antal" }, om: "Order netto · laget · november · data per 2026-11-16", ser: "Ser inte order som inte är godkända än.", motvikt: { text: "makulerade order", antal: 1, av: null }, forFa: false };
+  const T3 = { id: "t3", varde: 1, kalla: { verktyg: "sok_kunskap", anrop: 3, falt: "traffar" }, om: "Dokument i kunskapsbasen som matchade · data per 2026-11-17", ser: null, motvikt: null, forFa: false };
+  const { g } = await k2Chatt(K2SV({ text: "Laget höll ⟦t1:2⟧ möten och har ⟦t2:6⟧ order. ⟦t3:1⟧ dokument. Ungefär ⟦obelagt:63 %⟧.", tal: [T1, T2, T3] }));
+  const fore = g.hvHem();
+  ok("före klicket syns ingen motvikt, inget för få och inget ser inte", !fore.includes("Motvikt:") && !fore.includes("För få") && !fore.includes("Ser inte möten"));
+  k2Klick(g, { hvtal: "0:t1" }); const m = g.hvHem();
+  const i = (s) => m.indexOf(s);
+  ok("efter klicket: källan, Motvikt, För få, Ser inte och vägen vidare, i den ordningen", i("Hållna möten · Ditt lag") > 0 && i("Hållna möten · Ditt lag") < i("Motvikt:") && i("Motvikt:") < i("För få för att jämföra.") && i("För få för att jämföra.") < i("Ser inte möten som saknar utfall") && i("Ser inte möten som saknar utfall") < i(">Öppna Möten<"), m.slice(i("hv-talk"), i("hv-talk") + 600));
+  ok("ett mötesmått står som 1 av 3, aldrig som procent, var rad för sig", m.includes('<span class="hv-mono">Motvikt: uteblivna möten 1 av 3</span>') && !/Motvikt:[^<]*%/.test(m));
+  ok("talet är en knapp med aria-expanded", /data-hvtal="0:t1" aria-expanded="true"/.test(m));
+  k2Klick(g, { hvtal: "0:t2" }); const o = g.hvHem();
+  ok("ett ordermått har bara antalet, och utan För få står ingen sådan rad", o.includes('<span class="hv-mono">Motvikt: makulerade order 1</span>') && !o.includes("För få") && o.includes('<span class="hv-mono">Ser inte order som inte är godkända än.</span>'));
+  g.kunFar = () => false; k2Klick(g, { hvtal: "0:t3" }); const k = g.hvHem();
+  ok("fält som är null eller falska ritas inte: bara källraden", /<p class="hv-talk hv-mono" id="hvTalk0">Dokument i kunskapsbasen som matchade · data per 2026-11-17<\/p>/.test(k) && !k.includes("Motvikt"));
+  ok("ett obelagt tal är ingen knapp och har inga rader", /<mark class="hv-obel"[^>]*>63 %<\/mark>/.test(k) && !k.includes('data-hvtal="0:obelagt"'));
+  const fel = await k2Chatt(K2SV({ text: "⟦t1:2⟧", tal: [{ ...T1, ser: null, motvikt: null, forFa: false }] }));
+  k2Klick(fel.g, { hvtal: "0:t1" });
+  ok("ett verktyg som svarade med fel (fälten null) ger bara källraden", !fel.g.hvHem().includes('<span class="hv-mono">'));
+  let kopierat = null; g.navigator = { clipboard: { writeText: async (t) => { kopierat = t; } } }; g.hvKopiera(0); await k1Vanta();
+  ok("Kopiera tar inte med raderna under talet", typeof kopierat === "string" && kopierat.startsWith("Laget höll 2 möten") && !kopierat.includes("Motvikt") && !kopierat.includes("Ser inte"), kopierat);
+}
+
+rubrik("Funktionsvarvet K2, A1-5: Stämmer inte, kortens utfall och avläsningen");
+{
+  const s = await k2Chatt(K2SV(), { slut: false });
+  let ut = s.g.hvHem();
+  ok("Stämmer inte står under svaret när rutten sagt loggens rad", ut.includes('data-hvchattstammer="0">Stämmer inte</button>'));
+  k2Klick(s.g, { hvchattstammer: "0" }); await k1Vanta();
+  ok("medan strömmen läses klart skickas inget, och knappen går inte att trycka igen", s.skrivet.length === 0 && s.g.hvHem().includes('data-hvchattstammer="0" disabled>Skickar…'));
+  k2Klick(s.g, { hvchattstammer: "0" });
+  s.st.slut(); await k1Vanta(20);
+  ok("när strömmen är slut skickas bara raden, en gång", s.skrivet.length === 1 && s.skrivet[0][0] === "/nav2/hem" && JSON.stringify(s.skrivet[0][1]) === JSON.stringify({ handling: "flagga", var: "chatt", rad: K1RAD }), JSON.stringify(s.skrivet));
+  ut = s.g.hvHem();
+  ok("efteråt står serverns kvitto där knappen stod", ut.includes('<span class="hv-tank" role="status">Skickat till den som förvaltar Nav, med frågan och svaret.</span>') && !ut.includes("data-hvchattstammer"));
+  ok("kvittot sparas med tråden", JSON.parse(s.lager.getItem(`nav2-hvutkast-trad:${s.g.ND.jag.id}`)).turer[0].flagg.klar.startsWith("Skickat"));
+  const ek = await k2Chatt(K2SV(), { svara: (_u, _d, n) => (n === 1 ? { ok: false, status: 409, data: { kod: "ej-klar" }, fel: "Svaret sparas fortfarande. Försök igen om en stund." } : null) });
+  k2Klick(ek.g, { hvchattstammer: "0" }); await k1Vanta(1100);
+  ok("ej-klar prövas en gång till efter en sekund", ek.skrivet.length === 2 && ek.g.hvHem().includes("Skickat till den som förvaltar Nav"));
+  const ff = await k2Chatt(K2SV(), { svara: () => ({ ok: false, status: 500, data: null, fel: "Det gick inte att spara." }) });
+  k2Klick(ff.g, { hvchattstammer: "0" }); await k1Vanta(20);
+  ut = ff.g.hvHem();
+  ok("fel: serverns text som alert, och knappen går att trycka igen", ff.skrivet.length === 1 && ut.includes('role="alert">Det gick inte att spara.</span>') && ut.includes('data-hvchattstammer="0">Stämmer inte</button>'));
+  const ingenRad = hem({ chef: false }); ingenRad.ND.hem.chatt = true;
+  ingenRad.S.hv.chatt = [{ fraga: "F", filer: [], steg: [], svar: K2SV(), lage: [], laddar: false }]; ingenRad.S.hv.trad = [{ sort: "chatt", id: "0", nr: 1 }]; ingenRad.S.hv.ark = "chatt"; ingenRad.S.hv.id = "0";
+  const igen = await k2Chatt(K2SV());
+  k2Klick(igen.g, { hvchattstammer: "0" }); await k1Vanta(20); k2Klick(igen.g, { hvchattulag: "0" });
+  igen.g.hvChattIgen(0); await k1Vanta();
+  ok("Försök igen ger ett nytt svar utan det förra svarets kvitto", igen.g.S.hv.chatt[0].flagg === null && igen.g.S.hv.chatt[0].ulag === false);
+  ok("utan loggens rad (en äldre tråd) står ingen Stämmer inte", !ingenRad.hvHem().includes("data-hvchattstammer"));
+
+  const KU = { rubrik: "Lägg upp en uppgift", klart: "Uppgiften är upplagd.", varning: null, rader: [{ text: "Ring Ekdala", dag: "2026-11-17", not: "" }], steg: [{ vag: "/nav2/uppgifter", body: { handling: "skapa", titel: "Ring Ekdala", dag: "2026-11-17" }, angra: { handling: "avbryt", id: "$id" } }], anrop: 2, verktyg: "forbered_uppgifter", input: { uppgifter: [{ titel: "Ring Ekdala", dag: "2026-11-17", till: "jag" }] } };
+  const ut2 = (c) => c.skrivet.filter((x) => x[1].utfall).map((x) => x[1].utfall);
+  const gk = await k2Chatt(K2SV({ kort: [KU] }));
+  await gk.g.hvChattGodkann(0, 0); await k1Vanta();
+  ok("Godkänn ger utfallet godkant mot kortets anrop, och ett orört kort skickar inget andrat", JSON.stringify(ut2(gk)) === JSON.stringify([{ rad: K1RAD, anrop: 2, lage: "godkant" }]), JSON.stringify(ut2(gk)));
+  await gk.g.hvChattAngra(0, 0); await k1Vanta();
+  ok("Ångra ger angrat", ut2(gk).length === 2 && ut2(gk)[1].lage === "angrat");
+  const ab = await k2Chatt(K2SV({ kort: [KU] }), { slut: false });
+  ab.g.hvChattAvbryt(0, 0); await k1Vanta();
+  ok("Avbryt medan strömmen läses: utfallet väntar på slutet (R1)", ut2(ab).length === 0);
+  ab.st.slut(); await k1Vanta();
+  ok("och skickas sedan som avbrutet", ut2(ab).length === 1 && ut2(ab)[0].lage === "avbrutet");
+  const KU2 = { ...KU, rubrik: "Lägg upp 2 uppgifter", rader: [KU.rader[0], { text: "Skicka offerten", dag: null, not: "utan dag" }], steg: [KU.steg[0], { vag: "/nav2/uppgifter", body: { handling: "skapa", titel: "Skicka offerten", dag: null }, angra: { handling: "avbryt", id: "$id" } }], input: { uppgifter: [KU.input.uppgifter[0], { titel: "Skicka offerten", dag: "", till: "jag" }] } };
+  const dv = await k2Chatt(K2SV({ kort: [KU2] }), { svara: (u, d, n) => (n === 2 && !d.utfall ? { fel: "Det sparades inte." } : null) });
+  await dv.g.hvChattGodkann(0, 0); await k1Vanta();
+  ok("ett kort där bara en del gick ger delvis", ut2(dv).length === 1 && ut2(dv)[0].lage === "delvis", JSON.stringify(ut2(dv)));
+  const ek2 = await k2Chatt(K2SV({ kort: [KU] }), { svara: (_u, d) => (d.utfall && !ek2Sett++ ? { ok: false, status: 409, data: { kod: "ej-klar" }, fel: "Svaret sparas fortfarande." } : null) });
+  await ek2.g.hvChattGodkann(0, 0); await k1Vanta(1100);
+  ok("ett utfall som får ej-klar skickas en gång till efter en sekund, sedan inte mer", ut2(ek2).length === 2 && ut2(ek2)[1].lage === "godkant", JSON.stringify(ut2(ek2)));
+  const ingenAnrop = await k2Chatt(K2SV({ kort: [{ ...KU, anrop: undefined }] }));
+  await ingenAnrop.g.hvChattGodkann(0, 0); await k1Vanta();
+  ok("ett kort utan anrop skickar inget utfall", ut2(ingenAnrop).length === 0);
+
+  const lage = (C) => { const h = hem({ chef: true }); h.ND.hem.chattLage = { pa: true, skal: null, modell: "m", utrymme: null, allas: [], ...C }; return h.hvChattLage(); };
+  const A = { manad: "2026-11", dataPer: "2026-11-17", rad: "Kort i månaden: 5 visade, 1 godkända … · Stämmer inte: 2 · data per 2026-11-17", serInte: "Ser inte <i>varför</i>." };
+  const al = lage({ avlasning: A });
+  ok("avläsningen står för den som ser allas, med serverns rad och vad den inte ser", al.includes("Så gick chattens kort") && al.includes("Stämmer inte: 2 · data per 2026-11-17") && al.includes("Ser inte &lt;i&gt;varför&lt;/i&gt;."));
+  ok("går den inte att läsa säger den det", lage({ avlasning: null }).includes("Avläsningen gick inte att läsa just nu."));
+  ok("den som inte ser allas får ingen avläsning", !lage({ allas: null, avlasning: null }).includes("Så gick chattens kort"));
+}
+
+rubrik("Funktionsvarvet K2, funktion 6: rätta kortet före Godkänn");
+{
+  const KU = { rubrik: "Lägg upp en uppgift", klart: "Uppgiften är upplagd.", varning: null, rader: [{ text: "Följ upp Ekdala", dag: "2026-11-17", not: "" }], steg: [{ vag: "/nav2/uppgifter", body: { handling: "skapa", titel: "Följ upp Ekdala", dag: "2026-11-17" }, angra: { handling: "avbryt", id: "$id" } }], anrop: 3, verktyg: "forbered_uppgifter", input: { uppgifter: [{ titel: "Följ upp Ekdala", dag: "2026-11-17", till: "jag" }] } };
+  const UF = { rubrik: "Ändra dagen för uppföljningen", klart: "Uppföljningen är ändrad.", varning: null, rader: [{ text: "Solbacken", dag: "2026-11-20", not: "förut 2026-11-12" }], steg: [{ vag: "/nav2/moten", body: { handling: "uppfoljning_andra" }, angra: null }], anrop: 4, verktyg: "forbered_uppfoljning", input: { bolag: "Solbacken", dag: "2026-11-20" } };
+  const NY = { ...KU, rader: [{ text: "Följ upp Ekdala", dag: "2026-11-20", not: "" }], steg: [{ ...KU.steg[0], body: { ...KU.steg[0].body, dag: "2026-11-20" } }], anrop: undefined, input: { uppgifter: [{ titel: "Följ upp Ekdala", dag: "2026-11-20", till: "jag" }] } };
+  const c = await k2Chatt(K2SV({ kort: [KU, UF] }), { svara: (u, d) => (d.kommando ? (d.kommando.input.uppgifter && d.kommando.input.uppgifter[0].till === "Okänd" ? { ok: false, status: 422, data: { fel: "Här går det bara att lägga uppgifter åt sig själv och åt sitt eget lag." }, fel: "Här går det bara att lägga uppgifter åt sig själv och åt sitt eget lag." } : { ok: true, status: 200, data: { kort: { ...NY, input: d.kommando.input } } }) : null) });
+  const { g } = c;
+  let ut = g.hvHem();
+  ok("ett kort som inte är avgjort: titel, dag och åt är knappar", ut.includes('data-hvkortratta="0:0:0:titel"') && ut.includes('data-hvkortratta="0:0:0:dag" aria-label="Ändra dagen: 17 nov">17 nov</button>') && ut.includes('data-hvkortratta="0:0:0:till" aria-label="Ändra vem som gör den: åt dig">åt dig</button>'));
+  const at = await k2Chatt(K2SV({ kort: [{ ...KU, rader: [{ ...KU.rader[0], not: "åt Sara Lind" }], input: { uppgifter: [{ ...KU.input.uppgifter[0], till: "sara" }] } }] }));
+  ok("åt står som servern skrev raden (namnet den hittade), inte som AI:n skrev input", at.g.hvHem().includes(">åt Sara Lind</button>") && !at.g.hvHem().includes("åt sara"));
+  at.g.hvKortRattaOppna(0, 0, 0, "till");
+  ok("fältet för åt fylls med det AI:n skrev, så att det går att rätta", at.g.S.hv.ratta && at.g.S.hv.ratta.v === "sara");
+  ok("en uppföljning: bara dagen går att ändra, bolaget är text", ut.includes('data-hvkortratta="0:1:0:dag"') && !ut.includes('data-hvkortratta="0:1:0:titel"') && ut.includes("<span>Solbacken</span>") && ut.includes("förut 2026-11-12"));
+  g.hvKortRattaOppna(0, 0, 0, "dag"); ut = g.hvHem();
+  ok("ett klick på dagen gör den till ett fält med dagen ifylld och hjälp att läsa", /<input id="hvKortRatta" data-hvkortin autocomplete="off" aria-label="Ny dag för Följ upp Ekdala" aria-describedby="hvKortRattaH" value="17\/11">/.test(ut) && ut.includes("Enter bygger om kortet, Esc avbryter."));
+  g.S.hv.ratta.v = "fre"; const esc1 = { key: "Escape", target: { id: "hvKortRatta" }, preventDefault() {}, stopPropagation() {} }; g.hvTangent(esc1);
+  ok("Esc lämnar allt som det var: inget skickas och kortet är orört", g.S.hv.ratta === null && c.skrivet.length === 0 && g.hvHem().includes(">17 nov</button>") && !g.hvHem().includes("ändrat av dig"));
+  g.hvKortRattaOppna(0, 0, 0, "dag"); g.S.hv.ratta.v = "blabla"; g.hvTangent({ ...esc1, key: "Enter" }); await k1Vanta();
+  ok("en dag som inte går att tolka säger det under fältet, utan att fråga servern", c.skrivet.length === 0 && g.hvHem().includes('role="alert">Det förstod jag inte. Prova tor, 25/11 eller om 2 veckor.</span>'));
+  g.S.hv.ratta.v = "fre"; g.hvTangent({ ...esc1, key: "Enter" }); await k1Vanta();
+  ok("Enter bygger om kortet på servern med bara verktyget och input, med den nya dagen", c.skrivet.length === 1 && c.skrivet[0][0] === "/nav2/chatt" && JSON.stringify(c.skrivet[0][1]) === JSON.stringify({ kommando: { verktyg: "forbered_uppgifter", input: { uppgifter: [{ titel: "Följ upp Ekdala", dag: "2026-11-20", till: "jag" }] } } }), JSON.stringify(c.skrivet));
+  const k0 = g.S.hv.chatt[0].svar.kort[0]; ut = g.hvHem();
+  ok("det ombyggda kortet har samma anrop, den nya dagen och foten säger ändrat av dig", k0.anrop === 3 && k0.rader[0].dag === "2026-11-20" && ut.includes("Förberett av AI · ändrat av dig · görs när du godkänner") && g.S.hv.ratta === null);
+  ok("det andra kortet är orört", ut.includes("<span class=\"hv-mono\">Förberett av AI · görs när du godkänner</span>"));
+  ok("skärmläsaren får veta att kortet är ombyggt", c.sagt.includes("Kortet är ombyggt. Det görs när du godkänner."));
+  ok("det ändrade kortet och fälten sparas med tråden (A1-2)", (() => { const d = JSON.parse(c.lager.getItem(`nav2-hvutkast-trad:${g.ND.jag.id}`)); return d.turer[0].svar.kort[0].rader[0].dag === "2026-11-20" && d.turer[0].lage[0].andrat[0] === "dag"; })());
+  g.hvKortRattaOppna(0, 0, 0, "till"); g.S.hv.ratta.v = "Okänd"; await g.hvKortBygg();
+  ut = g.hvHem();
+  ok("fel vid ombyggnaden: serverns egen text under fältet, och kortet är oförändrat", ut.includes('role="alert">Här går det bara att lägga uppgifter åt sig själv och åt sitt eget lag.</span>') && g.S.hv.chatt[0].svar.kort[0].input.uppgifter[0].till === "jag" && g.S.hv.ratta && g.S.hv.ratta.falt === "till");
+  g.hvKortRattaStang();
+  await g.hvChattGodkann(0, 0); await k1Vanta();
+  const utf = c.skrivet.filter((x) => x[1].utfall).map((x) => x[1].utfall);
+  ok("kortets FÖRSTA utfall efter rättningen bär andrat", utf.length === 1 && utf[0].lage === "godkant" && utf[0].anrop === 3 && JSON.stringify(utf[0].andrat) === JSON.stringify(["dag"]), JSON.stringify(utf));
+  ok("Godkänn gör det ombyggda kortets steg", c.skrivet.some((x) => x[0] === "/nav2/uppgifter" && x[1].dag === "2026-11-20"));
+  ut = g.hvHem();
+  ok("ett gjort kort går inte att ändra: raderna är text", !ut.includes('data-hvkortratta="0:0:') && ut.includes("<span>Följ upp Ekdala</span>"));
+  g.hvKortRattaOppna(0, 0, 0, "dag");
+  ok("och fältet går inte att öppna", g.S.hv.ratta === null);
+  await g.hvChattAngra(0, 0); await k1Vanta();
+  const utf2 = c.skrivet.filter((x) => x[1].utfall).map((x) => x[1].utfall);
+  ok("nästa utfall bär inget andrat", utf2.length === 2 && utf2[1].lage === "angrat" && !("andrat" in utf2[1]));
+  g.hvKortRattaOppna(0, 1, 0, "titel");
+  ok("en uppföljnings bolag går inte att öppna som fält", g.S.hv.ratta === null);
+  g.hvKortRattaOppna(0, 1, 0, "dag"); g.S.hv.ratta.v = "ingen"; await g.hvKortBygg();
+  ok("en uppföljning måste ha en dag", g.hvHem().includes('role="alert">Skriv en dag, till exempel fre eller 25/11.</span>'));
+  g.S.hv.ratta.v = "20/11"; await g.hvKortBygg();
+  ok("samma värde som förut stänger fältet utan att fråga servern", g.S.hv.ratta === null && !c.skrivet.some((x) => x[1].kommando && x[1].kommando.verktyg === "forbered_uppfoljning"));
+
+  const gar = await k2Chatt(K2SV({ kort: [KU] }), { slut: false });
+  gar.g.S.hv.chatt[0].lage[0] = { gjorda: [], gor: true, slut: "" };
+  ok("ett kort som görs just nu har inga fält", !gar.g.hvHem().includes("data-hvkortratta"));
+  const gammal = await k2Chatt(K2SV({ kort: [{ ...KU, verktyg: undefined, input: undefined }] }));
+  ok("ett kort utan verktyg och input (äldre tråd) är text som förut", !gammal.g.hvHem().includes("data-hvkortratta"));
+  ok("fältet tar radens hela bredd, också i 400 px", /\.hv-kratt\{grid-column:2\/-1;/.test(html) && /\.hv-kratt input\{width:100%;/.test(html));
+  ok("markören i fältet står kvar efter en omritning", html.includes("sel:a && (a.id === 'hvQ' || a.id === 'hvKortRatta')"));
+}
+
+rubrik("Funktionsvarvet K3, funktion 1: hemmet säger när det inte vet");
+{
+  const f = hem({ chef: true }); f.ND.hem.lasfel = { forslag: true }; f.ND.hem.forslag = null;
+  let h = f.hvHem();
+  ok("lasfel.forslag: Nav föreslår är skissens radknapp med Gick inte att läsa och Försök igen", /<button class="hv-andr an" style="--i:4" data-hvater aria-busy="false" aria-label="Nav föreslår: gick inte att läsa 08\.00\. Försök igen"><span class="hv-mark">[\s\S]*?<\/span><span><b>Nav föreslår<\/b> &nbsp;Gick inte att läsa 08\.00 · Försök igen<\/span><\/button>/.test(h), h.slice(h.indexOf("Nav föreslår") - 200, h.indexOf("Nav föreslår") + 200));
+  ok("och aldrig tomtexten Inga förslag just nu", !h.includes("Inga förslag just nu"));
+  ok("Det som ändrats säger samma sak, inte Berätta om en ändring", h.includes("<b>Det som ändrats</b> &nbsp;Gick inte att läsa 08.00 · Försök igen") && !h.includes("Berätta om en ändring"));
+  const tom = hem({ chef: true, forslag: 0 }); tom.ND.hem.lasfel = {};
+  ok("utan lasfel är ett tomt kort skissens tomtext, utan Försök igen", tom.hvHem().includes("Inga förslag just nu.") && !tom.hvHem().includes("data-hvater"));
+
+  const c = hem({ chef: true }); c.ND.hem.team = null; c.ND.hem.lasfel = { team: true };
+  h = c.hvHem();
+  ok("lasfel.team hos ledaren: Teamet i november · Talen gick inte att läsa · Försök igen", h.includes("<b>Teamet i november</b> &nbsp;Talen gick inte att läsa 08.00 · Försök igen"));
+  ok("inget tal visas, inte heller Din månad i stället", !h.includes('class="hv-man'));
+  const s = hem({ chef: false }); s.ND.hem.lasfel = { team: true };
+  ok("säljaren ser aldrig teamraden", !s.hvHem().includes("Talen gick inte att läsa"));
+
+  const gv = hem({ chef: true, golvet: null }); gv.ND.hem.lasfel = { golvet: true }; gv.hvHem(); gv.S.hv.mer = true;
+  ok("Golvet står i Mer också när läsningen föll", gv.hvHem().includes('data-hvark="golvet">Golvet</button>'));
+  const ag = gv.hvArkGolvet();
+  ok("Golvet: Golvet gick inte att läsa just nu., med Försök igen", ag.includes("<p>Golvet gick inte att läsa just nu.</p>") && ag.includes('data-hvater aria-busy="false">Försök igen</button>'));
+  const gv2 = hem({ chef: true, golvet: null }); gv2.hvHem();
+  ok("utan lasfel.golvet (inget lag) står skissens text, utan Försök igen", !gv2.hvArkGolvet().includes("data-hvater"));
+
+  const ud = hem({ chef: true, nu: 1000, kal: [{ s: 600, e: 630, t: "Veckomöte", id: "k1" }] }); ud.ND.hem.lasfel = { dag: true };
+  ok("lasfel.dag utan schema: mitten säger Schemat gick inte att läsa", urtavlan(ud.hvHem()).includes('<span class="s" data-roll="mitt-s-stor">Schemat gick inte att läsa</span>'));
+  const ud2 = hem({ chef: true, nu: 1000, kal: [{ s: 600, e: 630, t: "Veckomöte", id: "k1" }] });
+  ok("utan lasfel.dag står ingen schematext i mitten", !/Schemat|Inget schema/.test(urtavlan(ud2.hvHem())));
+  const ud3 = hem({ chef: true, nu: 1100, kal: [{ s: 600, e: 630, t: "Veckomöte", id: "k1" }], kalImorgon: [] }); ud3.ND.hem.lasfel = { dag: true };
+  ok("efter dagens slut: Dagen är slut och Schemat gick inte att läsa", urtavlan(ud3.hvHem()).includes('<span class="s" data-roll="mitt-s-stor">Schemat gick inte att läsa</span>'));
+
+  // Försök igen: hvater, tyst. Faller det står raden kvar med tiden för det senaste försöket, och sidan laddas inte om.
+  const oml = []; f.ndOmlas = (vy, x) => { oml.push([vy, x]); return Promise.resolve(false); }; f.now = () => 504;
+  k2Klick(f, { hvater: "" }); await k1Vanta();
+  ok("Försök igen kör ndOmlas('hvater', {tyst:true})", oml.length === 1 && oml[0][0] === "hvater" && oml[0][1].tyst === true, JSON.stringify(oml));
+  ok("faller det igen står raden kvar med det senaste försöket", f.hvHem().includes("Gick inte att läsa 08.24 · Försök igen"));
+  f.S.hv.laserOm = true;
+  ok("medan det läses säger raden det, och är upptagen", f.hvHem().includes('aria-busy="true"') && f.hvHem().includes("Läser om …"));
+  f.S.hv.laserOm = false;
+  f.ndOmlas = () => Promise.resolve(true); f.ND.hem.skriv = true; f.ND.hem.lasfel = {}; f.ND.hem.forslag = hem({ chef: true }).ND.hem.forslag;
+  await f.hvLasOm();
+  ok("en lyckad omläsning sätter hamtad på nytt och säger sett en gång", Date.now() - f.S.hv.hamtad < 1000 && f.S.hv.hamtadKl === 504 && f.anrop.filter((x) => x[0] === "sett").length === 1);
+  ok("och raden blir kortet igen", !f.hvHem().includes("Gick inte att läsa"));
+
+  // Ny sedan: bilden när man gick, och det som kom till sedan.
+  const n = hem({ chef: true }); n.hvHem();
+  n.S.hv.bild = { t: Date.now() - 60e3, kl: 710, ids: ["r1", "r3", "r5", "upg-gammal"] };
+  n.ndOmlas = () => Promise.resolve(true);
+  await n.hvLasOm();
+  h = n.hvHem();
+  ok("en rad som kommit till sedan bilden får Ny sedan först i sin grå rad", h.includes("<small>Ny sedan 11.50 · Frist i dag</small>"));
+  ok("en rad som fanns får ingen", h.includes("<small>Sjuk sedan i dag. Ingen har bekräftat</small>"));
+  n.hvOppna("vantar"); h = n.hvHem();
+  ok("arket Väntar säger Sedan du tittade här, med nya och inte längre i listan", h.includes("Sedan du tittade här 11.50: 2 nya, 1 inte längre i listan."));
+  ok("Ny sedan står också i hela listan", h.includes("<small>Ny sedan 11.50 · Frist i dag · Uppgift</small>"));
+  n.S.hv.synts = Date.now() - 5000; n.hvBildTa();
+  const n2 = hem({ chef: true }); n2.hvHem(); n2.S.hv.synts = Date.now() - 2000; n2.hvBildTa();
+  ok("hemmet som synts kortare än 4 s tar ingen bild", !n2.S.hv.bild);
+  ok("en ny bild (hemmet dolt efter minst 4 s) tar bort märkena", !n.hvHem().includes("Ny sedan") && n.S.hv.bild.ids.length === 5);
+  const d1 = hem({ chef: true }); d1.hvHem(); d1.S.hv.bild = null; d1.ndOmlas = () => Promise.resolve(true); await d1.hvLasOm();
+  ok("dag ett, utan bild: inga märken", !d1.hvHem().includes("Ny sedan") && !d1.hvHem().includes("Sedan du tittade"));
+
+  // Gamla tal.
+  const t = hem({ chef: true }); t.hvHem(); t.S.hv.hamtadKl = 492;
+  t.S.hv.hamtad = Date.now() - 31 * 60e3; h = t.hvHem();
+  ok("31 minuter gamla tal: veckan blir knappen Talen från", h.includes('<button class="hv-lank" data-hvater aria-label="Talen är från 08.12. Läs om">Talen från 08.12</button>') && !h.includes("<small>v."));
+  t.hvOppna("vantar");
+  ok("arket Väntar har samma knapp efter sin mening", /brinner\.<\/b>[^<]*<button class="hv-lank" data-hvater[^>]*>Talen från 08\.12<\/button>/.test(t.hvHem()));
+  t.hvStang(); t.S.hv.hamtad = Date.now() - 29 * 60e3; h = t.hvHem();
+  ok("29 minuter: veckan som i skissen", h.includes("<small>v.") && !h.includes("Talen från"));
+
+  // Lyssnaren: synlig igen eller fokus.
+  const l = hem({ chef: true }); l.hvHem(); const lo = []; l.ndOmlas = (vy) => { lo.push(vy); return Promise.resolve(true); };
+  Object.assign(l, { NDAPP_OMLADDNING_MIN: 20, ndAppLagerOppet: () => false, ndAppOsparat: () => true, navigator: { onLine: true } });
+  l.S.hv.hamtad = Date.now() - 25 * 60e3;
+  l.S.hv.strom = { tur: { start: 0 } }; l.hvTillbaka(0);
+  ok("lyssnaren läser inte om under en ström", lo.length === 0);
+  l.S.hv.strom = null; l.S.hv.chatt = [{ lage: { 0: { gor: true } } }]; l.hvTillbaka(0);
+  ok("och inte medan ett kort görs", lo.length === 0);
+  l.S.hv.chatt = []; l.navigator = { onLine: false }; l.hvTillbaka(0);
+  ok("och inte utan nät", lo.length === 0);
+  l.navigator = { onLine: true }; l.hvTillbaka(25 * 60e3); await k1Vanta();
+  ok("med fokus i skrivrutan och 25 minuter dold körs hvater", lo.length === 1 && lo[0] === "hvater");
+  l.hvTillbaka(0);
+  ok("högst en gång per tio minuter", lo.length === 1);
+  const u = hem({ chef: true }); u.hvHem(); const uo = []; u.ndOmlas = (vy) => { uo.push(vy); return Promise.resolve(true); };
+  Object.assign(u, { NDAPP_OMLADDNING_MIN: 20, ndAppLagerOppet: () => false, ndAppOsparat: () => false, navigator: { onLine: true } });
+  u.S.hv.hamtad = Date.now() - 25 * 60e3; u.hvTillbaka(25 * 60e3);
+  ok("med fokus utanför ett fält och 25 minuter dold körs den inte, eftersom Nav laddar om", uo.length === 0);
+  u.hvTillbaka(0);
+  ok("och fönstrets fokus strax efter läser inte heller", uo.length === 0);
+  u.S.hv.hamtad = Date.now() - 5 * 60e3; u.hvTillbaka(0);
+  ok("fem minuter gamla tal läses inte om", uo.length === 0);
+  u.S.hv.hamtad = Date.now() - 11 * 60e3; u.S.view = "uppgifter"; u.hvTillbaka(0);
+  ok("bara när hemmet syns", uo.length === 0);
+  u.S.view = "hem"; u.S.hv.hoppa = 0; u.hvTillbaka(0); await k1Vanta();
+  ok("tillbaka efter elva minuter på hemmet: hvater", uo.length === 1 && uo[0] === "hvater");
+  ok("hvater har de elva delarna och läser in hem", /ndOmlasAnmal\('hvater', \{delar:\['hem', 'uppgifter', 'moten', 'kalender', 'order', 'tid', 'franvaro', 'arenden', 'rutiner', 'utbildning', 'notiser'\], laser:\['hem'\]\}\);/.test(block));
+  ok("hv har kvar sina fyra delar", block.includes("ndOmlasAnmal('hv', {delar:['hem', 'uppgifter', 'moten', 'kalender']});"));
+  ok("en tyst läsning som faller laddar inte om sidan (ndOmlasKor)", /if \(!s\.ok \|\| !s\.data \|\| !s\.data\.data\)\{ if \(ndOmlasTyst\(ko\)\) return false; ndOmlasReserv\(ko\); return false; \}/.test(html));
+  ok("Lyssna läser samma mening som arket", block.includes("DELTA[S.role === 'chef' ? 'chef' : 'saljare'][S.mode] = sedan;"));
+}
+
+rubrik("Funktionsvarvet K3, funktion 2: mötet bakom märket");
+{
+  const KUND = (x = {}) => ({ s: 900, e: 945, t: "Möte: Bäckström Revision AB", id: "k9", kund: { bolag: "Bäckström Revision AB", mote: "m1" }, ...x });
+  const mk = ({ nu = 960, kal = [KUND()], kort = [{ kedja: "c1", fas: "hos_saljaren", mote: { id: "m1", hallsAv: "jag", langd: 45 } }], moten = true, chatt = false } = {}) => {
+    const g = hem({ chef: true, nu, kal, dag: { start: 480, slut: 1020, rast: 0 } });
+    g.ND.moten.kort = kort; g.ND.hem.chatt = chatt;
+    if (!moten) g.ndKopplad = (vy) => vy !== "moten";
+    g.moUtfall = (k) => k.fas === "hos_saljaren";
+    g.toasts = []; g.toast = (m) => g.toasts.push(m);
+    g.moGa = () => { g.S.view = "moten"; }; g.ndMoDialog = (typ, k) => { g.S.moDlg = { typ, kedja: k.kedja }; };
+    return g;
+  };
+  let g = mk(), h = g.hvHem(), u = urtavlan(h);
+  ok("ett passerat kopplat möte utan utfall bleknar inte (inte forbi)", /<path class="m r-mote" data-m="k9"/.test(u), u.slice(0, 300));
+  ok("märket bär kedjan, bolaget och Utfall saknas · Registrera i Möten", /<button class="hv-pin" [^>]*data-m="k9" data-hvark="dag" data-hvutfall="c1" aria-label="15\.00–15\.45 · Bäckström Revision AB\. Utfall saknas · Registrera i Möten">/.test(u));
+  ok("mitten blir knappen till utfallet, med skissens l, k och v", /<button class="hv-mitt" data-hvutfall="c1" data-hvark="dag" aria-label="Utfall saknas: Bäckström Revision AB\. Registrera i Möten"><span class="l">Inga fler möten<\/span><span class="k num"[^>]*>17\.00<\/span><span class="v">Arbetsdagen slutar<\/span><span class="s"[^>]*>Utfall saknas: Bäckström Revision AB<\/span><\/button>/.test(u));
+  k2Klick(g, { hvutfall: "c1", hvark: "dag" });
+  ok("klicket öppnar Möten med Mötens utfallsruta för rätt kedja", g.S.view === "moten" && g.S.moDlg.typ === "utfall" && g.S.moDlg.kedja === "c1");
+
+  g = mk({ kort: [{ kedja: "c1", fas: "avgjort", mote: { id: "m1", hallsAv: "jag" } }] }); u = urtavlan(g.hvHem());
+  ok("med fas avgjort är bågen forbi, och mitten är skissens", /<path class="m r-mote forbi" data-m="k9"/.test(u) && !/class="hv-mitt" data-hvutfall/.test(u));
+  g = mk({ kal: [{ s: 600, e: 630, t: "Veckomöte", id: "k1" }, KUND()] }); u = urtavlan(g.hvHem());
+  ok("ett internt möte är oförändrat", /<path class="m r-mote forbi" data-m="k1"/.test(u) && !/data-m="k1" data-hvark="dag" data-hvutfall/.test(u));
+  g = mk({ kort: [{ kedja: "c1", fas: "hos_saljaren", mote: { id: "m1", hallsAv: "p1" } }] }); u = urtavlan(g.hvHem());
+  ok("en kollegas möte kopplas inte: bara egna", !u.includes("data-hvutfall") && /r-mote forbi" data-m="k9"/.test(u));
+  g = mk({ moten: false }); u = urtavlan(g.hvHem());
+  ok("Möten avstängt: urtavlan är skissens", !u.includes("data-hvutfall") && u.includes("15.00–15.45 · Möte: Bäckström Revision AB"));
+  g = mk({ kal: [{ ...KUND(), kund: { bolag: "Bäckström Revision AB", mote: null } }] });
+  ok("kund.mote null (inte med på posten): som i dag", !g.hvHem().includes("data-hvutfall"));
+
+  // Före mötets slut öppnar märket Min dag. Samma märke efter slutet, utan ny ritning, öppnar utfallet.
+  g = mk({ nu: 920, kort: [{ kedja: "c1", fas: "bokat", mote: { id: "m1", hallsAv: "jag" } }] }); u = urtavlan(g.hvHem());
+  ok("före slutet bär märket kedjan men säger Pågår", /data-hvutfall="c1" aria-label="15\.00–15\.45 · Bäckström Revision AB\. Pågår · Öppna Min dag"/.test(u));
+  k2Klick(g, { hvutfall: "c1", hvark: "dag" });
+  ok("klick före slutet öppnar Min dag", g.S.view === "hem" && g.S.hv.ark === "dag");
+  g.hvStang(); g.ND.moten.kort[0].fas = "hos_saljaren";
+  k2Klick(g, { hvutfall: "c1", hvark: "dag" });
+  ok("samma märke efter slutet, utan ny ritning, öppnar utfallet", g.S.view === "moten" && g.S.moDlg.typ === "utfall");
+
+  g = mk({ kal: [KUND(), { s: 950, e: 1000, t: "Intern genomgång", id: "k2" }] }); h = g.hvHem();
+  ok("mittens prioritet: ett pågående möte går före utfallet", urtavlan(h).includes('<span class="l">Pågår till</span>') && !/class="hv-mitt" data-hvutfall/.test(h));
+  g = mk({ kal: [KUND({ s: 700, e: 730, id: "k7", kund: { bolag: "Hagby Glas", mote: "m3" } }), KUND({ s: 800, e: 830, id: "k8", kund: { bolag: "Mälarö Frakt", mote: "m2" } }), KUND()],
+    kort: [{ kedja: "c3", fas: "avgjort", mote: { id: "m3", hallsAv: "jag" } }, { kedja: "c2", fas: "hos_saljaren", mote: { id: "m2", hallsAv: "jag" } }, { kedja: "c1", fas: "hos_saljaren", mote: { id: "m1", hallsAv: "jag" } }] });
+  u = urtavlan(g.hvHem());
+  ok("flera saknar utfall: 2 av 3 möten saknar utfall, och knappen öppnar det första", u.includes(">2 av 3 möten saknar utfall</span>") && /class="hv-mitt" data-hvutfall="c2"/.test(u));
+  g = mk();
+  ok("den lilla urtavlan har ingen ny knapp", !g.hvUrtavla(g.hvD(), { storlek: "kompakt" }).includes("data-hvutfall") && !g.hvUrtavla(g.hvD(), { storlek: "mini", dag: "idag" }).includes("data-hvutfall"));
+  g.hvOppna("dag"); h = g.hvHem();
+  ok("Min dag: raden får knappen Utfall och bleknar inte", h.includes('<button class="hv-btn" data-hvutfall="c1" aria-label="Utfall för Bäckström Revision AB: registrera i Möten">Utfall</button>') && /<div class="hv-drad mote an"[^>]*data-m="k9"/.test(h));
+  g.ND.moten.kort[0].fas = "avgjort"; k2Klick(g, { hvutfall: "c1" });
+  ok("Utfall när utfallet hunnit sparas: säger det, och Möten öppnas inte", g.S.view === "hem" && g.toasts.includes("Utfallet är redan sparat i Möten."));
+  g = mk({ nu: 1290 });
+  ok("kvällen: urtavlan visar i morgon och har inget märke för utfallet", g.hvVisadDag(g.hvD()) === "imorgon" && !urtavlan(g.hvHem()).includes("data-hvutfall"));
+  g.hvOppna("dag");
+  ok("men raden i Min dag har kvar Utfall", g.hvHem().includes('data-hvutfall="c1"'));
+
+  // Lägesmeningen och chipet använder serverns bolag.
+  g = mk({ nu: 840, chatt: true }); h = g.hvHem();
+  ok("lägesmeningen: nästa 15.00 med bolaget, inte med Möte:", h.includes(">nästa 15.00 med Bäckström Revision AB.</button>") && !h.includes("med Möte:"));
+  ok("chipet: Förbered 15.00 med bolaget, och frågan om samma möte", h.includes('data-hvforbered="Förbered mitt möte 15.00 med Bäckström Revision AB"') && h.includes('title="Bäckström Revision AB">') && h.includes("Förbered 15.00 med Bäckström</button>"));
+  g = mk({ nu: 700, chatt: true, kal: [{ s: 780, e: 810, t: "1:1 med Fredrik", id: "k5" }] }); h = g.hvHem();
+  ok("utan bolag: hela rubriken efter en punkt, och inget med framför", h.includes("Förbered 13.00 · 1:1 med Fredrik</button>") && !h.includes("Förbered 13.00 med 1:1"));
+  g = mk({ nu: 700, chatt: true, kal: [{ s: 780, e: 810, t: "Genomgång av offerten för Hagby Glas och Mälarö Frakt", id: "k5" }] }); h = g.hvHem();
+  ok("en lång rubrik kapas vid ett ord med …, och står hel i title", h.includes('title="Genomgång av offerten för Hagby Glas och Mälarö Frakt"') && h.includes("Förbered 13.00 · Genomgång av…</button>"));
+}
+
+rubrik("Funktionsvarvet K3: Klar går att ångra, också med riktig data");
+{
+  const RADER = [{ id: "upg-7", nar: "idag", heat: 2, bkind: "uppgift", kind: "Uppgift", bt: "{Ring Hagby} i dag.", t: "Ring Hagby", why: "Frist i dag", act: { l: "Klar", done: true, check: true }, gor: () => {} },
+    { id: "sjuk-1", nar: "nu", heat: 5, bkind: "frånvaro", kind: "Sjukanmälan", bt: "{Carl} är sjukanmäld.", t: "Carl är sjukanmäld", why: "Sedan i dag", act: { l: "Bekräfta" }, gor: () => {} }];
+  const mk = (svar, task = {}) => {
+    const g = hem({ chef: true, rader: RADER, tasks: [{ id: "7", t: "Ring Hagby", lage: "oppen", ndNytt: [], ...task }] }); g.hvHem();
+    const x = { g, upg: [], toasts: [], fel: [], oml: [], klar: [] };
+    Object.assign(g, { ndUpgNav: () => true, ndUpgPost: async (hl, d, o) => { x.upg.push([hl, d, o]); return svar[hl]; }, toastActs: (m, acts) => x.toasts.push([m, acts]), toast: (m) => x.toasts.push([m, []]),
+      ndSkrivFel: (s) => x.fel.push(s), ndOmlas: (vy) => { x.oml.push(vy); return Promise.resolve(true); }, complete: (id) => x.klar.push(id) });
+    return x;
+  };
+  const a = mk({ bocka: { ok: "Klar." }, ateroppna: { ok: "Öppnad igen." } });
+  k2Klick(a.g, { hvgor: "upg-7" }); await k1Vanta();
+  ok("Klar på en uppgift skickar bocka med uppgiftens id", a.upg.length === 1 && a.upg[0][0] === "bocka" && a.upg[0][1].id === "7" && a.upg[0][2].tyst === true, JSON.stringify(a.upg));
+  ok("och ger skissens bock med Ångra", a.toasts.length === 1 && a.toasts[0][0] === "Klar: Ring Hagby" && a.toasts[0][1].length === 1 && a.toasts[0][1][0][0] === "Ångra");
+  a.toasts[0][1][0][1](); await k1Vanta();
+  ok("Ångra skickar ateroppna med radens id", a.upg[1] && a.upg[1][0] === "ateroppna" && a.upg[1][1].id === "7");
+  ok("och säger serverns svar och läser om hemmet", a.toasts.some((t) => t[0] === "Öppnad igen.") && a.oml.includes("hv"));
+  const b = mk({ bocka: { ok: "Klar." }, ateroppna: { fel: "Uppgiften går inte att öppna igen." } });
+  k2Klick(b.g, { hvgor: "upg-7" }); await k1Vanta(); b.toasts[0][1][0][1](); await k1Vanta();
+  ok("ett fel från servern säger vad som hände, och hemmet läses inte om (raden står kvar som klar)", b.fel.length === 1 && b.fel[0].fel === "Uppgiften går inte att öppna igen." && !b.oml.includes("hv"));
+  const c = mk({ bocka: { ok: "Klar." } });
+  k2Klick(c.g, { hvgor: "sjuk-1" }); await k1Vanta();
+  ok("en rad utan väg tillbaka (sjukanmälan) går sin väg som förut, utan Ångra", c.klar.includes("sjuk-1") && c.upg.length === 0 && c.toasts.length === 0);
+  const d = mk({ bocka: { ok: "Inlämnad för godkännande." } });
+  k2Klick(d.g, { hvgor: "upg-7" }); await k1Vanta();
+  ok("Inlämnad för godkännande får ingen Ångra", d.toasts.length === 1 && d.toasts[0][0] === "Inlämnad för godkännande." && d.toasts[0][1].length === 0);
+  const e = mk({ bocka: { ok: "Klar." } }, { ae: "x1" });
+  k2Klick(e.g, { hvgor: "upg-7" }); await k1Vanta();
+  ok("en punkt i personallistan (ae) går sin egen väg", e.klar.includes("upg-7") && e.upg.length === 0);
+  const f = mk({ bocka: { fel: "Uppgiften finns inte längre." } });
+  k2Klick(f.g, { hvgor: "upg-7" }); await k1Vanta();
+  ok("ett fel på Klar säger serverns text och ger ingen Ångra", f.fel.length === 1 && f.toasts.length === 0);
+}
+
+rubrik("Funktionsvarvet K3: en väg tillbaka för dolda rader, och Stämmer inte om en rad");
+{
+  const g = hem({ chef: true }); g.hvHem(); g.hvOppna("vantar");
+  let h = g.hvHem();
+  ok("utan markerad rad är hela listan skissens: inga nya knappar", !h.includes("data-hvflagga") && !h.includes("data-hvdolj") && !h.includes("data-hvvisa"));
+  g.S.selRad = "r2"; h = g.hvHem();
+  const rad = h.match(/data-id="r2">[\s\S]*?<button class="hv-btn" data-hvgor="r2"/)?.[0] ?? "";
+  ok("den markerade raden får Stämmer inte och Visa inte på hemmet, före sin vanliga knapp", rad.includes('<span class="hv-atg"><button class="hv-atgk" data-hvflagga="r2" aria-label="Stämmer inte: Ring tillbaka Mälarö Frakt">Stämmer inte</button><button class="hv-atgk" data-hvdolj="uppgift" aria-label="Visa inte uppgifter på hemmet">Visa inte på hemmet</button></span>'), rad.slice(0, 600));
+  ok("bara den raden", (h.match(/data-hvflagga=/g) || []).length === 1);
+  k2Klick(g, { hvflagga: "r2" }); await k1Vanta();
+  ok("Stämmer inte skickar raden till hemmets rutt", g.anrop.some((x) => x[0] === "flagga" && x[1].rad === "r2"));
+  h = g.hvHem();
+  ok("och raden säger att den är markerad, utan en knapp som lovar en väg tillbaka", h.includes('<span class="hv-mono">Markerad som fel</span>') && !h.includes('data-hvflagga="r2"'));
+  ok("kvittot står i arkets fot", h.includes("Markerad som fel. Raden blir underlag för att rätta sammanfattningen."));
+  k2Klick(g, { hvdolj: "uppgift" }); await k1Vanta();
+  ok("Visa inte på hemmet döljer sorten", g.anrop.some((x) => x[0] === "dolj" && x[1].sort === "uppgift") && g.S.hiddenKinds.has("uppgift"));
+  h = g.hvHem();
+  ok("en dold sort får Visa på hemmet", h.includes('<button class="hv-atgk" data-hvvisa="uppgift" aria-label="Visa uppgifter på hemmet igen">Visa på hemmet</button>'));
+  k2Klick(g, { hvvisa: "uppgift" }); await k1Vanta();
+  ok("Visa på hemmet visar sorten igen", g.anrop.some((x) => x[0] === "visa" && x[1].sort === "uppgift") && !g.S.hiddenKinds.has("uppgift"));
+  g.S.selRad = "r4"; h = g.hvHem();
+  ok("en rad vars sort inte går att dölja får bara Stämmer inte", h.includes('data-hvflagga="r4"') && !h.includes('data-hvdolj="möten"'));
+  const tom = hem({ chef: true }); tom.hvHem(); tom.S.hiddenKinds.add("order"); tom.hvOppna("vantar");
+  ok("en dold sort utan rader just nu har ändå en väg tillbaka i arkets fot", tom.hvHem().includes('<button class="hv-lank" data-hvvisa="order">Visa order på hemmet igen</button>'));
+  ok("och utan dolda sorter står ingen sådan knapp", !hem({ chef: true }).hvArkVantar().includes("data-hvvisa"));
+  ok("J och K ritar om hela listan, så att den markerade raden får sina handlingar", /S\.selRad = rows\[sel\]\.dataset\.id;[\s\S]{0,260}if \(rows\[sel\]\.classList\.contains\('hv-sak'\)\)\{ render\(\); const ny = document\.querySelector\('\.hv-sak\.sel'\); if \(ny\) ny\.scrollIntoView\(\{block:'nearest'\}\); \}/.test(html));
+  g.hvKlick({ target: { closest: (sel) => (sel.includes(".hv-sak[data-id]") ? { dataset: { id: "r1" } } : null) }, preventDefault() {}, stopPropagation() {} });
+  ok("ett klick på en rad i listan markerar den", g.S.selRad === "r1" && g.hvHem().includes('data-hvflagga="r1"'));
+}
+
+rubrik("Funktionsvarvet K4, funktion 4: skrivrutan hittar i hela Nav");
+{
+  // Paletten (ndPalSok, NDPAL.sok och palInnehall) står utanför hv-blocket: provet fyller NDPAL.sok som servern hade gjort.
+  const NAV = [
+    { l: "Ny uppgift: kalix", p: "Ny uppgift", run: () => {} },
+    { i: "mote", l: "Kalix Bygg", p: "Möte · Bokat", run: () => {} },
+    { i: "kal", l: "Kalix Bygg", p: "17 nov 09.00", run: () => {} },
+    { l: "Kalix Bygg · #1042", p: "Signerad", run: () => {} },
+    { l: "Ring Kalix om avtalet", p: "Uppgift", run: () => {} },
+    { l: "Kalix Rör", p: "Möte · Ny", run: () => {} },
+    { l: "Kalixkunder", p: "Rutin", run: () => {} },
+    { l: "Kalix Fönster", p: "Möte · Bokat", run: () => {} },
+  ];
+  const mk = (o = {}) => {
+    const g = hem({ chef: true, kalImorgon: [{ s: 540, e: 570, t: "Kalix Bygg", id: "k9" }], ...o });
+    const sok = new Map(), sokt = [], korda = [];
+    g.norm = (t) => String(t).toLowerCase();
+    g.NDPAL = { sok };
+    g.ndPalSok = (nq, q) => { sokt.push([nq, q]); };
+    g.palInnehall = (nq) => (sok.get(nq) || []).map((x) => ({ ...x, run: () => korda.push(x.l) }));
+    const plats = { innerHTML: "" };
+    g.document = { ...g.document, getElementById: (id) => (id === "hvTraffPlats" ? plats : null) };
+    g.ND.hem.chatt = true; g.hvHem(); g.S.hv.q = "Kalix";
+    return { g, sok, sokt, korda, plats };
+  };
+  const { g, sok, sokt, korda, plats } = mk();
+  let L = g.hvTraffar();
+  ok("från två tecken frågas paletten med rutans råa text", sokt.length === 1 && sokt[0][0] === "kalix" && sokt[0][1] === "Kalix", JSON.stringify(sokt));
+  ok("innan svaret: AI-raden och hemmets träffar, ingen laddningsrad och inget I Nav", L[0].sort === "ai" && L.every((x) => x.sort !== "nav") && !/Laddar|Söker|Hämtar/.test(g.hvTraffVy()) && !g.hvTraffVy().includes("I Nav"));
+  sok.set("kalix", NAV);
+  const forut = sokt.length; g.hvTraffar(); g.hvTraffVy();
+  ok("med svaret i NDPAL.sok frågas paletten inte igen", sokt.length === forut);
+  g.ndPalOmrita("kalix");
+  ok("när svaret kommer ritas skrivrutans träffar om", plats.innerHTML.includes("<p class=\"hv-mono\">I Nav</p>"), plats.innerHTML.slice(0, 300));
+  L = g.hvTraffar();
+  ok("I Nav står efter I hemmet, med högst 6 rader och AI-raden först", L.length === 6 && L[0].sort === "ai" && L[1].sort === "mote" && L.slice(2).every((x) => x.sort === "nav"), JSON.stringify(L.map((x) => x.sort + ":" + x.t)));
+  ok("kortet i Möten står under I Nav fast hemmet har mötet", L.some((x) => x.sort === "nav" && x.t === "Kalix Bygg" && x.mark === "Möte · Bokat"));
+  const vy = g.hvTraffVy();
+  ok("rubrikerna i ordning, I Nav med skissens markup", vy.indexOf('<p class="hv-mono">I hemmet</p>') > 0 && vy.indexOf('<p class="hv-mono">I Nav</p>') > vy.indexOf('<p class="hv-mono">I hemmet</p>'));
+  ok("ingen träff börjar med Ny uppgift", !L.some((x) => /^Ny uppgift/.test(x.t)));
+  ok("palettens kalenderpost för samma möte tas bort", !L.some((x) => x.mark === "17 nov 09.00") && L.some((x) => x.t === "Kalix Bygg · #1042"));
+  ok("raden visar palettens sort, och texten går genom esc", vy.includes('<span class="hv-mono">Signerad</span>') && vy.includes("Ring <mark>Kalix</mark> om avtalet"));
+  g.S.hv.q = "Kalix"; plats.innerHTML = "";
+  g.ndPalOmrita("annat");
+  ok("ett svar på en äldre fråga ritar inte om", plats.innerHTML === "");
+  const iNav = L.findIndex((x) => x.t === "Ring Kalix om avtalet");
+  g.S.hv.sel = iNav; g.window = { ...g.window, matchMedia: () => ({ matches: false }) };
+  g.hvTangent({ key: "Enter", target: { id: "hvQ", value: "Kalix" }, preventDefault() {}, stopPropagation() {} });
+  ok("Enter på en nav-träff kör den och tömmer rutan", korda.length === 1 && korda[0] === "Ring Kalix om avtalet" && g.S.hv.q === "" && g.S.hv.sel === 0, JSON.stringify({ korda, q: g.S.hv.q }));
+
+  const f = mk(); f.sok.set("kalix", []);
+  L = f.g.hvTraffar();
+  ok("tomt konto eller fel: inga I Nav-rader, AI-raden och hemmets träffar står kvar", L.length === 2 && L[0].sort === "ai" && L[1].sort === "mote" && !f.g.hvTraffVy().includes("I Nav"));
+  const k = mk(); k.g.S.hv.q = "K"; k.g.hvTraffar();
+  ok("ett tecken frågar inte paletten", k.sokt.length === 0);
+  const av = mk(); av.g.ND.hem.chatt = false; av.sok.set("kalix", NAV);
+  L = av.g.hvTraffar();
+  ok("med chatten av finns ingen AI-rad, och sökrutan står överst", L[0].sort === "sok" && !L.some((x) => x.sort === "ai") && L.some((x) => x.sort === "nav"));
+  // Markeringen står kvar: hemmet har högst tre rader, så palettens svar flyttar dem inte.
+  const ms = mk({ kal: [{ s: 600, e: 630, t: "Kalix 1", id: "q1" }, { s: 700, e: 730, t: "Kalix 2", id: "q2" }, { s: 800, e: 830, t: "Kalix 3", id: "q3" }, { s: 900, e: 930, t: "Kalix 4", id: "q4" }] });
+  const fore = ms.g.hvTraffar(); ms.g.S.hv.sel = 3; const vald = fore[3].t;
+  ms.sok.set("kalix", NAV); ms.g.ndPalOmrita("kalix");
+  const efter = ms.g.hvTraffar();
+  ok("högst tre ur hemmet, och den markerade raden är samma när svaret kommer", fore.filter((x) => x.sort !== "ai" && x.sort !== "nav").length === 3 && efter[3].t === vald && ms.plats.innerHTML.includes('aria-selected="true" data-hvtr="3"'), JSON.stringify({ fore: fore.map((x) => x.t), efter: efter.map((x) => x.t) }));
+  const bara = mk({ kalImorgon: [] }); bara.sok.set("kalix", NAV);
+  L = bara.g.hvTraffar(); const bv = bara.g.hvTraffVy();
+  ok("utan träff i hemmet står I Nav direkt under frågan, utan rubriken I hemmet", L[1].sort === "nav" && !bv.includes("I hemmet") && bv.includes("I Nav"));
+
+  // Paletten ritar fortfarande om #palIn: skalet kör originalet först.
+  const p = hem({ chef: true }); const ritat = [];
+  p.ndPalOmrita = (nq) => ritat.push(nq);
+  kor(block, p, ["hvHem"]);
+  p.ndPalOmrita("kalix");
+  ok("paletten ritar fortfarande om #palIn när den är öppen (originalet körs)", ritat.length === 1 && ritat[0] === "kalix");
+  // Kalendern läses när skrivrutan får fokus.
+  const fk = hem({ chef: true }); const lyss = []; let kal = 0;
+  fk.document = { ...fk.document, addEventListener: (typ, fn) => lyss.push([typ, fn]) };
+  fk.ndPalKal = () => { kal++; };
+  kor(block, fk, ["hvHem"]); fk.hvHem();
+  for (const [typ, fn] of lyss) if (typ === "focusin") { try { fn({ target: { id: "hvQ" } }); } catch {} }
+  ok("ndPalKal körs när #hvQ får fokus", kal === 1, String(kal));
+}
+
+rubrik("Funktionsvarvet K4, funktion 5: Navs facit bakom förslagen");
+{
+  const FACIT_LAG = { per: { "ringer-sjalv": { n: 14, av: 18 } }, text: "När någon har ringt själv har 14 av 18 möten hållits. Låt stå: 9 av 15. Ingen valde: 3 av 6. För få för att skilja från slump.", trodde: "Jag räknade med att 31 av 40 skulle hållas. Det blev 29.", kalla: "Räknat av regler", dataPer: "2026-11-17", vem: "laget", dom: { sort: "for-fa" } };
+  const FACIT_DIG = { text: "Dina val: ringt själv 3 av 4 hölls, låt stå 2 av 3, ingen valde 1 av 2. Det här är bara dina möten, så jag säger inte vilket val som fungerar bäst. Siffrorna visar inte att samtalet gjorde skillnaden.", trodde: null, kalla: "Räknat av regler", dataPer: "2026-11-17", vem: "dig" };
+  // Dörr 1: källan i huvudet.
+  const ett = kort(hem({ chef: false }).hvHem(), "Nav föreslår");
+  ok("källan är en knapp till facit med samma text", ett.includes('<button class="hv-mono hv-end" data-hvark="facit" aria-label="Räknat av regler: så har det gått">Räknat av regler</button>'), ett);
+  ok("källan i vila ser ut som förut, länkens färg vid hovring och fokus, utan rörelse på färgen (bara transform och opacity rör sig)", !html.includes(".hv-sekh>button.hv-mono{transition") && !/\.hv-kfalt\{[^}]*transition/.test(html) && html.includes(".hv-sekh>button.hv-mono:hover{color:var(--hv-ink)}") && html.includes(".hv-sekh>button.hv-mono:focus-visible{color:var(--hv-ink)}"));
+  // Dörr 2: tomraden, bara med dömda förslag.
+  const tom = kort(hem({ chef: true, forslag: 0 }).hvHem(), "Nav föreslår");
+  ok("tomraden är en knapp till facit när det finns dömda förslag", tom.startsWith('<button class="hv-andr an" style="--i:4" data-hvark="facit"') && tom.includes("Inga förslag just nu."), tom);
+  const dag1 = kort(hem({ chef: true, forslag: 0, andrat: [] }).hvHem(), "Nav föreslår");
+  ok("dag ett, utan dömda: ingen dörr", dag1.startsWith('<div class="hv-andr') && !dag1.includes("data-hvark"));
+  const odomd = kort(hem({ chef: true, forslag: 0, andrat: [{ ...ANDRAT[0], stangd: false }, { ...ANDRAT[0], id: "a2", sort: "andring", stangd: true }] }).hvHem(), "Nav föreslår");
+  ok("ett ej dömt förslag eller en dömd ändring öppnar ingen dörr", !odomd.includes("data-hvark"));
+  const fel = hem({ chef: true, forslag: 0 }); fel.ND.hem.lasfel = { forslag: true }; fel.ND.hem.forslag = null;
+  ok("med lasfel.forslag står felraden, ingen dörr", !kort(fel.hvHem(), "Nav föreslår").includes('data-hvark="facit"'));
+
+  // Inlägget: hämtas, laddar, svar och fel.
+  const mk = (chef, svar) => {
+    const g = hem({ chef }); g.hvHem(); const hamtat = []; let losa;
+    g.ndLas = (url) => { hamtat.push(url); return new Promise((k) => { losa = k; }); };
+    g.hvOppna("facit");
+    return { g, hamtat, svara: (s) => losa(s) };
+  };
+  const L = mk(true);
+  ok("dörren öppnar ett inlägg i tråden och hämtar las=facit", L.hamtat.length === 1 && L.hamtat[0] === "/nav2/forslag?las=facit" && L.g.S.hv.trad.some((t) => t.sort === "facit"));
+  ok("medan det hämtas: Hämtar facit…", L.g.hvArkFacit().includes('<p class="hv-tank" role="status">Hämtar facit…</p>'));
+  L.svara({ ok: true, data: { facit: FACIT_LAG } }); await k1Vanta();
+  let a = L.g.hvArkFacit();
+  ok("ledaren: serverns mening, och vad Nav räknade med", a.includes(`<p>${esc(FACIT_LAG.text)}</p>`) && a.includes("<p>Jag räknade med att 31 av 40 skulle hållas. Det blev 29.</p>"));
+  ok("källraden med data per", /<p class="hv-kalla">Räknat av regler · data per 17 nov<\/p>/.test(a), a.match(/hv-kalla">[^<]*/)?.[0]);
+  ok("de dömda förslagen står under, med Hela översynen", a.includes("<b>Hagby Glas: du valde att låta mötet stå. Mötet hölls. Mötet blev aldrig bekräftat.</b>") && a.includes('<button class="hv-lank" data-hvark="andrat">Hela översynen'));
+  const fem = mk(true); fem.g.ND.hem.forslag.andrat = Array.from({ length: 8 }, (_x, i) => ({ ...ANDRAT[0], id: "a" + i, text: "Rad " + i }));
+  fem.svara({ ok: true, data: { facit: FACIT_LAG } }); await k1Vanta();
+  ok("högst de fem senaste", (fem.g.hvArkFacit().match(/<b>Rad \d<\/b>/g) || []).length === 5);
+  ok("i tråden ritas inlägget genom HVINL", L.g.hvHem().includes('data-hvinl="facit"') && L.g.hvHem().includes("Jag räknade med att 31 av 40"));
+  const u20 = mk(true); u20.svara({ ok: true, data: { facit: { ...FACIT_LAG, trodde: null } } }); await k1Vanta();
+  ok("under 20 avgjorda möten: ingen rad om vad Nav räknade med", !u20.g.hvArkFacit().includes("räknade med"));
+  const S0 = mk(false); S0.svara({ ok: true, data: { facit: FACIT_DIG } }); await k1Vanta();
+  a = S0.g.hvArkFacit();
+  ok("säljaren: bara sina egna val i antal, utan dom, utan lagets rader och utan översynen", a.includes(`<p>${esc(FACIT_DIG.text)}</p>`) && !/slump|räknade med/.test(a) && !a.includes("hv-lista") && !a.includes("Hela översynen"));
+  const tomt = mk(false); tomt.svara({ ok: true, data: { facit: { ...FACIT_DIG, text: "Inget facit än. Det kommer när de första mötena har fått ett utfall." } } }); await k1Vanta();
+  ok("förslag men inget dömt: Inget facit än", tomt.g.hvArkFacit().includes("<p>Inget facit än. Det kommer när de första mötena har fått ett utfall.</p>"));
+  const ff = mk(true); const fore = ff.g.hvHem().replace(/<div class="hv-trad"[\s\S]*$/, "");
+  ff.svara({ ok: true, data: { fel: "Det gick inte att läsa just nu. Försök igen. Felkod 7611b.", felkod: "7611b" } }); await k1Vanta();
+  a = ff.g.hvArkFacit();
+  ok("fel: serverns text med Försök igen", a.includes('<p role="alert">Det gick inte att läsa just nu. Försök igen. Felkod 7611b.</p>') && a.includes("data-hvigen>Försök igen</button>"));
+  ok("och hemmet är orört", ff.g.hvHem().replace(/<div class="hv-trad"[\s\S]*$/, "") === fore);
+  ff.g.ndLas = async (url) => { ff.hamtat.push(url); return { ok: true, data: { facit: FACIT_LAG } }; };
+  k2Klick(ff.g, { hvigen: "" }); await k1Vanta();
+  ok("Försök igen hämtar facit på nytt", ff.hamtat.length === 2 && ff.hamtat[1] === "/nav2/forslag?las=facit" && ff.g.hvArkFacit().includes("Jag räknade med"));
+
+  // Förslagets inlägg: ledarens rad före valet, dörr 3 efter valet.
+  const fs = (forslag) => { const g = hem({ chef: true }); g.hvHem(); Object.assign(g.S.hv, { ark: "forslag", id: "f0", data: { forslag: { id: "f0", forslag: { ...FORSLAG(1)[0], mitt: true, valt: null, domsDag: "på onsdag", dom: null, kommentar: null, ...forslag } } } }); return g.hvArkForslag(); };
+  const KORT = "Ringt själv 14 av 18 hölls, låt stå 9 av 15, ingen valde 3 av 6. För få för att säga något, tidigast vid runt 110 möten.";
+  let h = fs({ lage: "oppet", facitKort: KORT });
+  ok("ledaren: raden står före valknapparna", h.includes(`<p class="hv-tank">${esc(KORT)}</p>`) && h.indexOf(esc(KORT)) < h.indexOf("data-hvval"), h.slice(0, 600));
+  ok("och källraden säger vilken dag talen gäller", fs({ lage: "oppet", facitKort: KORT, dataPer: "2026-11-17" }).includes('<p class="hv-kalla">Räknat av regler · data per 17 nov</p>'));
+  ok("utan ledarens rad står skissens källrad", fs({ lage: "oppet", facitKort: null, dataPer: "2026-11-17" }).includes('<p class="hv-kalla">Räknat av regler</p>'));
+  h = fs({ lage: "oppet", facitKort: null });
+  ok("säljaren (facitKort null) får ingen rad", !h.includes("tidigast vid runt"));
+  h = fs({ lage: "valt", valt: "lat-sta", facitKort: KORT });
+  ok("efter valet: ingen ledarrad, och Så har det gått efter meningen om valet", !h.includes(esc(KORT)) && /Valet är gjort: [^<]*\. Jag säger hur det gick på onsdag\. <button class="hv-lank" data-hvark="facit">Så har det gått<\/button><\/p>/.test(h), h.match(/Valet är gjort[^]*?<\/p>/)?.[0]);
+  ok("ett öppet förslag har ingen Så har det gått", !fs({ lage: "oppet" }).includes("Så har det gått"));
+}
+
+rubrik("Funktionsvarvet, granskningens fynd: chattens fel, utkastet som blev kvar, utfallens ordning och skärmläsaren");
+{
+  // N4: tillfalligt i strömmen visar både Försök igen och Sök i stället.
+  const tf = k1Chatt(); tf.g.S.hv.q = "Vad väntar?"; const tp = tf.g.hvFraga(); await k1Vanta();
+  tf.strommar[0].st.ge({ h: "fel", text: "Chatten är tillfälligt upptagen. Försök igen om en stund.", kod: "tillfalligt" }); tf.strommar[0].st.slut(); await tp; await k1Vanta();
+  const tfh = tf.g.hvHem();
+  ok("tillfalligt i strömmen: både Försök igen och Sök i stället (N4)", tfh.includes('data-hvchattigen="0"') && tfh.includes('data-hvchattsok="0"'), tfh.slice(tfh.indexOf("hv-fel"), tfh.indexOf("hv-fel") + 300));
+  // Brottet: utkastet tonas, talet öppnar sin källa ur utkastets tal, ett tal utan rad är obelagt.
+  const UT = { h: "text", text: "Du har ⟦t1:3⟧ saker och ⟦t2:7⟧ möten.", tal: [{ id: "t1", varde: 3, om: "Väntar på dig · data per 2026-11-17" }] };
+  const br = k1Chatt(); br.g.S.hv.q = "Vad väntar?"; const bp = br.g.hvFraga(); await k1Vanta();
+  br.strommar[0].st.ge({ h: "rad", id: K1RAD }); br.strommar[0].st.ge(UT); await k1Vanta();
+  ok("medan svaret skrivs är utkastets tal inte knappar (kontroll)", !br.g.hvHem().includes("data-hvtal="));
+  br.strommar[0].st.slut(); await bp; await k1Vanta();
+  let bh = br.g.hvHem();
+  ok("strömmen bröts: utkastet står nedtonat och läsbart, talet med källa är en knapp, talet utan är obelagt", bh.includes('<div class="hv-svar hv-tonad"><p>Du har <button class="hv-siffra num" data-hvtal="0:t1"') && bh.includes('<mark class="hv-obel"') && bh.includes("Svaret bröts här.") && !bh.includes('<span class="num">'), bh.slice(bh.indexOf("hv-svar") - 12, bh.indexOf("hv-svar") + 400));
+  br.g.hvKlick({ target: { closest: () => ({ dataset: { hvtal: "0:t1" } }) }, preventDefault() {}, stopPropagation() {} });
+  bh = br.g.hvHem();
+  ok("och klicket på talet visar källan ur utkastets tal", bh.includes("Väntar på dig · data per 2026-11-17"), bh.slice(bh.indexOf("hv-talk") - 20, bh.indexOf("hv-talk") + 200));
+  // Stopp mitt i ett utkast: samma sak.
+  const sp = k1Chatt(); sp.g.S.hv.q = "Vad väntar?"; const spp = sp.g.hvFraga(); await k1Vanta();
+  sp.strommar[0].st.ge({ h: "rad", id: K1RAD }); sp.strommar[0].st.ge(UT); await k1Vanta();
+  sp.g.hvChattStopp(); await spp.catch(() => null); await k1Vanta();
+  const sph = sp.g.hvHem();
+  ok("Stopp mitt i ett utkast: utkastet tonas, talen har källa eller märks obelagda, och Du stoppade svaret står", sph.includes('<div class="hv-svar hv-tonad"><p>Du har <button class="hv-siffra num" data-hvtal="0:t1"') && sph.includes('<mark class="hv-obel"') && sph.includes("Du stoppade svaret.") && !sph.includes('<span class="num">'), sph.slice(sph.indexOf("hv-svar") - 12, sph.indexOf("hv-svar") + 400));
+  // Skärmläsaren: samma text två gånger i rad sägs två gånger.
+  const sr = k1Chatt();
+  for (const q of ["Fråga ett", "Fråga två"]){ sr.g.S.hv.q = q; const p = sr.g.hvFraga(); await k1Vanta(); const st = sr.strommar[sr.strommar.length - 1].st; st.ge({ h: "rad", id: K1RAD }); st.ge(K1SV); st.slut(); await p; await k1Vanta(); }
+  await k1Vanta(150);
+  ok("två svar utan hamtar i rad: Svar klart. sägs båda gångerna (noden töms och fylls igen)", sr.sagt.filter((x) => x === "Svar klart.").length === 2 && sr.sagt.includes(""), JSON.stringify(sr.sagt));
+  // Kopiera: sägs i skärmläsarnoden, och ett andra klick nollställer inte för tidigt.
+  const kp = k1Chatt(); kp.g.S.hv.q = "Vad väntar?"; const kpp = kp.g.hvFraga(); await k1Vanta();
+  kp.strommar[0].st.ge({ h: "rad", id: K1RAD }); kp.strommar[0].st.ge(K1SV); kp.strommar[0].st.slut(); await kpp; await k1Vanta();
+  kp.g.navigator = { clipboard: { writeText: async () => {} } };
+  ok("Kopiera-knappen bär ingen aria-live (kontroll)", !kp.g.hvHem().includes('data-hvchattkop="0" aria-live'));
+  await kp.g.hvKopiera(0); await k1Vanta(1000); await kp.g.hvKopiera(0); await k1Vanta(700);
+  ok("Kopiera: Kopierat. sägs av skärmläsarnoden, och ett andra klick får sina egna 1,5 s", kp.sagt.includes("Kopierat.") && kp.g.S.hv.chatt[0].kopierat === true, JSON.stringify([kp.sagt, kp.g.S.hv.chatt[0].kopierat]));
+}
+{
+  // Utfallen för ett kort går i följd: delvis (som får 503 och prövas igen) kommer fram före godkänt.
+  const KU = { rubrik: "Lägg upp en uppgift", anrop: 2, verktyg: "forbered_uppgifter", rader: [{ text: "Ring Ekdala", dag: "2026-11-17" }], steg: [{ vag: "/nav2/uppgifter", body: { handling: "skapa", titel: "Ring Ekdala", dag: "2026-11-17" } }], input: { uppgifter: [{ titel: "Ring Ekdala", dag: "2026-11-17", till: "jag" }] } };
+  const c = k1Chatt(); c.g.S.hv.q = "Lägg upp"; const p = c.g.hvFraga(); await k1Vanta();
+  c.strommar[0].st.ge({ h: "rad", id: K1RAD }); c.strommar[0].st.ge({ ...K1SV, kort: [KU] }); c.strommar[0].st.slut(); await p; await k1Vanta();
+  const fram = []; let n = 0;
+  c.g.ndSkriv = async (_u, d) => { const nr = ++n; if (nr === 1){ await k1Vanta(30); return { ok: false, status: 503, data: null }; } fram.push(JSON.parse(JSON.stringify(d.utfall))); return { ok: true, status: 200, data: { ok: true } }; };
+  c.g.hvKortFor(0, 0).l.andrat = ["dag"];
+  c.g.hvKortUtfall(0, 0, "delvis"); c.g.hvKortUtfall(0, 0, "godkant");
+  await k1Vanta(1200);
+  ok("delvis följt av godkänt: delvis prövas om och kommer fram först, godkänt sist, och bara delvis bär andrat", JSON.stringify(fram) === JSON.stringify([{ rad: K1RAD, anrop: 2, lage: "delvis", andrat: ["dag"] }, { rad: K1RAD, anrop: 2, lage: "godkant" }]), JSON.stringify(fram));
+}
+{
+  // En ny fråga väntar på hela den förra strömmen, inte 5 s: annars svarar rutten 429 pagar.
+  const c = k1Chatt(); c.g.S.hv.q = "Fråga ett"; const p1 = c.g.hvFraga(); await k1Vanta();
+  c.strommar[0].st.ge({ h: "rad", id: K1RAD }); c.strommar[0].st.ge(K1SV); await k1Vanta();
+  const riktig = globalThis.setTimeout; globalThis.setTimeout = (f, ms, ...r) => (ms === 5000 ? riktig(f, 0) : riktig(f, ms, ...r));
+  c.g.S.hv.q = "Fråga två"; const p2 = c.g.hvFraga(); await k1Vanta(30);
+  ok("den förra strömmen hänger kvar: nästa fråga skickas inte förrän den är läst", c.strommar.length === 1, String(c.strommar.length));
+  globalThis.setTimeout = riktig;
+  c.strommar[0].st.slut(); await p1; await k1Vanta(30);
+  ok("och skickas när den förra är läst till slutet", c.strommar.length === 2 && c.strommar[1].b.fraga === "Fråga två", String(c.strommar.length));
+  c.strommar[1].st.ge(K1SV); c.strommar[1].st.slut(); await p2;
+}
+{
+  // Rättafältet: det som skrivs sparas i S och står kvar efter en omritning.
+  const g = hem({ chef: false }); g.hvHem();
+  const lyss = []; g.document = { ...g.document, addEventListener: (typ, f) => lyss.push([typ, f]) };
+  const kod2 = html.slice(html.indexOf("document.addEventListener('input', e => { if (e.target && e.target.id === 'hvKortRatta'"));
+  const rad1 = kod2.slice(0, kod2.indexOf("\n"));
+  new Function("g", "with (g) { " + rad1 + " }")(g);
+  g.S.hv.ratta = { i: 0, n: 0, r: 0, falt: "dag", v: "17/11" };
+  for (const [typ, f] of lyss) if (typ === "input") f({ target: { id: "hvKortRatta", value: "fre" } });
+  ok("det som skrivs i rättafältet sparas i S vid input", g.S.hv.ratta.v === "fre", JSON.stringify(g.S.hv.ratta));
+  // Omläsningen: bara tysta läsningar i kön töms tyst; en sparning i kön går den gamla vägen.
+  const okod = html.slice(html.indexOf("const NDOMLAS = {}, NDOMLASKO"), html.indexOf("/* ---------- Skrivvägen slut"));
+  const om = new Function("g", "const ND = {hem:{}}, S = {}; const render = () => {}; " + okod + "; return { ndOmlasTyst, NDOMLASKO };")({});
+  g.ndOmlasTyst = om.ndOmlasTyst;
+  ok("tysta läsningar i kön: tyst (sidan laddas inte om)", g.ndOmlasTyst(new Map([["a", { tyst: true }], ["b", { tyst: true }]])) === true);
+  ok("en sparning blandad med en tyst: inte tyst, sidan laddas om som förut", g.ndOmlasTyst(new Map([["a", { tyst: true }], ["b", { tyst: false }]])) === false);
+}
+{
+  // Facit: utan serverns kalla ritas ingen källrad.
+  const g = hem({ chef: true }); g.hvHem();
+  Object.assign(g.S.hv, { ark: "facit", fel: null, data: { facit: { facit: { vem: "jag", text: "Dina val: 3 av 4 hölls." } } } });
+  const u = g.hvArkFacit();
+  ok("facit utan kalla: ingen källrad, ingen egen reservtext", !u.includes("Räknat av regler") && !u.includes("hv-kalla") && u.includes("Dina val: 3 av 4 hölls."), u);
+  g.S.hv.data.facit.facit.kalla = "Räknat av regler"; g.S.hv.data.facit.facit.dataPer = "2026-11-17";
+  ok("med kalla står serverns källrad (kontroll)", g.hvArkFacit().includes("Räknat av regler · data per 17 nov"));
 }
 
 console.log("\nKontroller per sort:");

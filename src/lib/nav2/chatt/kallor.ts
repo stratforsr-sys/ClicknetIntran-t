@@ -2,6 +2,7 @@ import "server-only";
 
 import type { CurrentUser } from "@/lib/auth";
 import { fullName } from "@/lib/auth";
+import { intervallForVy } from "@/lib/leveranskalender";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { lasSidvis } from "@/lib/sidvis";
 import { byggForslag, lasKrets } from "../forslag";
@@ -59,12 +60,18 @@ export function skapaKallor(user: CurrentUser): Kallor {
         const med = svar.filter((s): s is NonNullable<typeof s> => !!s);
         return { sammanfattning: med.map((s) => s.lead).join(" "), rader: med.flatMap((s) => s.rows.map((r) => r[1])) };
       }),
-    dag: (dag) =>
-      en(`dag:${dag}`, async () => {
-        const [kal, upp] = await Promise.all([hamtaKalposter(user, "dag", dag, []), byggUppgifter(await supabaseServer(), user)]);
-        if (!kal) throw new Error("kalendern gick inte att läsa");
-        return dagUr(kal.poster, upp.uppgifter, dag);
-      }),
+    // Kalendern läses en gång per vecka och uppgifterna en gång per fråga (N1). Kalendern för vyn "dag" hämtar alltid
+    // hela veckan, måndag till söndag (`intervallForVy`), så "Hur ser veckan ut?" med fem `las_dag` läste förut samma
+    // vecka fem gånger, och uppgifterna lika många. Veckans första dag är nyckeln; varje dag plockas ur den (`dagUr`).
+    dag: async (dag) => {
+      const vecka = intervallForVy("dag", dag).fran;
+      const [kal, upp] = await Promise.all([
+        en(`kal:${vecka}`, () => hamtaKalposter(user, "dag", vecka, [])),
+        en("uppgifter", async () => byggUppgifter(await supabaseServer(), user)),
+      ]);
+      if (!kal) throw new Error("kalendern gick inte att läsa");
+      return dagUr(kal.poster, upp.uppgifter, dag);
+    },
     provision: (manad) =>
       en(`provision:${manad}`, async () => {
         const p = await byggProvision(await supabaseServer(), user);

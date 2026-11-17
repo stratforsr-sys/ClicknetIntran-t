@@ -161,6 +161,8 @@ export async function POST(request: Request) {
   } catch {
     return svar({ fel: "Ogiltig begäran." }, 400);
   }
+  // JSON som inte är ett objekt (null, en lista, en text): samma svar som en kropp som inte går att läsa.
+  if (!b || typeof b !== "object" || Array.isArray(b)) return svar({ fel: "Ogiltig begäran." }, 400);
   const handling = String(b.handling ?? "");
   const id = String(b.id ?? "");
 
@@ -236,7 +238,17 @@ export async function POST(request: Request) {
         if (dag !== null && !DATUM.test(dag)) return svar({ fel: "Okänt datum." }, 400);
         const tid = b.tid === undefined ? u.due_time : b.tid === null ? null : String(b.tid);
         const est = b.est === undefined ? u.estimate_minutes : b.est === null ? null : Number(b.est);
-        return fran(await planera({}, form({ id, due_date: dag ?? "", due_time: tid ?? "", estimate_minutes: est ?? "" })), dag ? "Planerad." : "Datumet togs bort.");
+        // Uppskattningen är hela minuter, 1–1440 (0054), som tal eller som siffror i en text. Förut blev en text som inte
+        // är ett tal NaN, och repots planera tog då bort uppskattningen utan att säga det.
+        const estForm = typeof b.est === "number" || (typeof b.est === "string" && /^\d{1,4}$/.test(b.est));
+        if (b.est !== undefined && b.est !== null && !(estForm && Number.isInteger(est) && (est as number) >= 1 && (est as number) <= 1440)) return svar({ fel: "Okänd uppskattning." }, 400);
+        const s = await planera({}, form({ id, due_date: dag ?? "", due_time: tid ?? "", estimate_minutes: est ?? "" }));
+        // Bara uppskattningen: repots kvitto handlar om datumet ("Datumet togs bort." för en uppgift utan dag, fast ingen
+        // dag togs bort). Svaret säger i stället det som ändrades.
+        if (b.dag === undefined && b.tid === undefined && b.est !== undefined && !s.fel && !s.konflikt) {
+          return svar({ ok: est === null ? "Uppskattningen är borttagen." : "Uppskattningen är sparad.", id: s.id ?? null });
+        }
+        return fran(s, dag ? "Planerad." : "Datumet togs bort.");
       }
       case "andra": {
         const u = await uppgiften(id);
@@ -316,14 +328,32 @@ export async function POST(request: Request) {
       case "dag": {
         const vad = String(b.vad ?? "");
         if (vad !== "planera" && vad !== "avsluta" && vad !== "oppna") return svar({ fel: "Okänd handling." }, 400);
-        const nu = new Date().toISOString();
         if (vad === "oppna") {
-          await db.from("task_day").update({ closed_at: null }).eq("employee_id", mig).eq("dag", idag).not("planned_at", "is", null);
+          const { data: finns, error: lasfel } = await db.from("task_day").select("dag, planned_at, closed_at").eq("employee_id", mig).eq("dag", idag).maybeSingle();
+          if (lasfel) return svar({ fel: "Dagen gick inte att läsa. Försök igen." }, 500);
+          // Svaret säger bara det som hände. En dag som inte är avslutad har inget att öppna.
+          if (!finns?.closed_at) return svar({ ok: "Dagen var inte avslutad." });
+          // 0092: en rad har planned_at eller closed_at (check). En dag som avslutades utan att planeras har bara
+          // closed_at, så att öppna den är att ta bort raden: samma läge som innan den avslutades. Förut rördes bara
+          // planerade dagar, och den oplanerade sa "Dagen är öppen igen." utan att något ändrades.
+          if (!finns.planned_at) {
+            const { data: borta, error } = await db.from("task_day").delete().eq("employee_id", mig).eq("dag", idag).is("planned_at", null).select("dag");
+            if (error) return svar({ fel: "Dagen gick inte att öppna. Försök igen." }, 500);
+            if ((borta ?? []).length > 0) return svar({ ok: "Dagen är öppen igen." });
+            // Ingen rad togs bort: en annan flik hann planera dagen mellan läsningen och borttagningen. Då har raden
+            // planned_at, och dagen öppnas som en planerad dag nedan (planen står kvar).
+          }
+          // Träffar uppdateringen ingen rad har en annan flik redan öppnat dagen (raden togs bort): dagen är öppen ändå.
+          const { error } = await db.from("task_day").update({ closed_at: null }).eq("employee_id", mig).eq("dag", idag);
+          if (error) return svar({ fel: "Dagen gick inte att öppna. Försök igen." }, 500);
           return svar({ ok: "Dagen är öppen igen." });
         }
-        const { data: finns } = await db.from("task_day").select("dag").eq("employee_id", mig).eq("dag", idag).maybeSingle();
-        if (finns) await db.from("task_day").update(vad === "planera" ? { planned_at: nu } : { closed_at: nu }).eq("employee_id", mig).eq("dag", idag);
-        else await db.from("task_day").insert({ employee_id: mig, dag: idag, ...(vad === "planera" ? { planned_at: nu } : { closed_at: nu }) });
+        // En rad per person och dag. Upsert skriver bara den kolumn som ändras, så att planera inte nollar avslutat och
+        // tvärtom, och ett dubbelklick blir ingen krock på nyckeln.
+        const nu = new Date().toISOString();
+        const andring = vad === "planera" ? { planned_at: nu } : { closed_at: nu };
+        const { error } = await db.from("task_day").upsert({ employee_id: mig, dag: idag, ...andring }, { onConflict: "employee_id,dag" });
+        if (error) return svar({ fel: vad === "planera" ? "Dagen gick inte att planera. Försök igen." : "Dagen gick inte att avsluta. Försök igen." }, 500);
         return svar({ ok: vad === "planera" ? "Dagen är planerad." : "Dagen är avslutad. Ha en bra kväll." });
       }
       case "sett": {

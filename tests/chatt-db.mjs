@@ -128,6 +128,20 @@ try {
     const proven = await somAnvandare(a.auth_user_id, `select id from nav_chatt_prov`);
     ok("proven läses bara av servern", proven.fel === "42501", JSON.stringify(proven));
 
+    // Avläsningen (logg.ts, lasAvlasning) läser bara rader med ett visat kort: `.contains("verktyg", '[{"kort":true}]')`,
+    // som PostgREST gör till `verktyg @> '[{"kort":true}]'::jsonb`. Här prövas den formen mot riktig jsonb: ett element
+    // som har kort: true bland andra nycklar räknas, ett kort: false och ett element utan nyckeln räknas inte.
+    const kortRad = async (verktyg) => (await db.query(
+      `insert into nav_chatt_logg (employee_id, miljo, modell, stop_reason, verktyg) values ($1, 'prov-db-kort', 'claude-sonnet-5-5', 'end_turn', $2::jsonb) returning id`,
+      [a.id, JSON.stringify(verktyg)],
+    )).rows[0].id;
+    const medKort = await kortRad([{ namn: "las_matt", input: {}, ok: true }, { namn: "forbered_uppgifter", input: { uppgifter: [] }, ok: true, kort: true, utfall: "godkant", andrat: ["dag"] }]);
+    await kortRad([{ namn: "forbered_uppgifter", input: {}, ok: true }]);
+    await kortRad([{ namn: "forbered_uppgifter", input: {}, ok: true, kort: false }]);
+    await kortRad([]);
+    const traffar = (await db.query(`select id from nav_chatt_logg where miljo = 'prov-db-kort' and verktyg @> $1::jsonb`, [JSON.stringify([{ kort: true }])])).rows.map((r) => r.id);
+    ok("avläsningens filter (verktyg @> [{kort: true}]) tar bara raden med ett visat kort", traffar.length === 1 && traffar[0] === medKort, JSON.stringify(traffar));
+
     console.log("\n\x1b[1mGränserna: dollar per person och för företaget, varje kalendermånad\x1b[0m");
     const utr = async (vem, miljo = "prov-db") => (await ett(`select public.nav_chatt_utrymme($2, $1) as u`, [vem, miljo])).u;
     const reservera = async (vem, max, miljo = "prov-db") => (await ett(`select public.nav_chatt_reservera($2, $1, 'claude-sonnet-5-5', $3, 'PROV fråga') as r`, [vem, miljo, max])).r;

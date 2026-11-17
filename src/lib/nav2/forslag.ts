@@ -9,7 +9,7 @@ import {
   type AndratIn, type AndratKort, type Beslut, type FacitRad, type ForslagInst, type ForslagMote, type MotesUtfall, type Val,
 } from "./forslagforma";
 import {
-  KALLRAD, dagText, narText, textAndratInledning, textAndringDom, textDom, textFacit, textKortForslag, textKortObekraftade, textObekraftat, textTrendSaknas, textTrodde, type KortForslag,
+  KALLRAD, dagText, narText, textAndratInledning, textAndringDom, textDom, textFacit, textFacitEgen, textFacitKort, textKortForslag, textKortObekraftade, textObekraftat, textTrendSaknas, textTrodde, type KortForslag,
 } from "./hemtext";
 import { MATT, type MattNyckel } from "./matt";
 import { lasInstallningar, lokalDag, type MotenInst } from "./motesflode";
@@ -145,8 +145,14 @@ function somAndratIn(rad: LageRad, x: NdAndring): AndratIn {
 /* Inställningarna och kretsen                                               */
 /* ------------------------------------------------------------------------ */
 
-export async function lasInst(db: Db): Promise<{ f: ForslagInst; m: MotenInst }> {
-  const { data } = await db.from("nav_setting").select("key, value").or(`key.like.forslag.%,key.like.moten.%,key.eq.${FORSLAG_NYCKLAR.hemNytt}`).limit(200);
+/**
+ * Inställningarna för förslagen och Möten. `strikt`: ett läsfel kastas i stället för att ge förvalen. Hemmet läser
+ * strikt (byggHem gör felet till `lasfel.inst`), så att ett fel aldrig ser ut som att inget är inställt. Övriga anropare
+ * får förvalen vid fel, som förut.
+ */
+export async function lasInst(db: Db, strikt = false): Promise<{ f: ForslagInst; m: MotenInst }> {
+  const { data, error } = await db.from("nav_setting").select("key, value").or(`key.like.forslag.%,key.like.moten.%,key.eq.${FORSLAG_NYCKLAR.hemNytt}`).limit(200);
+  if (error && strikt) throw new Error(`inställningarna gick inte att läsa: ${error.message}`);
   const rader = (data ?? []) as { key: string; value: unknown }[];
   return { f: lasForslagInst(rader), m: lasInstallningar(rader) };
 }
@@ -194,26 +200,33 @@ export const somForslagMote = (r: MoteRad): ForslagMote => ({
   utfallNar: r.utfall_nar,
 });
 
-/** Mötena och kundens namn, för de möten raderna pekar på. Ett möte som är borta saknas i svaret. */
-export async function motesInfo(db: Db, ids: readonly string[]): Promise<Map<string, MotesInfo>> {
+/**
+ * Mötena och kundens namn, för de möten raderna pekar på. Ett möte som är borta saknas i svaret. `strikt`: ett läsfel
+ * kastas, i stället för att mötet saknas (och förslaget tyst faller bort ur kortet). Hemmets läsningar är strikta;
+ * nattjobbet och Teamet läser som förut.
+ */
+export async function motesInfo(db: Db, ids: readonly string[], strikt = false): Promise<Map<string, MotesInfo>> {
   const ut = new Map<string, MotesInfo>();
   const unika = [...new Set(ids)].filter(Boolean);
   if (!unika.length) return ut;
-  const { data: mr } = await db.from("mote").select(MOTE_KOL).in("id", unika).limit(unika.length);
+  const { data: mr, error: mf } = await db.from("mote").select(MOTE_KOL).in("id", unika).limit(unika.length);
+  if (mf && strikt) throw new Error(`mötena gick inte att läsa: ${mf.message}`);
   const rader = (mr ?? []) as unknown as MoteRad[];
   if (!rader.length) return ut;
   const kedjor = [...new Set(rader.map((r) => r.kedja_id))];
-  const { data: kr } = await db.from("mote_kort").select("kedja_id, namn").in("kedja_id", kedjor).limit(kedjor.length);
+  const { data: kr, error: kf } = await db.from("mote_kort").select("kedja_id, namn").in("kedja_id", kedjor).limit(kedjor.length);
+  if (kf && strikt) throw new Error(`kunderna gick inte att läsa: ${kf.message}`);
   const namn = new Map(((kr ?? []) as unknown as { kedja_id: string; namn: string | null }[]).map((k) => [k.kedja_id, k.namn?.trim() || "kunden"]));
   for (const r of rader) ut.set(r.id, { m: somForslagMote(r), kedja: r.kedja_id, forsok: r.forsok ?? 0, kund: namn.get(r.kedja_id) ?? "kunden" });
   return ut;
 }
 
-/** Förnamn för de anställda raderna nämner. */
-export async function fornamn(db: Db, ids: readonly (string | null | undefined)[]): Promise<Map<string, string>> {
+/** Förnamn för de anställda raderna nämner. `strikt`: ett läsfel kastas i stället för tomma namn (se motesInfo). */
+export async function fornamn(db: Db, ids: readonly (string | null | undefined)[], strikt = false): Promise<Map<string, string>> {
   const unika = [...new Set(ids.filter((x): x is string => !!x))];
   if (!unika.length) return new Map();
-  const { data } = await db.from("employee").select("id, first_name").in("id", unika).limit(unika.length);
+  const { data, error } = await db.from("employee").select("id, first_name").in("id", unika).limit(unika.length);
+  if (error && strikt) throw new Error(`namnen gick inte att läsa: ${error.message}`);
   return new Map(((data ?? []) as unknown as { id: string; first_name: string | null }[]).map((e) => [e.id, (e.first_name ?? "").trim()]));
 }
 
@@ -282,50 +295,51 @@ const nyastForst = (x: LageRad, y: LageRad): number => Date.parse(senastNar(y)) 
 /**
  * Det hemmet behöver direkt: personens öppna förslag, det senaste som ändrats
  * och hur långt trendregeln har kvar. Tre små frågor; mötena och namnen läses
- * bara när det finns rader att visa. Ett fel ger ett tomt svar, aldrig en fälld
- * startsida.
+ * bara när det finns rader att visa.
+ *
+ * Ett läsfel KASTAS, så att det inte ser ut som ett lugnt tomläge ("Inga förslag
+ * just nu."). Hemmet (byggHem) fångar det och sätter `lasfel.forslag`, och
+ * resten av startsidan ritas ändå. Chattens verktyg ger sitt eget felbesked.
  */
 export async function byggForslag(supabase: Db, user: CurrentUser, inst?: { f: ForslagInst; m: MotenInst }, nu: Date = new Date()): Promise<NdForslag> {
   if (!user.employee) return TOMT_FORSLAG;
   const mig = user.employee.id;
-  try {
-    const admin = supabaseAdmin();
-    const i = inst ?? (await lasInst(admin));
-    const tz = i.m.tidszon;
-    const [oppna, andrade, avgjorda] = await Promise.all([
-      supabase.from("nav_forslag_lage").select(LAGE_KOL).eq("om", mig).eq("sort", "forslag").eq("prov", false).is("beslut_id", null).is("dom", null).gt("utgar", nu.toISOString()).order("utgar", { ascending: true }).limit(20),
-      supabase.from("nav_forslag_lage").select(LAGE_KOL).eq("prov", false).or("sort.eq.andring,dom.not.is.null,matning.not.is.null").order("skapad", { ascending: false }).limit(30),
-      admin.from("mote").select("id", { count: "exact", head: true }).in("utfall", ["hallet", "uteblev"]).neq("art", "uppfoljning").gte("mote_tid", i.m.gallerFran ?? "1970-01-01T00:00:00Z"),
-    ]);
-    const o = (oppna.data ?? []) as unknown as LageRad[];
-    const allaA = ((andrade.data ?? []) as unknown as LageRad[]).sort(nyastForst);
-    const a = allaA.slice(0, 3);
-    const trend = { har: avgjorda.count ?? 0, behover: TREND_BEHOVER };
-    const trendrad = trend.har < trend.behover ? textTrendSaknas(trend.har, trend.behover) : null;
-    if (!o.length && !a.length) return { pa: i.f.pa, oppna: [], kortrad: null, andrat: [], andratKort: TOMT_ANDRATKORT, trend, trendrad };
+  const admin = supabaseAdmin();
+  const i = inst ?? (await lasInst(admin));
+  const tz = i.m.tidszon;
+  const [oppna, andrade, avgjorda] = await Promise.all([
+    supabase.from("nav_forslag_lage").select(LAGE_KOL).eq("om", mig).eq("sort", "forslag").eq("prov", false).is("beslut_id", null).is("dom", null).gt("utgar", nu.toISOString()).order("utgar", { ascending: true }).limit(20),
+    supabase.from("nav_forslag_lage").select(LAGE_KOL).eq("prov", false).or("sort.eq.andring,dom.not.is.null,matning.not.is.null").order("skapad", { ascending: false }).limit(30),
+    admin.from("mote").select("id", { count: "exact", head: true }).in("utfall", ["hallet", "uteblev"]).neq("art", "uppfoljning").gte("mote_tid", i.m.gallerFran ?? "1970-01-01T00:00:00Z"),
+  ]);
+  // supabase-js kastar inte: ett fel kommer som `error`, och data är då null. Utan den här raden blir felet ett tomt kort.
+  const fel = oppna.error ?? andrade.error ?? avgjorda.error;
+  if (fel) throw new Error(`förslagen gick inte att läsa: ${fel.message}`);
+  const o = (oppna.data ?? []) as unknown as LageRad[];
+  const allaA = ((andrade.data ?? []) as unknown as LageRad[]).sort(nyastForst);
+  const a = allaA.slice(0, 3);
+  const trend = { har: avgjorda.count ?? 0, behover: TREND_BEHOVER };
+  const trendrad = trend.har < trend.behover ? textTrendSaknas(trend.har, trend.behover) : null;
+  if (!o.length && !a.length) return { pa: i.f.pa, oppna: [], kortrad: null, andrat: [], andratKort: TOMT_ANDRATKORT, trend, trendrad };
 
-    const [info, namn] = await Promise.all([
-      motesInfo(admin, [...o, ...allaA].map(moteFor).filter((x): x is string => !!x)),
-      fornamn(admin, [...allaA.map((r) => r.om)]),
-    ]);
-    const idag = lokalDag(nu.toISOString(), tz);
-    const bokare = await fornamn(admin, o.map((r) => info.get(moteFor(r) ?? "")?.m.bokatAv));
-    // Bara det som fortfarande går att välja i står i kortet. Resten stänger nattjobbet.
-    const kvar = o.filter((r) => oppetLage(r.nyckel, r.utgar ?? "", info.get(moteFor(r) ?? "")?.m ?? null, nu, tz) === "oppet");
-    const dagar = [...new Set(kvar.map((r) => lokalDag(info.get(moteFor(r) ?? "")!.m.moteTid, tz)))];
-    return {
-      pa: i.f.pa,
-      oppna: kvar.map((r) => somForslagRad(r, info.get(moteFor(r) ?? ""), bokare, mig, nu, tz)),
-      kortrad: kvar.length ? textKortObekraftade(kvar.length, dagar.length === 1 ? dagText(dagar[0], lokalDag(nu, tz)) : null) : null,
-      andrat: a.map((r) => somAndring(r, info.get(moteFor(r) ?? ""), namn, mig)),
-      andratKort: kortAndrat(allaA.map((r) => somAndratIn(r, somAndring(r, info.get(moteFor(r) ?? ""), namn, mig))), idag),
-      trend,
-      trendrad,
-    };
-  } catch (e) {
-    console.error(`forslag: startläsningen föll: ${e instanceof Error ? e.message : String(e)}`);
-    return TOMT_FORSLAG;
-  }
+  const [info, namn] = await Promise.all([
+    motesInfo(admin, [...o, ...allaA].map(moteFor).filter((x): x is string => !!x), true),
+    fornamn(admin, [...allaA.map((r) => r.om)], true),
+  ]);
+  const idag = lokalDag(nu.toISOString(), tz);
+  const bokare = await fornamn(admin, o.map((r) => info.get(moteFor(r) ?? "")?.m.bokatAv), true);
+  // Bara det som fortfarande går att välja i står i kortet. Resten stänger nattjobbet.
+  const kvar = o.filter((r) => oppetLage(r.nyckel, r.utgar ?? "", info.get(moteFor(r) ?? "")?.m ?? null, nu, tz) === "oppet");
+  const dagar = [...new Set(kvar.map((r) => lokalDag(info.get(moteFor(r) ?? "")!.m.moteTid, tz)))];
+  return {
+    pa: i.f.pa,
+    oppna: kvar.map((r) => somForslagRad(r, info.get(moteFor(r) ?? ""), bokare, mig, nu, tz)),
+    kortrad: kvar.length ? textKortObekraftade(kvar.length, dagar.length === 1 ? dagText(dagar[0], lokalDag(nu, tz)) : null) : null,
+    andrat: a.map((r) => somAndring(r, info.get(moteFor(r) ?? ""), namn, mig)),
+    andratKort: kortAndrat(allaA.map((r) => somAndratIn(r, somAndring(r, info.get(moteFor(r) ?? ""), namn, mig))), idag),
+    trend,
+    trendrad,
+  };
 }
 
 /* ------------------------------------------------------------------------ */
@@ -348,6 +362,54 @@ export function facitRader(rader: readonly LageRad[]): FacitRad[] {
   return ut;
 }
 
+/** Rollerna som kan leda ett lag. Samma lista som byggHem använder när kretsen inte gick att läsa. */
+const LEDARROLLER: readonly string[] = ["team_lead", "sales_manager", "ceo", "admin"];
+const kanLeda = (user: CurrentUser): boolean => (user.roles as readonly string[]).some((r) => LEDARROLLER.includes(r));
+
+/**
+ * Alla dömda förslag om obekräftade möten, sida för sida: REST-lagret kapar ett svar vid 1000 rader utan att säga
+ * det, och ett facit på en del av raderna vore ett fel tal som ser rätt ut. `om` = bara den personens rader. Ett fel
+ * kastas (lasSidvis).
+ */
+function dommaRader(supabase: Db, om?: string): Promise<LageRad[]> {
+  return lasSidvis<LageRad>((a, b) => {
+    const q = supabase.from("nav_forslag_lage").select(LAGE_KOL).eq("regel", REGEL_OBEKRAFTAT).eq("prov", false).not("dom", "is", null);
+    return (om ? q.eq("om", om) : q).order("skapad", { ascending: true }).order("id").range(a, b) as unknown as PromiseLike<{ data: LageRad[] | null; error: { message: string } | null }>;
+  });
+}
+
+/** Lagets facit: alla dömda rader läsaren ser (RLS), per val, och Navs gissning mot utfallet (från 20 möten). */
+async function lagetsFacit(supabase: Db, grans: number) {
+  const rader = await dommaRader(supabase);
+  const facit = facitPerVal(facitRader(rader), grans);
+  const trodde = troddeAvstamning(
+    rader.filter((r) => r.trodde && r.dom && arUtfall(r.dom.utfall)).map((r) => ({ trodde: r.trodde as NAv, utfall: r.dom!.utfall as MotesUtfall })),
+  );
+  return { facit, trodde };
+}
+
+/**
+ * Raden "I laget hittills: …" i ett förslag, bara för den som leder ett lag. Alla andra får null: lagets tal i
+ * säljarens förslag är ett beslut om synlighet som inte är fattat. Raden är ett tillägg, så ett läsfel här fäller
+ * inte förslaget: det loggas och raden uteblir. Också kretsen: `lasKrets` kastar inte utan ger undefined, och för den
+ * som kan leda ett lag är det ett läsfel, inte "leder inte" (samma regel som grenen `facit`).
+ */
+async function facitKortFor(supabase: Db, user: CurrentUser, grans: number): Promise<string | null> {
+  if (!user.employee) return null;
+  const loggaFel = (e: unknown) => {
+    console.error(`forslag: lagets facit till förslaget gick inte att läsa: ${e instanceof Error ? e.message : String(e)}`);
+    return null;
+  };
+  try {
+    const krets = await lasKrets(supabase, user);
+    if (krets === undefined && kanLeda(user)) return loggaFel(new Error("kretsen (mote_statkrets) gick inte att läsa"));
+    if (!arChefFor(krets, user.employee.id)) return null;
+    return textFacitKort((await lagetsFacit(supabase, grans)).facit);
+  } catch (e) {
+    return loggaFel(e);
+  }
+}
+
 export async function lasGenomgang(user: CurrentUser, vad: string, id?: string | null, nu: Date = new Date()): Promise<Genomgang> {
   if (!user.employee) return nej(401, "Du måste vara inloggad.");
   const mig = user.employee.id;
@@ -358,13 +420,16 @@ export async function lasGenomgang(user: CurrentUser, vad: string, id?: string |
 
   if (vad === "forslag") {
     if (!id || !UUID.test(id)) return nej(400, "Förslaget finns inte.");
-    const { data } = await supabase.from("nav_forslag_lage").select(LAGE_KOL).eq("id", id).maybeSingle();
+    const { data, error } = await supabase.from("nav_forslag_lage").select(LAGE_KOL).eq("id", id).maybeSingle();
+    // Ett läsfel är inte "finns inte": det blir 500 med en felkod (rutten), och klienten erbjuder Försök igen.
+    if (error) throw new Error(`förslaget gick inte att läsa: ${error.message}`);
     const rad = data as unknown as LageRad | null;
     if (!rad || rad.sort !== "forslag") return nej(404, "Förslaget finns inte.");
-    const info = await motesInfo(admin, [moteFor(rad)].filter((x): x is string => !!x));
+    const info = await motesInfo(admin, [moteFor(rad)].filter((x): x is string => !!x), true);
     const i = info.get(moteFor(rad) ?? "");
-    const namn = await fornamn(admin, [i?.m.bokatAv, rad.om]);
+    const namn = await fornamn(admin, [i?.m.bokatAv, rad.om], true);
     const lage = rad.dom ? "domt" : rad.beslut_id ? "valt" : oppetLage(rad.nyckel, rad.utgar ?? "", i?.m ?? null, nu, tz);
+    const facitKort = await facitKortFor(supabase, user, inst.f.gransFacit);
     return {
       status: 200,
       data: {
@@ -376,17 +441,22 @@ export async function lasGenomgang(user: CurrentUser, vad: string, id?: string |
           domsDag: rad.doms_dag ? dagText(rad.doms_dag, lokalDag(nu, tz)) : null,
           dom: rad.dom ? somAndring(rad, i, namn, mig).text : null,
           kommentar: typeof rad.kommentar?.text === "string" ? rad.kommentar.text : null,
+          // Lagets facit på en rad, bara för den som leder ett lag (null för alla andra). Säljaren får aldrig lagets tal här.
+          facitKort,
+          // Dagen talen gäller (företagets tidszon), för källraden "data per": en delläsning sätter inte ND.nu.
+          dataPer: lokalDag(nu, tz),
         },
       },
     };
   }
 
   if (vad === "andrat") {
-    const { data } = await supabase.from("nav_forslag_lage").select(LAGE_KOL).eq("prov", false).or("sort.eq.andring,dom.not.is.null,matning.not.is.null").order("skapad", { ascending: false }).limit(200);
+    const { data, error } = await supabase.from("nav_forslag_lage").select(LAGE_KOL).eq("prov", false).or("sort.eq.andring,dom.not.is.null,matning.not.is.null").order("skapad", { ascending: false }).limit(200);
+    if (error) throw new Error(`det som ändrats gick inte att läsa: ${error.message}`);
     const rader = ((data ?? []) as unknown as LageRad[]).sort(nyastForst);
     const [info, namn, krets] = await Promise.all([
-      motesInfo(admin, rader.map(moteFor).filter((x): x is string => !!x)),
-      fornamn(admin, rader.map((r) => r.om)),
+      motesInfo(admin, rader.map(moteFor).filter((x): x is string => !!x), true),
+      fornamn(admin, rader.map((r) => r.om), true),
       lasKrets(supabase, user),
     ]);
     const nd = rader.map((r) => ({ rad: r, x: somAndring(r, info.get(moteFor(r) ?? ""), namn, mig) }));
@@ -411,19 +481,24 @@ export async function lasGenomgang(user: CurrentUser, vad: string, id?: string |
 
   if (vad === "facit") {
     const krets = await lasKrets(supabase, user);
-    if (!arChefFor(krets, mig)) return nej(403, "Lagets facit visas för den som leder ett lag.");
-    // Alla dömda förslag, sida för sida: REST-lagret kapar ett svar vid 1000 rader utan att säga det, och ett facit
-    // på en del av raderna vore ett fel tal som ser rätt ut.
-    const rader = await lasSidvis<LageRad>((a, b) =>
-      supabase.from("nav_forslag_lage").select(LAGE_KOL).eq("regel", REGEL_OBEKRAFTAT).eq("prov", false).not("dom", "is", null).order("skapad", { ascending: true }).order("id").range(a, b) as unknown as PromiseLike<{ data: LageRad[] | null; error: { message: string } | null }>,
-    );
-    const facit = facitPerVal(facitRader(rader), inst.f.gransFacit);
-    const trodde = troddeAvstamning(
-      rader.filter((r) => r.trodde && r.dom && arUtfall(r.dom.utfall)).map((r) => ({ trodde: r.trodde as NAv, utfall: r.dom!.utfall as MotesUtfall })),
-    );
+    // Kretsen gick inte att läsa. För den som kan leda ett lag vore "Dina val" ett tyst fel (hen skulle tro att laget
+    // saknas), så det blir 500 med en felkod. För en säljare spelar kretsen ingen roll: hen får alltid sina egna rader.
+    if (krets === undefined && kanLeda(user)) throw new Error("kretsen (mote_statkrets) gick inte att läsa");
+    if (arChefFor(krets, mig)) {
+      const { facit, trodde } = await lagetsFacit(supabase, inst.f.gransFacit);
+      return {
+        status: 200,
+        data: { facit: { ...facit, text: textFacit(facit), trodde: trodde ? textTrodde(trodde) : null, kalla: KALLRAD.regler, dataPer: lokalDag(nu, tz), vem: "laget" } },
+      };
+    }
+    // Den som inte leder ett lag: bara de egna valen, i antal, och aldrig en dom. Raderna läses med ett uttryckligt
+    // filter på personen, inte med RLS ensam: säljchef, vd och admin ser alla rader (0303, nav_forslag_las).
+    // `dom` och `trodde` skickas inte alls. Ett utslag om en persons möten vore ett facit om personen.
+    const egna = await dommaRader(supabase, mig);
+    const f = facitPerVal(facitRader(egna), inst.f.gransFacit);
     return {
       status: 200,
-      data: { facit: { ...facit, text: textFacit(facit), trodde: trodde ? textTrodde(trodde) : null, kalla: KALLRAD.regler } },
+      data: { facit: { per: f.per, detalj: f.detalj, flyttade: f.flyttade, text: textFacitEgen(f), trodde: null, kalla: KALLRAD.regler, dataPer: lokalDag(nu, tz), vem: "dig" } },
     };
   }
 

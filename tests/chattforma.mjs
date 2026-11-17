@@ -9,6 +9,11 @@
  */
 import { hanvisningsfel, sattInTal, utanMarken, kostnadKr, kostnadUsd, maxFragaUsd, farSlasPa, takBesked, lasUtrymme, lasChattInst, utanTal, KANDA_MODELLER, forsok, efterReserv, lasBilagor, bilageBlock, bilagaUsd, bilagaLogg, BILAGA, forePagar, PAGAR_BESKED } from "../src/lib/nav2/chatt/chattforma.ts";
 
+import { meningsgranser, helaMeningar, utkastAv, slappUtkast, nastaFragor, NASTA_MAX, jaFraga, underlagUr, UNDERLAG_RADER, UNDERLAG_KOLUMNER, arRadId, UTFALL, lasUtfall, medUtfall, visatKort, kortensUtfall, vantarSlutrad, PAGAR_MS, EJ_KLAR_BESKED, sammaModell } from "../src/lib/nav2/chatt/chattforma.ts";
+import { ANDRAT, ANDRAT_FOR, KOMMANDO_VERKTYG, KOMMANDO_FEL_TEXTER, kommandoFel, lasKommando, median, medianRad, provAnteckning } from "../src/lib/nav2/chatt/chattforma.ts";
+import { readFileSync } from "node:fs";
+import { raknaAvlasning } from "../src/lib/nav2/chatt/logg.ts";
+
 let fel = 0;
 const ok = (namn, villkor, extra = "") => {
   console.log(`  ${villkor ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m"} ${namn}${extra && !villkor ? "  " + String(extra).slice(0, 400) : ""}`);
@@ -250,6 +255,178 @@ rubrik("En fråga i taget per person");
   ok("en rad som fastnat räknas inte", forePagar([{ id: "a", nar: nar(200) }], "b", NU, MAX) === false);
   ok("trasiga rader och inget svar stoppar ingen", forePagar(null, "b", NU, MAX) === false && forePagar([{ id: 1, nar: nar(5) }, { id: "a", nar: "inte ett datum" }, null], "b", NU, MAX) === false);
   ok("beskedet säger vad som händer och vad man gör", PAGAR_BESKED === "Din förra fråga pågår fortfarande. Försök igen när den är klar.");
+}
+
+rubrik("Varv 2, utkastet: bara hela meningar, och bara tal med källa");
+{
+  ok("en mening är hel först när ett blanktecken följer: klockslag, hänvisningar och fetstil klipps aldrig", lika(meningsgranser("Mötet är 10.30 i dag. Det gäller {{t:1.antal}}. **Obs. viktigt.** Klart"), [21, 47]), JSON.stringify(meningsgranser("Mötet är 10.30 i dag. Det gäller {{t:1.antal}}. **Obs. viktigt.** Klart")));
+  ok("helaMeningar ger texten fram till sista hela meningen", helaMeningar("Ett. Två. Tre") === "Ett. Två." && helaMeningar("Ingen hel mening") === "");
+  ok("ett utkast har talen insatta som i svaret", lika(utkastAv("Laget höll {{t:1.antal}} möten.", SVAR), { text: "Laget höll ⟦t1:12⟧ möten.", tal: [{ id: "t1", varde: 12, kalla: { verktyg: "las_matt", anrop: 1, falt: "antal" } }] }));
+  ok("ett tal utan källa eller en halv hänvisning ger inget utkast", utkastAv("Det var 7 möten.", SVAR) === null && utkastAv("Laget höll {{t:1.ant", SVAR) === null && utkastAv("", SVAR) === null);
+  const s1 = slappUtkast("Laget höll {{t:1.antal}} möten. Det var 7 till. Bra. ", SVAR);
+  ok("slappUtkast stannar före det första obelagda talet, och säger hur långt det har provat", s1.utkast?.text === "Laget höll ⟦t1:12⟧ möten." && s1.provat === 52, JSON.stringify(s1));
+  ok("ett meningsslut prövas inte två gånger", slappUtkast("Laget höll {{t:1.antal}} möten. Det var 7 till. Bra. ", SVAR, s1.provat).utkast === null);
+  // Svaret matat tecken för tecken, som strömmen ger det: varje utkast ska vara början av slutsvarets märkta text.
+  const utkastenAv = (text, svar) => {
+    let provat = 0;
+    const ut = [];
+    for (let i = 1; i <= text.length; i++) {
+      const s = slappUtkast(text.slice(0, i).trimStart(), svar, provat);
+      provat = s.provat;
+      if (s.utkast) ut.push(s.utkast.text);
+    }
+    return ut;
+  };
+  const ANT = [{ _verktyg: "las_affarer", anteckning: "Vi vill ha 12 licenser.", oppna: 4 }];
+  const blandat = 'Anteckningen "Kunden sa ”Vi vill ha 12 licenser.” och bad om offert" står i mötet. Du har {{t:1.oppna}} öppna.';
+  const slutBlandat = sattInTal(blandat, ANT);
+  const uBlandat = utkastenAv(blandat, ANT);
+  ok("ett citat i ett citat som inte är slut: utkastet väntar, så att ett tal aldrig ser citerat ut i utkastet och obelagt i svaret", slutBlandat.obelagda === 1 && uBlandat.every((u) => slutBlandat.text.startsWith(u)) && !uBlandat.some((u) => /12/.test(u)), JSON.stringify([uBlandat, slutBlandat.text]));
+  const helt = "Kunden skrev ”Vi vill ha 12 licenser.” Du har {{t:1.oppna}} öppna. Ring i dag.";
+  const slutHelt = sattInTal(helt, ANT);
+  const uHelt = utkastenAv(helt, ANT);
+  ok("ett citat som är slut släpps som vanligt, med talet orört som datan", slutHelt.obelagda === 0 && uHelt[0] === "Kunden skrev ”Vi vill ha 12 licenser.”" && uHelt.every((u) => slutHelt.text.startsWith(u)), JSON.stringify(uHelt));
+  const fler = [
+    "Hon skrev «Vi vill ha 12 licenser. Ring oss.» i mötet. Du har {{t:1.oppna}} öppna.",
+    'Det står "Vi vill ha 12 licenser." i anteckningen. Hon sa “ring 12 gånger” och sedan "Vi vill ha 12 licenser." igen.',
+    'Han sa ” hej. Och ”Vi vill ha 12 licenser.” står där. Du har {{t:1.oppna}} öppna.',
+    '"Ett citat\nmed radbrytning. Och "Vi vill ha 12 licenser." sedan. Du har {{t:1.oppna}} öppna.',
+  ];
+  const brutna = fler.filter((t) => { const slut = sattInTal(t, ANT).text; return !utkastenAv(t, ANT).every((u) => slut.startsWith(u)); });
+  ok("blandade citattecken, radbrytningar och citat som börjar mitt i: varje utkast är början av svaret", brutna.length === 0, JSON.stringify(brutna));
+}
+
+rubrik("Varv 2, följdfrågor: regler ur verktygen som svarade, aldrig ur Claudes text");
+{
+  const idag = "2026-11-18";
+  const matt = (vem, period, ok = true) => ({ namn: "las_matt", input: { matt: "moten.hallna-av-alla", vem, period }, ok });
+  ok("las_matt: den andra perioden av samma slag, som en hel fråga", lika(nastaFragor({ anrop: [matt("jag", "forra-veckan")], fraga: "Hur gick det?", idag, laget: false }), [{ text: "Hur många hållna möten hade jag den här veckan?", knapp: "Den här veckan" }]));
+  ok("las_matt för laget: bara jag, och för en månad den andra månaden", lika(nastaFragor({ anrop: [matt("laget", "denna-manad")], fraga: "x", idag, laget: true }), [{ text: "Hur många hållna möten hade laget förra månaden?", knapp: "Förra månaden" }, { text: "Hur många hållna möten hade jag den här månaden?", knapp: "Bara jag" }]));
+  ok("högst två följdfrågor", nastaFragor({ anrop: [matt("jag", "forra-veckan"), { namn: "las_dag", input: { dag: idag }, ok: true }], fraga: "x", idag, laget: true }).length === NASTA_MAX && NASTA_MAX === 2);
+  ok("las_provision: den andra månaden", lika(nastaFragor({ anrop: [{ namn: "las_provision", input: { manad: "denna-manad" }, ok: true }], fraga: "x", idag, laget: false }), [{ text: "Hur ser min provision ut för förra månaden?", knapp: "Förra månaden" }]));
+  ok("las_affarer: laget bara för den som får se laget", lika(nastaFragor({ anrop: [{ namn: "las_affarer", input: { vem: "jag" }, ok: true }], fraga: "x", idag, laget: true }), [{ text: "Hur ser lagets öppna affärer ut?", knapp: "Laget" }]) && nastaFragor({ anrop: [{ namn: "las_affarer", input: { vem: "jag" }, ok: true }], fraga: "x", idag, laget: false }).length === 0);
+  ok("las_dag: i morgon bara när frågan gällde i dag", lika(nastaFragor({ anrop: [{ namn: "las_dag", input: { dag: idag }, ok: true }], fraga: "x", idag, laget: false }), [{ text: "Vad har jag i morgon?", knapp: "I morgon" }]) && nastaFragor({ anrop: [{ namn: "las_dag", input: { dag: "2026-11-20" }, ok: true }], fraga: "x", idag, laget: false }).length === 0);
+  ok("ett anrop som föll, ett okänt mått eller en okänd period ger ingenting", nastaFragor({ anrop: [matt("jag", "forra-veckan", false), { namn: "las_matt", input: { matt: "finns.inte", vem: "jag", period: "forra-veckan" }, ok: true }, { namn: "las_matt", input: { matt: "moten.hallna-av-alla", vem: "jag", period: "forra-aret" }, ok: true }], fraga: "x", idag, laget: true }).length === 0);
+  ok("en fråga om en namngiven person ger inga följdfrågor: namnet är Claudes indata, inte verktygets svar", nastaFragor({ anrop: [matt("Omar", "forra-veckan"), { namn: "las_affarer", input: { vem: "Omar" }, ok: true }], fraga: "x", idag, laget: true }).length === 0);
+  ok("det som redan lästs och frågan som just ställdes föreslås inte", nastaFragor({ anrop: [matt("jag", "forra-veckan"), matt("jag", "denna-vecka")], fraga: "x", idag, laget: false }).length === 0 && nastaFragor({ anrop: [matt("jag", "forra-veckan")], fraga: "Hur många hållna möten hade jag den här veckan?", idag, laget: false }).length === 0);
+  ok("Ja-markeringen: bara Ska jag …? sist och inga kort (visas inte förrän B4)", jaFraga("Klart. Ska jag lägga en uppgift om det?", 0) && !jaFraga("Klart. Ska jag lägga en uppgift om det?", 1) && !jaFraga("Vill du att jag lägger en?", 0) && !jaFraga("Ska jag? Nej.", 0));
+}
+
+rubrik("Varv 2, underlaget: verktygets egna rader, högst 10 × 4, inget räknat");
+{
+  const tal = (anrop, falt = "x") => ({ id: "t1", varde: 1, kalla: { verktyg: "?", anrop, falt } });
+  const aff = { _verktyg: "las_affarer", oppna: 14, affarer: Array.from({ length: 14 }, (_, i) => ({ bolag: `Bolag ${i}`, steg: "Offert skickad", nastaDag: "2026-11-20", nastaTid: i ? "" : "10.00", belopp: i ? null : 5000, ansvarig: "Någon" })) };
+  const u = underlagUr([aff], [tal(1)]);
+  ok("las_affarer: fyra kolumner, högst tio rader, totalt är verktygets eget antal", u?.verktyg === "las_affarer" && u.anrop === 1 && lika(u.kolumner, ["Bolag", "Steg", "Nästa", "Belopp"]) && u.rader.length === UNDERLAG_RADER && UNDERLAG_RADER === 10 && u.rader.every((r) => r.length <= UNDERLAG_KOLUMNER) && UNDERLAG_KOLUMNER === 4 && u.totalt === 14 && lika(u.rader[0], ["Bolag 0", "Offert skickad", "2026-11-20 10.00", 5000]), JSON.stringify(u?.rader[0]));
+  ok("bara de kolumner underlaget visar följer med, aldrig resten av verktygets rad", !JSON.stringify(u).includes("Någon"));
+  ok("las_provision: order och belopp", lika(underlagUr(SVAR, [tal(2)]), { anrop: 2, verktyg: "las_provision", kolumner: ["Order", "Belopp"], rader: [["#11 Hagmans Rör", 6500]], totalt: null }), JSON.stringify(underlagUr(SVAR, [tal(2)])));
+  const dag = { _verktyg: "las_dag", poster: [{ tid: "09.00", rubrik: "Möte Hagby" }], kalenderposter: 1, uppgifter: ["Ring"], uppgifterKvar: 1 };
+  ok("las_dag: kalenderns poster, och uppgifterna bara när kalendern är tom", lika(underlagUr([dag], [tal(1)])?.rader, [["09.00", "Möte Hagby"]]) && lika(underlagUr([{ ...dag, poster: [] }], [tal(1)])?.rader, [["Ring"]]));
+  ok("las_vantar: raderna, utan ett eget totalt (verktyget räknar dem inte)", lika(underlagUr([{ _verktyg: "las_vantar", rader: ["Två order väntar"] }], [tal(1)]), { anrop: 1, verktyg: "las_vantar", kolumner: ["Väntar"], rader: [["Två order väntar"]], totalt: null }));
+  ok("underlaget kommer ur verktyget som flest av talen kommer ur", underlagUr([aff, SVAR[1]], [tal(2), tal(1), tal(2)])?.verktyg === "las_provision");
+  ok("inget underlag utan tal, ur ett fel, ur ett mått eller ur en tom lista", underlagUr([aff], []) === null && underlagUr([{ ...aff, fel: "Nej." }], [tal(1)]) === null && underlagUr(SVAR, [tal(1)]) === null && underlagUr([{ ...aff, affarer: [] }], [tal(1)]) === null);
+}
+
+rubrik("Varv 2, kortens utfall och loggradens id");
+{
+  const ID = "c0000000-0000-4000-8000-0000000000a1";
+  ok("ett id är en uuid och inget annat", arRadId(ID) && arRadId(ID.toUpperCase()) && !arRadId("rad-1") && !arRadId(5) && !arRadId(null) && !arRadId(` ${ID}`));
+  ok("lägena är planens fyra", lika([...UTFALL], ["godkant", "delvis", "avbrutet", "angrat"]));
+  const l = lasUtfall({ rad: ID.toUpperCase(), anrop: 2, lage: "delvis" });
+  ok("ett giltigt utfall läses, och id:t blir gemener", l.ok && l.utfall.rad === ID && l.utfall.anrop === 2 && l.utfall.lage === "delvis", JSON.stringify(l));
+  ok("allt annat avvisas med en mening", [null, [], "x", {}, { rad: ID, anrop: 1.5, lage: "godkant" }, { rad: ID, anrop: 101, lage: "godkant" }, { rad: ID, anrop: 1, lage: "fel" }].every((x) => { const r = lasUtfall(x); return !r.ok && typeof r.fel === "string" && r.fel.length > 0; }));
+  // `kort: true`: kortet visades i svaret (korSamtal märker det). Ett förbered-anrop utan märket var en dubblett eller rymdes inte.
+  const V = [{ namn: "las_matt", input: {}, ok: true }, { namn: "forbered_uppgifter", input: {}, ok: true, kort: true }, { namn: "forbered_uppgifter", input: {}, ok: false }, { namn: "forbered_uppgifter", input: {}, ok: true }];
+  const m = medUtfall(V, { rad: ID, anrop: 2, lage: "godkant" }, "2026-11-17T10:00:00.000Z");
+  ok("utfallet skrivs i verktyg[anrop-1], resten står orört", m?.andrad === true && m.verktyg[1].utfall === "godkant" && m.verktyg[1].utfallNar === "2026-11-17T10:00:00.000Z" && lika(m.verktyg[0], V[0]) && !("utfall" in V[1]));
+  const igen = medUtfall(m.verktyg, { rad: ID, anrop: 2, lage: "godkant" }, "2026-11-17T11:00:00.000Z");
+  ok("samma utfall igen ändrar ingenting, och första tiden står kvar", igen?.andrad === false && igen.verktyg[1].utfallNar === "2026-11-17T10:00:00.000Z");
+  ok("inget utfall på ett förbered-anrop vars kort aldrig visades (en dubblett, ett kort över gränsen)", medUtfall(V, { rad: ID, anrop: 4, lage: "godkant" }, "x") === null && visatKort(V[1]) && !visatKort(V[3]) && !visatKort({ namn: "las_matt", ok: true, kort: true }) && !visatKort(null));
+  ok("inget utfall på en läsning, ett kort som föll, ett nummer som inte finns eller en rad utan verktyg", [1, 3, 5].every((anrop) => medUtfall(V, { rad: ID, anrop, lage: "godkant" }, "x") === null) && medUtfall(null, { rad: ID, anrop: 1, lage: "godkant" }, "x") === null);
+  const NU = Date.parse("2026-11-17T12:00:00Z");
+  const sek = (n) => new Date(NU - n * 1000).toISOString();
+  ok("en rad väntar på sin slutrad medan den pågår eller stoppas, men inte längre än PAGAR_MS", PAGAR_MS === 130_000 && vantarSlutrad("pagar", sek(5), NU) && vantarSlutrad("stoppas", sek(129), NU) && !vantarSlutrad("pagar", sek(131), NU) && !vantarSlutrad("stoppas", sek(600), NU) && !vantarSlutrad("end_turn", sek(1), NU) && !vantarSlutrad("avbruten", sek(1), NU) && vantarSlutrad("pagar", null, NU) && vantarSlutrad("pagar", "inte en tid", NU) && EJ_KLAR_BESKED === "Svaret sparas fortfarande. Försök igen om en stund.");
+  ok("villkoren för utfallet: varje visat korts utfall som det lästes, index från 0, inget för läsningar och kort som inte visades", lika(kortensUtfall(m.verktyg), [[1, "godkant"]]) && lika(kortensUtfall(V), [[1, null]]) && lika(kortensUtfall(null), []) && lika(kortensUtfall([{ namn: "forbered_uppgifter", ok: true, kort: true, utfall: null }]), [[0, null]]));
+  ok("samma modell med och utan datum, men inte en annan modell", sammaModell("claude-sonnet-5-5", "claude-sonnet-5-5-20261001") && !sammaModell("claude-sonnet-5-5", "claude-opus-5-5"));
+}
+
+rubrik("Funktion 6: det personen rättade före Godkänn, och kommandot som bygger om kortet");
+{
+  const ID = "c0000000-0000-4000-8000-0000000000a1";
+  ok("fälten som går att rätta är tre, i fast ordning", lika([...ANDRAT], ["titel", "dag", "till"]));
+  const l = lasUtfall({ rad: ID, anrop: 2, lage: "godkant", andrat: ["till", "titel", "till"] });
+  ok("vitlistan i lasUtfall: kända fält, i fast ordning och utan dubbletter", l.ok && lika(l.utfall.andrat, ["titel", "till"]), JSON.stringify(l));
+  ok("utan andrat, med en tom lista eller med null finns inget andrat", [undefined, [], null].every((andrat) => { const r = lasUtfall({ rad: ID, anrop: 2, lage: "godkant", andrat }); return r.ok && !("andrat" in r.utfall); }));
+  ok("ett okänt fält, en text eller ett objekt avvisas med en mening", [["bolag"], ["dag", 5], "dag", { dag: true }, ["Dag"], Array(11).fill("dag")].every((andrat) => { const r = lasUtfall({ rad: ID, anrop: 2, lage: "godkant", andrat }); return !r.ok && r.fel === "Okänt fält i ändrat."; }));
+  const V = [{ namn: "las_matt", input: {}, ok: true }, { namn: "forbered_uppgifter", input: {}, ok: true, kort: true }];
+  const forst = medUtfall(V, { rad: ID, anrop: 2, lage: "godkant", andrat: ["dag"] }, "2026-11-17T10:00:00.000Z");
+  ok("andrat skrivs med kortets första utfall, i rätt verktyg", forst?.andrad === true && lika(forst.verktyg[1].andrat, ["dag"]) && !("andrat" in forst.verktyg[0]) && !("andrat" in V[1]));
+  const sedan = medUtfall(forst.verktyg, { rad: ID, anrop: 2, lage: "angrat", andrat: ["titel", "dag"] }, "2026-11-17T11:00:00.000Z");
+  ok("ett senare utfall behåller andrat som det stod: inget läggs till", sedan?.andrad === true && sedan.verktyg[1].utfall === "angrat" && lika(sedan.verktyg[1].andrat, ["dag"]));
+  const utanSedan = medUtfall(forst.verktyg, { rad: ID, anrop: 2, lage: "angrat" }, "2026-11-17T11:00:00.000Z");
+  ok("ett senare utfall utan andrat tar inte bort det som står", lika(utanSedan?.verktyg[1].andrat, ["dag"]));
+  const ingen = medUtfall(V, { rad: ID, anrop: 2, lage: "godkant" }, "x");
+  const efter = medUtfall(ingen.verktyg, { rad: ID, anrop: 2, lage: "angrat", andrat: ["dag"] }, "y");
+  ok("ett kort som avgjordes utan ändring får inget andrat efteråt", !("andrat" in ingen.verktyg[1]) && !("andrat" in efter.verktyg[1]));
+  ok("samma läge igen skriver ingenting, också med andra fält", medUtfall(forst.verktyg, { rad: ID, anrop: 2, lage: "godkant", andrat: ["titel"] }, "z")?.andrad === false);
+  // Ett uppföljningskort har bolaget (titel) och dagen, ingen "åt". Ett `till` där är inget personen kan ha rättat, och
+  // skulle annars göra ett kort som godkändes oförändrat till "godkänt efter ändring" i avläsningen.
+  ok("varje förbered-verktyg har sina fält, och båda står i KOMMANDO_VERKTYG", lika(ANDRAT_FOR.forbered_uppgifter, ["titel", "dag", "till"]) && lika(ANDRAT_FOR.forbered_uppfoljning, ["titel", "dag"]) && KOMMANDO_VERKTYG.every((v) => v in ANDRAT_FOR));
+  const UF = [{ namn: "forbered_uppfoljning", input: { bolag: "X", dag: "2026-11-20" }, ok: true, kort: true }];
+  const bara = medUtfall(UF, { rad: ID, anrop: 1, lage: "godkant", andrat: ["till"] }, "x");
+  ok("till på ett uppföljningskort skrivs inte, och då står ingen andrat alls", bara?.andrad === true && bara.verktyg[0].utfall === "godkant" && !("andrat" in bara.verktyg[0]), JSON.stringify(bara?.verktyg[0]));
+  const blandat = medUtfall(UF, { rad: ID, anrop: 1, lage: "godkant", andrat: ["titel", "till"] }, "x");
+  ok("titel och dag på ett uppföljningskort står kvar, till tas bort", lika(blandat?.verktyg[0].andrat, ["titel"]), JSON.stringify(blandat?.verktyg[0]));
+  ok("ett uppgiftskort behåller till", lika(medUtfall(V, { rad: ID, anrop: 2, lage: "godkant", andrat: ["till"] }, "x")?.verktyg[1].andrat, ["till"]));
+  ok("avläsningen räknar inte ett uppföljningskort med bara till som ändrat", raknaAvlasning({ rader: [{ id: ID, nar: new Date().toISOString(), verktyg: bara.verktyg }], rapporterade: [], nu: new Date() }).kort.andrade === 0, JSON.stringify(raknaAvlasning({ rader: [{ id: ID, nar: new Date().toISOString(), verktyg: bara.verktyg }], rapporterade: [], nu: new Date() }).kort));
+
+  ok("kommandot har bara de två förbered-verktygen", lika([...KOMMANDO_VERKTYG], ["forbered_uppgifter", "forbered_uppfoljning"]));
+  const upp = { uppgifter: [{ titel: "Ring", dag: "2026-11-20", till: "Sara" }] };
+  const k = lasKommando({ verktyg: "forbered_uppgifter", input: upp });
+  ok("ett giltigt kommando läses, och input får schemats form", k.ok && k.kommando.verktyg === "forbered_uppgifter" && lika(k.kommando.input, upp) && k.kommando.input !== upp, JSON.stringify(k));
+  const f = lasKommando({ verktyg: "forbered_uppfoljning", input: { dag: "2026-11-25", bolag: "Hagby Glas" } });
+  ok("en uppföljning: bolag och dag", f.ok && lika(f.kommando.input, { bolag: "Hagby Glas", dag: "2026-11-25" }));
+  ok("ett okänt verktyg avvisas, också läsningarna och ett namn som bara börjar rätt", ["las_matt", "sok_kunskap", "forbered_uppgifter ", "forbered_", undefined].every((verktyg) => { const r = lasKommando({ verktyg, input: upp }); return !r.ok && r.fel === "Okänt verktyg."; }));
+  const fel = [null, [], "x", { verktyg: "forbered_uppgifter" }, { verktyg: "forbered_uppgifter", input: null }, { verktyg: "forbered_uppgifter", input: { uppgifter: "Ring" } },
+    { verktyg: "forbered_uppgifter", input: { uppgifter: [{ titel: "Ring", dag: null, till: "jag" }] } },
+    { verktyg: "forbered_uppgifter", input: { uppgifter: [{ titel: ["Ring"], dag: "", till: "jag" }] } },
+    { verktyg: "forbered_uppgifter", input: { uppgifter: [{ titel: "Ring\u0007", dag: "", till: "jag" }] } },
+    { verktyg: "forbered_uppgifter", input: { uppgifter: [{ titel: "Ring\u0000", dag: "", till: "jag" }] } },
+    { verktyg: "forbered_uppfoljning", input: { bolag: "Hagby Glas", dag: "2026-11-25", kedja: "x" } }];
+  ok("tab och radbrytning tas emot, som i Claudes input", lasKommando({ verktyg: "forbered_uppgifter", input: { uppgifter: [{ titel: "Ring\tHagby\r\nGlas", dag: "", till: "jag" }] } }).ok);
+  ok("allt annat avvisas med en mening, innan något läses", fel.every((x) => { const r = lasKommando(x); return !r.ok && typeof r.fel === "string" && r.fel.length > 0; }));
+  const verktygKod = readFileSync(new URL("../src/lib/nav2/chatt/verktyg.ts", import.meta.url), "utf8");
+  ok("varje text som byts för personen står i verktyg.ts, annars byts den aldrig", KOMMANDO_FEL_TEXTER.length === 4 && KOMMANDO_FEL_TEXTER.every((t) => verktygKod.includes(t)), KOMMANDO_FEL_TEXTER.filter((t) => !verktygKod.includes(t)).join(" | "));
+  ok("texterna till personen ber den skriva, inte fråga, och andra texter står kvar", kommandoFel("Fråga vilket bolag det gäller.") === "Skriv vilket bolag det gäller." && KOMMANDO_FEL_TEXTER.every((t) => !/Fråga/.test(kommandoFel(t))) && kommandoFel("Välj i dag eller en senare dag.") === "Välj i dag eller en senare dag.");
+}
+
+rubrik("A1-6: medianen per modell i provet");
+{
+  ok("medianen: mitten, medelvärdet av de två i mitten, och null för inga tal", median([3, 1, 2]) === 2 && median([4, 1, 3, 2]) === 2.5 && median([]) === null && median([NaN, 5]) === 5);
+  ok("raden bär median-ms, median-varv och antalet körningar", medianRad([{ varv: 2, tider: { totalt: 9000 } }, { varv: 3, tider: { totalt: 11000 } }, { varv: 2, tider: { totalt: 8000 } }]) === "Median per körning: 9000 ms och 2 varv, av 3 körningar.");
+  ok("en körning utan mätning räknas inte, och utan någon står det att den saknas", medianRad([{ varv: 2, tider: { totalt: 9000 } }, { ra: "x" }, null]) === "Median per körning: 9000 ms och 2 varv, av 1 körning." && medianRad([{ ra: "x" }]) === "Median per körning: saknas (ingen körning bar mätningen).");
+  // Det `--kor` sparar i nav_chatt_prov.anteckning. Provet körs inte här (det kostar pengar): anteckningen är en ren
+  // funktion, och skriptet ska skicka just den som anteckning.
+  const median3 = medianRad([{ varv: 2, tider: { totalt: 9000 } }, { varv: 3, tider: { totalt: 11000 } }, { varv: 2, tider: { totalt: 8000 } }]);
+  ok("anteckningen slutar med medianraden", provAnteckning({ varv: 3, omskrivna: 1, korningar: 48, reserv: 1, fall: [{ id: "s16" }, { id: "t35" }], median: median3 }) === "3 varv per fråga. Omskrivna svar: 1 av 48. Reservmodellen tog över 1 gång. Föll: s16, t35. Median per körning: 9000 ms och 2 varv, av 3 körningar.");
+  ok("utan fall och utan reserv", provAnteckning({ varv: 3, omskrivna: 0, korningar: 48, reserv: 0, fall: [], median: "Median per körning: saknas (ingen körning bar mätningen)." }) === "3 varv per fråga. Omskrivna svar: 0 av 48. Reservmodellen tog över 0 gånger. Föll: inga. Median per körning: saknas (ingen körning bar mätningen).");
+  const provKod = readFileSync(new URL("../scripts/chatt-prov.mjs", import.meta.url), "utf8");
+  const insattning = provKod.slice(provKod.indexOf("insert into nav_chatt_prov"), provKod.indexOf("insert into nav_chatt_prov") + 600);
+  ok("--kor skickar provAnteckning, med medianen, som anteckning i nav_chatt_prov", /provAnteckning\(\{[^}]*median: r\.median[^}]*\}\)\]/.test(insattning) && /const median = medianRad\(matningar\);/.test(provKod) && /resultat\.push\(\{[^}]*median[^}]*\}\)/.test(provKod), insattning.slice(0, 300));
+}
+
+rubrik("A1-5: avläsningen räknas ur raderna");
+{
+  const NU = new Date("2026-11-17T10:00:00Z");
+  const kort = (o) => ({ namn: "forbered_uppgifter", input: {}, ok: true, kort: true, ...o });
+  const a = raknaAvlasning({ nu: NU, rapporterade: [], rader: [{ id: "a", nar: "2026-11-02T08:00:00Z", verktyg: [kort({ utfall: "godkant" }), kort({ utfall: "godkant", andrat: ["titel", "dag"] }), kort({ utfall: "avbrutet" }), kort({ utfall: "avbrutet" }), kort({ utfall: "angrat" }), kort({ utfall: "angrat" }), kort({})] }] });
+  ok("flera av varje: plural, och ett kort med andrat räknas en gång oavsett antal fält", a.rad === "Kort i månaden: 2 godkända (1 efter ändring), 0 delvis, 2 avbrutna, 2 ångrade, 1 utan utfall · Ändrade före beslutet: 1 · Stämmer inte: 0 · data per 2026-11-17", a.rad);
+  const b = raknaAvlasning({ nu: NU, rapporterade: [], rader: [{ id: "b", nar: "2026-11-02T08:00:00Z", verktyg: [kort({ utfall: "godkant" }), kort({ utfall: "godkant" }), kort({ utfall: "avbrutet", andrat: ["dag"] })] }] });
+  ok("de godkända står för sig från de rättade: ett rättat kort som avbröts gör inte en godkänd till ändrad", b.kort.godkanda === 2 && b.kort.godkandaAndrade === 0 && b.kort.andrade === 1 && b.rad.startsWith("Kort i månaden: 2 godkända (0 efter ändring), 0 delvis, 1 avbrutet,"), b.rad);
+  const c = raknaAvlasning({ nu: NU, rapporterade: [], rader: [{ id: "c", nar: "2026-11-02T08:00:00Z", verktyg: [kort({ utfall: "avbrutet" })] }] });
+  ok("utan godkända står ingen parentes", c.rad.startsWith("Kort i månaden: 0 godkända, 0 delvis, 1 avbrutet,"), c.rad);
+  const igen = raknaAvlasning({ nu: NU, rapporterade: [{ id: "a", nar: "2026-11-02T08:00:00Z" }, { id: "a", nar: "2026-11-02T08:00:00Z" }, { id: "b", nar: "inte en tid" }], rader: [{ id: "a", nar: "2026-11-02T08:00:00Z", verktyg: [kort({})] }, { id: "a", nar: "2026-11-02T08:00:00Z", verktyg: [kort({})] }, { id: "c", nar: null, verktyg: [kort({})] }, { id: "d", nar: "2026-11-03T08:00:00Z", verktyg: null }] });
+  ok("samma rad två gånger (två sidor) räknas en gång, och en rad utan tid eller verktyg räknas inte", igen.kort.visade === 1 && igen.stammerInte === 1, JSON.stringify(igen));
 }
 
 console.log(fel ? `\n\x1b[31m${fel} ✗\x1b[0m` : "\n\x1b[32mAllt stämmer\x1b[0m");

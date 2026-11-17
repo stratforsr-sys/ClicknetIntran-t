@@ -9,7 +9,7 @@
  *   TZ=UTC node --experimental-strip-types tests/hemtext.mjs
  */
 import {
-  KALLRAD, textObekraftat, textKortObekraftade, textKortForslag, textAndratInledning, textKvitto, textFacit, textFacitKort, textTakt, textTaktFacit, textTaktKort,
+  KALLRAD, textObekraftat, textKortObekraftade, textKortForslag, textAndratInledning, textKvitto, textFacit, textFacitEgen, textFacitKort, textTakt, textTaktFacit, textTaktKort,
   textAndringDom, textTrendSaknas, textTrodde, textAndel, textDom, narText, manadsnamn, gangerText, textFel, felkod, textLagnamn,
 } from "../src/lib/nav2/hemtext.ts";
 
@@ -81,7 +81,38 @@ lika("utslag: urvalet står i samma mening", textFacit({ ...F, dom: { sort: "uts
 lika("en person: antalen visas, ingen dom", textFacit({ ...F, dom: { sort: "en-person", p: 0.004, tidigast: null, vid: 10 } }).endsWith("En person står för mer än hälften av mötena i ett val. Då vore det här ett facit om den personen, så jag dömer inte."), true);
 lika("ingen har valt låt stå än", textFacit({ ...F, per: { ...F.per, "lat-sta": { n: 0, av: 0 }, ingen: { n: 0, av: 0 } }, dom: { sort: "tomt", p: null, tidigast: null, vid: 0 } }), "När någon har ringt själv har 5 av 7 möten hållits. Det finns inget att jämföra med än.");
 lika("inget alls", textFacit({ ...F, per: { "ringer-sjalv": { n: 0, av: 0 }, flytta: { n: 0, av: 0 }, "lat-sta": { n: 0, av: 0 }, ingen: { n: 0, av: 0 } }, dom: { sort: "tomt", p: null, tidigast: null, vid: 0 } }), "Inget facit än. Det kommer när de första mötena har fått ett utfall.");
-lika("kort, i förslaget", textFacitKort(F), "I laget hittills: ringt själv 5 av 7 hölls, låt stå 1 av 4. För få för att säga något, tidigast vid runt 40 möten.");
+// Ingen valde räknas i samma mening som Ringt själv och Låt stå (regel 4), också på en rad.
+lika("kort, i förslaget", textFacitKort(F), "I laget hittills: ringt själv 5 av 7 hölls, låt stå 1 av 4, ingen valde 0 av 2. För få för att säga något, tidigast vid runt 40 möten.");
+lika("kort, utslag: domen säger vid hur många möten den räknades", textFacitKort({ ...F, dom: { sort: "utslag", p: 0.004, tidigast: null, vid: 20 } }), "I laget hittills: ringt själv 5 av 7 hölls, låt stå 1 av 4, ingen valde 0 av 2. Vid 20 möten var skillnaden för stor för att vara slump, men den visar inte att samtalet gjorde den.");
+{
+  // En person står för mer än hälften: domen hålls tillbaka för att den vore ett facit om personen. Underlaget räckte
+  // (facitPerVal sätter en-person bara när p ligger under gränsen), så "för få" vore en orsak som inte stämmer.
+  const enPerson = textFacitKort({ ...F, per: { ...F.per, "ringer-sjalv": { n: 18, av: 20 }, "lat-sta": { n: 6, av: 20 } }, dom: { sort: "en-person", p: 0.001, tidigast: null, vid: 40 } });
+  lika("kort, en person: ingen dom, och skälet är personen", enPerson, "I laget hittills: ringt själv 18 av 20 hölls, låt stå 6 av 20, ingen valde 0 av 2. En person står för mer än hälften av mötena i ett val, så jag dömer inte.");
+  ok("kort, en person: aldrig 'för få' och aldrig 'slump'", !/för få|slump/i.test(enPerson));
+}
+lika("kort, bara ringt själv: inget att jämföra med", textFacitKort({ ...F, per: { ...F.per, "lat-sta": { n: 0, av: 0 }, ingen: { n: 0, av: 0 } }, dom: { sort: "tomt", p: null, tidigast: null, vid: 0 } }), "I laget hittills: ringt själv 5 av 7 hölls. Det finns inget att jämföra med än.");
+console.log("\n\x1b[1mNavs facit för den som inte leder: de egna valen, aldrig en dom\x1b[0m");
+{
+  const FORBEHALL = "Det här är bara dina möten, så jag säger inte vilket val som fungerar bäst. Siffrorna visar inte att samtalet gjorde skillnaden.";
+  lika("antalen för alla tre valen, och förbehållet", textFacitEgen(F), `Dina val: ringt själv 5 av 7 hölls, låt stå 1 av 4, ingen valde 0 av 2. ${FORBEHALL}`);
+  lika("bara ingen valde", textFacitEgen({ ...F, per: { ...F.per, "ringer-sjalv": { n: 0, av: 0 }, "lat-sta": { n: 0, av: 0 } } }), `Dina val: ingen valde 0 av 2. ${FORBEHALL}`);
+  lika("flyttade står med som antal", textFacitEgen({ ...F, flyttade: 2 }).includes(", flyttade 2."), true);
+  lika("inget alls", textFacitEgen({ per: { "ringer-sjalv": { n: 0, av: 0 }, flytta: { n: 0, av: 0 }, "lat-sta": { n: 0, av: 0 }, ingen: { n: 0, av: 0 } }, flyttade: 0 }), "Inget facit än. Det kommer när de första mötena har fått ett utfall.");
+  // Domen i facit spelar ingen roll: textFacitEgen läser den inte, och samma antal ger samma text oavsett utslag.
+  const domar = ["utslag", "for-fa", "en-person", "tomt"].map((sort) => textFacitEgen({ ...F, dom: { sort, p: 0.001, tidigast: 40, vid: 50 } }));
+  lika("samma text vad domen än säger", new Set(domar).size, 1);
+  const varianter = [
+    textFacitEgen(F), textFacitEgen({ ...F, flyttade: 3 }),
+    textFacitEgen({ ...F, per: { ...F.per, "ringer-sjalv": { n: 9, av: 9 }, "lat-sta": { n: 0, av: 9 } } }),
+    textFacitEgen({ ...F, per: { ...F.per, "ringer-sjalv": { n: 0, av: 0 }, "lat-sta": { n: 0, av: 0 }, ingen: { n: 0, av: 0 } }, flyttade: 1 }),
+  ];
+  // "fungerar bäst" står i förbehållet ("jag säger inte vilket val som fungerar bäst"), så domen söks före det.
+  ok("aldrig 'slump', aldrig ett utslag, aldrig 'för få' eller 'bättre' som dom", varianter.every((t) => !/slump|utslag|för få|bättre|sämre/i.test(t.replace(FORBEHALL, ""))));
+  ok("förbehållet står alltid när det finns tal", varianter.every((t) => t.endsWith(FORBEHALL)));
+  ok("Låt stå och Ingen valde räknas i samma mening som Ringt själv", /^Dina val: ringt själv 5 av 7 hölls, låt stå 1 av 4, ingen valde 0 av 2\./.test(textFacitEgen(F)));
+  ok("inga orsaker och inga utrop", varianter.every((t) => !t.includes("!") && !/eftersom|därför att|på grund av|tack vare/i.test(t)));
+}
 lika("kort, tomt", textFacitKort({ ...F, per: { ...F.per, "ringer-sjalv": { n: 0, av: 0 }, "lat-sta": { n: 0, av: 0 } }, dom: { sort: "tomt", p: null, tidigast: null, vid: 0 } }), "Inget facit i laget än.");
 lika("det Nav trodde", textTrodde({ raknade: 9, av: 20, blev: 11 }), "Jag räknade med att 9 av 20 skulle hållas. Det blev 11.");
 
@@ -131,6 +162,7 @@ console.log("\n\x1b[1mInga orsaker och inga utrop\x1b[0m");
 {
   const alla = [
     ...textObekraftat(M, { n: 1, av: 4 }, true), textFacit(F), textFacitKort(F), textTaktFacit(TR),
+    textFacitKort({ ...F, dom: { sort: "utslag", p: 0.004, tidigast: null, vid: 20 } }), textFacitKort({ ...F, dom: { sort: "en-person", p: 0.004, tidigast: null, vid: 20 } }),
     textAndringDom(D, "x"), textKvitto("ringer-sjalv", "i morgon"), textDom({ kund: "X", val: "lat-sta", utfall: "uteblev", bekraftat: false }),
   ].join(" ");
   ok("inget utropstecken", !alla.includes("!"));
