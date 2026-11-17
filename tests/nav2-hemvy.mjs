@@ -160,7 +160,7 @@ function hem({ chef, forslag = 1, andrat = ANDRAT, andratKort = AKORT, rader = n
     toastActs: (msg, acts) => { anrop.push(["navtoast", msg, acts.length]); },
   };
   kor(block, g, ["hvHem", "hvVantar", "hvForeslar", "hvTeam", "hvDinManad", "hvAndrat", "hvArk", "hvSkriv", "hvInstRuta", "hvPa", "hvFlagga", "hvDolj", "hvVisa", "hvGrattis", "hvHamta", "hvOppna", "hvValj", "hvTangent", "hvFraga", "hvChattGodkann", "hvChattAngra", "hvKlick", "hvStang", "hvPlaneraDag", "hvSseDela", "hvVidBotten", "hvChattStopp", "hvChattIgen", "hvBokaDag", "hvAngraDag", "hvKopiera",
-    "hvUrtavla", "hvUrMitt", "hvUrRam", "hvUrVink", "hvUrBage", "hvDagPlan", "hvVisadDag", "hvDagSlut", "hvHalsning", "hvTraffar", "hvTraffVy", "hvEfterRita", "hvFlip", "hvMinut", "hvD", "hvForeMat", "hvFokusNyckel", "hvHeroRad", "hvDockRad", "hvLys", "hvStegKlocka", "hvValjTraff", "hvBokaKnapp", "hvDagNyckel", "hvSkala"]);
+    "hvUrtavla", "hvUrMitt", "hvUrRam", "hvUrVink", "hvUrBage", "hvDagPlan", "hvVisadDag", "hvDagSlut", "hvHalsning", "hvTraffar", "hvTraffVy", "hvEfterRita", "hvFlip", "hvMinut", "hvD", "hvForeMat", "hvFokusNyckel", "hvHeroRad", "hvDockRad", "hvLys", "hvStegKlocka", "hvValjTraff", "hvBokaKnapp", "hvDagNyckel", "hvSkala", "hvLageSynk"]);
   g.anrop = anrop;
   return g;
 }
@@ -2509,6 +2509,24 @@ rubrik("Kontrollen, fynd 7b: märken och rader lyser upp tillsammans, och stegkl
     g.S.hv.strom = false; g.hvStegKlocka();
     ok("när svaret är klart stannar klockan", g.anrop.filter((a) => a[0] === "clearInterval").length === fore + 1);
   } finally { Date.now = gammal; }
+}
+
+{
+  rubrik("Hemmets läge står inte kvar i en annan vy (hvLageSynk)");
+  const g = hem({ chef: true });
+  const klasser = (namn) => { const s = new Set(namn); return { toggle: (k, pa) => { if (pa) s.add(k); else s.delete(k); }, har: (k) => s.has(k) }; };
+  const main = { classList: klasser(["main", "hvmode"]) }, body = { classList: klasser(["hvbody"]) };
+  g.document = { ...g.document, body, getElementById: (id) => (id === "main" ? main : null) };
+  g.hvHem();
+  g.S.view = "moten"; g.hvLageSynk();
+  ok("i Möten, som ritar sig själv, slås hemmets läge av på main och body", !main.classList.har("hvmode") && !body.classList.har("hvbody") && main.classList.har("main"));
+  g.S.view = "hem"; g.hvLageSynk();
+  ok("tillbaka i hemmet slås det på igen", main.classList.har("hvmode") && body.classList.har("hvbody"));
+  g.ND.hem.nytt = false; g.hvLageSynk();
+  ok("den som inte har det nya hemmet får aldrig hemmets läge", !main.classList.har("hvmode") && !body.classList.har("hvbody"));
+  ok("varje väg som ritar en vy går genom renderPill, och den synkar läget först", /function renderPill\(\)\{\n  hvLageSynk\(\);/.test(html));
+  const mo = html.slice(html.indexOf("const _ndMoRender = render;"), html.indexOf("const _ndMoRender = render;") + 900);
+  ok("Mötens egen ritning anropar renderPill", /if \(S\.view === 'moten' && ndMo\(\)\)\{[\s\S]*?renderPill\(\);[\s\S]*?return;/.test(mo));
 }
 
 {

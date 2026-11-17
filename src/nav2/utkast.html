@@ -11815,6 +11815,7 @@ function renderTasksView(){
 /* ---------- Att göra-knappen ---------- */
 const pillHv = () => { try { return S.view === 'hem' && !!S.hv && hvPa(); } catch(_){ return false; } };
 function renderPill(){
+  hvLageSynk();   // varje väg som ritar en vy går hit, också de som ritar sig själva (Möten)
   const el = document.getElementById('todoPill');
   if (!el) return;
   const f = fokus(), nasta = f[0] || idagLista()[0];
@@ -36545,6 +36546,16 @@ function hvVisare(rot){
     if (f !== undefined && f !== v && !hvUtanRorelse() && !trappa){ g.style.transition = 'none'; g.style.transform = `rotate(${f}deg)`; g.getBoundingClientRect(); g.style.transition = ''; g.style.transform = `rotate(${v}deg)`; }
     S.hv.visFore[k] = v;
   });
+}
+/* ---------- Hemmets läge följer vyn ----------
+   hvmode på main och hvbody på body sätts i render(), men en vy som ritar sig själv (Möten) går aldrig genom den raden.
+   Då stod hemmets läge kvar i den vyn: ingen marginal, och Nästa att göra lyft och förstorad som i hemmet.
+   renderPill anropar den här, och dit går varje väg som ritar en vy. */
+function hvLageSynk(){
+  if (typeof document === 'undefined' || !document.body) return;
+  let pa = false; try { pa = S.view === 'hem' && !!S.hv && hvPa(); } catch(_){}
+  const m = document.getElementById('main'); if (m) m.classList.toggle('hvmode', pa);
+  document.body.classList.toggle('hvbody', pa);
 }
 /* ---------- Ett stort fönster: hemmet förstoras som skissen, och står kvar på samma ställen ----------
    Skissen är ritad för en ram på 1380 x 856 px (fönstret utan menyraden). Är fönstret större förstoras hemmet med CSS
