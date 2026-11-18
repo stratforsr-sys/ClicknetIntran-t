@@ -7,7 +7,6 @@ import { CHATT_NYCKLAR, EJ_KLAR_BESKED, PAGAR_BESKED, PAGAR_MS, arRadId, bilagaL
 import { skapaKallor } from "@/lib/nav2/chatt/kallor";
 import { chattMiljo } from "@/lib/nav2/chatt/logg";
 import { BESKED_AI, KORT_MAX, MAX_UT, MAX_VARV, fragetur, harReserv, historiaTurer, korSamtal, loggKostnadUsd, type Handelse, type Klient, type Samtalssvar, type Tur } from "@/lib/nav2/chatt/samtal";
-import { FORSLAG_NYCKLAR, harNyttHem, lasForslagInst } from "@/lib/nav2/forslagforma";
 import { INST_NYCKLAR, lasInstallningar, lokalDag, lokalKlockan } from "@/lib/nav2/motesflode";
 import { avtryck } from "@/lib/nav2/chatt/systemtext";
 import { KRETSFEL, VERKTYGSFEL, korVerktyg } from "@/lib/nav2/chatt/verktyg";
@@ -51,7 +50,7 @@ export const maxDuration = 120;
  *   Hela protokollet för klienten: .lyft/chatt-server-api.md.
  *
  * AVSTÄNGD tills någon slår på den: utan `chatt.pa` svarar rutten 409 innan något annat händer, och
- * skrivrutan svarar som paletten. Detsamma för den som inte har det nya hemmet (`hem.nytt`). Påslagen
+ * skrivrutan svarar som paletten. Påslagen
  * kräver den dessutom, vid varje fråga: nyckeln i miljön, ett bekräftat avtal och ett godkänt prov för
  * just den här modellen, systemtexten och verktygslistan (`farSlasPa`). Triggern (0304, 0305) håller
  * samma sak i databasen.
@@ -159,14 +158,14 @@ export async function POST(request: Request) {
   if (b.kommando !== undefined) {
     const k = lasKommando(b.kommando);
     if (!k.ok) return json({ fel: k.fel }, 400);
-    const { data: instRader, error: instFel } = await supabaseAdmin().from("nav_setting").select("key, value").in("key", [...Object.values(CHATT_NYCKLAR), FORSLAG_NYCKLAR.hemNytt, INST_NYCKLAR.tidszon]).limit(50);
+    const { data: instRader, error: instFel } = await supabaseAdmin().from("nav_setting").select("key, value").in("key", [...Object.values(CHATT_NYCKLAR), INST_NYCKLAR.tidszon]).limit(50);
     // Inställningarna gick inte att läsa: det är ett läsfel som kan försökas igen, inte "Chatten är inte påslagen.".
     if (instFel) {
       console.error(`chatt: inställningarna gick inte att läsa: ${instFel.message}`);
       return json({ fel: VERKTYGSFEL, kod: "tillfalligt" }, 503);
     }
     const rader = (instRader ?? []) as { key: string; value: unknown }[];
-    if (!lasChattInst(rader).pa || !harNyttHem(lasForslagInst(rader), mig.id)) return json({ fel: "Chatten är inte påslagen." }, 409);
+    if (!lasChattInst(rader).pa) return json({ fel: "Chatten är inte påslagen." }, 409);
     const r = await korVerktyg(k.kommando.verktyg, k.kommando.input, { mig: mig.id, idag: lokalDag(new Date(), lasInstallningar(rader).tidszon), kallor: skapaKallor(user) }, 1);
     if (!r.kort) {
       // En källa som inte gick att läsa (också kretsen) är 503 och kan försökas igen; en regel som sa nej är 422.
@@ -191,7 +190,7 @@ export async function POST(request: Request) {
   const db = supabaseAdmin();
   // Inställningarna och de godkända proven läses samtidigt: båda behövs före första livstecknet, ingen beror på den andra.
   const [{ data: instRader, error: instFel }, { data: prov, error: provFel }] = await Promise.all([
-    db.from("nav_setting").select("key, value").in("key", [...Object.values(CHATT_NYCKLAR), FORSLAG_NYCKLAR.hemNytt, INST_NYCKLAR.tidszon]).limit(50),
+    db.from("nav_setting").select("key, value").in("key", [...Object.values(CHATT_NYCKLAR), INST_NYCKLAR.tidszon]).limit(50),
     db.from("nav_chatt_prov").select("modell, avtryck, godkand").eq("godkand", true).limit(200),
   ]);
   // Ett läsfel är inte "Chatten är inte påslagen." och inte "Modellen har inget godkänt prov.": det är tillfälligt, och
@@ -202,8 +201,7 @@ export async function POST(request: Request) {
   }
   const rader = (instRader ?? []) as { key: string; value: unknown }[];
   const inst = lasChattInst(rader);
-  // Samma svar till den som inte har det nya hemmet: skrivrutan är inte den enda vägen hit.
-  if (!inst.pa || !harNyttHem(lasForslagInst(rader), mig.id)) return json({ fel: "Chatten är inte påslagen." }, 409);
+  if (!inst.pa) return json({ fel: "Chatten är inte påslagen." }, 409);
 
   const far = farSlasPa({
     nyckel: !!process.env.ANTHROPIC_API_KEY,

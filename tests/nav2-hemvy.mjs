@@ -555,7 +555,7 @@ rubrik("Rådgivarens fynd: klicken, hämtningarna, Escape och exempeldata");
   ok("lyssnaren hör tangenten före Navs vanliga, så att den ser vad som var öppet", /document\.addEventListener\('keydown', hvTangent, true\);/.test(html));
 
   // 4. Texten om var förslagen slås på visas bara för den som har brytaren.
-  const INST = { pa: false, obekraftatTid: "14:00", gransFacit: 0.01, gransDom: 0.05, gransPerson: 0.01, gransMotvikt: 0.2, foljda: [], hemNytt: [] };
+  const INST = { pa: false, obekraftatTid: "14:00", gransFacit: 0.01, gransDom: 0.05, gransPerson: 0.01, gransMotvikt: 0.2, foljda: [] };
   const utan = kort(hem({ chef: true, forslag: 0, pa: false, inst: { ...INST, farBrytare: false } }).hvHem(), "Nav föreslår");
   ok("ingen rad om avstängda förslag, för någon (beställaren: som skissen)", !utan.includes("avstängda"));
   const med = kort(hem({ chef: true, forslag: 0, pa: false, inst: { ...INST, farBrytare: true } }).hvHem(), "Nav föreslår");
@@ -587,12 +587,12 @@ rubrik("Rådgivarens fynd: klicken, hämtningarna, Escape och exempeldata");
 
 rubrik("Rutan Nya hemmet i Inställningar");
 {
-  const INST = { pa: false, obekraftatTid: "14:00", gransFacit: 0.01, gransDom: 0.05, gransPerson: 0.01, gransMotvikt: 0.2, foljda: ["moten.bekrafta-dagar"], hemNytt: ["p1"] };
+  const INST = { pa: false, obekraftatTid: "14:00", gransFacit: 0.01, gransDom: 0.05, gransPerson: 0.01, gransMotvikt: 0.2, foljda: ["moten.bekrafta-dagar"] };
   const superadmin = hem({ chef: true, inst: { ...INST, farBrytare: true } }).hvInstRuta();
-  ok("superadmin ser rutan med brytarna", superadmin.includes("Nya hemmet") && superadmin.includes('data-hvinst="forslag.pa"') && superadmin.includes('data-hvinst="hem.nytt"'), superadmin.slice(0, 300));
+  ok("superadmin ser rutan med brytarna", superadmin.includes("Nya hemmet") && superadmin.includes('data-hvinst="forslag.pa"'), superadmin.slice(0, 300));
   ok("brytaren säger vad den gör, och vad av betyder", superadmin.includes("Nav skapar förslag och dömer dem. Av: jobben räknar bara och skriver i kvittot."));
   ok("klockslaget och de fyra gränserna, var och en med en mening om vad den gör", ["forslag.obekraftat-tid", "forslag.grans-facit", "forslag.grans-dom", "forslag.grans-person", "forslag.grans-motvikt"].every((k) => superadmin.includes(`data-hvinst="${k}"`)) && (superadmin.match(/class="hv-ihj"/g) || []).length >= 6, superadmin);
-  ok("vilka som har nya hemmet: personer eller alla", superadmin.includes("Edvin Prov") && superadmin.includes('data-hvinstalla'));
+  ok("ingen väljer längre vilka som har nya hemmet: alla har det (2026-11-18)", !superadmin.includes("hem.nytt") && !superadmin.includes("data-hvinstalla") && !superadmin.includes("data-hvinstperson") && !superadmin.includes("Edvin Prov"));
   const admin = hem({ chef: true, inst: { ...INST, farBrytare: false } }).hvInstRuta();
   ok("en admin ser klockslaget, men varken gränserna eller brytarna", admin.includes('data-hvinst="forslag.obekraftat-tid"') && !admin.includes('data-hvinst="forslag.grans-') && !admin.includes('data-hvinst="forslag.pa"') && !admin.includes('data-hvinst="hem.nytt"'), admin.slice(0, 600));
   ok("säljaren ser ingen ruta", hem({ chef: false, inst: null }).hvInstRuta() === "");
@@ -747,7 +747,7 @@ rubrik("Chatten i skrivrutan");
   ok("svarar inte Nav säger rutan det", /Nav svarade inte/.test(n.hvHem()) && n.S.hv.chatt[0].laddar === false);
 
   // Rutan i Inställningar: läget, för superadmin.
-  const INST = { pa: false, obekraftatTid: "14:00", gransFacit: 0.01, gransDom: 0.05, gransPerson: 0.01, gransMotvikt: 0.2, foljda: [], hemNytt: [] };
+  const INST = { pa: false, obekraftatTid: "14:00", gransFacit: 0.01, gransDom: 0.05, gransPerson: 0.01, gransMotvikt: 0.2, foljda: [] };
   const lage = hem({ chef: true, inst: { ...INST, farBrytare: true } });
   lage.ND.hem.chattLage = { pa: false, skal: "Modellen har inget godkänt prov.", modell: "claude-sonnet-5-5", utrymme: { personUsd: 0, foretagUsd: 12.4, takPersonUsd: 14, takForetagUsd: 85 }, allas: [{ namn: "Sara <i>Prov</i>", usd: 9.25, fragor: 210 }, { namn: "Tea Prov", usd: 3.15, fragor: 1 }] };
   const lr = lage.hvInstRuta();
@@ -1984,7 +1984,7 @@ rubrik("Lyftet: chattens klient (stopp, försök igen, stegen, rullningen och st
   ok("går Ångra bara delvis står det, och Ångra gäller det som är kvar", /^Ångrade 1 av 2\. En uppgift har kvar den nya tiden\.$/.test(md.S.hv.kvitto?.text || "") && md.S.hv.dagBokad.length === 1, JSON.stringify(md.S.hv.kvitto));
 
   // Språket står på ett ställe.
-  ok("taligenkänningen, dollarbeloppen och namnordningen använder HVLOK", block.includes("r.lang = HVLOK.sprak") && block.includes("toLocaleString(HVLOK.sprak, {minimumFractionDigits") && block.includes("localeCompare(String(b.namn), HVLOK.sprak)") && !/'sv-SE'\)|, 'sv'\)/.test(block.replace("const HVLOK = {sprak:'sv-SE'", "")));
+  ok("taligenkänningen och dollarbeloppen använder HVLOK", block.includes("r.lang = HVLOK.sprak") && block.includes("toLocaleString(HVLOK.sprak, {minimumFractionDigits") && !/'sv-SE'\)|, 'sv'\)/.test(block.replace("const HVLOK = {sprak:'sv-SE'", "")));
 }
 
 /* ------------------------------------------------------------------------ */

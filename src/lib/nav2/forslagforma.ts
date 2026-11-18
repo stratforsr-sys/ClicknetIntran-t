@@ -403,7 +403,7 @@ export function trendLaget(avgjorda: readonly { moteTid: string; utfall: "hallet
 /**
  * Allt är av från början. Brytarna slås på av en människa, aldrig av bygget:
  * `pa` låter jobben skapa och döma rader (av = de räknar och skriver bara i sitt
- * kvitto), `hemNytt` säger vilka som ser det nya hemmet.
+ * kvitto).
  */
 export type ForslagInst = {
   pa: boolean;
@@ -415,7 +415,6 @@ export type ForslagInst = {
   gransMotvikt: number;
   /** Inställningar vars ändring blir en rad i loggen och följs upp. */
   foljda: string[];
-  hemNytt: string[] | "alla";
 };
 
 export const FORSLAG_FORVAL: ForslagInst = {
@@ -426,7 +425,6 @@ export const FORSLAG_FORVAL: ForslagInst = {
   gransPerson: 0.01,
   gransMotvikt: 0.2,
   foljda: ["moten.bekrafta-dagar", "moten.bekrafta-tid", "moten.bekrafta-paminn"],
-  hemNytt: [],
 };
 
 export const FORSLAG_NYCKLAR: Record<keyof ForslagInst, string> = {
@@ -437,7 +435,6 @@ export const FORSLAG_NYCKLAR: Record<keyof ForslagInst, string> = {
   gransPerson: "forslag.grans-person",
   gransMotvikt: "forslag.grans-motvikt",
   foljda: "forslag.foljda-installningar",
-  hemNytt: "hem.nytt",
 };
 
 /**
@@ -447,7 +444,6 @@ export const FORSLAG_NYCKLAR: Record<keyof ForslagInst, string> = {
  */
 const ADMIN_FAR: readonly string[] = [FORSLAG_NYCKLAR.obekraftatTid];
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const INST_NYCKEL_RE = /^[a-z0-9]+\.[a-z0-9-]{1,40}$/;
 const svenskt = (x: number): string => String(x).replace(".", ",");
 const talMellan = (min: number, max: number) => (v: unknown): number | undefined =>
@@ -464,11 +460,6 @@ const TOLKA_F: { [K in keyof ForslagInst]: { tolka: (v: unknown) => ForslagInst[
   foljda: {
     tolka: (v) => (Array.isArray(v) && v.length <= 20 && v.every((x) => typeof x === "string" && INST_NYCKEL_RE.test(x)) ? [...new Set(v as string[])] : undefined),
     fel: "Listan ska vara högst 20 inställningar, skrivna som deras nycklar.",
-  },
-  hemNytt: {
-    tolka: (v) =>
-      v === "alla" ? "alla" : Array.isArray(v) && v.length <= 500 && v.every((x) => typeof x === "string" && UUID_RE.test(x)) ? [...new Set(v as string[])] : undefined,
-    fel: "Välj Alla, eller de personer som ska ha det nya hemmet.",
   },
 };
 
@@ -501,8 +492,6 @@ export function farAndraForslagInst(roller: readonly string[], nyckel: string): 
   return niva === "superadmin" || ADMIN_FAR.includes(nyckel);
 }
 
-/** Har personen det nya hemmet? */
-export const harNyttHem = (f: Pick<ForslagInst, "hemNytt">, anstalld: string): boolean => f.hemNytt === "alla" || f.hemNytt.includes(anstalld);
 
 /* ------------------------------------------------------------------------ */
 /* Kortet Det som ändrats (skiss 9)                                          */

@@ -231,34 +231,33 @@ console.log("\n\x1b[1mInställningarna\x1b[0m");
 {
   const { FORSLAG_FORVAL, lasForslagInst, provaForslagInst, farAndraForslagInst } = await import("../src/lib/nav2/forslagforma.ts");
   lika("utan rader gäller förvalen", lasForslagInst([]), FORSLAG_FORVAL);
-  lika("förvalen: allt av, gränserna som i designen", [FORSLAG_FORVAL.pa, FORSLAG_FORVAL.obekraftatTid, FORSLAG_FORVAL.gransFacit, FORSLAG_FORVAL.gransDom, FORSLAG_FORVAL.gransPerson, FORSLAG_FORVAL.gransMotvikt, FORSLAG_FORVAL.hemNytt],
-    [false, "14:00", 0.01, 0.05, 0.01, 0.2, []]);
+  lika("förvalen: allt av, gränserna som i designen", [FORSLAG_FORVAL.pa, FORSLAG_FORVAL.obekraftatTid, FORSLAG_FORVAL.gransFacit, FORSLAG_FORVAL.gransDom, FORSLAG_FORVAL.gransPerson, FORSLAG_FORVAL.gransMotvikt],
+    [false, "14:00", 0.01, 0.05, 0.01, 0.2]);
   lika("de följda inställningarna från början", FORSLAG_FORVAL.foljda, ["moten.bekrafta-dagar", "moten.bekrafta-tid", "moten.bekrafta-paminn"]);
   const U = "b0000000-0000-4000-8000-000000000001";
   const inst = lasForslagInst([
     { key: "forslag.pa", value: true }, { key: "forslag.obekraftat-tid", value: "13:30" }, { key: "forslag.grans-facit", value: 0.005 },
     { key: "hem.nytt", value: [U] }, { key: "forslag.grans-dom", value: "trasigt" }, { key: "annat.nyckel", value: 1 },
   ]);
-  lika("sparade värden läses", [inst.pa, inst.obekraftatTid, inst.gransFacit, inst.hemNytt], [true, "13:30", 0.005, [U]]);
+  lika("sparade värden läses", [inst.pa, inst.obekraftatTid, inst.gransFacit], [true, "13:30", 0.005]);
+  lika("en kvarglömd hem.nytt-rad läses inte in: alla har det nya hemmet", "hemNytt" in inst, false);
   lika("ett trasigt värde ger förvalet", inst.gransDom, 0.05);
-  lika("hem.nytt kan vara alla", lasForslagInst([{ key: "hem.nytt", value: "alla" }]).hemNytt, "alla");
   lika("gränsen för facit: 0,001 till 0,1", [provaForslagInst("forslag.grans-facit", 0.0005).ok, provaForslagInst("forslag.grans-facit", 0.2).ok, provaForslagInst("forslag.grans-facit", 0.02)], [false, false, { ok: true, varde: 0.02 }]);
   lika("felet säger vad som gäller", provaForslagInst("forslag.grans-facit", 0.2), { ok: false, fel: "Gränsen ska vara mellan 0,001 och 0,1." });
   lika("klockslaget ska vara TT:MM", [provaForslagInst("forslag.obekraftat-tid", "25:00").ok, provaForslagInst("forslag.obekraftat-tid", "09:15")], [false, { ok: true, varde: "09:15" }]);
   lika("på eller av", [provaForslagInst("forslag.pa", "ja").ok, provaForslagInst("forslag.pa", true)], [false, { ok: true, varde: true }]);
-  lika("hem.nytt: en lista personer utan dubbletter", provaForslagInst("hem.nytt", [U, U]), { ok: true, varde: [U] });
-  lika("hem.nytt: annat än id:n nekas", provaForslagInst("hem.nytt", ["kalle"]).ok, false);
+  lika("hem.nytt finns inte längre som inställning (alla har det nya hemmet sedan 2026-11-18)", [provaForslagInst("hem.nytt", [U]), provaForslagInst("hem.nytt", "alla").ok], [{ ok: false, fel: "Okänd inställning." }, false]);
   lika("en okänd nyckel nekas", provaForslagInst("moten.tidszon", "Europe/Stockholm"), { ok: false, fel: "Okänd inställning." });
   lika("följda inställningar är nycklar", [provaForslagInst("forslag.foljda-installningar", ["moten.bekrafta-dagar"]).ok, provaForslagInst("forslag.foljda-installningar", ["DROP TABLE"]).ok], [true, false]);
-  // Brytarna (på/av, vilka som har nya hemmet) ändras bara av superadmin. Gränserna av admin och uppåt.
+  // Brytaren (förslagen på/av) ändras bara av superadmin. Gränserna av admin och uppåt.
   lika("en säljare ändrar ingenting", farAndraForslagInst(["salesperson"], "forslag.grans-facit"), false);
   lika("en teamledare ändrar ingen gräns: den som döms ska inte kunna flytta ribban", ["forslag.grans-facit", "forslag.grans-dom", "forslag.grans-person", "forslag.grans-motvikt"].map((k) => farAndraForslagInst(["team_lead"], k)), [false, false, false, false]);
   lika("en säljchef ändrar ingen gräns heller", farAndraForslagInst(["sales_manager"], "forslag.grans-dom"), false);
   lika("en teamledare ändrar klockslaget för obekräftade möten", farAndraForslagInst(["team_lead"], "forslag.obekraftat-tid"), true);
   lika("vd och admin ändrar gränserna", [farAndraForslagInst(["ceo"], "forslag.grans-dom"), farAndraForslagInst(["admin"], "forslag.grans-motvikt")], [true, true]);
   lika("en teamledare slår inte på förslagen", farAndraForslagInst(["team_lead"], "forslag.pa"), false);
-  lika("en säljchef väljer inte vilka som har nya hemmet", farAndraForslagInst(["sales_manager"], "hem.nytt"), false);
-  lika("en admin slår på förslagen", [farAndraForslagInst(["admin"], "forslag.pa"), farAndraForslagInst(["ceo"], "hem.nytt")], [true, true]);
+  lika("en admin slår på förslagen", [farAndraForslagInst(["admin"], "forslag.pa"), farAndraForslagInst(["ceo"], "forslag.pa")], [true, true]);
+  lika("ingen ändrar hem.nytt, inte ens en superadmin", [farAndraForslagInst(["sales_manager"], "hem.nytt"), farAndraForslagInst(["superadmin"], "hem.nytt")], [false, false]);
 }
 
 console.log("\n\x1b[1mKortet Det som ändrats (skiss 9)\x1b[0m");

@@ -138,7 +138,6 @@ const { kostnadUsd, maxFragaUsd, sattInTal } = await import("../src/lib/nav2/cha
 const PA = [
   { key: "chatt.pa", value: true },
   { key: "chatt.avtal", value: true },
-  { key: "hem.nytt", value: "alla" },
 ];
 const UTRYMME = { person_usd: 1.5, foretag_usd: 20, tak_person_usd: 14, tak_foretag_usd: 85 };
 const PROV = [{ modell: "claude-sonnet-5-5", avtryck: avtryck(), godkand: true }];
@@ -248,10 +247,11 @@ rubrik("Avstängd tills någon slår på den");
   ok("ett prov som inte är godkänt räcker inte", ejGodkant.status === 409 && ejGodkant.ai.length === 0, visa(ejGodkant));
   const utanAvtal = await anropa(["salesperson"], S, FRAGA, { inst: PA.filter((r) => r.key !== "chatt.avtal") });
   ok("utan bekräftat avtal: 409", utanAvtal.status === 409 && /avtalet/.test(utanAvtal.data?.fel ?? "") && utanAvtal.ai.length === 0, visa(utanAvtal));
+  // Alla har det nya hemmet sedan 2026-11-18: chatten avgörs av chatt.pa, inte av vem som står i en lista.
   const utanfor = await anropa(["salesperson"], S, FRAGA, { inst: [...PA.filter((r) => r.key !== "hem.nytt"), { key: "hem.nytt", value: [X] }] });
-  ok("den som inte har det nya hemmet får 409, också med ett eget anrop förbi skrivrutan", utanfor.status === 409 && utanfor.data?.fel === "Chatten är inte påslagen." && utanfor.ai.length === 0 && utanfor.res.length === 0, visa(utanfor));
+  ok("en kvarglömd hem.nytt-rad med någon annan stänger inte chatten för personen", utanfor.status === 200 && utanfor.ai.length === 1, visa(utanfor));
   const utanHem = await anropa(["salesperson"], S, FRAGA, { inst: PA.filter((r) => r.key !== "hem.nytt") });
-  ok("och utan inställningen hem.nytt har ingen det", utanHem.status === 409 && utanHem.ai.length === 0, visa(utanHem));
+  ok("och utan någon hem.nytt-rad svarar chatten", utanHem.status === 200 && utanHem.ai.length === 1, visa(utanHem));
   const nyckel = process.env.ANTHROPIC_API_KEY;
   delete process.env.ANTHROPIC_API_KEY;
   const utanNyckel = await anropa(["salesperson"], S, FRAGA);
@@ -1708,12 +1708,12 @@ rubrik("Funktion 6: rätta kortet före Godkänn, utan Claude och utan att någo
     const r = await anropa(["sales_manager"], TL, { kommando: { verktyg, input: { uppgifter: [{ titel: "x", dag: "", till: "jag" }] } } });
     ok(`ett okänt verktyg (${JSON.stringify(verktyg)}) ger 400, och inget läses eller skrivs`, r.status === 400 && r.data?.fel === "Okänt verktyg." && inget(r) && r.lasta.length === 0, visaK(r));
   }
-  const av = await anropa(["team_lead"], TL, UPP([{ titel: "Ring", dag: "", till: "jag" }]), { inst: [{ key: "chatt.pa", value: false }, { key: "hem.nytt", value: "alla" }] });
+  const av = await anropa(["team_lead"], TL, UPP([{ titel: "Ring", dag: "", till: "jag" }]), { inst: [{ key: "chatt.pa", value: false }] });
   ok("med chatten av ger grenen 409, och inget kort byggs", av.status === 409 && av.data?.fel === "Chatten är inte påslagen." && inget(av), visaK(av));
   const baraS = [{ key: "chatt.pa", value: true }, { key: "chatt.avtal", value: true }, { key: "hem.nytt", value: [S] }];
   const utanHem = await anropa(["team_lead"], TL, UPP([{ titel: "Ring", dag: "", till: "jag" }]), { inst: baraS });
   const medHem = await anropa(["salesperson"], S, UPP([{ titel: "Ring", dag: "", till: "jag" }]), { inst: baraS });
-  ok("den som inte har det nya hemmet får 409, den som har det får kortet", utanHem.status === 409 && utanHem.data?.fel === "Chatten är inte påslagen." && inget(utanHem) && medHem.status === 200 && !!medHem.data?.kort, `${visaK(utanHem)} | ${visaK(medHem)}`);
+  ok("en kvarglömd hem.nytt-rad stänger inte grenen för någon: båda får kortet", utanHem.status === 200 && !!utanHem.data?.kort && medHem.status === 200 && !!medHem.data?.kort, `${visaK(utanHem)} | ${visaK(medHem)}`);
 
   const felformade = [
     null, [], "forbered_uppgifter", { verktyg: "forbered_uppgifter" }, { verktyg: "forbered_uppgifter", input: [] },

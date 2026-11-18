@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { LAGE_KOL, REGEL_OBEKRAFTAT, arChefFor, lasGenomgang, lasInst, lasKrets, motesInfo, type LageRad } from "@/lib/nav2/forslag";
-import { farAndraForslagInst, nyckelDelar, oppetLage, provaForslagInst, FORSLAG_NYCKLAR, type Val } from "@/lib/nav2/forslagforma";
+import { farAndraForslagInst, nyckelDelar, oppetLage, provaForslagInst, type Val } from "@/lib/nav2/forslagforma";
 import { dagText, felkod, textFel, textKvitto } from "@/lib/nav2/hemtext";
 import { teamGenomgang } from "@/lib/nav2/hem-team";
 import { MATT, type MattNyckel } from "@/lib/nav2/matt";
@@ -259,11 +259,6 @@ export async function POST(request: Request) {
           return svar({ fel: "Den inställningen ändras av en superadmin." }, 403);
         }
         if (!p.ok) return svar({ fel: p.fel }, 400);
-        if (nyckel === FORSLAG_NYCKLAR.hemNytt && Array.isArray(p.varde)) {
-          const ids = p.varde as string[];
-          const { data } = ids.length ? await db.from("employee").select("id").in("id", ids).neq("status", "offboarded").limit(ids.length) : { data: [] };
-          if (((data ?? []) as unknown[]).length !== ids.length) return svar({ fel: "Någon i listan finns inte eller har slutat." }, 400);
-        }
         // Gammalt och nytt värde skrivs i händelseloggen av triggern på nav_setting (0303).
         const { error } = await db.from("nav_setting").upsert({ key: nyckel, value: p.varde, updated_by: mig, updated_at: nu.toISOString() });
         if (error) return svar({ fel: "Inställningen kunde inte sparas." }, 500);

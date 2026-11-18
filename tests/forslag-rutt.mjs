@@ -337,10 +337,10 @@ rubrik("Inställningarna");
   ok("en teamledare slår inte på förslagen", brytare.status === 403 && brytare.skrivningar.length === 0, visa(brytare));
   const pa = await anropa(["admin"], ADM, { handling: "installningar", nyckel: "forslag.pa", varde: true });
   ok("en admin slår på förslagen", pa.status === 200 && pa.skrivningar[0]?.rad?.value === true, visa(pa));
-  const hem = await anropa(["admin"], ADM, { handling: "installningar", nyckel: "hem.nytt", varde: [H, "b0000000-0000-4000-8000-0000000000ee"] });
-  ok("nya hemmet ges bara till personer som finns", hem.status === 400 && hem.skrivningar.length === 0, visa(hem));
-  const hemOk = await anropa(["admin"], ADM, { handling: "installningar", nyckel: "hem.nytt", varde: [H] });
-  ok("nya hemmet till en person som finns", hemOk.status === 200 && hemOk.lista === "upsert nav_setting", visa(hemOk));
+  // Alla har det nya hemmet sedan 2026-11-18: hem.nytt är ingen inställning längre, och går inte att skriva tillbaka.
+  const hem = await anropa(["superadmin"], ADM, { handling: "installningar", nyckel: "hem.nytt", varde: [H] });
+  const hemAlla = await anropa(["superadmin"], ADM, { handling: "installningar", nyckel: "hem.nytt", varde: "alla" });
+  ok("hem.nytt går inte att sätta, inte ens av en superadmin", [hem, hemAlla].every((r) => r.status === 400 && r.skrivningar.length === 0), visa(hem));
   const annan = await anropa(["admin"], ADM, { handling: "installningar", nyckel: "moten.tidszon", varde: "Europe/Stockholm" });
   ok("Mötens inställningar sparas inte här", annan.status === 400 && annan.skrivningar.length === 0, visa(annan));
 }
@@ -473,38 +473,38 @@ rubrik("Hemmet säger när det inte vet: ett läsfel är inte ett tomläge");
   // `forslag: null`, och resten av hemmet ritas. Kontrollen utan fel visar att märket inte sätts av något annat.
   const { byggHem } = await import("../src/lib/nav2/hem.ts");
   const hemmet = async (t) => {
-    const db = attrapp(tabeller({ extra: { nav_setting: [{ key: "hem.nytt", value: "alla" }], ...t } }), { mote_statkrets: () => [H] });
+    const db = attrapp(tabeller({ extra: { ...t } }), { mote_statkrets: () => [H] });
     globalThis.__rutt = { db, user: jag };
     const forut = console.error;
     console.error = () => {};
     try { return await byggHem(db, jag); } finally { console.error = forut; }
   };
   const hemOk = await hemmet({});
-  ok("byggHem utan fel: nya hemmet, förslagen fyllda och inget lasfel.forslag (kontroll)", hemOk?.nytt === true && hemOk.forslag !== null && hemOk.lasfel?.forslag === undefined, JSON.stringify({ nytt: hemOk?.nytt, lasfel: hemOk?.lasfel, forslag: !!hemOk?.forslag }));
+  ok("byggHem utan någon hem.nytt-rad: nya hemmet, förslagen fyllda och inget lasfel.forslag (kontroll)", hemOk?.nytt === true && hemOk.forslag !== null && hemOk.lasfel?.forslag === undefined, JSON.stringify({ nytt: hemOk?.nytt, lasfel: hemOk?.lasfel, forslag: !!hemOk?.forslag }));
   const hemFel = await hemmet(fel);
   ok("byggHem när förslagen inte går att läsa: lasfel.forslag är true och forslag null", hemFel?.lasfel?.forslag === true && hemFel.forslag === null, JSON.stringify({ lasfel: hemFel?.lasfel, forslag: hemFel?.forslag }));
   ok("resten av hemmet ritas ändå (svaret finns, nytt är kvar)", hemFel?.nytt === true && Array.isArray(hemFel.dolda));
   // Inställningarna (lasInst kastar vid läsfel): ett läsfel är lasfel.inst, aldrig förvalen som om inget vore inställt.
   const instFel = await hemmet({ "nav_setting!lasfel": "nere" });
-  ok("byggHem när inställningarna inte går att läsa: lasfel.inst är true, nytt falskt, och varken förslag eller inställningsrutan byggs på förval", instFel?.lasfel?.inst === true && instFel.nytt === false && instFel.forslag === null && instFel.inst === null, JSON.stringify({ lasfel: instFel?.lasfel, nytt: instFel?.nytt }));
+  ok("byggHem när inställningarna inte går att läsa: nya hemmet ändå, lasfel.inst och lasfel.forslag är true, och varken förslag eller inställningsrutan byggs på förval", instFel?.lasfel?.inst === true && instFel.lasfel.forslag === true && instFel.nytt === true && instFel.forslag === null && instFel.inst === null && Array.isArray(instFel.dolda), JSON.stringify({ lasfel: instFel?.lasfel, nytt: instFel?.nytt }));
   ok("utan fel sätts inget lasfel.inst (kontroll)", hemOk?.lasfel?.inst === undefined);
   // Ett tillfälligt läsfel: första läsningen av inställningarna faller, den andra går. Hemmet är det nya, utan lasfel.inst.
   {
-    const ok1 = attrapp(tabeller({ extra: { nav_setting: [{ key: "hem.nytt", value: "alla" }] } }), { mote_statkrets: () => [H] });
+    const ok1 = attrapp(tabeller({}), { mote_statkrets: () => [H] });
     const fel1 = attrapp(tabeller({ extra: { "nav_setting!lasfel": "nere" } }), {});
     let n = 0;
     const db = new Proxy(ok1, { get: (t, k) => (k === "from" ? (tab) => (tab === "nav_setting" && n++ === 0 ? fel1 : t).from(tab) : t[k]) });
     globalThis.__rutt = { db, user: jag };
     const forut = console.error; console.error = () => {};
     let r; try { r = await byggHem(db, jag); } finally { console.error = forut; }
-    ok("byggHem när första läsningen av inställningarna faller och den andra går: nya hemmet, inget lasfel.inst", r?.nytt === true && r?.lasfel?.inst === undefined && n >= 2, JSON.stringify({ nytt: r?.nytt, lasfel: r?.lasfel, n }));
+    ok("byggHem när första läsningen av inställningarna faller och den andra går: inget lasfel.inst och förslagen byggs", r?.nytt === true && r?.lasfel?.inst === undefined && r?.lasfel?.forslag === undefined && r?.forslag !== null && n >= 2, JSON.stringify({ nytt: r?.nytt, lasfel: r?.lasfel, n }));
   }
   const { lasInst } = await import("../src/lib/nav2/forslag.ts");
   const instDb = attrapp(tabeller({ extra: { "nav_setting!lasfel": "nere" } }), {});
   let kast = null; try { await lasInst(instDb); } catch (e) { kast = e instanceof Error ? e.message : String(e); }
   ok("lasInst kastar vid läsfel, för alla anropare (aldrig förvalen som om inget vore inställt)", typeof kast === "string" && kast.includes("inställningarna gick inte att läsa"), String(kast));
   const forval = await lasInst(attrapp(tabeller({}), {}));
-  ok("lasInst utan fel och utan sparade inställningar ger förvalen (kontroll)", Array.isArray(forval.f.hemNytt) && forval.f.hemNytt.length === 0 && typeof forval.m.tidszon === "string");
+  ok("lasInst utan fel och utan sparade inställningar ger förvalen (kontroll)", forval.f.pa === false && forval.f.obekraftatTid === "14:00" && typeof forval.m.tidszon === "string");
   // Nattjobbet: ett läsfel av inställningarna blir ett fel i kvittot, inte ett torrt varv som om förslagen vore av.
   const { korForslagNatt } = await import("../src/lib/nav2/forslag-jobb.ts");
   let nattKast = null; try { await korForslagNatt(instDb); } catch (e) { nattKast = e instanceof Error ? e.message : String(e); }

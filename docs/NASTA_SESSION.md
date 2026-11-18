@@ -8,7 +8,7 @@ till main"), en commit ihopslagen med mains Möten-ändringar (0313). Alla migra
 redan körda i produktionen (stämt mot `schema_migrations` före mergen). **Chatten svarar i produktionen:** raden för `44349a171864` är
 kopierad från nav-prov till produktionens `nav_chatt_prov` på beställarens ord ("Kopiera från nav-prov"), med samma id
 (`a06f4169…`) och en anteckning om att provet kördes i nav-prov, inte mot produktionen. Prövat med en fråga
-2026-11-17 kväll: svaret kom med källraden "Skrivet av AI ur Navs tal". Det nya hemmet syns bara för den som står i `hem.nytt`. Rättat före mergen: beskedet när hemmets
+2026-11-17 kväll: svaret kom med källraden "Skrivet av AI ur Navs tal". Det nya hemmet syns för alla sedan 2026-11-18 (spärren `hem.nytt` är borttagen). Rättat före mergen: beskedet när hemmets
 inställningar inte går att läsa, "Saknas i kunskapsbasen · sparat" (`missSparad`), och att en bockad uppgift
 försvinner direkt. Rättat efteråt: `lasInst` kastar nu vid läsfel för alla läsare (rutterna ger sitt felbesked, nattjobbet ett fel i kvittot), aldrig förvalen som om inget vore inställt. npm test stannar vid
 `handelselogg` i nav-prov (tre händelsetyper saknar rader), så resten måste köras skript för skript.
@@ -33,8 +33,8 @@ main. Svaren: `~/nav-prov-svar/sonnet-2026-11-17.jsonl`.
 - **Steg 1 (underlaget), byggt:** förslagsloggen (0303), rutten `/nav2/forslag`, jobben i torrkörning, offertens
   belopp. Se arbetsloggen 2026-11-15.
 - **Steg 2 (nya hemmet), byggt:** blocket `NYA HEMMET (prefix hv)` i `utkast.html`, hemmets data (`hem.ts`,
-  `hem-team.ts`, `hemforma.ts`), rutan Nya hemmet i Inställningar, Administration. Det gamla hemmet är orört och
-  ritas för alla som inte står i `hem.nytt`. Var varje sak från det gamla hemmet finns: `docs/hemvy-gamla-hemmet.md`.
+  `hem-team.ts`, `hemforma.ts`), rutan Nya hemmet i Inställningar, Administration. Det gamla hemmets kod finns kvar men
+  ritas inte längre (alla har det nya sedan 2026-11-18). Var varje sak från det gamla hemmet finns: `docs/hemvy-gamla-hemmet.md`.
 - **Så provar beställaren:** Inställningar, Administration, rutan Nya hemmet: bocka i sig själv. Ingen annan märker
   något. Nav föreslår slås på för sig i samma ruta, och står av tills dess.
 - **Byggd exakt som skiss 9 (2026-11-16, uppgift 1–16):** tonen följer Inställningar för hela Nav (ingen egen
@@ -54,8 +54,8 @@ main. Svaren: `~/nav-prov-svar/sonnet-2026-11-17.jsonl`.
 - **PÅSLAGET 2026-11-16 med beställarens ja:** Sonnet-raden i `nav_chatt_prov` (avtryck `dd3097dba5f0`) är
   godkänd av Zen; `chatt.avtal`, `chatt.pa` och `forslag.pa` är true. Förslagsjobbet kördes för hand en gång (1
   förslag skapat, nattjobbet 0 fel). Main läser inga av nycklarna, så inget ändras i produktionen förrän grenen
-  mergas. `hem.nytt` = bara Zen, och tas bort (`delete from nav_setting where key='hem.nytt'`, kontrollera att
-  antalet blir 0) när beställaren säger att klickprovet är klart.
+  mergas. `hem.nytt` sattes till "alla" 2026-11-18 på beställarens ord, och spärren togs sedan bort ur koden. Raden
+  raderas först när den koden ligger på main: innan dess betyder en saknad rad att INGEN har det nya hemmet.
 - **Provet av Claude-modellerna är KÖRT** (fyra gånger, beställarens ja, ungefär 30 kr av godkända 67 kr). Sista
   körningen på slutkoden (avtryck `dd3097dba5f0`, 3 varv per fråga, effort `low`): **Sonnet 5.5 28 av 30**, 0
   allvarliga fel, ungefär 6 öre per fråga; **Haiku 5.5 26 av 30**, 1 allvarligt fel (sa "Jag har förberett ett
@@ -104,7 +104,7 @@ main. Svaren: `~/nav-prov-svar/sonnet-2026-11-17.jsonl`.
   går att hänvisa till; "laget" är hela företaget för chefen; avtrycket täcker omskrivningen, effort och
   märkreglerna; loggen har kolumnen `omskrivet` (0307).
 - **Kvar:** klickprov i previewn mot skiss 9 som chef och säljare, i mörkt och ljust och i mobilbredd; chattprovet
-  på slutkoden före main (F5); beställarens ja före main; därefter `hem.nytt` bort.
+  på slutkoden före main (F5); beställarens ja före main. `hem.nytt` öppnad för alla och borttagen ur koden 2026-11-18.
 - **Öppet för beställaren:** genvägen Golvet (se arbetsloggen), ingen notis skickas när ett förslag skapas, och tre
   saker som bara ligger i sin egen vy (olästa nyheter, kurser utan frist, coachningskortet).
 

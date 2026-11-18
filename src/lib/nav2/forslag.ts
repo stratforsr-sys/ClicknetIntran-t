@@ -5,7 +5,7 @@ import type { CurrentUser } from "@/lib/auth";
 import { supabaseAdmin, supabaseServer } from "@/lib/supabase/server";
 import { lasSidvis } from "@/lib/sidvis";
 import {
-  FORSLAG_NYCKLAR, TREND_BEHOVER, facitPerVal, harNyttHem, kortAndrat, lasForslagInst, nyckelDelar, oppetLage, troddeAvstamning,
+  FORSLAG_NYCKLAR, TREND_BEHOVER, facitPerVal, kortAndrat, lasForslagInst, nyckelDelar, oppetLage, troddeAvstamning,
   type AndratIn, type AndratKort, type Beslut, type FacitRad, type ForslagInst, type ForslagMote, type MotesUtfall, type Val,
 } from "./forslagforma";
 import {
@@ -147,17 +147,15 @@ function somAndratIn(rad: LageRad, x: NdAndring): AndratIn {
 
 /**
  * Inställningarna för förslagen och Möten. Ett läsfel KASTAS i stället för att ge förvalen, så att ett fel aldrig ser
- * ut som att inget är inställt (fel tidszon, förslagen av, ingen i `hem.nytt`). Hemmet gör felet till `lasfel.inst`,
+ * ut som att inget är inställt (fel tidszon, förslagen av). Hemmet gör felet till `lasfel.inst` och visar Nav föreslår som fel,
  * rutterna till sitt felbesked och nattjobbet till ett fel i kvittot.
  */
 export async function lasInst(db: Db): Promise<{ f: ForslagInst; m: MotenInst }> {
-  const { data, error } = await db.from("nav_setting").select("key, value").or(`key.like.forslag.%,key.like.moten.%,key.eq.${FORSLAG_NYCKLAR.hemNytt}`).limit(200);
+  const { data, error } = await db.from("nav_setting").select("key, value").or("key.like.forslag.%,key.like.moten.%").limit(200);
   if (error) throw new Error(`inställningarna gick inte att läsa: ${error.message}`);
   const rader = (data ?? []) as { key: string; value: unknown }[];
   return { f: lasForslagInst(rader), m: lasInstallningar(rader) };
 }
-
-export { harNyttHem };
 
 /**
  * Kretsen ur `mote_statkrets()`: null = alla (bara säljchef, vd och admin), en

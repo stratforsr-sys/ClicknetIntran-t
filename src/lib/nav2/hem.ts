@@ -8,7 +8,7 @@ import { dagensRam, type NdDag, type RastRad, type SchemaRad } from "./hemdag";
 import { harGodkants, nettoAntal, ordervarde, type Order } from "@/lib/order";
 import { SKRIVLAGE } from "./skrivlage";
 import { vapidPublik } from "./push";
-import { byggForslag, harNyttHem, lasInst, lasKrets, type NdForslag } from "./forslag";
+import { byggForslag, lasInst, lasKrets, type NdForslag } from "./forslag";
 import type { ForslagInst } from "./forslagforma";
 import { nivaFor } from "./forma";
 import { byggTeam, lagenJagLeder, type LettLag, type NdTeam } from "./hem-team";
@@ -99,28 +99,28 @@ export type NdHem = {
   golvet: NdGolvet | null;
   /** Sant när Golvet saknas för att läsaren varken har eller leder ett lag: "Du är inte i något lag än." */
   golvetUtanLag: boolean;
-  /** Har läsaren det nya hemmet (`hem.nytt`: en lista personer, eller alla)? Annars ritas hemmet som förut. */
-  nytt: boolean;
-  /** Nav föreslår och Det som ändrats. Null för den som inte har det nya hemmet: då läses ingenting. */
+  /** Alltid sant: alla har det nya hemmet. Fältet finns kvar för klienten, som ritar det gamla hemmet bara utan det. */
+  nytt: true;
+  /** Nav föreslår och Det som ändrats. Null när läsningen föll (`lasfel.forslag`). */
   forslag: NdForslag | null;
-  /** Teamet i månaden. Null för den som inte har det nya hemmet, och för den som bara har sig själv i sin krets. */
+  /** Teamet i månaden. Null för den som bara har sig själv i sin krets, och när läsningen föll (`lasfel.team`). */
   team: NdTeam | null;
   /** Rutan Nya hemmet i Inställningar: värdena, för admin och uppåt. `farBrytare`: får slå på och av och ändra gränserna (superadmin). */
   inst: (ForslagInst & { farBrytare: boolean }) | null;
-  /** Frågar skrivrutan Claude? Sant bara för den som har det nya hemmet, när chatten är påslagen och får vara det (`farSlasPa`). */
+  /** Frågar skrivrutan Claude? Sant när chatten är påslagen och får vara det (`farSlasPa`). */
   chatt: boolean;
   /** Chattens läge och vad som saknas, för rutan i Inställningar. Bara superadmin. */
   chattLage: ChattLage | null;
   /** Hur stor del av månadens AI-utrymme personen har använt, i procent (0–100). Bara när skrivrutan frågar Claude. */
   chattAnvant: number | null;
-  /** Min dag: arbetsdagens start, slut och rasternas minuter i dag ur schemat. Null utan schema, och utan nya hemmet. */
+  /** Min dag: arbetsdagens start, slut och rasternas minuter i dag ur schemat. Null utan schema. */
   dag: NdDag | null;
   /** Kort vars läsning föll. Bara de som föll står med, och då med true: tomt (rätt) skiljs från fel. */
   lasfel: NdHemFel;
 };
 
 /** Golvet, Teamet, Nav föreslår och Min dag: true när kortets läsning föll, i stället för att kortet försvinner tyst. */
-/** `inst`: inställningarna föll. Då går det inte att veta om läsaren har det nya hemmet, så `nytt` är false och inget räknas med förval. */
+/** `inst`: inställningarna föll. Då byggs inte Nav föreslår (det står som fel med Försök igen), och inget räknas med förval. */
 export type NdHemFel = { golvet?: true; team?: true; forslag?: true; dag?: true; inst?: true };
 
 /** Veckodag 1–7 med måndag först för ett kalenderdatum ("YYYY-MM-DD"). Datumet är redan räknat i rätt tidszon. */
@@ -316,10 +316,9 @@ export async function byggHem(supabase: SupabaseClient, user: CurrentUser): Prom
   const leder = () => (lederP ??= lagenJagLeder(db, mig));
 
   // Nya hemmet (0303): en läsning av inställningarna. Den ger också tidszonen, så Golvet väntar på den men inte tvärtom.
-  // Ett läsfel blir `lasfel.inst` nedan, i stället för förval som ser ut som att inget är inställt.
+  // Ett läsfel blir `lasfel.inst` och `lasfel.forslag` nedan, i stället för förval som ser ut som att inget är inställt.
   let instFel = false;
-  // Ett tillfälligt fel prövas en gång till, så att personen inte tyst får det gamla hemmet för den laddningen (nytt
-  // avgörs av samma läsning). Faller båda blir det lasfel.inst.
+  // Ett tillfälligt fel prövas en gång till, så att Nav föreslår inte faller för en enstaka miss. Faller båda blir det lasfel.inst.
   const instP = lasInst(db).catch(() => lasInst(db)).then((i) => i, (e: unknown) => { instFel = true; return loggaFel("inst")(e); });
   const tzP = instP.then((i) => i?.m.tidszon ?? INST_FORVAL.tidszon);
   // Golvet startar direkt och väntas in sist. Ett fel här fäller aldrig resten av hemmet.
@@ -330,19 +329,18 @@ export async function byggHem(supabase: SupabaseClient, user: CurrentUser): Prom
   const pushP = supabase.from("push_subscription").select("id", { count: "exact", head: true }).eq("employee_id", mig).then((r) => r);
 
   const inst = await instP;
-  const nytt = !!inst && harNyttHem(inst.f, mig);
   const tz = inst?.m.tidszon ?? INST_FORVAL.tidszon;
-  // Chatten (0304): läses bara för den som har det nya hemmet, och för superadmin som ser läget i Inställningar.
-  const chattP = nytt || niva === "superadmin" ? chattLage(db, mig, niva === "superadmin").catch(loggaFel("chatt")) : Promise.resolve(null);
+  // Chatten (0304). Superadmin får dessutom läget, som visas i Inställningar.
+  const chattP = chattLage(db, mig, niva === "superadmin").catch(loggaFel("chatt"));
   const lasfel: NdHemFel = {};
-  if (instFel) lasfel.inst = true;
+  if (instFel) { lasfel.inst = true; lasfel.forslag = true; }
   let forslag: NdForslag | null = null;
   let team: NdTeam | null = null;
   let dag: NdDag | null = null;
-  if (nytt && inst) {
+  {
     const fall = <T>(kort: keyof NdHemFel, p: Promise<T>): Promise<T | null> => p.catch((e: unknown) => { lasfel[kort] = true; return loggaFel(kort)(e); });
     [forslag, team, dag] = await Promise.all([
-      fall("forslag", byggForslag(supabase, user, inst, nu)),
+      inst ? fall("forslag", byggForslag(supabase, user, inst, nu)) : Promise.resolve(null),
       fall("team", kretsP.then((krets) => {
         // Kretsen gick inte att läsa: för den som kan leda ett lag är det ett fel, för övriga finns inget kort att visa.
         if (krets === undefined && hasRole(user, "team_lead", "sales_manager", "ceo", "admin")) throw new Error("kretsen (mote_statkrets) gick inte att läsa");
@@ -354,7 +352,7 @@ export async function byggHem(supabase: SupabaseClient, user: CurrentUser): Prom
   const [{ data: val }, { count: enheter }, chatt, golv] = await Promise.all([valP, pushP, chattP, golvetP]);
   if (golv.fel) lasfel.golvet = true;
   const golvet = golv.g;
-  const chattPa = nytt && !!chatt && chatt.pa && chatt.skal === null;
+  const chattPa = !!chatt && chatt.pa && chatt.skal === null;
   const nyckel = vapidPublik();
   const v = new Map(((val ?? []) as { key: string; value: unknown }[]).map((x) => [x.key, x.value]));
   const lista = (k: string): string[] => {
@@ -373,7 +371,7 @@ export async function byggHem(supabase: SupabaseClient, user: CurrentUser): Prom
     push: nyckel ? { nyckel, enheter: enheter ?? 0, ledare: hasRole(user, "sales_manager", "ceo", "team_lead") } : null,
     golvet,
     golvetUtanLag: !golv.fel && golvet === null,
-    nytt,
+    nytt: true,
     forslag,
     team,
     inst: inst && niva !== "salesperson" ? { ...inst.f, farBrytare: niva === "superadmin" } : null,

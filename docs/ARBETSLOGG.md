@@ -5,6 +5,22 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-18 · Nya hemmet för alla, spärren `hem.nytt` borttagen
+
+Beställaren: "öppna den nya hemvyn för alla", sedan "radera den inställningen också, den är onödig". Först sattes
+`hem.nytt` till "alla" i produktionen. Raden kunde inte bara raderas: förvalet var en tom lista, så en saknad rad hade
+gett ALLA det gamla hemmet. Därför togs spärren bort ur koden först.
+
+- `forslagforma.ts`: `hemNytt` borta ur `ForslagInst`, förvalen, nycklarna och tolkningen, och `harNyttHem` är borta.
+  `hem.nytt` är nu en okänd inställning (400), också för superadmin.
+- `hem.ts`: `nytt` är alltid true. Går inställningarna inte att läsa blir det `lasfel.inst` och `lasfel.forslag`
+  (Nav föreslår visar felet med Försök igen); förut ritades det gamla hemmet. Chattens läge läses för alla.
+- Chattrutten: avgörs bara av `chatt.pa` och avtal och prov, inte av en lista personer.
+- Inställningar, rutan Nya hemmet: reglaget "Nya hemmet för alla" och personlistan är borta.
+- Proven för den gamla regeln är omskrivna till den nya (en kvarglömd `hem.nytt`-rad stänger inget).
+- Kvar: radera raden (`delete from nav_setting where key='hem.nytt'`) när koden ligger på main. Det gamla hemmets
+  kod i `utkast.html` ritas inte längre och kan tas bort i ett eget pass (`docs/hemvy-gamla-hemmet.md`).
+
 ## 2026-11-17 · Inställningarna: ett läsfel ger aldrig förvalen
 
 `lasInst` (`src/lib/nav2/forslag.ts`) gav förvalen vid läsfel för alla utom hemmet. Det betydde att ett tillfälligt

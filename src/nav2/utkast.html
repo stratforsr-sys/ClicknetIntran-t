@@ -9614,9 +9614,6 @@ button.hv-mitt{cursor:pointer}
 .hv-ferr{margin:0;font-size:var(--hv-fs-1);color:var(--hv-danger)}
 .hv-sakt{display:block;max-width:100%;text-align:left}
 .hv-ihj{font-size:12.5px;line-height:1.45}
-.hv-ifolk{display:flex;flex-wrap:wrap;gap:6px 16px;padding:10px 0;border-top:1px solid var(--line)}
-.hv-ifolk label{display:inline-flex;align-items:center;gap:6px;font-size:13.5px}
-.hv-ifolk p{flex-basis:100%;margin:2px 0 0;color:var(--ink-3)}
 .hv-iin{width:112px;flex:none;text-align:right}
 @media (hover:hover){
   .hv-sakt:hover b{text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--hv-line-2)}
@@ -10562,7 +10559,7 @@ function render(){
   renum();
   if ((S.view === 'logg' || S.view === 'adoption') && !chef) S.view = 'hem';
   document.getElementById('main').classList.toggle('olmode', S.view === 'kalender');
-  // Nya hemmet (hv): bara för den som står i hem.nytt. S.hv finns först när blocket NYA HEMMET har körts.
+  // Nya hemmet (hv): för alla, se ND.hem.nytt. S.hv finns först när blocket NYA HEMMET har körts.
   const hvNytt = S.view === 'hem' && !!S.hv && hvPa();
   document.getElementById('main').classList.toggle('hvmode', hvNytt);
   document.body.classList.toggle('hvbody', hvNytt);
@@ -35025,9 +35022,8 @@ renderGolvet = function(){ return _ndHemGolvMo() + (typeof ndMoHemKort === 'func
    NAV 2.0 I RIKTIGT LÄGE: NYA HEMMET (prefix hv)
 
    Hemmet är skiss A v2, Instrumentet (vald av beställaren 2026-11-16, byggd utan omtolkning): urtavlan i mitten är
-   arbetsdagen, och runt den står det som behöver dig, hur månaden går och skrivrutan. Ritas bara för den som står i
-   inställningen `hem.nytt` (ND.hem.nytt). Alla andra får hemmet som förut: ingen av det gamla hemmets funktioner är
-   ändrad, render() väljer bara.
+   arbetsdagen, och runt den står det som behöver dig, hur månaden går och skrivrutan. Alla har det (ND.hem.nytt är
+   alltid sant sedan 2026-11-18). Det gamla hemmet ritas bara om ND.hem saknas.
 
    I hemmet talar Nav först:
      Väntar på dig     samma lista som det gamla hemmets inkorg (ndHemRad), det som brinner först.
@@ -37548,7 +37544,6 @@ const HVINST = [
   ['forslag.grans-person', 'gransPerson', 'Gräns för trendregeln', 'Gäller när lagets 20 senaste möten jämförs med de 40 före. Regeln säger inget till någon än. Förvalt 0,01.'],
   ['forslag.grans-motvikt', 'gransMotvikt', 'Gräns för motvikten', 'När motvikten räknas som sämre. Generös med flit: motvikten är en broms, inte ett påstående. Förvalt 0,2.']
 ];
-const hvInstFolk = () => ((ND.moten && (ND.moten.kollegor || ND.moten.saljare)) || []).slice().sort((a, b) => String(a.namn).localeCompare(String(b.namn), HVLOK.sprak));
 // Chatten har ingen brytare här: den slås på först när provet av modellen är kört och godkänt. Rutan säger läget och vad som saknas.
 function hvDollar(v){ return Number(v).toLocaleString(HVLOK.sprak, {minimumFractionDigits: Number.isInteger(+v) ? 0 : 2, maximumFractionDigits: 2}); }
 function hvChattLage(){
@@ -37565,10 +37560,7 @@ function hvChattLage(){
 function hvInstRuta(){
   const V = ND && ND.hem && ND.hem.inst; if (!V) return '';
   const sw = (nyckel, on, l, h, attr) => { const id = 'hvI' + nyckel.replace(/\W/g, ''); return `<div class="prf-swrad"><span class="prf-swt"><b id="${id}L">${l}</b><small class="hv-ihj" id="${id}H">${h}</small></span><button type="button" role="switch" class="prf-sw" aria-checked="${!!on}" aria-labelledby="${id}L" aria-describedby="${id}H" ${attr}><i></i></button></div>`; };
-  const alla = V.hemNytt === 'alla', valda = alla ? [] : (V.hemNytt || []);
   const brytare = V.farBrytare ? `<div class="prf-lista">
-      ${sw('hemalla', alla, 'Nya hemmet för alla', 'På: alla ser det nya hemmet. Av: bara de som är valda här under.', 'data-hvinstalla')}
-      <div class="hv-ifolk" data-hvinst="hem.nytt" role="group" aria-label="Vilka som har nya hemmet">${alla ? '<p class="hv-ihj">Alla har det nya hemmet.</p>' : hvInstFolk().map(p => `<label><input type="checkbox" data-hvinstperson="${esc(p.id)}" ${valda.includes(p.id) ? 'checked' : ''}>${esc(p.namn)}</label>`).join('') + `<p class="hv-ihj">${valda.length ? `${valda.length} ${valda.length === 1 ? 'person har' : 'personer har'} det nya hemmet.` : 'Ingen har det nya hemmet än.'} Ingen annan märker något.</p>`}</div>
       ${sw('forslagpa', V.pa, 'Nav föreslår', 'Nav skapar förslag och dömer dem. Av: jobben räknar bara och skriver i kvittot.', 'data-hvinst="forslag.pa"')}
     </div>` : '';
   // Gränserna avgör när Nav fäller en dom. Bara superadmin ändrar dem, så bara superadmin ser fälten.
@@ -37580,7 +37572,7 @@ function hvInstRuta(){
 async function hvInstSpara(nyckel, varde, fore){
   const s = await hvPost('installningar', {nyckel, varde});
   if (!s){ render(); return; }
-  const f = {'forslag.pa':'pa', 'hem.nytt':'hemNytt'}[nyckel] || (HVINST.find(x => x[0] === nyckel) || [])[1];
+  const f = {'forslag.pa':'pa'}[nyckel] || (HVINST.find(x => x[0] === nyckel) || [])[1];
   if (f && ND.hem.inst) ND.hem.inst[f] = s.varde;
   render();
   toast('Sparat.', fore === undefined ? null : () => hvInstSpara(nyckel, fore));
@@ -37590,17 +37582,11 @@ document.addEventListener('click', e => {
   const t = e.target.closest('[role=switch]'); if (!t) return;
   const V = ND.hem.inst;
   e.preventDefault(); e.stopPropagation();
-  if (t.dataset.hvinstalla !== undefined){ const fore = V.hemNytt; hvInstSpara('hem.nytt', V.hemNytt === 'alla' ? [] : 'alla', fore); return; }
   if (t.dataset.hvinst === 'forslag.pa'){ hvInstSpara('forslag.pa', !V.pa, V.pa); return; }
 }, true);
 document.addEventListener('change', e => {
   const ruta = e.target.closest && e.target.closest('#prf-r-hvinst'); if (!ruta || !ND || !ND.hem || !ND.hem.inst) return;
   const V = ND.hem.inst, d = e.target.dataset;
-  if (d.hvinstperson){
-    const fore = V.hemNytt === 'alla' ? [] : (V.hemNytt || []).slice();
-    hvInstSpara('hem.nytt', e.target.checked ? [...new Set([...fore, d.hvinstperson])] : fore.filter(id => id !== d.hvinstperson), fore);
-    return;
-  }
   if (d.hvinst){
     const rad = HVINST.find(x => x[0] === d.hvinst); if (!rad) return;
     const tid = rad[1] === 'obekraftatTid', v = tid ? e.target.value : Number(String(e.target.value).trim().replace(',', '.'));
