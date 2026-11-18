@@ -376,3 +376,18 @@ export function alder(iso: string, nu: Date = new Date()): string {
 
 /** Hur långt bakåt en dubblett letas. Ett dygn: samma kund som skickar två gånger på en förmiddag. */
 export const DUBBLETT_TIMMAR = 24;
+
+/**
+ * Varför ett lead inte får raderas, eller null om det får det.
+ *
+ * Att radera tar bort leadet för alltid, och det får aldrig nå kunden eller
+ * ta något med sig som räknas. Ett lead som blev en order räknas i Order och
+ * provisionen, och ett bokat möte ligger i Kalendern med kunden som gäst: att
+ * radera det hade krävt att mötet ställdes in, och då får kunden en avbokning.
+ * Båda får därför tas om hand först, där de hör hemma.
+ */
+export function raderingsHinder(l: { order_id: string | null; meeting_event_id: string | null }): string | null {
+  if (l.order_id) return "Leadet har blivit en order och kan inte raderas.";
+  if (l.meeting_event_id) return "Leadet har ett möte i Kalendern. Ställ in mötet först, så får kunden veta.";
+  return null;
+}

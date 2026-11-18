@@ -240,6 +240,7 @@ const RUBRIK: Record<string, string> = {
   "late_arrival.commented": "Sen ankomst förklarad",
   "lead.assigned": "Lead tilldelat",
   "lead.created": "Lead inkommet",
+  "lead.deleted": "Lead raderat",
   "lead.note_changed": "Leadanteckning ändrad",
   "lead.status_changed": "Lead ändrat",
   "lead.unassigned": "Lead återlämnat",

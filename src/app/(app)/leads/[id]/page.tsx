@@ -8,8 +8,8 @@ import { Field, Select, KONTROLL } from "@/components/ui/Field";
 import { Ikon } from "@/components/shell/Ikon";
 import { getCurrentUser, hasRole, fullName } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabase/server";
-import { alder, leadTitel, STATUSAR, STATUS_ETIKETT, STATUS_TON, type Leadstatus } from "@/lib/leads";
-import { tilldelaLead, uppdateraLead } from "../actions";
+import { alder, leadTitel, raderingsHinder, STATUSAR, STATUS_ETIKETT, STATUS_TON, type Leadstatus } from "@/lib/leads";
+import { raderaLead, tilldelaLead, uppdateraLead } from "../actions";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Lead — Clicknet Nav" };
@@ -34,6 +34,8 @@ type Lead = {
   assigned_at: string | null;
   note: string | null;
   duplicate_of: string | null;
+  order_id: string | null;
+  meeting_event_id: string | null;
 };
 
 function tid(iso: string): string {
@@ -75,7 +77,7 @@ export default async function LeadSida({ params }: { params: Promise<{ id: strin
   // kommer tillbaka tomt, och sidan blir 404 — inte "åtkomst nekad".
   const { data } = await supabase
     .from("lead")
-    .select("id, created_at, source, name, company, email, phone, message, page_url, utm_source, utm_medium, utm_campaign, extra, status, status_changed_at, assigned_to, assigned_at, note, duplicate_of")
+    .select("id, created_at, source, name, company, email, phone, message, page_url, utm_source, utm_medium, utm_campaign, extra, status, status_changed_at, assigned_to, assigned_at, note, duplicate_of, order_id, meeting_event_id")
     .eq("id", id)
     .maybeSingle();
 
@@ -263,6 +265,31 @@ export default async function LeadSida({ params }: { params: Promise<{ id: strin
                   </Button>
                 </div>
               </form>
+            </Card>
+          )}
+          {fordelar && (
+            <Card>
+              <CardHeader
+                titel="Radera"
+                beskrivning={
+                  raderingsHinder(lead) ??
+                  `Leadet, samtalen och historiken tas bort för alltid${(dubbletter ?? []).length ? ", med gångerna kunden skrev in igen" : ""}. Det går inte att ångra. Vill du bara ta bort det ur listorna, sätt status Spam.`
+                }
+              />
+              {!raderingsHinder(lead) && (
+                <details className="group">
+                  <summary className="inline-flex min-h-9 cursor-pointer list-none items-center rounded-full px-4 text-small font-semibold text-ink-500 hover:bg-surface-alt hover:text-ink-900 group-open:hidden">
+                    Radera leadet…
+                  </summary>
+                  <form action={raderaLead} className="flex flex-wrap items-center gap-3">
+                    <input type="hidden" name="lead_id" value={lead.id} />
+                    <Button type="submit" variant="destruktiv" size="sm">
+                      Radera för alltid
+                    </Button>
+                    <span className="text-small text-ink-500">Säker? Det här går inte att ångra.</span>
+                  </form>
+                </details>
+              )}
             </Card>
           )}
         </div>

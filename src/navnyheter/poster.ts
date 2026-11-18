@@ -14,6 +14,21 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "leads-radera",
+    rubrik: "Leads: radera ett lead",
+    ingress: "Den som fördelar leads kan nu radera ett lead för alltid, till exempel ett test eller något som aldrig var en förfrågan.",
+    text: `Öppna leadet och tryck **Radera leadet…** längst ned. Nav frågar en gång till innan något tas bort. Leadet,
+samtalen och historiken försvinner, liksom gångerna samma kund skrev in igen. Det går inte att ångra.
+
+Vill du bara få bort ett lead ur listorna, välj **Spam** i stället. Det går att se igen.
+
+Ett lead som har blivit en order, eller har ett bokat möte, går inte att radera. Ställ in mötet först, så får kunden
+veta.`,
+    datum: "2026-11-18",
+    roller: ["sales_manager", "ceo", "team_lead", "admin"],
+    href: "/leads",
+  },
+  {
     slug: "moten-vem-holl-motet",
     rubrik: "Möten: den som höll mötet sätter utfallet",
     ingress: "Höll en kollega mötet i stället för den som stod som hållare? Välj vem som höll det när du sätter Hållet, så svarar rätt person på frågorna och väljer nästa steg. Ett möte efter det första räknas aldrig som ett nytt bokat möte.",

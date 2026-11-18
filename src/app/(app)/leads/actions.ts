@@ -1,11 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { getCurrentUser, hasRole } from "@/lib/auth";
 import { notifieraSenare } from "@/lib/notishandelse-server";
 import { skrivHandelse } from "@/lib/handelselogg-server";
 import { sattKvitto } from "@/lib/toast-server";
+import { raderaLeadet } from "@/lib/leads-radera-server";
 import { arLeadstatus, leadTitel, maskeraPersonnummer, STATUS_ETIKETT } from "@/lib/leads";
 import { NOTIS_VANTAR_SEK, tilldelaVillkorat, tilldelningsnyckel } from "@/lib/nav2/leadsforma";
 
@@ -172,4 +174,22 @@ export async function uppdateraLead(form: FormData): Promise<void> {
   await sattKvitto({ text: statusAndrad ? `Status: ${STATUS_ETIKETT[status]}.` : "Anteckningen är sparad." });
   revalidatePath("/leads");
   revalidatePath(`/leads/${id}`);
+}
+
+/**
+ * Raderar ett lead för alltid (src/lib/leads-radera-server.ts). Bara den som
+ * fördelar leads. Sidan frågar en gång till innan formuläret skickas.
+ */
+export async function raderaLead(form: FormData): Promise<void> {
+  const user = await getCurrentUser();
+  if (!user?.employee) throw new Error("Du måste vara inloggad.");
+  if (!farFordela(user)) throw new Error("Bara den som fördelar leads kan radera dem.");
+
+  const id = String(form.get("lead_id") ?? "");
+  const r = await raderaLeadet(user.employee.id, id);
+  if ("fel" in r) throw new Error(r.fel);
+
+  await sattKvitto({ text: r.ok });
+  revalidatePath("/leads");
+  redirect("/leads");
 }

@@ -24,6 +24,7 @@ import {
   STATUS_ETIKETT,
   STATUS_TON,
   OPPNA,
+  raderingsHinder,
 } from "../src/lib/leads.ts";
 import { ANGRA_MIN, NOTIS_VANTAR_SEK, gaEtt, moteNyss, nyTilldelning, tilldelaVillkorat, tilldelningsnyckel, tilldelningsprefix } from "../src/lib/nav2/leadsforma.ts";
 import { readFileSync } from "node:fs";
@@ -346,6 +347,26 @@ console.log("\n\x1b[1mNav 2.0: Fördela jämnt räknar rätt (granskningen S07, 
   const kund = src.slice(src.indexOf('case "kund":'), src.indexOf('case "angra":'));
   ok("Blev kund på ett otilldelat lead ger det till fördelaren (M3)", /await andra\(l, \{[^\n]*nyTilldelning\(l, mig, fordelar,/.test(kund));
   ok("jamt/auto går genom gaEtt", /await gaEtt\(/.test(gren) && !/catch \{\s*hunnit\+\+/.test(gren));
+}
+
+{
+  console.log("\nRadera ett lead");
+  ok("ett vanligt lead går att radera", raderingsHinder({ order_id: null, meeting_event_id: null }) === null);
+  ok("ett lead som blev en order raderas inte", /order/i.test(raderingsHinder({ order_id: "o1", meeting_event_id: null }) ?? ""));
+  ok("ett lead med ett möte i Kalendern raderas inte (kunden hade fått en avbokning)", /möte/i.test(raderingsHinder({ order_id: null, meeting_event_id: "m1" }) ?? ""));
+  const rutt = readFileSync(new URL("../src/app/nav2/leads/route.ts", import.meta.url), "utf8");
+  const gren = rutt.slice(rutt.indexOf('case "radera":'), rutt.indexOf('case "angra":'));
+  ok("Nav 2.0 har handlingen radera", gren.length > 0 && /raderaLeadet\(/.test(gren));
+  ok("bara den som fördelar får radera", /if \(!fordelar\)/.test(gren));
+  const srv = readFileSync(new URL("../src/lib/leads-radera-server.ts", import.meta.url), "utf8");
+  ok("dubbletterna raderas med originalet", /duplicate_of/.test(srv));
+  ok("väntande notiser i utkorgen tas bort", /tilldelningsprefix/.test(srv) && /sent_at/.test(srv));
+  ok("loggen får lead.deleted", /"lead\.deleted"/.test(srv));
+  ok("loggen bär ingen kunddata", !/meta: \{[^}]*(company|email|phone|name)/.test(srv));
+  const logg = readFileSync(new URL("../src/lib/nav2/loggforma.ts", import.meta.url), "utf8");
+  ok("lead.deleted har en etikett i loggen", /"lead\.deleted":/.test(logg));
+  const utk = readFileSync(new URL("../src/nav2/utkast.html", import.meta.url), "utf8");
+  ok("Nav 2.0-panelen frågar en gång till innan den raderar", /data-lddo="raderaja\|/.test(utk) && /ndLdPost\('radera'/.test(utk));
 }
 
 console.log(fel === 0

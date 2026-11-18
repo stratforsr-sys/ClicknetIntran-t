@@ -25,6 +25,11 @@ main. Svaren: `~/nav-prov-svar/sonnet-2026-11-17.jsonl`.
 
 ---
 
+## LEADS: RADERA (2026-11-18): grenen `radera-leads`, INTE på main, ingen migration
+
+Den som fördelar leads kan radera ett lead för alltid (`/leads/[id]` och Nav 2.0-panelen, två klick, inget Ångra).
+Lead med order eller möte nekas. Väntar på beställarens ja efter preview. Detaljer i `docs/ARBETSLOGG.md` 2026-11-18.
+
 ## HEMVYN: KORT, FÖRSLAG OCH CHATT (2026-11-15): grenen `hemvy-chatt`, 0303–0307 KÖRDA, INTE på main
 
 - **Vad:** hemvyn görs om till fyra kort (Väntar på dig, Nav föreslår, Teamet i månaden eller Din månad, Det som

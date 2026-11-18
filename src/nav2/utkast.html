@@ -22498,7 +22498,17 @@ function ldPanel(l){
       ${dub.length ? `<section class="rxsek"><h3>Skrev igen</h3><ul class="ldlog">${dub.map(d => `<li><span class="num">${ldTid(d.at)}</span>${esc(d.msg)}</li>`).join('')}</ul></section>` : ''}
       ${l.forsok.length ? `<section class="rxsek"><h3>Samtalen</h3><ul class="ldlog">${l.forsok.slice().reverse().map(([d, t, u, n]) => `<li><span class="num">${d === ldT() ? t : frKort(d)}</span><b>${LDUTFALL[u] || u}</b>${n ? ' · ' + esc(n) : ''}</li>`).join('')}</ul></section>` : ''}
       <section class="rxsek"><h3>Historik</h3><ol class="rxlog">${l.logg.slice().reverse().map(x => `<li><span class="num">${x.d === ldT() ? x.tid : frKort(x.d)}</span>${esc(x.t)}</li>`).join('')}</ol></section>
+      ${chef ? ldRaderaRuta(l, dub) : ''}
     </div></aside>`;
+}
+/* Radera: bara den som fördelar, och alltid ett andra klick. Leadet försvinner för alltid, så det finns inget Ångra.
+   Ett lead som blev order, eller har ett möte i Kalendern, raderas inte: kunden hade fått en avbokning. */
+function ldRaderaRuta(l, dub){
+  const hinder = (l.orderId || l.order) ? 'Leadet har blivit en order och kan inte raderas.' : (l.moteId || l.mote) ? 'Leadet har ett möte i Kalendern. Ställ in mötet först, så får kunden veta.' : null;
+  if (hinder) return `<section class="rxsek"><h3>Radera</h3><p class="aehint">${esc(hinder)}</p></section>`;
+  if (S.ldRadera !== l.id) return `<section class="rxsek"><button class="tlink" data-lddo="radera|${l.id}">Radera leadet…</button></section>`;
+  return `<section class="rxsek"><h3>Radera leadet?</h3><p class="aehint">Leadet, samtalen och historiken tas bort för alltid${dub.length ? `, med ${dub.length === 1 ? 'gången' : `de ${dub.length} gångerna`} kunden skrev igen` : ''}. Det går inte att ångra. Vill du bara ta bort det ur listorna, välj Spam.</p>
+    <div class="aek"><button class="btn mo-btn-d btn-sm" data-lddo="raderaja|${l.id}">Radera för alltid</button><button class="tlink" data-lddo="raderanej|${l.id}">Avbryt</button></div></section>`;
 }
 function ldNastaRuta(l, chef){
   let t, sub = '', k = '';
@@ -22551,6 +22561,9 @@ function ldClick(t, e){
   if (d.ldjamt !== undefined){ const k = ldKopia(), f = ldAttFordela().filter(l => !ldSpamLik(l)), ut = {}; f.forEach(l => { const v = ldForslag()[0]; if (v){ ldGe(l, v.namn); ut[v.namn] = (ut[v.namn] || 0) + 1; } }); render(); toast(`Fördelat: ${aeOch(Object.entries(ut).map(([n, a]) => `${rxFor(n)} ${a}`))}.`, () => ldAterstall(k)); return true; }
   if (d.ldpamin){ S.ldPamind = {...(S.ldPamind || {}), [d.ldpamin]:true}; render(); toast(`${rxFor(d.ldpamin)} fick en påminnelse om leads som väntar.`); return true; }
   if (d.lddo){ const [a, id] = d.lddo.split('|'), l = ldL(id), k = ldKopia();
+    if (a === 'radera'){ S.ldRadera = id; ldRita(); return true; }
+    if (a === 'raderanej'){ S.ldRadera = null; ldRita(); return true; }
+    if (a === 'raderaja'){ S.ld.leads = S.ld.leads.filter(x => x.id !== id && x.dubbl !== id); S.ldRadera = null; S.ldOpen = null; render(); toast('Leadet är raderat.'); return true; }
     if (a === 'spam'){ l.status = 'spam'; ldLogg(l, 'Markerat som spam.'); S.ldOpen = null; render(); toast('Markerat som spam. Det syns inte längre i listorna.', () => ldAterstall(k)); return true; }
     if (a === 'ateroppna'){ l.status = 'contacted'; l.nasta = aeArbFram(ldT(), 1) + ' 10:00'; ldLogg(l, 'Öppnades igen.'); render(); toast('Leadet är öppet igen, med ett samtal i morgon 10:00.', () => ldAterstall(k)); return true; }
     if (a === 'ge'){ const v = ldForslag()[0]; if (v){ ldGe(l, v.namn); render(); toast(`${l.bolag} gick till ${v.namn}.`, () => ldAterstall(k)); } return true; }
@@ -41312,6 +41325,7 @@ document.addEventListener('click', e => {
   if (ds.lddo){
     const [a, id] = ds.lddo.split('|');
     if (a === 'spam'){ stopp(); ndLdPost('spam', {id}); return; }
+    if (a === 'raderaja'){ stopp(); S.ldRadera = null; ndLdPost('radera', {id}); return; }
     if (a === 'ateroppna'){ stopp(); ndLdPost('oppna', {id, nasta:aeArbFram(ldT(), 1) + ' 10:00'}); return; }
     if (a === 'ge'){ stopp(); const v = ldForslag()[0]; if (v) ndLdGe(id, v.namn); else toast('Ingen säljare är instämplad just nu.'); return; }
     return;   // Ring och Efter samtalet: utkastets formulär
