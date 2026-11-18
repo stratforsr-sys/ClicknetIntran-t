@@ -372,6 +372,8 @@ const TACKNING = {
   // `src/lib/leads-server.ts`, inte från en server action — det skrivs av
   // hemsidan och inte av någon i navet.
   // ---------------------------------------------------------------------------
+  "leads::raderaLead":
+    "Den som raderar är den som bestämt det. Leadet och dess notiser försvinner; att meddela säljaren om något som inte längre finns hade bara varit brus.",
   "leads::tilldelaLead": "notifierar",
   "leads::uppdateraLead":
     "Status och anteckning är säljarens eget arbetsminne. Fördelarna ser läget i listan, och ingen behöver avbrytas för att ett lead blev uppringt.",

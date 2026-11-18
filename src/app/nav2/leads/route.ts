@@ -9,6 +9,7 @@ import { leadTitel, maskeraPersonnummer } from "@/lib/leads";
 import { tilldelaLead, uppdateraLead } from "@/app/(app)/leads/actions";
 import { skapaMote, stallIn } from "@/app/(app)/kalender/moten/actions";
 import { farFordela } from "@/lib/nav2/leads";
+import { raderaLeadet } from "@/lib/leads-radera-server";
 import { ANGRA_MIN, FORE_KOLUMNER, MOTE_SPARR_SEK, PLATSER, SKAL, gaEtt, moteNyss, nyTilldelning, tilldelningsprefix, type Fore } from "@/lib/nav2/leadsforma";
 import { medNyckel } from "@/lib/nav2/nyckel";
 import { LASLAGE_TEXT, SKRIVLAGE, sammaUrsprung } from "@/lib/nav2/skrivlage";
@@ -418,6 +419,17 @@ export async function POST(request: Request) {
         await steg(l, "kund");
         await skrivHandelse({ actorId: mig, action: "lead.status_changed", objectType: "lead", objectId: l.id, meta: { fran: l.status, till: "won", order: order.id } });
         return klart(`Leadet blev kund: order #${order.order_number}.`, []);
+      }
+
+      case "radera": {
+        // Bara den som fördelar: att radera tar bort leadet för alltid, för alla (src/lib/leads-radera-server.ts).
+        if (!fordelar) return svar({ fel: "Bara den som fördelar leads kan radera dem." }, 403);
+        const id = String(b.id ?? "");
+        if (!UUID.test(id)) return svar({ fel: "Leadet finns inte." }, 404);
+        const r = await raderaLeadet(mig, id);
+        if ("fel" in r) return svar({ fel: r.fel }, r.status);
+        revalidatePath("/leads");
+        return svar({ ok: r.ok });
       }
 
       case "angra": {

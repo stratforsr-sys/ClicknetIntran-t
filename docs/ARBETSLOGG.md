@@ -5,6 +5,24 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-18 · Leads: radera ett lead (på `main`)
+
+Beställaren: "i nav måste jag kunna radera leads som kommer in." Den som fördelar leads (`farFordela`: säljchef, VD,
+teamledare, superadmin) kan nu radera ett lead för alltid, både på `/leads/[id]` och i Nav 2.0-panelen. Alltid ett
+andra klick, inget Ångra: det finns ingen äkta invers (`src/lib/toast.ts`), och en sparad kopia för att lägga tillbaka
+hade varit att inte radera. "Spam" finns kvar för den som bara vill få bort leadet ur listorna.
+
+Allt i `src/lib/leads-radera-server.ts` (`raderaLeadet`), som båda vyerna anropar: dubbletterna (`duplicate_of`) går
+med, annars blev de egna leads (on delete set null); `lead_event` går med via cascade; väntande tilldelningsmejl i
+utkorgen och notiser om leadet tas bort. Ett lead med order eller möte i Kalendern nekas (`raderingsHinder` i
+`src/lib/leads.ts`, 409): att radera mötet hade skickat kunden en avbokning. Loggen får `lead.deleted` utan kunddata
+(status och antal dubbletter), med etiketten "Lead raderat" i `loggforma.ts`. Ingen migration: skrivningen går med
+tjänstenyckeln, som allt annat på `lead`.
+
+Prov: `tests/leads.mjs` (elva nya kontroller), `npx tsc --noEmit` grönt, nav2-skriv/-missbruk/-till/-gallring/-omladdning
+gröna. `test:handelselogg` kräver databasen och kördes inte. Inte provat i webbläsaren mot riktiga leads. Bokförd i `tests/notiser-tackning.mjs`. Mergad till main på beställarens ja efter preview.
+
+---
 ## 2026-11-18 · Nya hemmet för alla, spärren `hem.nytt` borttagen
 
 Beställaren: "öppna den nya hemvyn för alla", sedan "radera den inställningen också, den är onödig". Först sattes
@@ -20,6 +38,8 @@ gett ALLA det gamla hemmet. Därför togs spärren bort ur koden först.
 - Proven för den gamla regeln är omskrivna till den nya (en kvarglömd `hem.nytt`-rad stänger inget).
 - Kvar: radera raden (`delete from nav_setting where key='hem.nytt'`) när koden ligger på main. Det gamla hemmets
   kod i `utkast.html` ritas inte längre och kan tas bort i ett eget pass (`docs/hemvy-gamla-hemmet.md`).
+
+---
 
 ## 2026-11-17 · Inställningarna: ett läsfel ger aldrig förvalen
 
