@@ -102,6 +102,15 @@ export const MEJLKALLOR = [
   "order-inkio-uppsagt",
 
   /**
+   * Inkio-vakten (2026-11-20): en godkänd order som inte kommit in i Inkio, och
+   * en säljare som saknas där. Båda betyder att en kund inte faktureras och att
+   * en säljare inte får sin affär förrän någon gör något. Toro (#41) låg en
+   * vecka för att larmet bara stod i en admins klocka.
+   */
+  "inkio-order-fel",
+  "inkio-saljare-saknas",
+
+  /**
    * Frånvaron: de tre besked som RIVER UPP något den anställda redan planerat
    * efter. En godkänd ledighet som ställs in är det tydligaste fallet i hela
    * navet — personen har bokat resa på ett besked som inte längre gäller.

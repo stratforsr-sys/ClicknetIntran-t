@@ -14,6 +14,21 @@ import type { Navnyhet } from "./typer.ts";
  */
 export const POSTER: Navnyhet[] = [
   {
+    slug: "inkio-vakten",
+    rubrik: "Order som inte kommer in i Inkio larmar nu tydligt",
+    ingress: "Kommer en godkänd order inte in i Inkio får säljaren, den som godkände, chefen och admin veta det direkt, med kundens namn och vad som ska göras.",
+    text: `Larmet kommer i klockan, i telefonen och som mejl. Det säger vilken kund och vilken order det gäller, varför Inkio
+sa nej och vad du gör åt det. Tryck på det så öppnas ordern, där du rättar och trycker **Försök igen**.
+
+Är felet kvar efter ett dygn kommer larmet igen, på dagtid, tills ordern har kommit in.
+
+Nav kontrollerar också att alla som säljer finns som säljare i Inkio med samma e-post. Saknas någon får admin veta
+det innan nästa order hinner fastna.`,
+    datum: "2026-11-20",
+    roller: ["salesperson", "sales_manager", "ceo", "team_lead", "admin"],
+    href: "/order",
+  },
+  {
     slug: "leads-radera",
     rubrik: "Leads: radera ett lead",
     ingress: "Den som fördelar leads kan nu radera ett lead för alltid, till exempel ett test eller något som aldrig var en förfrågan.",
