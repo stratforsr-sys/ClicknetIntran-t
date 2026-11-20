@@ -4,8 +4,7 @@ Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken oc
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
 **2026-11-20: INKIO-VAKTEN PÅ MAIN** (beställarens "Ja, merga till main"). Toro (#41) kom aldrig in i Inkio (säljaren saknas
-i Inkio) och larmet var en oläslig admin-notis. Vakten larmar nu med kund, skäl och länk till säljare, godkännare, chef,
-admin och superadmin, varje dygn tills det är löst, och kontrollerar att säljarna finns i Inkio. Se ARBETSLOGG 2026-11-20.
+i Inkio) och larmet var en oläslig admin-notis. Vakten larmar nu med kund, skäl och länk, BARA till rollen admin (Zen), varje dygn tills det är löst, och kontrollerar att säljarna finns i Inkio. Se ARBETSLOGG 2026-11-20.
 Fredrik, Edvin, Mick och Thomas måste läggas till i Inkio av någon med behörighet där.
 
 **Senast uppdaterad:** 2026-11-17 (sen kväll): **HEMVYN OCH CHATTEN ÄR PÅ MAIN** (beställarens ja: "nu kan du pusha

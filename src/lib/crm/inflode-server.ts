@@ -642,11 +642,6 @@ async function koppla(org: string, kund: Kundrad, rader: Rad[], ordrar: Order[],
 }
 
 /** Kretsen för en kund, för det som händer i Nav (en anteckning från kundkortet). */
-/** Kretsen kring säljarna: superadmin, säljarna och deras chef eller teamledare. Tom lista ger superadmin. */
-export async function kretsForSaljare(saljare: readonly string[]): Promise<string[]> {
-  return new Personer().kretsFor(saljare);
-}
-
 export async function kretsForKund(org: string): Promise<string[]> {
   const { data } = await supabaseAdmin().from("sales_order").select("salesperson_id").eq("org_number", org).neq("status", "utkast");
   const saljare = [...new Set(((data ?? []) as { salesperson_id: string }[]).map((x) => x.salesperson_id))];

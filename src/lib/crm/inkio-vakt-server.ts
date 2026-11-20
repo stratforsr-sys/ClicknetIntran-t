@@ -2,7 +2,6 @@ import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/server";
 import { medRoll, notifieraFlera } from "@/lib/notishandelse-server";
 import { inkioKonfigurerad, inkioSaljarEpost } from "./inkio";
-import { kretsForSaljare } from "./inflode-server";
 import { attLarma, orderlarm, saknasIInkio, saljarlarm, saljarnyckel, type Fastnad, type Saljare } from "./inkio-vakt";
 
 /**
@@ -11,6 +10,10 @@ import { attLarma, orderlarm, saknasIInkio, saljarlarm, saljarnyckel, type Fastn
  * Körs av utkorgens minutjobb, bara i produktionen: previewen delar databas
  * och hade larmat om samma order en gång till. Kastar aldrig — svaret är en
  * rad i jobbets kvitto.
+ *
+ * MOTTAGARE: BARA ROLLEN ADMIN (beställaren 2026-11-20: "Säljarna ska inte få
+ * någon varning eller mejl"). Säljare, chefer och den som godkände får inget;
+ * det är admin som rättar i Inkio. Vem som är admin är data, inte kod.
  *
  * VILKET LARM SOM REDAN GÅTT läses ur `notification_event` (sorten och
  * `object_id`), så vakten behöver ingen egen tabell och kan inte glömma: ett
@@ -46,7 +49,7 @@ async function larmaOmVakten(fel: string, nu: Date): Promise<void> {
   try {
     const senast = await senasteLarm(ORDERSORT, ["vakten"]);
     if (!attLarma(senast.get("vakten") ?? null, nu)) return;
-    const till = [...new Set([...(await kretsForSaljare([])), ...(await medRoll("admin"))])];
+    const till = await medRoll("admin");
     await notifieraFlera(till, {
       av: null,
       kalla: "inkio-order-fel",
@@ -83,7 +86,7 @@ async function vaktaOrder(nu: Date): Promise<number> {
   const db = supabaseAdmin();
   const { data, error } = await db
     .from("crm_order")
-    .select("order_id, error, sales_order!inner(order_number, company_name, salesperson_id, approved_by, approved_at, status)")
+    .select("order_id, error, sales_order!inner(order_number, company_name, approved_at, status)")
     .eq("state", "fel");
   if (error) throw new Error(`crm_order: ${error.message}`);
 
@@ -93,8 +96,6 @@ async function vaktaOrder(nu: Date): Promise<number> {
     sales_order: {
       order_number: number | null;
       company_name: string;
-      salesperson_id: string;
-      approved_by: string | null;
       approved_at: string | null;
       status: string;
     };
@@ -130,10 +131,8 @@ async function vaktaOrder(nu: Date): Promise<number> {
       fel: r.error,
       sedan: r.sales_order.approved_at,
     };
-    const krets = await kretsForSaljare([r.sales_order.salesperson_id]);
-    const till = [...new Set([...krets, ...admins, ...(r.sales_order.approved_by ? [r.sales_order.approved_by] : [])])];
     const larm = orderlarm(f, nu);
-    await notifieraFlera(till, {
+    await notifieraFlera(admins, {
       av: null,
       kalla: ORDERSORT,
       typ: "fel",
@@ -171,7 +170,7 @@ async function vaktaSaljare(nu: Date): Promise<number> {
   const nyckel = saljarnyckel(saknas);
   const senast = await senasteLarm(SALJARSORT, [nyckel]);
   if (!attLarma(senast.get(nyckel) ?? null, nu)) return 0;
-  const till = [...new Set([...(await kretsForSaljare([])), ...(await medRoll("admin"))])];
+  const till = await medRoll("admin");
   await notifieraFlera(till, { av: null, kalla: SALJARSORT, typ: "fel", ...saljarlarm(saknas), objekt: { typ: "saljare", id: nyckel } });
   return saknas.length;
 }

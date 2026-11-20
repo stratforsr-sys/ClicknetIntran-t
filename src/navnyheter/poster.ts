@@ -16,16 +16,16 @@ export const POSTER: Navnyhet[] = [
   {
     slug: "inkio-vakten",
     rubrik: "Order som inte kommer in i Inkio larmar nu tydligt",
-    ingress: "Kommer en godkänd order inte in i Inkio får säljaren, den som godkände, chefen och admin veta det direkt, med kundens namn och vad som ska göras.",
+    ingress: "Kommer en godkänd order inte in i Inkio får admin veta det direkt, med kundens namn och vad som ska göras.",
     text: `Larmet kommer i klockan, i telefonen och som mejl. Det säger vilken kund och vilken order det gäller, varför Inkio
 sa nej och vad du gör åt det. Tryck på det så öppnas ordern, där du rättar och trycker **Försök igen**.
 
 Är felet kvar efter ett dygn kommer larmet igen, på dagtid, tills ordern har kommit in.
 
 Nav kontrollerar också att alla som säljer finns som säljare i Inkio med samma e-post. Saknas någon får admin veta
-det innan nästa order hinner fastna.`,
+det innan nästa order hinner fastna. Säljarna får inga larm.`,
     datum: "2026-11-20",
-    roller: ["salesperson", "sales_manager", "ceo", "team_lead", "admin"],
+    roller: ["admin"],
     href: "/order",
   },
   {

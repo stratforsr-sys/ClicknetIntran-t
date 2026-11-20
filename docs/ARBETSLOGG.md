@@ -5,6 +5,16 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-20 · Inkio-vakten: larmen bara till admin
+
+Beställaren (Zen), efter att Fredrik fått Toro-larmet som mejl: "Säljarna ska inte få någon varning eller mejl, bara
+jag Zen". Alla tre larmen (`inkio-order-fel`, `inkio-saljare-saknas`, vaktens eget) går nu bara till rollen **admin**
+(`medRoll("admin")`), som i produktionen är Zen ensam. Säljaren, chefen, superadmin och den som godkände får inget.
+Ingen hårdkodad person: vem som är admin är data. `kretsForSaljare` togs bort igen. Navnyheten visas bara för admin.
+Redan skickat 11:54 UTC: Fredrik fick Toro-larmet som notis och mejl, Simon som notis; det går inte att ta tillbaka.
+
+---
+
 ## 2026-11-20 · Inkio-vakten: Toro (#41) kom inte in i Inkio, och ingen fick veta (på `main`, beställarens ja)
 
 Beställaren: "I nav misslyckades inkio kopplingen för toro. Varför och varför fick jag ingen varning."
