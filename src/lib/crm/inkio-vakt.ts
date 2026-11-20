@@ -15,7 +15,7 @@
  * Vakten säger det på tre sätt i stället:
  *
  *   1. EN ORDER SOM STÅR MED FEL MOT INKIO larmar med kundens namn, ordernumret
- *      och skälet i klartext, länkar till ordern och går till admin, bara admin
+ *      och skälet i klartext, länkar till ordern och går bara till superadmin
  *      (beställaren 2026-11-20: säljarna ska inte få något). Mejl och telefon.
  *   2. DEN LARMAR IGEN varje dygn så länge felet står kvar, och bara på dagtid.
  *      Ett larm som kom en gång och lästes på kvällen är ett larm som glömts.

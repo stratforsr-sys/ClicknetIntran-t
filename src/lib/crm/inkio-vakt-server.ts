@@ -1,6 +1,6 @@
 import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/server";
-import { medRoll, notifieraFlera } from "@/lib/notishandelse-server";
+import { notifieraFlera, superadminkretsen } from "@/lib/notishandelse-server";
 import { inkioKonfigurerad, inkioSaljarEpost } from "./inkio";
 import { attLarma, orderlarm, saknasIInkio, saljarlarm, saljarnyckel, type Fastnad, type Saljare } from "./inkio-vakt";
 
@@ -11,9 +11,10 @@ import { attLarma, orderlarm, saknasIInkio, saljarlarm, saljarnyckel, type Fastn
  * och hade larmat om samma order en gång till. Kastar aldrig — svaret är en
  * rad i jobbets kvitto.
  *
- * MOTTAGARE: BARA ROLLEN ADMIN (beställaren 2026-11-20: "Säljarna ska inte få
- * någon varning eller mejl"). Säljare, chefer och den som godkände får inget;
- * det är admin som rättar i Inkio. Vem som är admin är data, inte kod.
+ * MOTTAGARE: BARA SUPERADMIN (`superadminkretsen`: rollerna ceo och admin).
+ * Beställaren 2026-11-20: "Säljarna ska inte få någon varning eller mejl",
+ * sedan "bara superadmin". Säljare, chefer och den som godkände får inget.
+ * Vem som är superadmin är data, inte kod.
  *
  * VILKET LARM SOM REDAN GÅTT läses ur `notification_event` (sorten och
  * `object_id`), så vakten behöver ingen egen tabell och kan inte glömma: ett
@@ -49,7 +50,7 @@ async function larmaOmVakten(fel: string, nu: Date): Promise<void> {
   try {
     const senast = await senasteLarm(ORDERSORT, ["vakten"]);
     if (!attLarma(senast.get("vakten") ?? null, nu)) return;
-    const till = await medRoll("admin");
+    const till = await superadminkretsen();
     await notifieraFlera(till, {
       av: null,
       kalla: "inkio-order-fel",
@@ -119,7 +120,7 @@ async function vaktaOrder(nu: Date): Promise<number> {
   if (rader.length === 0) return 0;
 
   const senast = await senasteLarm(ORDERSORT, rader.map((r) => r.order_id));
-  const admins = await medRoll("admin");
+  const till = await superadminkretsen();
   let antal = 0;
 
   for (const r of rader) {
@@ -132,7 +133,7 @@ async function vaktaOrder(nu: Date): Promise<number> {
       sedan: r.sales_order.approved_at,
     };
     const larm = orderlarm(f, nu);
-    await notifieraFlera(admins, {
+    await notifieraFlera(till, {
       av: null,
       kalla: ORDERSORT,
       typ: "fel",
@@ -170,7 +171,7 @@ async function vaktaSaljare(nu: Date): Promise<number> {
   const nyckel = saljarnyckel(saknas);
   const senast = await senasteLarm(SALJARSORT, [nyckel]);
   if (!attLarma(senast.get(nyckel) ?? null, nu)) return 0;
-  const till = await medRoll("admin");
+  const till = await superadminkretsen();
   await notifieraFlera(till, { av: null, kalla: SALJARSORT, typ: "fel", ...saljarlarm(saknas), objekt: { typ: "saljare", id: nyckel } });
   return saknas.length;
 }
