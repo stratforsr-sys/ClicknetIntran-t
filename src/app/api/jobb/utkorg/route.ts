@@ -5,6 +5,7 @@ import { tomUtkorgen } from "@/lib/utkorg-server";
 import { tomKandidatko } from "@/lib/nav2/rekrytering-utskick";
 import { motespaminnelser } from "@/lib/nav2/kalender-push";
 import { larmaOmBevakningenStar } from "@/lib/crm/inflode-server";
+import { inkioVakt } from "@/lib/crm/inkio-vakt-server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -36,6 +37,8 @@ async function kor(request: NextRequest) {
   const kandidater = await tomKandidatko();
   // Inkio-bevakningen (0277) är ett annat jobb. Står den still säger det här till.
   const inkio = await larmaOmBevakningenStar();
+  // Order som inte kommit in i Inkio, och säljare som saknas där (2026-11-20).
+  const inkioVakten = await inkioVakt();
 
   return NextResponse.json({
     paminnelser: error ? `fel: ${error.message}` : paminnelser,
@@ -43,6 +46,7 @@ async function kor(request: NextRequest) {
     ...tomning,
     kandidater,
     inkio,
+    inkioVakten,
   });
 }
 

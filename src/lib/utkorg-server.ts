@@ -98,7 +98,12 @@ export async function tomUtkorgen(antal = 50): Promise<Tomning> {
     const svar = klar as unknown as "skickad" | "igen" | "fel" | null;
     if (svar === "fel") {
       utfall.fel++;
-      await sagTillAdmin(rad, fel ?? "okänt fel");
+      // En order som inte kom in i Inkio larmas av Inkio-vakten, med kundens
+      // namn, länk till ordern och en påminnelse varje dag (`inkio-vakt.ts`).
+      // Den allmänna raden här blev en notis om "Rad 9228 (crm)" som ingen förstod.
+      // Bara när ordern faktiskt står med fel: ett fel före `sparaFel` (beviset,
+      // loggen) lämnar ingen rad åt vakten, och då går den allmänna notisen.
+      if (!(await vaktenTarDen(rad))) await sagTillAdmin(rad, fel ?? "okänt fel");
     } else if (svar === "igen") {
       utfall.igen++;
     }
@@ -225,6 +230,13 @@ async function hamtaUnderlag(n: Notisrad) {
   }
 
   return null;
+}
+
+/** En `crm`/`skapa`-rad vars order står med fel i `crm_order` larmas av Inkio-vakten (`inkio-vakt.ts`). */
+async function vaktenTarDen(rad: Utkorgsrad): Promise<boolean> {
+  if (rad.kind !== "crm" || rad.payload.handling !== "skapa") return false;
+  const { data } = await supabaseAdmin().from("crm_order").select("state").eq("order_id", String(rad.payload.order_id ?? "")).maybeSingle();
+  return data?.state === "fel";
 }
 
 /** Tredje misslyckade försöket. En notis per rad, aldrig en per försök. */

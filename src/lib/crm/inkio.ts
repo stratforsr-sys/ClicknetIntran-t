@@ -203,6 +203,12 @@ async function saljareMedEpost(epost: string | null): Promise<string | null> {
   return rader.find((r) => r.email.trim().toLowerCase() === epost.trim().toLowerCase())?.id ?? null;
 }
 
+/** E-postadresserna bland Inkios säljare i bolaget. Inkio-vakten jämför Navs säljare med dem. */
+export async function inkioSaljarEpost(): Promise<string[]> {
+  const rader = await anrop<{ email: string | null }[]>("GET", "/api/sales/get-sellers");
+  return (rader ?? []).map((r) => (r.email ?? "").trim()).filter((e) => e !== "");
+}
+
 /**
  * Finansbolaget för en finansierad order. Nav vet bara ATT affären går via
  * finanspartnern, inte vilken — `INKIO_FINANSBOLAG` om den är satt, annars det
@@ -316,6 +322,16 @@ export const inkio: CrmAdapter = {
       saljareMedEpost(o.saljarEpost),
       o.underlag.finansierad ? finansbolag() : Promise.resolve(null),
     ]);
+    // Säljaren som Inkio inte känner igen (2026-11-20, Toro #41). Utan den här
+    // raden skickades ordern utan säljare och Inkio svarade "Välj vem som sålde
+    // affären" — sant, men det sa inte VEM som saknades eller vad man gör.
+    // Bara när ordern skickas in: ett utkast (inget bevis) tar Inkio emot utan säljare.
+    const skickasIn = Boolean(o.bevis && o.bevis.data.byteLength <= INKIO_MAX_BYTE);
+    if (skickasIn && o.saljarEpost && !saljare) {
+      throw new Error(
+        `Säljaren (${o.saljarEpost}) finns inte bland Inkios säljare. Lägg till samma e-post som säljare i Inkio och tryck Försök igen.`,
+      );
+    }
     const rader = orderrader(o.underlag, tj);
     if (rader.length === 0) throw new Error("Ordern har varken månadsbelopp eller tjänster — det finns inget att lägga in.");
 

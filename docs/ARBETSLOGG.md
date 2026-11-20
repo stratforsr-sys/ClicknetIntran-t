@@ -5,6 +5,49 @@ Kort lägesbild och nästa steg: **`docs/NASTA_SESSION.md`**.
 
 ---
 
+## 2026-11-20 · Inkio-vakten: Toro (#41) kom inte in i Inkio, och ingen fick veta (på `main`, beställarens ja)
+
+Beställaren: "I nav misslyckades inkio kopplingen för toro. Varför och varför fick jag ingen varning."
+
+**Varför.** Toro Relining AB (#41) godkändes 2026-11-13 15:38 UTC. Inkio svarade 422 "Välj vem som sålde affären":
+säljaren (fredrik@clicknet.se) finns inte längre i `GET /api/sales/get-sellers`. Hans order #40 den 4 nov fick honom som
+säljare, så Clicknets säljare har tagits bort eller stängts av i Inkio mellan 4 och 13 nov. 2026-11-20 finns bara
+simon@ och zen@ från Clicknet där; Edvin, Mick och Thomas saknas också. `saljareMedEpost` gav null, ordern skickades
+med `sales_person: ""`, och utkorgen gav upp efter tre försök (outbox 9228, `crm_order.state = 'fel'`).
+
+**Varför ingen varning.** Utkorgen skrev EN notis (`utkorg-fel`) till admin, och admin är bara Zen. Rubriken
+"Utkorgen kunde inte skicka en rad", detaljen "Rad 9228 (crm)", länk till `/fel`, ingen kund, inget mejl, och ingen
+påminnelse. Zen öppnade den via push samma kväll; ingenting i den sa att det var en kund.
+
+**Byggt.** `src/lib/crm/inkio-vakt.ts` (ren logik) och `inkio-vakt-server.ts`, körd av utkorgens minutjobb, bara i
+produktionen:
+- En signerad/betald order med `crm_order.state = 'fel'` och ingen väntande `crm`-rad i utkorgen (felet är slutgiltigt,
+  ett hack som går vid andra försöket larmar inte) larmar `inkio-order-fel`: "Toro Relining AB (#41) har inte kommit
+  in i Inkio", skälet i klartext, vad man gör, dagar sedan godkännandet, länk `/order/<id>`. Mottagare: säljaren,
+  chef/teamledare, superadmin (`kretsForSaljare`), den som godkände och admin. För Toro: Simon, Zen, Fredrik.
+- Sorterna ligger under området **Order** (`utskick.ts`), inte Fel: superadmins regel stänger mejl för `omrade:fel`,
+  så under Fel hade larmet bara blivit push. Order mejlas. Båda pushas (`PUSHKALLOR`).
+- Larmet upprepas efter ett dygn, bara 07–19 svensk tid. Vad som redan larmats läses ur `notification_event`
+  (sort + `object_id`): ingen ny tabell, ingen migration.
+- Var 15:e minut: aktiva säljare med order senaste 90 dagarna jämförs med Inkios säljare på e-post. De som saknas
+  larmas i EN notis (`inkio-saljare-saknas`) till superadmin och admin; samma uppsättning en gång per dygn, en ny direkt.
+  2026-11-20 hade det blivit Fredrik, Edvin och Mick.
+- Stannar vakten själv larmar den (högst en gång per dygn) i stället för att bara skriva i jobbets kvitto.
+- `inkio.ts`: saknas säljaren när ordern skickas in (med bevis) kastar Nav ett eget fel som namnger e-posten. Ett
+  utkast utan bevis skickas som förut.
+- Utkorgens allmänna `utkorg-fel` hoppas över för `crm`/`skapa` bara när ordern faktiskt står med fel i `crm_order`;
+  ett fel före `sparaFel` larmas som förut.
+
+Prov: `tests/inkio-vakt.mjs` (Toro-fallet, fyra saknade säljare i en notis, dagtid), notiser, utskick,
+notiser-tackning, notislankar (nytt undantag för vaktens eget larm), inkio, inkio-inflode, navnyheter gröna.
+`npx tsc --noEmit` grönt i klonen. Torrkört mot produktionen (bara läsning): vaktens två inbäddade frågor ger objekt,
+Toro är enda raden, ingen väntande utkorgsrad, texten blir som ovan.
+
+**Kvar för människor:** lägg tillbaka Fredrik (och Edvin, Mick, Thomas) som säljare i Inkio, sedan Försök igen på #41.
+När grenen når main larmar vakten om Toro inom en minut och om säljarna vid nästa kvart.
+
+---
+
 ## 2026-11-18 · Leads: radera ett lead (på `main`)
 
 Beställaren: "i nav måste jag kunna radera leads som kommer in." Den som fördelar leads (`farFordela`: säljchef, VD,

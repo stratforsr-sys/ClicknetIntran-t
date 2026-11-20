@@ -58,6 +58,10 @@ export const PUSHKALLOR = new Set<string>([
   // standardläget också för den som inte slagit på allt. Ring igen efter Fick inte tag (2026-11-14) av samma skäl.
   "mote-bekrafta",
   "mote-ring-igen",
+  // Inkio-vakten (2026-11-20): en order som inte kom in i Inkio, och en säljare som saknas där. Toro (#41)
+  // låg en vecka för att larmet bara stod i klockan.
+  "inkio-order-fel",
+  "inkio-saljare-saknas",
   // Möten (2026-11-16, 0310): en kollega skrev i anteckningarna på ett kort du är med på. Beställaren: notis "om
   // just den kunden och mötet i mobilen", så telefonen är förvalet. Tråden går att tysta per kort.
   "mote-anteckning",

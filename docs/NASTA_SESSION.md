@@ -3,6 +3,11 @@
 Kort överlämning mellan sessioner. `docs/ARBETSLOGG.md` har hela historiken och
 varför-resonemangen; det här är bara läget just nu och vad som står på tur.
 
+**2026-11-20: INKIO-VAKTEN PÅ MAIN** (beställarens "Ja, merga till main"). Toro (#41) kom aldrig in i Inkio (säljaren saknas
+i Inkio) och larmet var en oläslig admin-notis. Vakten larmar nu med kund, skäl och länk till säljare, godkännare, chef,
+admin och superadmin, varje dygn tills det är löst, och kontrollerar att säljarna finns i Inkio. Se ARBETSLOGG 2026-11-20.
+Fredrik, Edvin, Mick och Thomas måste läggas till i Inkio av någon med behörighet där.
+
 **Senast uppdaterad:** 2026-11-17 (sen kväll): **HEMVYN OCH CHATTEN ÄR PÅ MAIN** (beställarens ja: "nu kan du pusha
 till main"), en commit ihopslagen med mains Möten-ändringar (0313). Alla migrationer på grenen (0303–0307, 0312) var
 redan körda i produktionen (stämt mot `schema_migrations` före mergen). **Chatten svarar i produktionen:** raden för `44349a171864` är

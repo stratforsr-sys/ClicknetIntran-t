@@ -300,6 +300,8 @@ export const NOTIS_KALLOR = [
   "order-inkio-handelse",
   "order-anteckning",
   "inkio-bevakning",
+  "inkio-order-fel",
+  "inkio-saljare-saknas",
 
   /** Stamplingens rattelser. Begaran till chefen, beslutet till den anstallda. */
   "tid-rattelse",
@@ -790,6 +792,8 @@ export const HANDELSEKALLOR = [
   "order-inkio-handelse",
   "order-anteckning",
   "inkio-bevakning",
+  "inkio-order-fel",
+  "inkio-saljare-saknas",
   "tid-rattelse",
   "tid-rattelse-beslut",
   "tid-ostamplad",

@@ -45,6 +45,7 @@ const UNDANTAG = {
   'tid-ostamplad "/tid"': "chefens fråga gäller i dag, och Tid öppnar dagen",
   'tid-fraga "/tid"': "chefens fråga gäller i dag, och Tid öppnar dagen",
   'utkorg-fel "/fel"': "utkorgens fel har ingen egen rapport att öppna",
+  'inkio-order-fel "/fel"': "Inkio-vakten själv stannade; det finns ingen order att öppna, larmet säger felet",
   'inkio-bevakning "/fel"': "bevakningen som står still har ingen egen rapport att öppna; larmet säger hur länge",
   'personal-uppdrag "/"': "faddern har ingen egen plats i navet; Anställda är chefens vy",
   'personal-paminn "/utbildning"': "påminnelsen gäller alla kurser och rutiner som är kvar, och Utbildning visar dem först",

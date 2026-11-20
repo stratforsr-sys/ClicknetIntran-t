@@ -141,6 +141,10 @@ const OMRADE_UNDANTAG: Record<string, string> = {
   "order-inkio-handelse": "inkio",
   "order-anteckning": "inkio",
   "inkio-bevakning": "fel",
+  // Under Order, inte Fel (2026-11-20): Fel mejlas inte som standard, och det
+  // här är order som inte faktureras förrän någon gör något.
+  "inkio-order-fel": "order",
+  "inkio-saljare-saknas": "order",
   kvallsnotis: "hem",
 };
 
@@ -249,6 +253,8 @@ export const SORT_NAMN: Record<string, string> = {
   "order-inkio-handelse": "Annat som händer i Inkio",
   "order-anteckning": "Anteckning om en kund i Nav",
   "inkio-bevakning": "Larm från Inkio-bevakningen",
+  "inkio-order-fel": "Order som inte kommit in i Inkio",
+  "inkio-saljare-saknas": "Säljare som saknas i Inkio",
   "order-grattis": "Grattis till en order",
   "tid-rattelse": "Rättelse av tid att besluta",
   "tid-rattelse-beslut": "Beslut om din tidsrättelse",
